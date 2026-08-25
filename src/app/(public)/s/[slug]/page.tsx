@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { CalendarDays, LogIn, TicketCheck, UserPlus } from "lucide-react";
+import { CalendarDays, LogIn, UserPlus } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
@@ -12,6 +12,7 @@ import { SocialShare } from "@/components/public/social-share";
 import { PrizesSection } from "@/components/public/prizes-section";
 import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
+import { RaffleCover } from "@/components/public/raffle-cover";
 import { headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
 import { meetsMinLevel } from "@/lib/rank";
@@ -208,18 +209,17 @@ export default async function PublicRaffleDetailPage({
     // Mobile-first: container estreito, centralizado, mesmo no desktop.
     // O site público se comporta como um "app no celular" também no PC.
     <div className="mx-auto w-full max-w-md px-4 py-5 space-y-5">
-      {raffle.images[0] ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={raffle.images[0].url}
-          alt={raffle.title}
-          className="w-full rounded-xl object-cover aspect-[4/3] shadow-sm"
-        />
-      ) : (
-        <div className="w-full rounded-xl bg-gradient-to-br from-muted to-muted/40 aspect-[4/3] flex items-center justify-center text-muted-foreground border">
-          <TicketCheck className="h-16 w-16 opacity-20" />
-        </div>
-      )}
+      {/* 16/9 em vez de 4/3: no celular a capa quadrada comia metade da
+          primeira dobra e empurrava preço e botão para fora da tela. */}
+      <RaffleCover
+        url={raffle.images[0]?.url ?? null}
+        title={raffle.title}
+        skinName={headlinePrize?.skinName}
+        rarity={headlinePrize?.skinRarity}
+        className="aspect-16/9 w-full rounded-xl"
+        sizes="(min-width: 640px) 600px, 100vw"
+        priority
+      />
 
       <div className="space-y-2">
         <span className="inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary-foreground">
@@ -284,7 +284,7 @@ export default async function PublicRaffleDetailPage({
       {/* Ficha da skin principal — o prêmio de maior raridade da campanha.
           Fica acima do preço de propósito: o jogador decide pela skin,
           não pelo valor da cota. */}
-      {raffle.prizesShow && headlinePrize && (
+      {raffle.showSkinSpecs && headlinePrize && (
         <SkinHero
           prize={headlinePrize}
           extraPrizes={raffle.prizes.length - 1}

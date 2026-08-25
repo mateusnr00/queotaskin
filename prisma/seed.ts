@@ -51,6 +51,10 @@ const CAMPAIGNS = [
     initialQuantity: 10,
     showOnHome: true,
     statusText: "Corre que está acabando!",
+    // Única campanha com a ficha técnica ligada — serve de exemplo do que o
+    // toggle faz. Numa skin de R$ 4.890 o float e o padrão justificam o
+    // preço; nas mais baratas a ficha só empurraria o botão pra baixo.
+    showSkinSpecs: true,
     selectionCards: [5, 10, 25, 50, 100, 250],
     prizes: [
       {

@@ -435,6 +435,10 @@ model Raffle {
   // Config dos Prêmios (lista em Prize). Toggle de visibilidade pro
   // público + bloco de E-book entregue após pagamento (estilo SkinsLendarias).
   prizesShow      Boolean @default(true)
+  /// Ficha técnica da skin na página pública (raridade, desgaste, float,
+  /// coleção, valor). Desligada por padrão: ocupa meia tela no mobile e só
+  /// se paga nas skins caras, onde o float justifica o preço.
+  showSkinSpecs   Boolean @default(false)
   ebookEnabled    Boolean @default(false)
   ebookTitle      String?
   ebookText       String? @db.Text

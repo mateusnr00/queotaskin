@@ -109,6 +109,7 @@ interface RaffleFormProps {
   };
   initialPrizesConfig?: {
     show: boolean;
+    showSkinSpecs: boolean;
     ebook: {
       enabled: boolean;
       title: string;
@@ -218,6 +219,7 @@ export function RaffleForm({
   },
   initialPrizesConfig = {
     show: true,
+    showSkinSpecs: false,
     ebook: {
       enabled: false,
       title: "",

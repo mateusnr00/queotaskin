@@ -38,6 +38,7 @@ interface Props {
   initialPrizes: PrizeDraft[];
   initialConfig: {
     show: boolean;
+    showSkinSpecs: boolean;
     ebook: EbookConfig;
   };
 }
@@ -48,6 +49,7 @@ export function RafflePrizesTab({
   initialConfig,
 }: Props) {
   const [show, setShow] = useState(initialConfig.show);
+  const [showSkinSpecs, setShowSkinSpecs] = useState(initialConfig.showSkinSpecs);
   const [ebook, setEbook] = useState<EbookConfig>(initialConfig.ebook);
 
   const [prizes, setPrizes] = useState<PrizeDraft[]>(
@@ -82,6 +84,7 @@ export function RafflePrizesTab({
       const result = await setRafflePrizesAction({
         raffleId,
         show,
+        showSkinSpecs,
         ebookEnabled: ebook.enabled,
         ebookTitle: ebook.title,
         ebookText: ebook.text,
@@ -176,12 +179,19 @@ export function RafflePrizesTab({
       </div>
 
       {/* ============ MOSTRAR PRÊMIOS ============ */}
-      <div className="border-t pt-4">
+      <div className="space-y-4 border-t pt-4">
         <ToggleRow
           checked={show}
           onChange={setShow}
           label="Mostrar Prêmios"
           description="Quando ativo, a lista de prêmios aparece na página pública do sorteio."
+        />
+
+        <ToggleRow
+          checked={showSkinSpecs}
+          onChange={setShowSkinSpecs}
+          label="Mostrar ficha técnica da skin"
+          description="Exibe raridade, desgaste, float, coleção e valor de mercado acima do preço. Ocupa espaço no celular — vale nas skins caras, onde o float justifica o valor. Desligado por padrão."
         />
       </div>
 

@@ -251,6 +251,7 @@ export async function setRaffleCoverAction(
 const prizesSchema = z.object({
   raffleId: z.string().cuid(),
   show: z.boolean().default(true),
+  showSkinSpecs: z.boolean().default(false),
   ebookEnabled: z.boolean().default(false),
   ebookTitle: z.string().max(120).optional().default(""),
   ebookText: z.string().max(500).optional().default(""),
@@ -345,6 +346,7 @@ export async function setRafflePrizesAction(
       raffleId,
       prizes,
       show,
+      showSkinSpecs,
       ebookEnabled,
       ebookTitle,
       ebookText,
@@ -360,6 +362,7 @@ export async function setRafflePrizesAction(
         where: { id: raffleId },
         data: {
           prizesShow: show,
+          showSkinSpecs,
           ebookEnabled,
           ebookTitle: norm(ebookTitle),
           ebookText: norm(ebookText),

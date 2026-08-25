@@ -179,6 +179,7 @@ export default async function EditRafflePage({
         initialPrizes={raffle.prizes.map(toPrizeDraft)}
         initialPrizesConfig={{
           show: raffle.prizesShow,
+          showSkinSpecs: raffle.showSkinSpecs,
           ebook: {
             enabled: raffle.ebookEnabled,
             title: raffle.ebookTitle ?? "",
