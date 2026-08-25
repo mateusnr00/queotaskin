@@ -85,15 +85,47 @@ run("prisma migrate deploy", ["prisma", "migrate", "deploy"]);
 // RUN_SEED=1 no primeiro build resolve isso sem precisar de acesso direto ao
 // Postgres, que num ambiente serverless a gente não tem.
 //
-// O seed é idempotente (upsert por slug/celular e guardas de "já existe"),
-// então repetir não duplica nada. Ainda assim: remova a variável depois do
-// primeiro deploy — build não é lugar de escrever dados.
-if (process.env.RUN_SEED === "1") {
+// A flag sozinha não basta: ela fica esquecida no projeto e passa a rodar em
+// todo deploy. Por isso o banco decide. Se já existe Tenant, o bootstrap já
+// aconteceu e o seed é pulado — mesmo com RUN_SEED=1.
+//
+// Isso importa porque a Vercel dispara dois builds pelo mesmo commit (o de
+// produção e o da branch), os dois apontando para o mesmo banco. Dois seeds
+// simultâneos disputando as mesmas linhas foi exatamente o que derrubou um
+// build com unique violation em Prize.
+async function bancoJaTemDados() {
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const prisma = new PrismaClient();
+    try {
+      return (await prisma.tenant.count()) > 0;
+    } finally {
+      await prisma.$disconnect();
+    }
+  } catch (err) {
+    // Não dá para afirmar que está vazio, então não semeia: escrever num
+    // banco de estado desconhecido é pior do que pular.
+    console.error(
+      "[build] não consegui verificar se o banco já tem dados:",
+      err?.message ?? err
+    );
+    return true;
+  }
+}
+
+if (process.env.RUN_SEED !== "1") {
+  console.log("[build] RUN_SEED não setada — pulando o seed.");
+} else if (await bancoJaTemDados()) {
+  console.log(
+    "[build] RUN_SEED=1, mas o banco já tem Tenant cadastrado — seed pulado.\n" +
+      "[build] O bootstrap já foi feito. Remova RUN_SEED do projeto na Vercel\n" +
+      "[build] (Settings → Environment Variables): build não é lugar de\n" +
+      "[build] escrever dados, e a variável esquecida só gera risco."
+  );
+} else {
   run("prisma db seed (RUN_SEED=1)", ["tsx", "prisma/seed.ts"]);
   console.log(
     "[build] Seed concluído. Remova RUN_SEED do projeto na Vercel — " +
       "ele não precisa rodar de novo."
   );
-} else {
-  console.log("[build] RUN_SEED não setada — pulando o seed.");
 }

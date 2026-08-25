@@ -111,8 +111,15 @@ O banco sobe vazio, e sem um `Tenant` cadastrado toda página pública responde
 `prisma/seed.ts` depois das migrations, criando tenant, admin, campanhas de
 exemplo e participantes.
 
-**Remova a variável depois do primeiro deploy.** O seed é idempotente, então
-repetir não duplica nada — mas build não é lugar de escrever dados.
+**Remova a variável depois do primeiro deploy.** Build não é lugar de escrever
+dados, e a Vercel dispara dois builds pelo mesmo commit (produção e branch)
+apontando para o mesmo banco — dois seeds simultâneos disputando as mesmas
+linhas já derrubaram um deploy.
+
+Como rede de proteção, o script pula o seed quando o banco já tem `Tenant`
+cadastrado, mesmo com `RUN_SEED=1`. O seed em si também não apaga mais nada:
+prêmios só entram em campanha que ainda não tem nenhum, para não sobrescrever
+o que foi editado no painel.
 
 ## 3. Domínio
 

@@ -23,7 +23,11 @@ Production; Preview pula e apenas compila).
 Bootstrap de um ambiente novo: setar `RUN_SEED=1` no primeiro build faz o
 mesmo script rodar `prisma/seed.ts` depois das migrations. Sem isso o banco
 sobe vazio e toda página pública responde 404 — sem `Tenant` cadastrado
-nenhum host resolve. **Remova a variável depois do primeiro deploy**; o seed
-é idempotente, mas build não é lugar de escrever dados.
+nenhum host resolve. **Remova a variável depois do primeiro deploy**: build
+não é lugar de escrever dados.
+
+O script ignora `RUN_SEED` quando o banco já tem `Tenant`, então a variável
+esquecida não semeia produção de novo. É rede de proteção, não permissão para
+deixá-la lá.
 
 Não abra nem mergeie PR sem o usuário pedir.

@@ -398,15 +398,25 @@ async function main() {
       },
     });
 
-    // Prêmios são recriados a cada seed: é a lista canônica da campanha.
-    await prisma.prize.deleteMany({ where: { raffleId: raffle.id } });
-    await prisma.prize.createMany({
-      data: prizes.map((prize, index) => ({
-        ...prize,
-        raffleId: raffle.id,
-        position: index + 1,
-      })),
+    // Prêmios entram só quando a campanha ainda não tem nenhum.
+    //
+    // Recriar a lista a cada seed apagava o que o admin tivesse editado no
+    // painel — o seed não é dono desses dados depois do primeiro deploy. E,
+    // com dois builds da Vercel rodando o seed ao mesmo tempo contra o mesmo
+    // banco (produção e branch saem do mesmo commit), o delete de um caía no
+    // meio do insert do outro e estourava a unique de (raffleId, position).
+    const jaTemPremios = await prisma.prize.count({
+      where: { raffleId: raffle.id },
     });
+    if (jaTemPremios === 0) {
+      await prisma.prize.createMany({
+        data: prizes.map((prize, index) => ({
+          ...prize,
+          raffleId: raffle.id,
+          position: index + 1,
+        })),
+      });
+    }
 
     createdRaffles.push({
       id: raffle.id,
