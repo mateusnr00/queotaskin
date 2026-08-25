@@ -205,224 +205,241 @@ export default async function PublicRaffleDetailPage({
     raffle.awardedTicketsViewMode === "modal" ? "modal" : "list";
 
   return (
-    // Mobile-first: container estreito, centralizado, mesmo no desktop.
-    // O site público se comporta como um "app no celular" também no PC.
-    <div className="mx-auto w-full max-w-md px-4 py-5 space-y-5">
-      {/* 16/9 em vez de 4/3: no celular a capa quadrada comia metade da
-          primeira dobra e empurrava preço e botão para fora da tela. */}
-      <RaffleCover
-        url={raffle.images[0]?.url ?? null}
-        title={raffle.title}
-        skinName={headlinePrize?.skinName}
-        rarity={headlinePrize?.skinRarity}
-        className="aspect-16/9 w-full rounded-xl"
-        sizes="(min-width: 640px) 600px, 100vw"
-        priority
-      />
+    // Coluna única em qualquer largura: no desktop a página é a mesma do
+    // celular, só com mais folga e a capa maior. O que mudou foi a ORDEM.
+    //
+    // Antes, descrição, ficha da skin, prêmios e títulos premiados ficavam
+    // entre o preço e o seletor de números, e era preciso rolar três telas
+    // para achar o botão. Nas referências do mercado (Skins Lendárias, CS2
+    // Pro, MM Skins) os cards de quantidade aparecem na primeira dobra, sem
+    // exceção — é a decisão que a página existe para provocar.
+    <div className="mx-auto w-full max-w-md px-4 py-5 md:max-w-2xl md:py-10">
+      {/* ---------- capa + título ---------- */}
+      <div className="space-y-4 md:space-y-5">
+        {/* No celular a capa sangra até as bordas, como nas três
+            referências: a moldura arredondada com margem lateral encolhia
+            a imagem justamente onde ela precisa vender. */}
+        <RaffleCover
+          url={raffle.images[0]?.url ?? null}
+          title={raffle.title}
+          skinName={headlinePrize?.skinName}
+          rarity={headlinePrize?.skinRarity}
+          className="-mx-4 aspect-16/9 w-[calc(100%+2rem)] md:mx-0 md:w-full md:rounded-2xl"
+          sizes="(min-width: 768px) 640px, 100vw"
+          priority
+        />
 
-      <div className="space-y-2">
-        <span className="inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary-foreground">
-          {raffle.statusText ?? "Adquira já"}
-        </span>
-        <h1 className="text-2xl font-bold tracking-tight leading-tight">
-          {raffle.title}
-        </h1>
-        {raffle.shortDescription && (
-          <p className="text-sm text-muted-foreground">
-            {raffle.shortDescription}
-          </p>
+        <div className="space-y-1.5">
+          <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+            {raffle.statusText ?? "Adquira já"}
+          </span>
+          <h1 className="text-xl font-bold leading-tight tracking-tight md:text-3xl">
+            {raffle.title}
+          </h1>
+          {raffle.shortDescription && (
+            <p className="text-sm text-muted-foreground">
+              {raffle.shortDescription}
+            </p>
+          )}
+        </div>
+
+  {/* Card de ganhador: só aparece quando o admin declarou o resultado. */}
+        {raffle.winnerTicketNumber != null && (
+          <div className="rounded-2xl border-2 border-amber-500/50 bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/20 p-5 text-center space-y-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow">
+              🏆 Sorteio realizado
+            </div>
+            <p className="text-3xl font-black tabular-nums text-amber-700 dark:text-amber-300">
+              Título {raffle.winnerTicketNumber}
+            </p>
+            {winnerParticipant ? (
+              <p className="text-base font-semibold">
+                Ganhador:{" "}
+                <span className="text-amber-800 dark:text-amber-200">
+                  {winnerParticipant}
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Título não foi comprado — sem ganhador registrado.
+              </p>
+            )}
+            {raffle.winnerDrawnAt && (
+              <p className="text-[11px] text-muted-foreground">
+                Sorteado em{" "}
+                {new Intl.DateTimeFormat("pt-BR", {
+                  dateStyle: "long",
+                  timeZone: "America/Sao_Paulo",
+                }).format(raffle.winnerDrawnAt)}
+              </p>
+            )}
+            {raffle.winnerNote && (
+              <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10 px-3 py-2 text-left text-xs whitespace-pre-wrap text-amber-900 dark:text-amber-100">
+                {raffle.winnerNote}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Card de ganhador: só aparece quando o admin declarou o resultado. */}
-      {raffle.winnerTicketNumber != null && (
-        <div className="rounded-2xl border-2 border-amber-500/50 bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/20 p-5 text-center space-y-2">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow">
-            🏆 Sorteio realizado
-          </div>
-          <p className="text-3xl font-black tabular-nums text-amber-700 dark:text-amber-300">
-            Título {raffle.winnerTicketNumber}
-          </p>
-          {winnerParticipant ? (
-            <p className="text-base font-semibold">
-              Ganhador:{" "}
-              <span className="text-amber-800 dark:text-amber-200">
-                {winnerParticipant}
-              </span>
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Título não foi comprado — sem ganhador registrado.
-            </p>
-          )}
-          {raffle.winnerDrawnAt && (
-            <p className="text-[11px] text-muted-foreground">
-              Sorteado em{" "}
-              {new Intl.DateTimeFormat("pt-BR", {
-                dateStyle: "long",
-                timeZone: "America/Sao_Paulo",
-              }).format(raffle.winnerDrawnAt)}
-            </p>
-          )}
-          {raffle.winnerNote && (
-            <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10 px-3 py-2 text-left text-xs whitespace-pre-wrap text-amber-900 dark:text-amber-100">
-              {raffle.winnerNote}
-            </p>
-          )}
-        </div>
-      )}
+      {/* ---------- caixa de compra ---------- */}
+      {/* Fixa na coluna da direita no desktop; no celular é só o bloco
+          seguinte, logo abaixo do título. */}
+      <div className="mt-5 space-y-3 md:mt-6 md:space-y-4">
+        {raffle.showProgressBar && (
+          <SalesProgressBar
+            percent={Math.min(100, Math.max(0, soldPercent))}
+            soldCount={soldCount}
+            remaining={remaining}
+          />
+        )}
 
-      {raffle.showProgressBar && (
-        <SalesProgressBar
-          percent={Math.min(100, Math.max(0, soldPercent))}
-          soldCount={soldCount}
-          remaining={remaining}
-        />
-      )}
-
-      {/* Ficha da skin principal — o prêmio de maior raridade da campanha.
-          Fica acima do preço de propósito: o jogador decide pela skin,
-          não pelo valor da cota. */}
-      {raffle.showSkinSpecs && headlinePrize && (
-        <SkinHero
-          prize={headlinePrize}
-          extraPrizes={raffle.prizes.length - 1}
-        />
-      )}
-
-      {/* Card de preço — destaque visual com gradiente sutil. Rifas
-          gratuitas mostram um texto custom centralizado (default
-          "SORTEIO GRATUITO") em vez do valor + label "Por apenas". */}
-      {raffle.isFree ? (
-        <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-5 py-6 text-center">
-          <span className="text-2xl sm:text-3xl font-extrabold tracking-tight uppercase text-primary">
-            {raffle.freeLabel || "SORTEIO GRATUITO"}
-          </span>
-        </div>
-      ) : (
-        <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-5 py-3.5 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Por apenas
-          </span>
-          <span className="text-2xl font-bold tracking-tight tabular-nums text-primary">
-            {formatBRL(Number(raffle.pricePerNumber))}
-          </span>
-        </div>
-      )}
-
-      {raffle.showDrawDate && raffle.drawDate && (
-        <div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Sorteio em</span>
-          <span className="font-semibold">
-            {formatDateTime(raffle.drawDate)}
-          </span>
-        </div>
-      )}
-
-      {raffle.description &&
-        (raffle.descriptionMode === "EXPANDED" ? (
-          <div className="rounded-xl border bg-card px-4 py-3 space-y-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Descrição / Regulamento
-            </h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">
-              {raffle.description}
-            </p>
+        {raffle.isFree ? (
+          <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-4 text-center">
+            <span className="text-xl font-extrabold uppercase tracking-tight text-primary sm:text-2xl">
+              {raffle.freeLabel || "SORTEIO GRATUITO"}
+            </span>
           </div>
         ) : (
-          <details className="rounded-xl border bg-card overflow-hidden group">
-            <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-muted/50">
-              <span>Descrição / Regulamento</span>
-              <span className="text-muted-foreground transition-transform group-open:rotate-180">
-                ▾
-              </span>
-            </summary>
-            <div className="border-t px-4 py-3">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+          <div className="flex items-center justify-between rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-2.5 md:px-5 md:py-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Por apenas
+            </span>
+            <span className="text-xl font-bold tabular-nums tracking-tight text-primary md:text-2xl">
+              {formatBRL(Number(raffle.pricePerNumber))}
+            </span>
+          </div>
+        )}
+
+        <div className="rounded-xl border bg-card p-4 md:rounded-2xl md:p-5">
+  {!isActive ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Este sorteio não está mais disponível para venda.
+            </p>
+          ) : remaining <= 0 ? (
+            // Sem esse ramo, o formulário aparecia normalmente e a reserva só
+            // falhava no submit — com uma mensagem genérica de erro, que faz
+            // parecer defeito e não campanha esgotada.
+            <div className="py-8 text-center">
+              <p className="text-sm font-semibold">Todos os números foram vendidos</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                O sorteio acontece na data marcada. Acompanhe o resultado aqui
+                mesmo.
+              </p>
+            </div>
+          ) : levelLocked ? (
+            <MinLevelGate
+              minLevel={raffle.minLevel!}
+              xp={viewerXp}
+              xpPerBrl={rankSettings?.xpPerBrl ?? 10}
+              isLoggedIn={Boolean(currentUser)}
+            />
+          ) : (
+            <ReservationForm
+              raffleId={raffle.id}
+              totalNumbers={raffle.totalNumbers}
+              takenNumbers={takenNumbers}
+              minPurchase={raffle.minPurchase}
+              maxPurchase={raffle.maxPurchase ?? undefined}
+              initialQuantity={raffle.initialQuantity ?? undefined}
+              reservationModel={raffle.reservationModel}
+              requiredFields={requiredFields}
+              currentUser={currentUser}
+              pricePerNumber={Number(raffle.pricePerNumber)}
+              selectionCards={raffle.selectionCards ?? []}
+              selectionCardsBestseller={raffle.selectionCardsBestseller ?? -1}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ---------- conteúdo longo ---------- */}
+      {/* Tudo que ajuda a decidir, mas não precisa vir antes do botão. */}
+      <div className="mt-5 space-y-4 md:mt-8 md:space-y-5">
+        {/* Ficha da skin principal — o prêmio de maior raridade da
+            campanha. Opcional por campanha (Admin → Prêmios). */}
+        {raffle.showSkinSpecs && headlinePrize && (
+          <SkinHero
+            prize={headlinePrize}
+            extraPrizes={raffle.prizes.length - 1}
+          />
+        )}
+
+  {raffle.showDrawDate && raffle.drawDate && (
+          <div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Sorteio em</span>
+            <span className="font-semibold">
+              {formatDateTime(raffle.drawDate)}
+            </span>
+          </div>
+        )}
+
+  {raffle.description &&
+          (raffle.descriptionMode === "EXPANDED" ? (
+            <div className="rounded-xl border bg-card px-4 py-3 space-y-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Descrição / Regulamento
+              </h2>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
                 {raffle.description}
               </p>
             </div>
-          </details>
-        ))}
+          ) : (
+            <details className="rounded-xl border bg-card overflow-hidden group">
+              <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-muted/50">
+                <span>Descrição / Regulamento</span>
+                <span className="text-muted-foreground transition-transform group-open:rotate-180">
+                  ▾
+                </span>
+              </summary>
+              <div className="border-t px-4 py-3">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                  {raffle.description}
+                </p>
+              </div>
+            </details>
+          ))}
 
-      {raffle.prizesShow && raffle.prizes.length > 0 && (
-        <PrizesSection prizes={skinPrizes} />
-      )}
+  {raffle.prizesShow && raffle.prizes.length > 0 && (
+          <PrizesSection prizes={skinPrizes} />
+        )}
 
-      {showAwarded && publicAwardedTickets.length > 0 && (
-        <AwardedTicketsSection
-          tickets={publicAwardedTickets}
-          totalNumbers={raffle.totalNumbers}
-          viewMode={awardedViewMode}
-        />
-      )}
-
-      {/* Form de reserva — exige conta cadastrada para garantir
-          rastreabilidade do comprador (nome/CPF vêm da sessão). */}
-      <div className="rounded-xl border bg-card p-4">
-        <h2 className="text-base font-bold mb-3">Reservar números</h2>
-        {!isActive ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Este sorteio não está mais disponível para venda.
-          </p>
-        ) : remaining <= 0 ? (
-          // Sem esse ramo, o formulário aparecia normalmente e a reserva só
-          // falhava no submit — com uma mensagem genérica de erro, que faz
-          // parecer defeito e não campanha esgotada.
-          <div className="py-8 text-center">
-            <p className="text-sm font-semibold">Todos os números foram vendidos</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              O sorteio acontece na data marcada. Acompanhe o resultado aqui
-              mesmo.
-            </p>
-          </div>
-        ) : levelLocked ? (
-          <MinLevelGate
-            minLevel={raffle.minLevel!}
-            xp={viewerXp}
-            xpPerBrl={rankSettings?.xpPerBrl ?? 10}
-            isLoggedIn={Boolean(currentUser)}
-          />
-        ) : (
-          <ReservationForm
-            raffleId={raffle.id}
+  {showAwarded && publicAwardedTickets.length > 0 && (
+          <AwardedTicketsSection
+            tickets={publicAwardedTickets}
             totalNumbers={raffle.totalNumbers}
-            takenNumbers={takenNumbers}
-            minPurchase={raffle.minPurchase}
-            maxPurchase={raffle.maxPurchase ?? undefined}
-            initialQuantity={raffle.initialQuantity ?? undefined}
-            reservationModel={raffle.reservationModel}
-            requiredFields={requiredFields}
-            currentUser={currentUser}
-            pricePerNumber={Number(raffle.pricePerNumber)}
-            selectionCards={raffle.selectionCards ?? []}
-            selectionCardsBestseller={raffle.selectionCardsBestseller ?? -1}
+            viewMode={awardedViewMode}
           />
         )}
-      </div>
 
-      {raffle.showShareButtons && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Compartilhar
-          </p>
-          <SocialShare
-            url={shareUrl}
-            title={`Participe: ${raffle.title}`}
-          />
-        </div>
-      )}
+  {raffle.showShareButtons && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Compartilhar
+            </p>
+            <SocialShare
+              url={shareUrl}
+              title={`Participe: ${raffle.title}`}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// Barra de progresso "fat" no estilo Sorteamos: bar grossa com porcentagem
-// centralizada sobre o preenchimento, e contagens (vendidos/disponíveis)
-// embaixo. Truque pra legibilidade da % em qualquer fundo:
-// - texto branco sobre a parte preenchida (clipado)
-// - texto colorido escuro sobre a parte vazia (clipado pelo lado oposto)
-// Assim a label é sempre legível, vinda de fora pra dentro do preenchimento.
+// Barra de progresso enxuta.
+//
+// A versão anterior era um card à parte: rótulo "Progresso da venda", barra
+// de 36px e as contagens embaixo — quatro linhas para dizer "37% vendido".
+// Nas três referências do mercado a barra é uma faixa fina logo abaixo da
+// capa, com a porcentagem dentro dela. Encolher isso devolve espaço da
+// primeira dobra para o que de fato converte: preço e seletor de números.
+//
+// A % continua legível sobre qualquer fundo pelo mesmo truque de duas
+// camadas: o texto base aparece na parte vazia e a cópia clara é clipada à
+// largura preenchida.
 function SalesProgressBar({
   percent,
   soldCount,
@@ -434,34 +451,24 @@ function SalesProgressBar({
 }) {
   const pct = `${percent}%`;
   return (
-    <div className="space-y-2.5 rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Progresso da venda
-        </span>
-      </div>
-
+    <div className="space-y-1.5">
       <div
-        className="relative h-9 w-full overflow-hidden rounded-full bg-muted ring-1 ring-border/60"
+        className="relative h-6 w-full overflow-hidden rounded-full bg-muted ring-1 ring-border/60 md:h-7"
         role="progressbar"
         aria-valuenow={percent}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`Vendido ${percent}%`}
       >
-        {/* Preenchimento com gradiente animado */}
         <div
           className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary via-primary to-primary/80 transition-all duration-500"
           style={{ width: pct }}
         />
-        {/* Label da % — duas camadas pra ficar legível tanto no preenchido
-            quanto no vazio. A primeira é o texto base (escuro); a segunda
-            fica clipada à largura preenchida e mostra texto claro. */}
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums text-foreground/70">
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums text-foreground/70">
           {pct}
         </span>
         <span
-          className="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums text-primary-foreground overflow-hidden"
+          className="absolute inset-0 flex items-center justify-center overflow-hidden text-xs font-bold tabular-nums text-primary-foreground"
           style={{ clipPath: `inset(0 ${100 - percent}% 0 0)` }}
           aria-hidden
         >
@@ -469,7 +476,7 @@ function SalesProgressBar({
         </span>
       </div>
 
-      <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+      <div className="flex justify-between text-[11px] tabular-nums text-muted-foreground">
         <span>
           <strong className="text-foreground">
             {soldCount.toLocaleString("pt-BR")}

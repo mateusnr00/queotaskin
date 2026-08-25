@@ -245,7 +245,7 @@ export function ReservationForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3.5">
         {isManualMode ? (
           <ManualPicker
             totalNumbers={totalNumbers}
@@ -280,17 +280,35 @@ export function ReservationForm({
           needsPhoneInput={needsPhoneInput}
         />
 
-        <div className="rounded-lg border bg-muted/30 px-4 py-2.5 text-sm text-center">
-          <strong className="tabular-nums">{effectiveQty}</strong>{" "}
+        {/* Confirmação enxuta: o stepper logo acima já mostra o número, então
+            aqui basta uma linha — no celular cada bloco alto empurra o botão
+            para fora da tela. */}
+        <p className="text-center text-xs text-muted-foreground">
+          <strong className="tabular-nums text-foreground">{effectiveQty}</strong>{" "}
           {effectiveQty === 1 ? "número selecionado" : "números selecionados"}
-        </div>
+        </p>
 
+        {/* O total vai no botão, como nas três referências do mercado: o
+            número decidido some de vista assim que a pessoa rola, e repetir
+            o valor no ponto do clique evita a dúvida de "quanto mesmo vou
+            pagar?" bem na hora de confirmar. */}
         <Button
           type="submit"
-          className="w-full h-12 text-base font-semibold"
+          className="h-13 w-full flex-col gap-0 text-base font-semibold leading-tight"
           disabled={isPending || effectiveQty === 0}
         >
-          {isPending ? "Reservando..." : "Quero participar"}
+          {isPending ? (
+            "Reservando..."
+          ) : (
+            <>
+              <span>Quero participar</span>
+              {effectiveQty > 0 && (
+                <span className="text-xs font-bold tabular-nums opacity-90">
+                  {formatBRL(effectiveQty * pricePerNumber)}
+                </span>
+              )}
+            </>
+          )}
         </Button>
 
         {/* Só entra em cena quando a reserva exige uma conta que ainda não
@@ -330,8 +348,8 @@ function QuantityPicker({
     (q) => q >= minPurchase && (!maxPurchase || q <= maxPurchase)
   );
   return (
-    <div className="space-y-3">
-      <p className="text-center text-sm text-muted-foreground">
+    <div className="space-y-2.5">
+      <p className="text-center text-[13px] text-muted-foreground">
         Quanto mais títulos, mais chances de ganhar
       </p>
 
@@ -347,7 +365,7 @@ function QuantityPicker({
                 type="button"
                 onClick={() => onChange(q)}
                 className={cn(
-                  "relative rounded-xl border-2 px-2 py-3 text-center transition-all flex flex-col items-center gap-0.5",
+                  "relative flex flex-col items-center gap-0 rounded-xl border-2 px-2 py-2.5 text-center transition-all",
                   popular
                     ? "border-amber-500 bg-amber-500/10"
                     : selected
