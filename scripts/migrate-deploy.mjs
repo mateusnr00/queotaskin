@@ -55,6 +55,26 @@ if (faltando.length > 0) {
   process.exit(0);
 }
 
+// Antes de tentar conectar, diz PARA ONDE está indo. Sem isso, um erro de
+// conexão no build não distingue "host errado" de "senha errada" de "a env
+// var ainda tem o placeholder do .env.example" — e cada hipótese custa um
+// redeploy pra testar. Usuário e host aparecem; a senha, nunca.
+function descreve(nome) {
+  const bruto = process.env[nome];
+  if (!bruto) return `${nome}: (vazia)`;
+  try {
+    const u = new URL(bruto);
+    const params = u.search ? ` ${u.search}` : "";
+    return `${nome}: ${u.username}@${u.hostname}:${u.port || "5432"}${u.pathname}${params}`;
+  } catch {
+    return `${nome}: (valor não é uma URL válida — ${bruto.length} caracteres)`;
+  }
+}
+
+console.log("[build] destino do banco:");
+console.log(`[build]   ${descreve("DATABASE_URL")}`);
+console.log(`[build]   ${descreve("DIRECT_URL")}`);
+
 run("prisma migrate deploy", ["prisma", "migrate", "deploy"]);
 
 // Seed de dados iniciais. Fica atrás de uma flag porque popular o banco não

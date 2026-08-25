@@ -8,20 +8,25 @@ aplica as migrations e, no primeiro deploy, popula o banco.
 
 Projeto: **queota-skin** · região `us-east-1` · Postgres 17.
 
-A aplicação usa o papel `queota_app`, não o `postgres` — assim a credencial
-que vive na Vercel não é superusuária. O papel já existe, com `CREATE` no
-schema `public` (as migrations precisam) e privilégios nas tabelas.
+**Use o usuário `postgres`.** Papéis criados por SQL não funcionam através do
+pooler: o Supavisor mantém a própria lista de usuários por projeto e só o
+`postgres` está registrado nela. Um papel customizado existe no Postgres mas o
+pooler responde `FATAL: tenant/user <papel>.<ref> not found`.
+
+Para menor privilégio seria preciso registrar o papel no pooler pelo painel do
+Supabase, ou conectar direto — e a conexão direta é IPv6, que a Vercel não
+alcança.
 
 As duas connection strings saem de **Supabase → Project Settings → Database →
-Connection string**. Troque o usuário `postgres` por `queota_app` e use a
-senha do papel:
+Connection string**. Use a senha do banco definida na criação do projeto (ou
+gerada em **Reset database password**):
 
 ```
 # App (pooler em transaction mode — é o que serverless precisa)
-DATABASE_URL="postgresql://queota_app.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DATABASE_URL="postgresql://postgres.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 # Migrations (session mode — migration não roda em transaction pooler)
-DIRECT_URL="postgresql://queota_app.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler.supabase.com:5432/postgres"
+DIRECT_URL="postgresql://postgres.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler.supabase.com:5432/postgres"
 ```
 
 O prefixo `aws-<N>` varia por projeto (`aws-0`, `aws-1`...). Copie o host
