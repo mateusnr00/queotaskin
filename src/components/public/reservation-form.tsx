@@ -6,7 +6,7 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 
 import { createReservationAction } from "@/server/actions/reservations";
 import { AccountGateDialog } from "@/components/public/account-gate-dialog";
@@ -342,10 +342,12 @@ function QuantityPicker({
   selectionCards: number[];
   selectionCardsBestseller: number;
 }) {
-  // Filtra cards inválidos (<= 0 ou fora dos limites min/max). Slots
-  // vazios já não chegam aqui (action filtra antes de salvar).
+  // Descarta card que não soma nada e card maior que o teto de compra, que
+  // seria sempre aparado. O piso mínimo não filtra mais: com o clique
+  // somando, um card de +2 continua útil numa campanha de mínimo 10 — são
+  // cinco cliques, não um card inválido.
   const cards = selectionCards.filter(
-    (q) => q >= minPurchase && (!maxPurchase || q <= maxPurchase)
+    (q) => q > 0 && (!maxPurchase || q <= maxPurchase)
   );
   return (
     <div className="space-y-2.5">
@@ -357,20 +359,23 @@ function QuantityPicker({
         <div className="grid grid-cols-3 gap-2">
           {cards.map((q, idx) => {
             const popular = idx === selectionCardsBestseller;
-            const selected = quantity === q;
-            const totalPrice = pricePerNumber * q;
+            // Preço do acréscimo, não do total: o card soma q cotas ao que
+            // já está escolhido.
+            const precoDoAcrescimo = pricePerNumber * q;
             return (
               <button
                 key={`${q}-${idx}`}
                 type="button"
-                onClick={() => onChange(q)}
+                // Soma ao contador em vez de substituí-lo. O rótulo diz
+                // "+10", então dois cliques têm de dar 20 — trocar o valor
+                // fazia o segundo clique não mudar nada, contradizendo o
+                // próprio rótulo.
+                onClick={() => onChange(quantity + q)}
                 className={cn(
                   "relative flex flex-col items-center gap-0 rounded-xl border-2 px-2 py-2.5 text-center transition-all",
                   popular
                     ? "border-amber-500 bg-amber-500/10"
-                    : selected
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/40"
+                    : "border-border hover:border-primary/40 active:border-primary"
                 )}
               >
                 {popular && (
@@ -380,14 +385,14 @@ function QuantityPicker({
                 )}
                 <p className="text-lg font-extrabold">+{q}</p>
                 <span className="text-[11px] text-muted-foreground tabular-nums">
-                  R${" "}
-                  {totalPrice.toLocaleString("pt-BR", {
+                  +R${" "}
+                  {precoDoAcrescimo.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </span>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary mt-0.5">
-                  Selecionar
+                <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                  Adicionar
                 </p>
               </button>
             );
@@ -396,6 +401,22 @@ function QuantityPicker({
       )}
 
       <div className="flex items-center gap-2">
+        {/* Zerar a escolha. Com os cards somando, quem clicou em +1000 por
+            engano teria de apertar "−" mil vezes para voltar. Só aparece
+            quando há o que desfazer. */}
+        {quantity > minPurchase && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onChange(minPurchase)}
+            aria-label="Limpar seleção"
+            title="Limpar seleção"
+            className="text-destructive hover:text-destructive"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"
