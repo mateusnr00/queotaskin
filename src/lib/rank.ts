@@ -45,6 +45,8 @@ export interface PrestigeRank {
   /** XP acumulado para alcançar a patente. */
   xp: number;
   color: string;
+  /** Numeral exibido no selo. As patentes usam romano; os níveis, o número. */
+  numeral: string;
   description: string;
 }
 
@@ -61,46 +63,74 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     key: "PRO_PLAYER",
     label: "Pro Player",
     xp: 40_000,
-    color: "#22d3ee",
-    description: "Assinou com uma organização. R$ 4.000 acumulados.",
+    color: "#3fc9d6",
+    numeral: "I",
+    description: "Assinou com uma organização.",
   },
   {
     key: "LEGEND",
     label: "Legend",
     xp: 80_000,
-    color: "#8847ff",
-    description: "Status de lenda no Major. R$ 8.000 acumulados.",
+    color: "#7c6cf0",
+    numeral: "II",
+    description: "Status de lenda no Major.",
   },
   {
     key: "MAJOR_CHAMPION",
     label: "Campeão de Major",
     xp: 150_000,
-    color: "#eb4b4b",
-    description: "Levantou o troféu. R$ 15.000 acumulados.",
+    color: "#e05a4a",
+    numeral: "III",
+    description: "Levantou o troféu.",
   },
   {
     key: "GOAT",
     label: "GOAT",
     xp: 300_000,
-    color: "#ffd700",
-    description: "O maior de todos os tempos. R$ 30.000 acumulados.",
+    color: "#f2d059",
+    numeral: "IV",
+    description: "O maior de todos os tempos.",
   },
 ] as const;
 
-// ---------------------------------------------------------------- cores
+// ---------------------------------------------------------------- faixas
+
+export interface Tier {
+  /** Nome da faixa, no vocabulário das patentes do Counter-Strike. */
+  name: string;
+  color: string;
+  /** Primeiro nível da faixa. */
+  from: number;
+}
 
 /**
- * Cor do nível numérico. A faixa acompanha a leitura da Gamers Club:
- * cinza no começo, azul, roxo, rosa e ouro no topo.
+ * Faixas dos níveis 0–21, nomeadas como as patentes do competitivo do CS.
+ *
+ * A cor é o único elemento cromático de cada componente de rank — por isso é
+ * dessaturada de propósito. Uma lista de ranking com sete cores neon vira
+ * ruído; puxada para o sóbrio, ela informa sem gritar.
  */
+export const TIERS: readonly Tier[] = [
+  { from: 0, name: "Prata", color: "#7d8894" },
+  { from: 1, name: "Prata Elite", color: "#5b8fc7" },
+  { from: 4, name: "Nova de Ouro", color: "#6d7fd6" },
+  { from: 8, name: "Mestre Guardião", color: "#9a72d1" },
+  { from: 12, name: "Águia Lendária", color: "#c06ab8" },
+  { from: 16, name: "Supremo", color: "#d4694f" },
+  { from: 20, name: "Global Elite", color: "#d8a53c" },
+] as const;
+
+export function tierForLevel(level: number): Tier {
+  const L = Math.max(0, Math.min(MAX_LEVEL, Math.floor(level)));
+  let found = TIERS[0];
+  for (const tier of TIERS) {
+    if (L >= tier.from) found = tier;
+  }
+  return found;
+}
+
 export function levelColor(level: number): string {
-  if (level >= 20) return "#ffd700";
-  if (level >= 17) return "#eb4b4b";
-  if (level >= 13) return "#d32ce6";
-  if (level >= 9) return "#8847ff";
-  if (level >= 5) return "#4b69ff";
-  if (level >= 1) return "#5e98d9";
-  return "#8b98a8";
+  return tierForLevel(level).color;
 }
 
 // ---------------------------------------------------------------- rank
@@ -112,8 +142,10 @@ export interface Rank {
   prestige: PrestigeRank | null;
   /** Nome exibido: "Nível 14" ou "Campeão de Major". */
   label: string;
-  /** Nome curto para selos apertados: "14" ou "GOAT". */
-  shortLabel: string;
+  /** Faixa do nível ("Águia Lendária"), ou o nome da patente no prestígio. */
+  tierName: string;
+  /** Conteúdo do selo: "14" nos níveis, romano ("III") nas patentes. */
+  numeral: string;
   color: string;
   xp: number;
 }
@@ -130,25 +162,29 @@ export function prestigeFromXp(xp: number): PrestigeRank | null {
 export function rankFromXp(xp: number): Rank {
   const total = Math.max(0, Math.floor(xp));
   const prestige = prestigeFromXp(total);
-  const level = levelFromXp(total);
 
   if (prestige) {
     return {
       level: MAX_LEVEL,
       prestige,
       label: prestige.label,
-      shortLabel: prestige.key === "MAJOR_CHAMPION" ? "MAJOR" : prestige.label,
+      tierName: prestige.label,
+      numeral: prestige.numeral,
       color: prestige.color,
       xp: total,
     };
   }
 
+  const level = levelFromXp(total);
+  const tier = tierForLevel(level);
   return {
     level,
     prestige: null,
     label: `Nível ${level}`,
-    shortLabel: String(level),
-    color: levelColor(level),
+    tierName: tier.name,
+    // Dois dígitos deixam a coluna de selos alinhada na lista de ranking.
+    numeral: String(level).padStart(2, "0"),
+    color: tier.color,
     xp: total,
   };
 }

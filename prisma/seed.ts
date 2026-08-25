@@ -300,7 +300,9 @@ async function main() {
       "com entrega direta na sua conta Steam.",
     themeMode: "DARK" as const,
     themePreset: "cs2",
-    headerAccent: true,
+    // Header escuro: a barra chapada de laranja competia com as cores das
+    // patentes do rank. Dá pra ligar de novo em Admin → Personalizar tema.
+    headerAccent: false,
     cardColor: "black",
     numbersNomenclature: "numeros",
     homeCampaignsTitle: "Campanhas",

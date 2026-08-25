@@ -1,14 +1,35 @@
-import { Trophy } from "lucide-react";
+import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
+import { MAX_LEVEL, PRESTIGE_RANKS, TIERS, rankProgress, xpForLevel } from "@/lib/rank";
 
-import { RankBadge } from "@/components/rank/rank-badge";
-import { MAX_LEVEL, PRESTIGE_RANKS, rankProgress, xpForLevel } from "@/lib/rank";
+/** Painel com aresta de acento à esquerda — a marca visual do rank. */
+function Panel({
+  color,
+  children,
+  className = "",
+}: {
+  color: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`relative overflow-hidden rounded-r-lg border border-l-0 border-[#232730] bg-[#141619] ${className}`}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[3px]"
+        style={{ backgroundColor: color }}
+      />
+      {children}
+    </section>
+  );
+}
 
 /**
- * Cartão de progresso do participante: rank atual, barra até o próximo
- * degrau e quanto falta em reais.
+ * Cartão de progresso do participante.
  *
- * O "faltam R$ X" é o coração da recorrência — número redondo e acionável,
- * bem melhor que mostrar só o XP cru.
+ * O "faltam R$ X" é o que puxa a recorrência — número redondo e acionável,
+ * bem melhor do que exibir só o XP cru.
  */
 export function RankCard({
   xp,
@@ -23,139 +44,178 @@ export function RankCard({
   const { rank } = progress;
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card">
+    <Panel color={rank.color}>
       <div
-        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-        style={{ background: `linear-gradient(90deg, ${rank.color}22, transparent)` }}
-      >
-        <div className="flex items-center gap-3">
-          <RankBadge rank={rank} size="lg" showLabel={false} />
-          <div>
-            <p className="text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">
-              Seu rank
-            </p>
-            <p className="text-lg leading-tight font-bold" style={{ color: rank.color }}>
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: `radial-gradient(420px 120px at 0% 0%, color-mix(in srgb, ${rank.color} 11%, transparent), transparent 70%)`,
+        }}
+      />
+
+      <div className="relative p-5 sm:p-6">
+        <div className="flex items-center gap-4">
+          <RankBadge rank={rank} size="lg" variant="solid" />
+
+          <div className="min-w-0">
+            <h2 className="text-xl leading-tight font-bold tracking-tight sm:text-2xl">
               {rank.label}
+            </h2>
+            <p
+              className="text-[11px] font-bold tracking-[0.12em] uppercase"
+              style={{ color: rank.color }}
+            >
+              {/* No prestígio o nome já é o título — repetir a faixa embaixo
+                  seria eco. Ali cabe melhor o que a patente significa. */}
+              {rank.prestige ? rank.prestige.description : rank.tierName}
             </p>
+          </div>
+
+          <div className="ml-auto text-right">
+            <p className="text-[9.5px] font-bold tracking-[0.16em] text-muted-foreground uppercase">
+              XP acumulado
+            </p>
+            <p className="font-mono text-lg font-bold tracking-tight tabular-nums sm:text-xl">
+              {xp.toLocaleString("pt-BR")}
+            </p>
+            {position != null && (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                {position}º no ranking
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="text-right">
-          <p className="text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">
-            XP total
-          </p>
-          <p className="text-lg font-bold tabular-nums">{xp.toLocaleString("pt-BR")}</p>
-          {position != null && (
-            <p className="text-xs text-muted-foreground">
-              {position}º no ranking geral
-            </p>
-          )}
+        <div className="mt-5">
+          <div className="mb-2 flex items-baseline justify-between gap-3 text-xs">
+            <span className="text-muted-foreground">
+              {progress.atMax ? (
+                "Patente máxima atingida"
+              ) : (
+                <>
+                  Próximo:{" "}
+                  <b className="font-semibold text-foreground">{progress.nextLabel}</b>
+                </>
+              )}
+            </span>
+            <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+              {progress.atMax ? "MÁX" : `${progress.percent}%`}
+            </span>
+          </div>
+
+          <RankMeter
+            percent={progress.percent}
+            color={rank.color}
+            height={6}
+            label={progress.nextLabel ?? "Patente máxima"}
+          />
         </div>
-      </div>
 
-      <div className="space-y-2 border-t p-4">
-        {progress.atMax ? (
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-500">
-            <Trophy className="h-4 w-4" />
-            Você chegou ao topo. Não existe rank acima de GOAT.
+        {!progress.atMax && (
+          <p className="mt-3 border-t border-[#232730] pt-3 text-xs text-muted-foreground">
+            Faltam{" "}
+            <b className="font-semibold text-foreground">
+              {progress.xpToNext.toLocaleString("pt-BR")} XP
+            </b>{" "}
+            — cerca de{" "}
+            <b className="font-semibold text-foreground">
+              R$ {progress.brlToNext.toLocaleString("pt-BR")}
+            </b>{" "}
+            em números.
           </p>
-        ) : (
-          <>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="text-muted-foreground">
-                Próximo: <span className="font-semibold text-foreground">{progress.nextLabel}</span>
-              </span>
-              <span className="font-semibold tabular-nums">{progress.percent}%</span>
-            </div>
-
-            <div
-              className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-valuenow={progress.percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Progresso até ${progress.nextLabel}`}
-            >
-              <div
-                className="h-full rounded-full transition-[width] duration-700"
-                style={{
-                  width: `${progress.percent}%`,
-                  background: `linear-gradient(90deg, ${rank.color}88, ${rank.color})`,
-                }}
-              />
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Faltam{" "}
-              <span className="font-bold text-foreground">
-                {progress.xpToNext.toLocaleString("pt-BR")} XP
-              </span>{" "}
-              — cerca de{" "}
-              <span className="font-bold text-foreground">
-                R$ {progress.brlToNext.toLocaleString("pt-BR")}
-              </span>{" "}
-              em números.
-            </p>
-          </>
         )}
-
-        <p className="border-t pt-2 text-xs text-muted-foreground">
-          Cada R$ 1 gasto em números pagos vale {xpPerBrl} XP. O rank é
-          permanente: XP não expira nem é descontado.
-        </p>
       </div>
-    </section>
+    </Panel>
   );
 }
 
-/** A escada completa: os 21 níveis e as 4 patentes acima deles. */
+/** A escada completa: as faixas de nível e as patentes acima delas. */
 export function RankLadder({ xp }: { xp: number }) {
   const current = rankProgress(xp).rank;
 
   return (
-    <section className="rounded-xl border bg-card p-4">
-      <h2 className="mb-1 text-base font-bold">A escada</h2>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Níveis 0 a 21 como na Gamers Club. Depois do 21, começam as patentes.
+    <section className="rounded-lg border border-[#232730] bg-[#141619] p-5">
+      <h2 className="text-sm font-bold">A escada</h2>
+      <p className="mt-0.5 mb-4 text-xs text-muted-foreground">
+        Vinte e dois níveis, sete patentes. Acima do 21, o prestígio.
       </p>
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {Array.from({ length: MAX_LEVEL + 1 }, (_, level) => (
-          <RankBadge
-            key={level}
-            xp={xpForLevel(level)}
-            size="sm"
-            showLabel={false}
-            className={
-              current.prestige == null && current.level === level
-                ? "ring-2 ring-primary ring-offset-1 ring-offset-card rounded-md"
-                : "opacity-60"
-            }
-          />
-        ))}
-      </div>
+      <ol className="space-y-2.5">
+        {TIERS.map((tier, index) => {
+          const last = TIERS[index + 1] ? TIERS[index + 1].from - 1 : MAX_LEVEL;
+          const active =
+            current.prestige == null &&
+            current.level >= tier.from &&
+            current.level <= last;
 
-      <ol className="space-y-1.5">
+          return (
+            <li key={tier.name} className="flex items-center gap-3">
+              <span
+                className="w-32 shrink-0 text-[11px] font-bold tracking-[0.08em] uppercase"
+                style={{ color: active ? tier.color : undefined }}
+                data-active={active}
+              >
+                <span className={active ? "" : "text-muted-foreground"}>{tier.name}</span>
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {Array.from({ length: last - tier.from + 1 }, (_, i) => {
+                  const level = tier.from + i;
+                  const isCurrent = active && current.level === level;
+                  return (
+                    <RankBadge
+                      key={level}
+                      xp={xpForLevel(level)}
+                      size="sm"
+                      variant={isCurrent ? "solid" : "outline"}
+                      className={isCurrent ? "" : "opacity-45"}
+                    />
+                  );
+                })}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      <ol className="mt-4 space-y-1.5 border-t border-[#232730] pt-4">
         {PRESTIGE_RANKS.map((prestige) => {
           const reached = xp >= prestige.xp;
           return (
             <li
               key={prestige.key}
-              className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+              className="flex items-center gap-3 rounded-md border px-3 py-2"
               style={{
-                borderColor: reached ? `${prestige.color}66` : undefined,
-                backgroundColor: reached ? `${prestige.color}12` : undefined,
-                opacity: reached ? 1 : 0.55,
+                borderColor: reached ? `${prestige.color}55` : "#232730",
+                backgroundColor: reached ? `${prestige.color}0f` : undefined,
               }}
             >
-              <div className="min-w-0">
-                <p className="text-sm font-bold" style={{ color: prestige.color }}>
-                  {prestige.label}
+              <RankBadge
+                rank={{
+                  level: MAX_LEVEL,
+                  prestige,
+                  label: prestige.label,
+                  tierName: prestige.label,
+                  numeral: prestige.numeral,
+                  color: prestige.color,
+                  xp: prestige.xp,
+                }}
+                size="sm"
+                variant={reached ? "solid" : "outline"}
+                className={reached ? "" : "opacity-45"}
+              />
+              <div className="min-w-0 flex-1">
+                <p
+                  className="text-xs font-bold"
+                  style={{ color: reached ? prestige.color : undefined }}
+                >
+                  <span className={reached ? "" : "text-muted-foreground"}>
+                    {prestige.label}
+                  </span>
                 </p>
-                <p className="text-xs text-muted-foreground">{prestige.description}</p>
+                <p className="text-[11px] text-muted-foreground">{prestige.description}</p>
               </div>
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
-                {prestige.xp.toLocaleString("pt-BR")} XP
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+                {prestige.xp.toLocaleString("pt-BR")}
               </span>
             </li>
           );

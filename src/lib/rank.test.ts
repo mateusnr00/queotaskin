@@ -8,6 +8,7 @@ import {
   prestigeFromXp,
   rankFromXp,
   rankProgress,
+  tierForLevel,
   xpForLevel,
   xpForPurchase,
 } from "@/lib/rank";
@@ -108,9 +109,21 @@ describe("rankFromXp", () => {
     expect(rank.prestige?.key).toBe("GOAT");
   });
 
-  it("encurta 'Campeão de Major' para caber em selo apertado", () => {
-    expect(rankFromXp(150_000).shortLabel).toBe("MAJOR");
-    expect(rankFromXp(5500).shortLabel).toBe("10");
+  it("usa numeral romano no selo das patentes e o nível nos demais", () => {
+    expect(rankFromXp(150_000).numeral).toBe("III");
+    expect(rankFromXp(300_000).numeral).toBe("IV");
+    // Dois dígitos mantêm a coluna de selos alinhada na lista de ranking.
+    expect(rankFromXp(5500).numeral).toBe("10");
+    expect(rankFromXp(0).numeral).toBe("00");
+  });
+
+  it("nomeia a faixa com o vocabulário das patentes do CS", () => {
+    expect(rankFromXp(0).tierName).toBe("Prata");
+    expect(rankFromXp(xpForLevel(5)).tierName).toBe("Nova de Ouro");
+    expect(rankFromXp(xpForLevel(14)).tierName).toBe("Águia Lendária");
+    expect(rankFromXp(xpForLevel(21)).tierName).toBe("Global Elite");
+    // No prestígio, a faixa é a própria patente.
+    expect(rankFromXp(300_000).tierName).toBe("GOAT");
   });
 });
 
@@ -173,5 +186,20 @@ describe("meetsMinLevel", () => {
 
   it("prestígio passa em qualquer exigência de nível", () => {
     expect(meetsMinLevel(300_000, 21)).toBe(true);
+  });
+});
+
+describe("tierForLevel", () => {
+  it("cobre todos os níveis sem buraco entre faixas", () => {
+    for (let level = 0; level <= MAX_LEVEL; level++) {
+      expect(tierForLevel(level).name).toBeTruthy();
+    }
+  });
+
+  it("troca de faixa exatamente no nível de corte", () => {
+    expect(tierForLevel(3).name).toBe("Prata Elite");
+    expect(tierForLevel(4).name).toBe("Nova de Ouro");
+    expect(tierForLevel(19).name).toBe("Supremo");
+    expect(tierForLevel(20).name).toBe("Global Elite");
   });
 });

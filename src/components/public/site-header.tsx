@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { adminHref, isAdminOnSeparateHost } from "@/lib/admin-host";
 import { getCurrentTenant } from "@/lib/tenant";
 import { PublicMobileMenu } from "./public-mobile-menu";
+import { RankChip } from "@/components/rank/rank-chip";
 
 // Header público compacto inspirado no Sorteamos: logo à esquerda,
 // menu hambúrguer no mobile, ações no desktop. Quando admin liga
@@ -40,10 +41,30 @@ export async function SiteHeader() {
     ? await prisma.tenant
         .findUnique({
           where: { id: tenantCtx.id },
-          select: { logoUrl: true, headerAccent: true },
+          select: {
+            logoUrl: true,
+            headerAccent: true,
+            rankEnabled: true,
+            xpPerBrl: true,
+          },
         })
         .catch(() => null)
     : null;
+
+  // Chip de rank no header. Só monta quando há usuário, tenant e o rank está
+  // ligado — falhar aqui não pode derrubar o cabeçalho do site inteiro.
+  const rankChip =
+    session?.user?.id && tenantCtx && tenantVisual?.rankEnabled
+      ? await prisma.userProgress
+          .findUnique({
+            where: {
+              userId_tenantId: { userId: session.user.id, tenantId: tenantCtx.id },
+            },
+            select: { xp: true },
+          })
+          .then((p) => ({ xp: p?.xp ?? 0, xpPerBrl: tenantVisual.xpPerBrl }))
+          .catch(() => null)
+      : null;
   // Em produção (host split ativo), o site público nunca mostra o link Admin
   // — quem é admin acessa via admin.<dominio>. Só liga o link em dev/preview
   // onde tudo vive no mesmo host.
@@ -124,9 +145,19 @@ export async function SiteHeader() {
                   Admin
                 </Link>
               )}
-              <span className="ml-2 text-xs text-muted-foreground">
-                {session.user.name?.split(" ")[0]}
-              </span>
+              {rankChip ? (
+                <span className="ml-2">
+                  <RankChip
+                    name={session.user.name?.split(" ")[0] ?? "Você"}
+                    xp={rankChip.xp}
+                    xpPerBrl={rankChip.xpPerBrl}
+                  />
+                </span>
+              ) : (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {session.user.name?.split(" ")[0]}
+                </span>
+              )}
               <form
                 action={async () => {
                   "use server";

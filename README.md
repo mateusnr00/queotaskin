@@ -82,8 +82,12 @@ próximo nível está perto e porque campanhas exclusivas dependem dele.
 
 ### A escada
 
-**Níveis 0 a 21**, como na Gamers Club. A curva é quadrática
-(`XP_STEP * L * (L+1) / 2`): o começo é rápido e o topo é de longo prazo.
+**Níveis 0 a 21**, como na Gamers Club, agrupados em sete faixas nomeadas
+com o vocabulário das patentes do competitivo do CS — Prata, Prata Elite,
+Nova de Ouro, Mestre Guardião, Águia Lendária, Supremo e Global Elite.
+
+A curva é quadrática (`XP_STEP * L * (L+1) / 2`): o começo é rápido e o topo
+é de longo prazo.
 
 | Nível | XP | Equivale a |
 |---|---|---|
@@ -146,13 +150,35 @@ O bloqueio é decidido **no servidor**, em `createReservationAction`. A página
 pública apenas mostra o aviso, e ele é escrito para motivar: *"Faltam 1.500
 XP — cerca de R$ 150 em outras campanhas para liberar esta."*
 
+### Linguagem visual
+
+O selo é um **hexágono** com o nível (`07`) ou o numeral romano da patente
+(`III`). Patente usa sempre a variante chapada: a diferença de tratamento
+distingue prestígio de nível sem depender só da cor.
+
+Cada componente tem **uma cor só**, a da faixa — e a paleta é dessaturada de
+propósito. Uma lista de ranking com sete cores neon vira ruído; puxada para o
+sóbrio, ela informa sem gritar.
+
+A marca do sistema é a **aresta de acento à esquerda** do painel, no lugar de
+borda colorida em volta. Números sempre em `JetBrains Mono` com `tabular-nums`,
+para as colunas não dançarem entre linhas.
+
+O ranking **não tem barra de progresso**: numa lista, uma barra "até o próximo
+nível" mente para o olho — o GOAT apareceria cheio e o Campeão de Major quase
+vazio logo abaixo dele. Lá o que ordena é XP e posição, então é isso que a
+linha mostra. A barra fica no perfil, onde significa algo.
+
 ### Onde mexer
 
 | Arquivo | O quê |
 |---|---|
-| `src/lib/rank.ts` | Curva, limiares, patentes, cores |
+| `src/lib/rank.ts` | Curva, limiares, faixas, patentes, cores |
 | `src/server/services/xp.ts` | Crédito, estorno, ajuste, ranking |
-| `src/components/rank/` | Selo, cartão de progresso, escada, gate |
+| `src/components/rank/rank-badge.tsx` | Selo hexagonal e barra |
+| `src/components/rank/rank-chip.tsx` | Chip do header |
+| `src/components/rank/rank-card.tsx` | Cartão do perfil e escada |
+| `src/components/rank/rank-row.tsx` | Linha do ranking |
 | `src/app/(public)/ranking/` | Ranking público |
 
 ### Ainda não implementado
