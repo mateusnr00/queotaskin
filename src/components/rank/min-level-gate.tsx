@@ -75,12 +75,7 @@ export function MinLevelGate({
             className="flex-1"
             label={`Progresso até o nível ${minLevel}`}
           />
-          <RankBadge
-            xp={required}
-            size="sm"
-            variant="outline"
-            className="opacity-60"
-          />
+          <RankBadge xp={required} size="sm" muted />
         </div>
       )}
     </div>

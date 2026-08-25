@@ -55,7 +55,7 @@ export function RankCard({
 
       <div className="relative p-5 sm:p-6">
         <div className="flex items-center gap-4">
-          <RankBadge rank={rank} size="lg" variant="solid" />
+          <RankBadge rank={rank} size="lg" />
 
           <div className="min-w-0">
             <h2 className="text-xl leading-tight font-bold tracking-tight sm:text-2xl">
@@ -157,18 +157,28 @@ export function RankLadder({ xp }: { xp: number }) {
               >
                 <span className={active ? "" : "text-muted-foreground"}>{tier.name}</span>
               </span>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {Array.from({ length: last - tier.from + 1 }, (_, i) => {
                   const level = tier.from + i;
+                  // Apaga só o que ainda não foi conquistado. Quem chegou ao
+                  // prestígio passou por toda a escada — apagá-la inteira
+                  // faria a conquista parecer o contrário do que é.
+                  const reached = xp >= xpForLevel(level);
                   const isCurrent = active && current.level === level;
                   return (
-                    <RankBadge
+                    <span
                       key={level}
-                      xp={xpForLevel(level)}
-                      size="sm"
-                      variant={isCurrent ? "solid" : "outline"}
-                      className={isCurrent ? "" : "opacity-45"}
-                    />
+                      className={
+                        isCurrent
+                          ? "rounded-full ring-2 ring-offset-2 ring-offset-[#141619]"
+                          : undefined
+                      }
+                      style={
+                        isCurrent ? { ["--tw-ring-color" as string]: current.color } : undefined
+                      }
+                    >
+                      <RankBadge xp={xpForLevel(level)} size="md" muted={!reached} />
+                    </span>
                   );
                 })}
               </div>
@@ -189,20 +199,7 @@ export function RankLadder({ xp }: { xp: number }) {
                 backgroundColor: reached ? `${prestige.color}0f` : undefined,
               }}
             >
-              <RankBadge
-                rank={{
-                  level: MAX_LEVEL,
-                  prestige,
-                  label: prestige.label,
-                  tierName: prestige.label,
-                  numeral: prestige.numeral,
-                  color: prestige.color,
-                  xp: prestige.xp,
-                }}
-                size="sm"
-                variant={reached ? "solid" : "outline"}
-                className={reached ? "" : "opacity-45"}
-              />
+              <RankBadge xp={prestige.xp} size="md" muted={!reached} />
               <div className="min-w-0 flex-1">
                 <p
                   className="text-xs font-bold"

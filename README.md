@@ -152,9 +152,23 @@ XP — cerca de R$ 150 em outras campanhas para liberar esta."*
 
 ### Linguagem visual
 
-O selo é um **hexágono** com o nível (`07`) ou o numeral romano da patente
-(`III`). Patente usa sempre a variante chapada: a diferença de tratamento
-distingue prestígio de nível sem depender só da cor.
+**A silhueta do selo sobe junto com a faixa.** Losango na Prata, pentágono
+na Prata Elite, hexágono na Nova de Ouro, heptágono no Mestre Guardião,
+octógono na Águia Lendária, decágono no Supremo — e o Global Elite fecha a
+escada com o mesmo decágono, mas com um anel externo destacado. O prestígio
+vira roseta com brilho, claramente fora da escala.
+
+Isso é o que faz o rank ser legível em 26px e para quem não distingue
+matizes: dá para reconhecer a faixa pelo contorno, antes da cor. Cada selo é
+anel colorido por fora, miolo escuro por dentro e número branco no centro.
+
+A geometria é gerada por `polygon(sides, inset, notch)` em `rank-badge.tsx`:
+o mesmo polígono percorrido com recuos diferentes vira anel, corpo e miolo,
+sem empilhar máscaras. `notch` puxa os vértices ímpares para dentro e
+transforma o polígono em roseta.
+
+Supremo e Global Elite têm a mesma contagem de lados de propósito — passar de
+10 para 12 lados seria indistinguível numa lista; o anel é que separa os dois.
 
 Cada componente tem **uma cor só**, a da faixa — e a paleta é dessaturada de
 propósito. Uma lista de ranking com sete cores neon vira ruído; puxada para o

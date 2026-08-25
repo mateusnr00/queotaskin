@@ -8,6 +8,7 @@ import {
   prestigeFromXp,
   rankFromXp,
   rankProgress,
+  TIERS,
   tierForLevel,
   xpForLevel,
   xpForPurchase,
@@ -201,5 +202,36 @@ describe("tierForLevel", () => {
     expect(tierForLevel(4).name).toBe("Nova de Ouro");
     expect(tierForLevel(19).name).toBe("Supremo");
     expect(tierForLevel(20).name).toBe("Global Elite");
+  });
+});
+
+describe("geometria do selo", () => {
+  it("a silhueta ganha lados conforme a faixa sobe", () => {
+    const sides = TIERS.map((t) => t.sides);
+    for (let i = 1; i < sides.length; i++) {
+      expect(sides[i]).toBeGreaterThanOrEqual(sides[i - 1]);
+    }
+    expect(sides[0]).toBe(4);
+  });
+
+  it("Supremo e Global Elite se separam pelo anel, não pela contagem", () => {
+    const supremo = TIERS.find((t) => t.name === "Supremo")!;
+    const global = TIERS.find((t) => t.name === "Global Elite")!;
+    expect(global.sides).toBe(supremo.sides);
+    expect(global.doubleRing).toBe(true);
+    expect(supremo.doubleRing).toBeUndefined();
+  });
+
+  it("níveis usam polígono liso e prestígio usa roseta", () => {
+    expect(rankFromXp(xpForLevel(10)).shape.notch).toBe(0);
+    expect(rankFromXp(300_000).shape.notch).toBeGreaterThan(0);
+  });
+
+  it("todo rank traz uma geometria desenhável", () => {
+    for (const xp of [0, 100, 5500, 23_100, 40_000, 300_000]) {
+      const { shape } = rankFromXp(xp);
+      expect(shape.sides).toBeGreaterThanOrEqual(3);
+      expect(shape.fontScale).toBeGreaterThan(0);
+    }
   });
 });
