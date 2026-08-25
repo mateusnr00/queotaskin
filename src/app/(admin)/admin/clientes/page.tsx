@@ -1,0 +1,195 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import {
+  ChevronRight,
+  Repeat,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
+
+import { getAdminOrThrow } from "@/lib/auth-helpers";
+import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { listCustomers, type CustomerSort } from "@/server/services/customers";
+import { StatCard } from "@/components/admin/customers/stat-card";
+import { TopCustomers } from "@/components/admin/customers/top-customers";
+import { CustomersFilters } from "@/components/admin/customers/customers-filters";
+import { CustomerRow } from "@/components/admin/customers/customer-row";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatBRL } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = { title: "Clientes" };
+export const dynamic = "force-dynamic";
+
+const ORDENACOES_VALIDAS: CustomerSort[] = ["spent", "recent", "purchases", "name"];
+
+export default async function AdminClientesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string; sort?: string; page?: string }>;
+}) {
+  const session = await getAdminOrThrow();
+  const tenantId = await getActiveTenantIdForAdmin(session.user);
+  const sp = await searchParams;
+
+  const search = (sp.search ?? "").trim();
+  const sort = ORDENACOES_VALIDAS.includes(sp.sort as CustomerSort)
+    ? (sp.sort as CustomerSort)
+    : "spent";
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+
+  const { customers, total, pages, page: paginaAtual, totals } =
+    await listCustomers(tenantId, { search, sort, page });
+
+  // O pódio ignora busca e ordenação: é sempre o topo por gasto.
+  const { customers: topCustomers } = await listCustomers(tenantId, {
+    sort: "spent",
+    page: 1,
+  });
+
+  function href(p: number) {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (sort !== "spent") params.set("sort", sort);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/admin/clientes?${qs}` : "/admin/clientes";
+  }
+
+  const taxaRecorrencia =
+    totals.clientes > 0
+      ? Math.round((totals.recorrentes / totals.clientes) * 100)
+      : 0;
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Clientes</h1>
+        <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Link href="/admin" className="hover:text-foreground">
+            Admin
+          </Link>
+          <ChevronRight className="h-3 w-3" />
+          <span>Clientes</span>
+        </nav>
+      </header>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={Users}
+          label="Clientes pagantes"
+          value={totals.clientes.toLocaleString("pt-BR")}
+          hint={`${totals.novos30d} novos em 30 dias`}
+        />
+        <StatCard
+          icon={Wallet}
+          label="Receita total"
+          value={formatBRL(totals.receita)}
+          accent="money"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Ticket médio"
+          value={formatBRL(totals.ticketMedio)}
+          hint="por compra paga"
+        />
+        <StatCard
+          icon={Repeat}
+          label="Compraram mais de uma vez"
+          value={`${taxaRecorrencia}%`}
+          hint={`${totals.recorrentes} de ${totals.clientes}`}
+          accent="growth"
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
+        <div className="space-y-4">
+          <CustomersFilters search={search} sort={sort} />
+
+          <Card className="overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12 text-center">#</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Patente</TableHead>
+                    <TableHead className="text-right">Compras</TableHead>
+                    <TableHead className="text-right">Números</TableHead>
+                    <TableHead className="text-right">Gasto</TableHead>
+                    <TableHead>Última compra</TableHead>
+                    <TableHead className="w-12 text-right">Zap</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customers.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="py-12 text-center text-sm text-muted-foreground"
+                      >
+                        {search
+                          ? `Nenhum cliente encontrado para "${search}".`
+                          : "Ninguém comprou ainda. O primeiro pagamento abre esta lista."}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    customers.map((c, i) => (
+                      <CustomerRow
+                        key={c.id}
+                        customer={c}
+                        position={(paginaAtual - 1) * 25 + i + 1}
+                      />
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+
+          {pages > 1 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {total.toLocaleString("pt-BR")} cliente(s) · página {paginaAtual} de{" "}
+                {pages}
+              </span>
+              <div className="flex gap-2">
+                <Link
+                  href={href(paginaAtual - 1)}
+                  aria-disabled={paginaAtual <= 1}
+                  className={cn(
+                    "rounded-md border px-3 py-1.5 text-sm hover:bg-muted",
+                    paginaAtual <= 1 && "pointer-events-none opacity-40",
+                  )}
+                >
+                  Anterior
+                </Link>
+                <Link
+                  href={href(paginaAtual + 1)}
+                  aria-disabled={paginaAtual >= pages}
+                  className={cn(
+                    "rounded-md border px-3 py-1.5 text-sm hover:bg-muted",
+                    paginaAtual >= pages && "pointer-events-none opacity-40",
+                  )}
+                >
+                  Próxima
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <TopCustomers customers={topCustomers.slice(0, 8)} />
+      </div>
+    </div>
+  );
+}
