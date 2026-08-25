@@ -2,6 +2,9 @@ import Link from "next/link";
 import { TicketCheck, Trophy } from "lucide-react";
 
 import { prisma } from "@/lib/db";
+import type { SkinRarity } from "@prisma/client";
+
+import { RaffleCover } from "@/components/public/raffle-cover";
 import { formatBRL, formatDate } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
@@ -39,6 +42,8 @@ export default async function HomePage() {
   const showHeader = Boolean(campaignsTitle || campaignsCaption);
   const showWinners = tenantPrefs?.showWinnersOnHome ?? false;
 
+  // `select` em vez de `include`: a Raffle tem ~70 colunas e o card usa oito.
+  // Puxar a linha inteira de sete campanhas era tráfego e parse à toa.
   const activeRaffles = await prisma.raffle.findMany({
     where: {
       status: "ACTIVE",
@@ -47,10 +52,37 @@ export default async function HomePage() {
     },
     take: MAX_RAFFLES,
     orderBy: [{ showOnHome: "desc" }, { createdAt: "desc" }],
-    include: {
-      images: { where: { isCover: true }, take: 1 },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      shortDescription: true,
+      statusText: true,
+      pricePerNumber: true,
+      isFree: true,
+      freeLabel: true,
+      totalNumbers: true,
+      showProgressBar: true,
+      images: { where: { isCover: true }, take: 1, select: { url: true } },
+      // A raridade do prêmio principal colore a capa quando não há arte.
+      prizes: {
+        orderBy: { position: "asc" },
+        take: 1,
+        select: { skinName: true, skinRarity: true },
+      },
     },
   });
+
+  // Quantos números já saíram de cada campanha, numa agregação só.
+  const vendidos = await prisma.ticket.groupBy({
+    by: ["raffleId"],
+    where: {
+      raffleId: { in: activeRaffles.map((r) => r.id) },
+      status: { in: ["PAID", "AWARDED"] },
+    },
+    _count: { _all: true },
+  });
+  const vendidosPorRifa = new Map(vendidos.map((v) => [v.raffleId, v._count._all]));
 
   const awarded = showWinners
     ? await prisma.awardedTicket.findMany({
@@ -97,13 +129,19 @@ export default async function HomePage() {
 
   const [featured, ...rest] = activeRaffles;
 
+  // A coluna de ganhadores só existe quando há ganhador. Antes o grid de duas
+  // colunas era montado só pelo toggle do admin: sem nenhum sorteio realizado,
+  // a segunda coluna vinha vazia e empurrava todo o conteúdo pra esquerda,
+  // deixando um vão do tamanho dela à direita.
+  const showWinnersColumn = showWinners && awarded.length > 0;
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6 md:py-10">
       <div
         className={
-          showWinners
+          showWinnersColumn
             ? "grid gap-8 lg:grid-cols-[1.6fr_1fr]"
-            : "max-w-3xl mx-auto"
+            : "mx-auto max-w-4xl"
         }
       >
         {/* ============ Campanhas ============ */}
@@ -119,16 +157,25 @@ export default async function HomePage() {
             />
           ) : (
             <>
-              <FeaturedRaffleCard raffle={featured} />
-              {rest.map((r) => (
-                <CompactRaffleCard key={r.id} raffle={r} />
-              ))}
+              <FeaturedRaffleCard
+                raffle={featured}
+                sold={vendidosPorRifa.get(featured.id) ?? 0}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {rest.map((r) => (
+                    <CompactRaffleCard
+                    key={r.id}
+                    raffle={r}
+                    sold={vendidosPorRifa.get(r.id) ?? 0}
+                  />
+                ))}
+              </div>
             </>
           )}
         </section>
 
         {/* ============ Ganhadores (só renderiza se admin ligou o toggle) ============ */}
-        {showWinners && awarded.length > 0 && (
+        {showWinnersColumn && (
           <section className="space-y-3">
             <SectionHeader title="Ganhadores" caption="sortudos" />
             <div className="space-y-3">
@@ -201,7 +248,10 @@ interface RaffleCardData {
   pricePerNumber: unknown;
   isFree: boolean;
   freeLabel: string | null;
+  totalNumbers: number;
+  showProgressBar: boolean;
   images: { url: string }[];
+  prizes: { skinName: string | null; skinRarity: SkinRarity | null }[];
 }
 
 // Texto exibido no lugar do preço. Rifas gratuitas usam o freeLabel
@@ -212,95 +262,139 @@ function priceLabel(raffle: RaffleCardData): string {
   return formatBRL(Number(raffle.pricePerNumber));
 }
 
-// Card grande de destaque — primeira campanha. Imagem grande no topo,
-// título e descrição abaixo + badge de status.
-function FeaturedRaffleCard({ raffle }: { raffle: RaffleCardData }) {
-  const cover = raffle.images[0]?.url ?? null;
+// Barra fina de progresso da venda. Todos os sites de rifa mostram isso e
+// funciona como prova social: 78% vendido diz "os outros estão comprando".
+function SalesBar({ sold, total }: { sold: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (sold / total) * 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-700"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums">
+        <span>
+          <b className="font-semibold text-foreground">{pct.toFixed(0)}%</b> vendido
+        </span>
+        <span>{(total - sold).toLocaleString("pt-BR")} disponíveis</span>
+      </div>
+    </div>
+  );
+}
+
+// Card grande de destaque — capa grande, título, preço e progresso.
+function FeaturedRaffleCard({
+  raffle,
+  sold,
+}: {
+  raffle: RaffleCardData;
+  sold: number;
+}) {
+  const prize = raffle.prizes[0];
   return (
     <Link
       href={`/s/${raffle.slug}`}
-      className="block rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+      className="group block overflow-hidden rounded-2xl border bg-card transition-colors hover:border-primary/40"
     >
-      {cover ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={cover}
-          alt={raffle.title}
-          className="w-full aspect-[4/3] object-cover"
+      <div className="relative">
+        <RaffleCover
+          url={raffle.images[0]?.url ?? null}
+          title={raffle.title}
+          skinName={prize?.skinName}
+          rarity={prize?.skinRarity}
+          className="aspect-16/9 w-full sm:aspect-2/1"
+          priority
         />
-      ) : (
-        <div className="w-full aspect-[4/3] bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-          <TicketCheck className="h-16 w-16 text-primary/40" />
-        </div>
-      )}
-      <div className="p-4 space-y-2">
-        <h3 className="font-bold text-base leading-tight line-clamp-2">
-          {raffle.title}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {raffle.shortDescription ?? "Participe e concorra!"}
-        </p>
-        <div className="flex items-center justify-between pt-1">
-          <span
-            className={cn(
-              "text-sm font-medium",
-              raffle.isFree ? "text-primary uppercase tracking-wider" : "tabular-nums"
-            )}
-          >
-            {priceLabel(raffle)}
-          </span>
+        <div className="absolute top-3 left-3">
           <StatusBadge text={raffle.statusText ?? "Adquira já!"} />
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4">
+        <div className="space-y-1">
+          <h3 className="text-base leading-tight font-bold text-balance group-hover:text-primary">
+            {raffle.title}
+          </h3>
+          {raffle.shortDescription && (
+            <p className="line-clamp-2 text-xs text-muted-foreground">
+              {raffle.shortDescription}
+            </p>
+          )}
+        </div>
+
+        {raffle.showProgressBar && (
+          <SalesBar sold={sold} total={raffle.totalNumbers} />
+        )}
+
+        <div className="flex items-end justify-between gap-3 border-t pt-3">
+          <span>
+            <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
+              Por número
+            </span>
+            <span
+              className={cn(
+                "text-xl leading-none font-bold text-primary",
+                raffle.isFree && "text-base tracking-wider uppercase",
+              )}
+            >
+              {priceLabel(raffle)}
+            </span>
+          </span>
+          <span className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
+            Participar
+          </span>
         </div>
       </div>
     </Link>
   );
 }
 
-// Card compacto — imagem à esquerda, conteúdo à direita.
-function CompactRaffleCard({ raffle }: { raffle: RaffleCardData }) {
-  const cover = raffle.images[0]?.url ?? null;
+// Card compacto — capa à esquerda, conteúdo à direita.
+function CompactRaffleCard({
+  raffle,
+  sold,
+}: {
+  raffle: RaffleCardData;
+  sold: number;
+}) {
+  const prize = raffle.prizes[0];
   return (
     <Link
       href={`/s/${raffle.slug}`}
-      className="block rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+      className="group flex gap-3 overflow-hidden rounded-xl border bg-card p-3 transition-colors hover:border-primary/40"
     >
-      <div className="flex gap-3 p-3">
-        <div className="relative h-20 w-20 sm:h-24 sm:w-24 shrink-0 rounded-lg overflow-hidden bg-muted">
-          {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cover}
-              alt={raffle.title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center text-primary/40">
-              <TicketCheck className="h-8 w-8" />
-            </div>
+      <RaffleCover
+        url={raffle.images[0]?.url ?? null}
+        title={raffle.title}
+        skinName={prize?.skinName}
+        rarity={prize?.skinRarity}
+        variant="thumb"
+        className="h-20 w-28 shrink-0 rounded-lg sm:h-24 sm:w-40"
+        sizes="160px"
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+        <div className="space-y-1">
+          <h3 className="line-clamp-2 text-sm leading-snug font-semibold group-hover:text-primary">
+            {raffle.title}
+          </h3>
+          {raffle.showProgressBar && (
+            <SalesBar sold={sold} total={raffle.totalNumbers} />
           )}
         </div>
-        <div className="min-w-0 flex-1 flex flex-col justify-between">
-          <div>
-            <h3 className="font-semibold text-sm leading-snug line-clamp-2">
-              {raffle.title}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {raffle.shortDescription ?? "Participe e concorra!"}
-            </p>
-          </div>
-          <div className="flex items-center justify-between mt-2">
-            <span
-              className={cn(
-                "text-xs font-medium",
-                raffle.isFree
-                  ? "text-primary uppercase tracking-wider"
-                  : "tabular-nums text-muted-foreground"
-              )}
-            >
-              {priceLabel(raffle)}
-            </span>
-            <StatusBadge text={raffle.statusText ?? "Adquira já!"} />
-          </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={cn(
+              "font-bold text-primary",
+              raffle.isFree ? "text-xs tracking-wider uppercase" : "text-base",
+            )}
+          >
+            {priceLabel(raffle)}
+          </span>
+          <StatusBadge text={raffle.statusText ?? "Adquira já!"} />
         </div>
       </div>
     </Link>

@@ -40,9 +40,9 @@ const CAMPAIGNS = [
     title: "★ Karambit | Doppler (Nova de Fábrica) — Phase 2",
     shortDescription: "A faca mais desejada do CS2 pode ser sua por R$ 4,99.",
     description:
-      "Karambit Doppler Phase 2 Nova de Fábrica, float baixíssimo e padrão limpo.\\n\\n" +
+      "Karambit Doppler Phase 2 Nova de Fábrica, float baixíssimo e padrão limpo.\n\n" +
       "O sorteio acontece assim que 100% dos números forem vendidos, com apuração " +
-      "ao vivo no nosso Discord. O resultado fica publicado nesta página.\\n\\n" +
+      "ao vivo no nosso Discord. O resultado fica publicado nesta página.\n\n" +
       "A entrega é feita por oferta de troca na Steam em até 24h após a confirmação.",
     totalNumbers: 1000,
     pricePerNumber: 4.99,
@@ -71,7 +71,7 @@ const CAMPAIGNS = [
     title: "★ Butterfly Knife | Fade (Nova de Fábrica)",
     shortDescription: "Fade 95%+ com degradê completo. A borboleta dos sonhos.",
     description:
-      "Butterfly Knife Fade Nova de Fábrica — um dos padrões mais valorizados do jogo.\\n\\n" +
+      "Butterfly Knife Fade Nova de Fábrica — um dos padrões mais valorizados do jogo.\n\n" +
       "Sorteio pela Loteria Federal na data indicada. O número vencedor é " +
       "formado pelos primeiros prêmios do concurso, conforme o regulamento.",
     totalNumbers: 5000,
@@ -101,7 +101,7 @@ const CAMPAIGNS = [
     shortDescription: "Três prêmios numa campanha só. Um número, três chances de setup.",
     description:
       "O kit completo: uma Talon Knife Marble Fade, um par de Specialist Gloves " +
-      "Crimson Kimono e uma AK-47 Fire Serpent.\\n\\n" +
+      "Crimson Kimono e uma AK-47 Fire Serpent.\n\n" +
       "O mesmo número vencedor leva os três itens. Sorteio ao vivo assim que " +
       "a campanha fechar.",
     totalNumbers: 2000,
@@ -181,7 +181,7 @@ const CAMPAIGNS = [
     title: "StatTrak™ M4A1-S | Printstream (Nova de Fábrica)",
     shortDescription: "Com contador de abates. A M4 mais bonita do jogo.",
     description:
-      "StatTrak™ M4A1-S Printstream Nova de Fábrica, contador zerado.\\n\\n" +
+      "StatTrak™ M4A1-S Printstream Nova de Fábrica, contador zerado.\n\n" +
       "Campanha de 500 números. Sorteio próprio transmitido ao vivo.",
     totalNumbers: 500,
     pricePerNumber: 3.9,
@@ -239,7 +239,7 @@ const CAMPAIGNS = [
     title: "AWP | Dragon Lore (Testada em Campo)",
     shortDescription: "A lenda. A skin mais icônica da história do Counter-Strike.",
     description:
-      "AWP Dragon Lore Testada em Campo, da Coleção Cobblestone.\\n\\n" +
+      "AWP Dragon Lore Testada em Campo, da Coleção Cobblestone.\n\n" +
       "Campanha de 10.000 números. Sorteio pela Loteria Federal.",
     totalNumbers: 10000,
     pricePerNumber: 9.9,
