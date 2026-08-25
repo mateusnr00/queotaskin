@@ -32,21 +32,35 @@ exato do painel; o resto do formato é este.
 
 ## 2. Variáveis na Vercel
 
-Escopo **Production**. Gere os segredos com `openssl rand -base64 32`:
+Escopo **Production**. Gere os segredos com `openssl rand -base64 32`.
+
+**Obrigatórias** — sem qualquer uma delas o site não sobe:
 
 | Variável | Valor |
 |---|---|
 | `DATABASE_URL` | pooler, porta 6543 (acima) |
 | `DIRECT_URL` | pooler, porta 5432 (acima) |
 | `AUTH_SECRET` | `openssl rand -base64 32` |
-| `AUTH_URL` | `https://<seu-dominio>` |
-| `NEXTAUTH_URL` | mesmo valor de `AUTH_URL` |
-| `PAYMENT_SECRET_ENCRYPTION_KEY` | `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_NAME` | `QuéOta Skin` |
-| `NEXT_PUBLIC_APP_URL` | mesmo valor de `AUTH_URL` |
+
+**Primeiro deploy** — criam o admin e populam o banco, depois podem sair:
+
+| Variável | Valor |
+|---|---|
 | `SEED_ADMIN_NAME` | seu nome completo — é metade do login do admin |
-| `SEED_ADMIN_PHONE` | seu celular com DDD, só dígitos — a outra metade |
-| `RUN_SEED` | `1` **só no primeiro deploy** |
+| `SEED_ADMIN_PHONE` | seu celular com DDD, só dígitos (10 ou 11) |
+| `RUN_SEED` | `1` |
+
+**Recomendadas** — o site sobe sem elas, mas alguma função fica capenga:
+
+| Variável | Para quê |
+|---|---|
+| `PAYMENT_SECRET_ENCRYPTION_KEY` | salvar credenciais de PIX no painel |
+| `NEXT_PUBLIC_APP_URL` | montar a URL do webhook do gateway |
+| `CRON_SECRET` | proteger a rota de expiração de reservas |
+
+`AUTH_URL`, `NEXTAUTH_URL` e `NEXT_PUBLIC_APP_NAME` não precisam ser
+definidas: o Auth.js detecta a URL pela `VERCEL_URL`, e o nome do site vem do
+`Tenant` no banco.
 
 `PAYMENT_SECRET_ENCRYPTION_KEY` criptografa as credenciais de PIX gravadas
 pelo painel. Trocá-la depois torna ilegível o que já foi salvo.
