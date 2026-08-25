@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { CalendarDays, LogIn, UserPlus } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
@@ -21,7 +21,6 @@ import {
   AwardedTicketsSection,
   type PublicAwardedTicket,
 } from "@/components/public/awarded-tickets-section";
-import { buttonVariants } from "@/components/ui/button";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { raffleUrl } from "@/lib/raffle-url";
 import { getCurrentTenant } from "@/lib/tenant";
@@ -385,7 +384,7 @@ export default async function PublicRaffleDetailPage({
             xpPerBrl={rankSettings?.xpPerBrl ?? 10}
             isLoggedIn={Boolean(currentUser)}
           />
-        ) : currentUser ? (
+        ) : (
           <ReservationForm
             raffleId={raffle.id}
             totalNumbers={raffle.totalNumbers}
@@ -400,8 +399,6 @@ export default async function PublicRaffleDetailPage({
             selectionCards={raffle.selectionCards ?? []}
             selectionCardsBestseller={raffle.selectionCardsBestseller ?? -1}
           />
-        ) : (
-          <LoginPrompt slug={raffle.slug} />
         )}
       </div>
 
@@ -492,32 +489,3 @@ function SalesProgressBar({
 
 // CTA exibida quando o visitante não está logado. Leva pra /registro ou
 // /login preservando o slug da rifa pra voltar pra cá depois.
-function LoginPrompt({ slug }: { slug: string }) {
-  const back = `/s/${slug}`;
-  const registerHref = `/registro?redirect=${encodeURIComponent(back)}`;
-  const loginHref = `/login?redirect=${encodeURIComponent(back)}`;
-  return (
-    <div className="space-y-4 py-2 text-center">
-      <p className="text-sm text-muted-foreground">
-        Para reservar números, crie sua conta com nome e CPF. É rápido, sem
-        senha e sem e-mail.
-      </p>
-      <div className="flex flex-col gap-2">
-        <Link
-          href={registerHref}
-          className={buttonVariants({ className: "h-12 text-base font-semibold" })}
-        >
-          <UserPlus className="mr-2 h-4 w-4" />
-          Criar conta para participar
-        </Link>
-        <Link
-          href={loginHref}
-          className={buttonVariants({ variant: "outline" })}
-        >
-          <LogIn className="mr-2 h-4 w-4" />
-          Já tenho conta
-        </Link>
-      </div>
-    </div>
-  );
-}

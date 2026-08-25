@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 
 import { createReservationAction } from "@/server/actions/reservations";
+import { AccountGateDialog } from "@/components/public/account-gate-dialog";
+import { formatBRL } from "@/lib/format";
 import { onlyDigits, formatCpf, formatPhone, isValidCpf } from "@/lib/cpf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,7 +93,9 @@ interface ReservationFormProps {
   initialQuantity?: number;
   reservationModel: "RANDOM_NUMBERS" | "SEQUENTIAL" | "MANUAL";
   requiredFields: RequiredFields;
-  currentUser: CurrentUser;
+  /** null = visitante sem conta. O seletor aparece igual; a conta é pedida
+   *  só na hora de confirmar. */
+  currentUser: CurrentUser | null;
   pricePerNumber: number;
   // Quick-picks configurados pelo admin. Array vazio = sem cards (mostra
   // só o stepper -/+). bestsellerIndex >= 0 destaca o card no índice
@@ -116,6 +120,15 @@ export function ReservationForm({
 }: ReservationFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // Guarda o que a pessoa escolheu enquanto ela cria a conta, para a reserva
+  // continuar de onde parou em vez de recomeçar do zero.
+  const [pedindoConta, setPedindoConta] = useState(false);
+  // Estado, não ref: o React Compiler barra ler ref durante o render, e
+  // onSubmit é entregue a form.handleSubmit() ali mesmo. Guardar em estado
+  // também basta, porque a leitura só acontece depois que a pessoa conclui o
+  // cadastro — vários renders adiante.
+  const [valoresPendentes, setValoresPendentes] = useState<Values | null>(null);
+  const isLoggedIn = currentUser !== null;
 
   const isManualMode = reservationModel === "MANUAL" && totalNumbers <= 500;
 
@@ -124,8 +137,10 @@ export function ReservationForm({
   );
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
 
-  const needsCpfInput = requiredFields.cpf && !currentUser.cpf;
-  const needsPhoneInput = requiredFields.phone && !currentUser.phone;
+  // Visitante informa CPF e celular ao criar a conta, então esses campos não
+  // se repetem aqui; para quem já tem conta, só aparecem se faltarem nela.
+  const needsCpfInput = isLoggedIn && requiredFields.cpf && !currentUser.cpf;
+  const needsPhoneInput = isLoggedIn && requiredFields.phone && !currentUser.phone;
   const schema = buildSchema(requiredFields, needsCpfInput, needsPhoneInput);
   type Values = z.infer<typeof schema>;
 
@@ -134,7 +149,7 @@ export function ReservationForm({
     defaultValues: {
       participantCpf: "",
       participantPhone: "",
-      participantEmail: currentUser.email ?? "",
+      participantEmail: currentUser?.email ?? "",
       participantSocialName: "",
       participantBirthDate: "",
     },
@@ -173,6 +188,19 @@ export function ReservationForm({
       }
     }
 
+    // Sem conta, a escolha fica guardada e o cadastro aparece por cima. A
+    // reserva continua sozinha assim que a sessão existir — a pessoa não
+    // volta para uma tela vazia nem refaz a seleção.
+    if (!isLoggedIn) {
+      setValoresPendentes(values);
+      setPedindoConta(true);
+      return;
+    }
+
+    criarReserva(values);
+  }
+
+  function criarReserva(values: Values) {
     startTransition(async () => {
       const base = isManualMode
         ? { numbers: selectedNumbers }
@@ -191,11 +219,28 @@ export function ReservationForm({
       const result = await createReservationAction(payload);
       if (!result.ok) {
         toast.error(result.error);
+        // Se a conta acabou de ser criada, a página ainda está desenhada como
+        // visitante; recarrega para ela refletir a sessão nova.
+        if (!isLoggedIn) router.refresh();
         return;
       }
       toast.success("Reserva criada!");
       router.push(`/comprovante/${result.data.reservationId}`);
     });
+  }
+
+  function aoEntrarNaConta() {
+    setPedindoConta(false);
+    const pendentes = valoresPendentes;
+    setValoresPendentes(null);
+    if (pendentes) {
+      // loginAction já gravou o cookie de sessão, então a próxima server
+      // action vai autenticada. Não recarrega aqui: a reserva navega para o
+      // comprovante logo em seguida.
+      criarReserva(pendentes);
+      return;
+    }
+    router.refresh();
   }
 
   return (
@@ -221,10 +266,12 @@ export function ReservationForm({
           />
         )}
 
-        <AccountSummary
-          currentUser={currentUser}
-          requiredFields={requiredFields}
-        />
+        {currentUser && (
+          <AccountSummary
+            currentUser={currentUser}
+            requiredFields={requiredFields}
+          />
+        )}
 
         <ParticipantExtras
           control={form.control}
@@ -245,6 +292,16 @@ export function ReservationForm({
         >
           {isPending ? "Reservando..." : "Quero participar"}
         </Button>
+
+        {/* Só entra em cena quando a reserva exige uma conta que ainda não
+            existe. Fechar o diálogo mantém a seleção intacta. */}
+        <AccountGateDialog
+          open={pedindoConta}
+          onOpenChange={setPedindoConta}
+          quantidade={effectiveQty}
+          total={formatBRL(effectiveQty * pricePerNumber)}
+          onAuthenticated={aoEntrarNaConta}
+        />
       </form>
     </Form>
   );
