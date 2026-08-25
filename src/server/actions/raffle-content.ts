@@ -21,17 +21,12 @@ import {
   uploadRaffleImage,
 } from "@/lib/storage";
 import type { ActionResult } from "@/server/actions/auth";
+import { MAX_IMAGES_PER_RAFFLE, MAX_IMAGE_BYTES } from "@/lib/raffle-images";
 
 // =============================================================
 // IMAGENS
 // =============================================================
 
-const MAX_IMAGES_PER_RAFFLE = 8;
-// Teto real do que chega aqui: a Vercel corta o corpo de uma função em
-// 4,5 MB e o Next em bodySizeLimit (ver next.config.ts). Este número fica
-// abaixo dos dois só para produzir uma mensagem clara quando o cliente não
-// conseguiu encolher o arquivo.
-const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 // Qualquer image/* passa. Barrar por lista fixa rejeitava AVIF, HEIC e GIF,
 // e o navegador nem sempre preenche file.type — daí o fallback pela extensão.
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
@@ -65,7 +60,7 @@ export async function uploadRaffleImageAction(
     if (!pareceImagem) {
       return { ok: false, error: "O arquivo não parece ser uma imagem" };
     }
-    if (file.size > MAX_FILE_BYTES) {
+    if (file.size > MAX_IMAGE_BYTES) {
       return {
         ok: false,
         error: "Imagem grande demais para enviar — tente uma menor",

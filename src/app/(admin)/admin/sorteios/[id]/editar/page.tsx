@@ -6,7 +6,6 @@ import { ArrowLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { RaffleForm } from "@/components/admin/raffle-form";
 import { RaffleStatusActions } from "@/components/admin/raffle-status-actions";
-import { RaffleDangerZone } from "@/components/admin/raffle-danger-zone";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { toPrizeDraft } from "@/lib/prize-mapper";
@@ -170,6 +169,7 @@ export default async function EditRafflePage({
 
       <RaffleForm
         mode={{ kind: "edit", id: raffle.id }}
+        raffleTitle={raffle.title}
         initialImages={raffle.images.map((img) => ({
           id: img.id,
           url: img.url,
@@ -248,8 +248,6 @@ export default async function EditRafflePage({
           selectionCardsBestseller: raffle.selectionCardsBestseller ?? -1,
         }}
       />
-
-      <RaffleDangerZone raffleId={raffle.id} raffleTitle={raffle.title} />
     </div>
   );
 }

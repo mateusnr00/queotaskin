@@ -24,10 +24,13 @@ import {
   Sparkles,
   TagsIcon,
   Ticket,
+  Trash2,
   Trophy,
 } from "lucide-react";
 
 import { RaffleImagesTab, type RaffleImageItem } from "@/components/admin/raffle-images-tab";
+import { RaffleDangerZone } from "@/components/admin/raffle-danger-zone";
+import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { RafflePrizesTab } from "@/components/admin/raffle-prizes-tab";
 import type { PrizeDraft } from "@/components/admin/skin-prize-editor";
 import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
@@ -79,6 +82,8 @@ interface PromotionData {
 
 interface RaffleFormProps {
   mode: Mode;
+  /** Título atual — a exclusão pede que ele seja digitado para confirmar. */
+  raffleTitle?: string;
   defaultValues?: Partial<RaffleGeneralInput>;
   // Dados de conteúdo das abas — só preenchidos no modo edit.
   initialImages?: RaffleImageItem[];
@@ -195,6 +200,7 @@ const CATEGORIES = [
 
 export function RaffleForm({
   mode,
+  raffleTitle = "",
   defaultValues,
   initialImages = [],
   initialPrizes = [],
@@ -306,6 +312,14 @@ export function RaffleForm({
                 value="promocoes"
                 icon={TagsIcon}
                 label="Promoções"
+                disabled={!isEdit}
+              />
+              {/* Última da fila e só na edição: não há o que excluir num
+                  sorteio que ainda não existe. */}
+              <TabIcon
+                value="excluir"
+                icon={Trash2}
+                label="Excluir"
                 disabled={!isEdit}
               />
             </TabsList>
@@ -1169,39 +1183,51 @@ export function RaffleForm({
               <SaveFirstHint label="Salve o sorteio primeiro para criar promoções." />
             )}
           </TabsContent>
+
+          {/* =================== EXCLUIR =================== */}
+          {/* Ficava solta abaixo do formulário, então era o único bloco
+              presente em todas as abas — e a única ação sempre à mão era
+              apagar a campanha. Agora exige entrar aqui de propósito. */}
+          <TabsContent value="excluir">
+            {isEdit ? (
+              <RaffleDangerZone raffleId={raffleId} raffleTitle={raffleTitle} />
+            ) : (
+              <SaveFirstHint label="Só dá para excluir um sorteio depois de criá-lo." />
+            )}
+          </TabsContent>
         </Tabs>
 
-        {/* Save sticky no rodapé — visível só nos tabs que pertencem ao
-            form principal (Geral / Títulos). Os outros tabs têm save próprio. */}
+        {/* A barra de salvar acompanha as abas do formulário principal.
+            As outras abas trazem a própria barra, com a própria action —
+            e a de Excluir não tem barra, porque lá não se salva nada. */}
         {(activeTab === "geral" || activeTab === "titulos") && (
-          <div className="sticky bottom-0 -mx-4 md:-mx-6 border-t bg-background/85 px-4 md:px-6 py-3.5 backdrop-blur-md shadow-[0_-12px_24px_-12px_rgba(0,0,0,0.12)]">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs text-muted-foreground">
-                {form.formState.isDirty
-                  ? "Você tem alterações não salvas"
-                  : isEdit
-                  ? "Tudo salvo"
-                  : "Preencha os campos obrigatórios pra criar"}
-              </div>
-              <Button
-                type="submit"
-                disabled={isPending}
-                size="lg"
-                className="min-w-[160px]"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : mode.kind === "create" ? (
-                  "Criar Sorteio"
-                ) : (
-                  "Salvar alterações"
-                )}
-              </Button>
-            </div>
-          </div>
+          <StickySaveBar
+            status={
+              form.formState.isDirty
+                ? "Você tem alterações não salvas"
+                : isEdit
+                ? "Tudo salvo"
+                : "Preencha os campos obrigatórios pra criar"
+            }
+          >
+            <Button
+              type="submit"
+              disabled={isPending}
+              size="lg"
+              className="min-w-[160px]"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : mode.kind === "create" ? (
+                "Criar Sorteio"
+              ) : (
+                "Salvar alterações"
+              )}
+            </Button>
+          </StickySaveBar>
         )}
       </form>
     </Form>

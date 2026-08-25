@@ -16,6 +16,7 @@ import { Plus, Trash2, Trophy, Award, Dices } from "lucide-react";
 
 import { setRaffleAwardedTicketsAction } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
+import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -201,218 +202,218 @@ export function RaffleAwardedTicketsTab({
   ).length;
 
   return (
-    <Card className="p-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
-          <Trophy className="h-4 w-4" />
-        </span>
-        <div className="flex-1">
-          <h2 className="text-base font-semibold">Títulos Premiados</h2>
-          <p className="text-xs text-muted-foreground">
-            Números específicos que valem prêmio instantâneo. Aceita 1 a{" "}
-            {totalNumbers.toLocaleString("pt-BR")}.
-          </p>
-        </div>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {filledCount}/{MAX_ITEMS}
-        </span>
-      </div>
-
-      {/* ===== Toggles principais ===== */}
-      <div className="space-y-3 border-t pt-4">
-        <ToggleRow
-          checked={enabled}
-          onChange={setEnabled}
-          label="Ativar Títulos Premiados"
-          description="Liga/desliga o sistema inteiro. Quando off, nenhum ticket é marcado como AWARDED automaticamente."
-        />
-        <ToggleRow
-          checked={showList}
-          onChange={setShowList}
-          label="Mostrar lista de prêmios/ganhadores pros participantes"
-          description="Quando on, qualquer visitante da página do sorteio vê a lista (com nome de quem já ganhou)."
-        />
-      </div>
-
-      {/* ===== Modo de exibição ===== */}
-      <div className="grid gap-3 md:grid-cols-2 border-t pt-4">
-        <div className="space-y-1.5">
-          <Label>Modo de exibição</Label>
-          <Select
-            value={viewMode}
-            onValueChange={(v) => v && setViewMode(v as "list" | "modal")}
-          >
-            <SelectTrigger>
-              <SelectValue
-                labels={{ list: "Lista", modal: "Modal/Popup" }}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="list">Lista</SelectItem>
-              <SelectItem value="modal">Modal/Popup</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Como a lista aparece pro público: rolando inline na página ou num
-            popup.
-          </p>
-        </div>
-      </div>
-
-      {/* ===== Texto pro ganhador ===== */}
-      <div className="border-t pt-4 space-y-2">
-        <Label htmlFor="winner-text">
-          Texto exibido pros ganhadores de Títulos Premiados
-        </Label>
-        <Textarea
-          id="winner-text"
-          rows={2}
-          placeholder={DEFAULT_WINNER_TEXT}
-          value={winnerText}
-          onChange={(e) => setWinnerText(e.target.value)}
-        />
-        <p className="text-xs text-muted-foreground">
-          Aparece no comprovante quando o cliente é dono de pelo menos 1 ticket
-          AWARDED. Vazio = usa o padrão.
-        </p>
-      </div>
-
-      {/* ===== Aviso pro perdedor ===== */}
-      <div className="border-t pt-4 space-y-3">
-        <ToggleRow
-          checked={loserShow}
-          onChange={setLoserShow}
-          label="Mostrar aviso pros NÃO ganhadores?"
-          description="Mensagem amigável quando o cliente comprou tickets mas nenhum foi premiado."
-        />
-        {loserShow && (
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="loser-title">Título do aviso</Label>
-              <Input
-                id="loser-title"
-                placeholder={DEFAULT_LOSER_TITLE}
-                value={loserTitle}
-                onChange={(e) => setLoserTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="loser-text">Texto do aviso</Label>
-              <Input
-                id="loser-text"
-                placeholder={DEFAULT_LOSER_TEXT}
-                value={loserText}
-                onChange={(e) => setLoserText(e.target.value)}
-              />
-            </div>
+    <>
+      <Card className="p-5 space-y-5">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+            <Trophy className="h-4 w-4" />
+          </span>
+          <div className="flex-1">
+            <h2 className="text-base font-semibold">Títulos Premiados</h2>
+            <p className="text-xs text-muted-foreground">
+              Números específicos que valem prêmio instantâneo. Aceita 1 a{" "}
+              {totalNumbers.toLocaleString("pt-BR")}.
+            </p>
           </div>
-        )}
-      </div>
-
-      {/* ===== Lista de números ===== */}
-      <div className="border-t pt-4 space-y-2">
-        <h3 className="text-sm font-semibold">Lista de Títulos Premiados</h3>
-        <div className="hidden md:grid md:grid-cols-[120px_1fr_auto_auto] gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <span>Número</span>
-          <span>Prêmio</span>
-          <span className="w-8 text-center" />
-          <span className="w-8 text-center" />
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {filledCount}/{MAX_ITEMS}
+          </span>
         </div>
-        {items.map((it, idx) => (
-          <div
-            key={idx}
-            className="grid grid-cols-[120px_1fr_auto_auto] gap-2 items-start"
-          >
-            <div>
-              <Input
-                type="number"
-                inputMode="numeric"
-                placeholder="123"
-                value={it.number}
-                onChange={(e) => update(idx, "number", e.target.value)}
-                min={1}
-                max={totalNumbers}
-              />
-              {it.participantName && (
-                <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300 truncate">
-                  <Award className="inline h-3 w-3 mr-0.5" />
-                  {it.participantName}
-                </p>
-              )}
-            </div>
-            <Input
-              placeholder="Ex: AK-47 Asiimov Field-Tested"
-              value={it.prizeDescription}
-              onChange={(e) => update(idx, "prizeDescription", e.target.value)}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => generateRandom(idx)}
-              title="Gerar número aleatório"
-              aria-label="Gerar número aleatório"
-            >
-              <Dices className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => remove(idx)}
-              aria-label="Remover"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={add}
-          disabled={items.length >= MAX_ITEMS}
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Adicionar título
-        </Button>
-      </div>
 
-      {/* ===== Adicionar em lote ===== */}
-      <div className="border-t pt-4 space-y-2">
-        <Label htmlFor="bulk">Adicionar em lote</Label>
-        <Textarea
-          id="bulk"
-          rows={3}
-          placeholder={
-            "123, AK-47 Asiimov\n456, M4A1 Howl\n789, Karambit Doppler"
-          }
-          value={bulkText}
-          onChange={(e) => setBulkText(e.target.value)}
-        />
-        <div className="flex items-center justify-between">
+        {/* ===== Toggles principais ===== */}
+        <div className="space-y-3 border-t pt-4">
+          <ToggleRow
+            checked={enabled}
+            onChange={setEnabled}
+            label="Ativar Títulos Premiados"
+            description="Liga/desliga o sistema inteiro. Quando off, nenhum ticket é marcado como AWARDED automaticamente."
+          />
+          <ToggleRow
+            checked={showList}
+            onChange={setShowList}
+            label="Mostrar lista de prêmios/ganhadores pros participantes"
+            description="Quando on, qualquer visitante da página do sorteio vê a lista (com nome de quem já ganhou)."
+          />
+        </div>
+
+        {/* ===== Modo de exibição ===== */}
+        <div className="grid gap-3 md:grid-cols-2 border-t pt-4">
+          <div className="space-y-1.5">
+            <Label>Modo de exibição</Label>
+            <Select
+              value={viewMode}
+              onValueChange={(v) => v && setViewMode(v as "list" | "modal")}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  labels={{ list: "Lista", modal: "Modal/Popup" }}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="list">Lista</SelectItem>
+                <SelectItem value="modal">Modal/Popup</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Como a lista aparece pro público: rolando inline na página ou num
+              popup.
+            </p>
+          </div>
+        </div>
+
+        {/* ===== Texto pro ganhador ===== */}
+        <div className="border-t pt-4 space-y-2">
+          <Label htmlFor="winner-text">
+            Texto exibido pros ganhadores de Títulos Premiados
+          </Label>
+          <Textarea
+            id="winner-text"
+            rows={2}
+            placeholder={DEFAULT_WINNER_TEXT}
+            value={winnerText}
+            onChange={(e) => setWinnerText(e.target.value)}
+          />
           <p className="text-xs text-muted-foreground">
-            Um por linha, formato <code>número, prêmio</code>.
+            Aparece no comprovante quando o cliente é dono de pelo menos 1 ticket
+            AWARDED. Vazio = usa o padrão.
           </p>
+        </div>
+
+        {/* ===== Aviso pro perdedor ===== */}
+        <div className="border-t pt-4 space-y-3">
+          <ToggleRow
+            checked={loserShow}
+            onChange={setLoserShow}
+            label="Mostrar aviso pros NÃO ganhadores?"
+            description="Mensagem amigável quando o cliente comprou tickets mas nenhum foi premiado."
+          />
+          {loserShow && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="loser-title">Título do aviso</Label>
+                <Input
+                  id="loser-title"
+                  placeholder={DEFAULT_LOSER_TITLE}
+                  value={loserTitle}
+                  onChange={(e) => setLoserTitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="loser-text">Texto do aviso</Label>
+                <Input
+                  id="loser-text"
+                  placeholder={DEFAULT_LOSER_TEXT}
+                  value={loserText}
+                  onChange={(e) => setLoserText(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ===== Lista de números ===== */}
+        <div className="border-t pt-4 space-y-2">
+          <h3 className="text-sm font-semibold">Lista de Títulos Premiados</h3>
+          <div className="hidden md:grid md:grid-cols-[120px_1fr_auto_auto] gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <span>Número</span>
+            <span>Prêmio</span>
+            <span className="w-8 text-center" />
+            <span className="w-8 text-center" />
+          </div>
+          {items.map((it, idx) => (
+            <div
+              key={idx}
+              className="grid grid-cols-[120px_1fr_auto_auto] gap-2 items-start"
+            >
+              <div>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="123"
+                  value={it.number}
+                  onChange={(e) => update(idx, "number", e.target.value)}
+                  min={1}
+                  max={totalNumbers}
+                />
+                {it.participantName && (
+                  <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300 truncate">
+                    <Award className="inline h-3 w-3 mr-0.5" />
+                    {it.participantName}
+                  </p>
+                )}
+              </div>
+              <Input
+                placeholder="Ex: AK-47 Asiimov Field-Tested"
+                value={it.prizeDescription}
+                onChange={(e) => update(idx, "prizeDescription", e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => generateRandom(idx)}
+                title="Gerar número aleatório"
+                aria-label="Gerar número aleatório"
+              >
+                <Dices className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => remove(idx)}
+                aria-label="Remover"
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={insertBulk}
-            disabled={!bulkText.trim()}
+            onClick={add}
+            disabled={items.length >= MAX_ITEMS}
           >
-            Inserir lote
+            <Plus className="h-4 w-4 mr-1.5" />
+            Adicionar título
           </Button>
         </div>
-      </div>
 
-      {/* ===== Salvar ===== */}
-      <div className="border-t pt-4 flex justify-end">
+        {/* ===== Adicionar em lote ===== */}
+        <div className="border-t pt-4 space-y-2">
+          <Label htmlFor="bulk">Adicionar em lote</Label>
+          <Textarea
+            id="bulk"
+            rows={3}
+            placeholder={
+              "123, AK-47 Asiimov\n456, M4A1 Howl\n789, Karambit Doppler"
+            }
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Um por linha, formato <code>número, prêmio</code>.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={insertBulk}
+              disabled={!bulkText.trim()}
+            >
+              Inserir lote
+            </Button>
+          </div>
+        </div>
+      </Card>
+      <StickySaveBar status="Títulos premiados desta campanha">
         <Button type="button" onClick={save} disabled={isPending}>
-          {isPending ? "Salvando..." : "Salvar"}
+          {isPending ? "Salvando..." : "Salvar alterações"}
         </Button>
-      </div>
-    </Card>
+      </StickySaveBar>
+    </>
   );
 }
 

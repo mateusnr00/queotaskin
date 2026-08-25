@@ -15,6 +15,7 @@ import { CheckCircle2, ExternalLink, AlertCircle } from "lucide-react";
 
 import { setRafflePaymentProviderAction } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
+import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -85,87 +86,90 @@ export function RafflePaymentTab({
   const dirty = choice !== saved;
 
   return (
-    <Card className="p-5 space-y-5">
-      <div>
-        <h2 className="text-base font-semibold">Gateway de pagamento</h2>
-        <p className="text-sm text-muted-foreground">
-          Escolha qual provider gera o PIX desse sorteio. Reservas já criadas
-          continuam no gateway antigo até serem pagas ou expirarem.
-        </p>
-      </div>
+    <>
+      <Card className="p-5 space-y-5">
+        <div>
+          <h2 className="text-base font-semibold">Gateway de pagamento</h2>
+          <p className="text-sm text-muted-foreground">
+            Escolha qual provider gera o PIX desse sorteio. Reservas já criadas
+            continuam no gateway antigo até serem pagas ou expirarem.
+          </p>
+        </div>
 
-      <div className="space-y-1.5">
-        <Label>Provider pra esse sorteio</Label>
-        <Select
-          value={choice}
-          onValueChange={(v) => v && setChoice(v as ProviderChoice)}
-        >
-          <SelectTrigger className="w-full sm:w-80">
-            <SelectValue
-              labels={{
-                DEFAULT: `Padrão do site (${labelFor(tenantDefault)})`,
-                SYNCPAY: "SyncPay",
-                CODEPAY: "CodePay",
-              }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="DEFAULT">
-              Padrão do site ({labelFor(tenantDefault)})
-            </SelectItem>
-            <SelectItem value="SYNCPAY">SyncPay</SelectItem>
-            <SelectItem value="CODEPAY">CodePay</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Padrão do site segue o gateway global; trocar ele afeta todos os
-          sorteios que estão como &ldquo;Padrão do site&rdquo;. Escolher um
-          provider específico fixa esse sorteio nele.
-        </p>
-      </div>
+        <div className="space-y-1.5">
+          <Label>Provider pra esse sorteio</Label>
+          <Select
+            value={choice}
+            onValueChange={(v) => v && setChoice(v as ProviderChoice)}
+          >
+            <SelectTrigger className="w-full sm:w-80">
+              <SelectValue
+                labels={{
+                  DEFAULT: `Padrão do site (${labelFor(tenantDefault)})`,
+                  SYNCPAY: "SyncPay",
+                  CODEPAY: "CodePay",
+                }}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DEFAULT">
+                Padrão do site ({labelFor(tenantDefault)})
+              </SelectItem>
+              <SelectItem value="SYNCPAY">SyncPay</SelectItem>
+              <SelectItem value="CODEPAY">CodePay</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Padrão do site segue o gateway global; trocar ele afeta todos os
+            sorteios que estão como &ldquo;Padrão do site&rdquo;. Escolher um
+            provider específico fixa esse sorteio nele.
+          </p>
+        </div>
 
-      <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-        {effectiveConfigured ? (
-          <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
-            <div>
-              <div className="font-medium">
-                Esse sorteio vai gerar PIX via {labelFor(effective)}.
-              </div>
-              <div className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
-                Credenciais configuradas no tenant.
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+          {effectiveConfigured ? (
+            <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+              <div>
+                <div className="font-medium">
+                  Esse sorteio vai gerar PIX via {labelFor(effective)}.
+                </div>
+                <div className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                  Credenciais configuradas no tenant.
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <div className="font-medium">
-                Credenciais de {labelFor(effective)} não configuradas.
+          ) : (
+            <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="font-medium">
+                  Credenciais de {labelFor(effective)} não configuradas.
+                </div>
+                <div className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                  Cadastre as credenciais no site primeiro, senão esse sorteio
+                  não vai gerar PIX.
+                </div>
+                <Link
+                  href="/admin/configuracoes/pagamentos"
+                  className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
+                >
+                  Configurar credenciais
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
               </div>
-              <div className="text-xs text-amber-700/80 dark:text-amber-300/80">
-                Cadastre as credenciais no site primeiro, senão esse sorteio
-                não vai gerar PIX.
-              </div>
-              <Link
-                href="/admin/configuracoes/pagamentos"
-                className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
-              >
-                Configurar credenciais
-                <ExternalLink className="h-3 w-3" />
-              </Link>
             </div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex justify-end">
+          )}
+        </div>
+      </Card>
+      <StickySaveBar
+        status={dirty ? "Você tem alterações não salvas" : "Tudo salvo"}
+      >
         <Button type="button" onClick={onSave} disabled={isPending || !dirty}>
-          {isPending ? "Salvando..." : "Salvar"}
+          {isPending ? "Salvando..." : "Salvar alterações"}
         </Button>
-      </div>
-    </Card>
+      </StickySaveBar>
+    </>
   );
 }
 

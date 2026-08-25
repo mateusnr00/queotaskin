@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { normalizeImage } from "@/lib/image-normalize";
+import { StickySaveBar } from "@/components/admin/sticky-save-bar";
+import { MAX_IMAGES_PER_RAFFLE } from "@/lib/raffle-images";
 import { cn } from "@/lib/utils";
 
 export interface RaffleImageItem {
@@ -151,125 +153,129 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
   }
 
   return (
-    <Card className="p-5 md:p-6 space-y-4">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFiles(e.target.files)}
-      />
+    <>
+      <Card className="p-5 md:p-6 space-y-4">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files)}
+        />
 
-      <DropZone
-        onPick={() => inputRef.current?.click()}
-        onDrop={(files) => handleFiles(files)}
-        isUploading={isUploading}
-      />
+        <DropZone
+          onPick={() => inputRef.current?.click()}
+          onDrop={(files) => handleFiles(files)}
+          isUploading={isUploading}
+        />
 
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          ou cole uma URL
-        </span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Link2 className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={urlValue}
-            onChange={(e) => setUrlValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddUrl();
-              }
-            }}
-            placeholder="https://exemplo.com/imagem.jpg"
-            inputMode="url"
-            disabled={isAddingUrl}
-            className="pl-8"
-          />
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            ou cole uma URL
+          </span>
+          <div className="h-px flex-1 bg-border" />
         </div>
-        <Button
-          type="button"
-          onClick={handleAddUrl}
-          disabled={isAddingUrl || !urlValue.trim()}
-          size="lg"
-        >
-          {isAddingUrl ? (
-            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-          ) : (
-            <Link2 className="mr-1.5 h-4 w-4" />
-          )}
-          Adicionar
-        </Button>
-      </div>
 
-      {images.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-2">
-          Nenhuma imagem ainda. Envie pelo menos uma para a rifa aparecer com
-          capa nos cards.
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {images.map((img) => (
-            <div
-              key={img.id}
-              className={cn(
-                "group relative rounded-lg overflow-hidden border bg-card",
-                img.isCover && "ring-2 ring-primary"
-              )}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={img.url}
-                alt="Imagem do sorteio"
-                className="w-full aspect-square object-cover"
-              />
-              {img.isCover && (
-                <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
-                  <Star className="h-2.5 w-2.5 fill-current" />
-                  Capa
-                </span>
-              )}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-1">
-                {!img.isCover && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Link2 className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={urlValue}
+              onChange={(e) => setUrlValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddUrl();
+                }
+              }}
+              placeholder="https://exemplo.com/imagem.jpg"
+              inputMode="url"
+              disabled={isAddingUrl}
+              className="pl-8"
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={handleAddUrl}
+            disabled={isAddingUrl || !urlValue.trim()}
+            size="lg"
+          >
+            {isAddingUrl ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Link2 className="mr-1.5 h-4 w-4" />
+            )}
+            Adicionar
+          </Button>
+        </div>
+
+        {images.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-2">
+            Nenhuma imagem ainda. Envie pelo menos uma para a rifa aparecer com
+            capa nos cards.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {images.map((img) => (
+              <div
+                key={img.id}
+                className={cn(
+                  "group relative rounded-lg overflow-hidden border bg-card",
+                  img.isCover && "ring-2 ring-primary"
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.url}
+                  alt="Imagem do sorteio"
+                  className="w-full aspect-square object-cover"
+                />
+                {img.isCover && (
+                  <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+                    <Star className="h-2.5 w-2.5 fill-current" />
+                    Capa
+                  </span>
+                )}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-1">
+                  {!img.isCover && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleSetCover(img.id)}
+                      disabled={isPending}
+                      className="h-7 px-2"
+                    >
+                      <Star className="h-3.5 w-3.5 mr-1" />
+                      Capa
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     size="sm"
-                    variant="secondary"
-                    onClick={() => handleSetCover(img.id)}
+                    variant="destructive"
+                    onClick={() => handleDelete(img.id)}
                     disabled={isPending}
                     className="h-7 px-2"
                   >
-                    <Star className="h-3.5 w-3.5 mr-1" />
-                    Capa
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleDelete(img.id)}
-                  disabled={isPending}
-                  className="h-7 px-2"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <p className="text-xs text-muted-foreground">
-        Formatos permitidos: PNG, JPG, WebP. Limite 8 MB por arquivo. Até 8
-        imagens por sorteio.
-      </p>
-    </Card>
+        {/* Esta aba não tem botão de salvar: enviar, definir capa e remover
+            já gravam na hora. A barra fica assim mesmo para a pessoa não
+            procurar um "Salvar" que não existe. */}
+      </Card>
+      <StickySaveBar
+        status={`Qualquer formato de imagem serve — ela é reduzida automaticamente antes do envio. Até ${MAX_IMAGES_PER_RAFFLE} imagens por sorteio. Alterações aqui são salvas na hora.`}
+      />
+    </>
   );
 }
 
