@@ -1,0 +1,237 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import type { Metadata } from "next";
+import { ChevronRight } from "lucide-react";
+import type { Prisma, ReservationStatus } from "@prisma/client";
+
+import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth-helpers";
+import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { RaffleComprasView } from "@/components/admin/raffle-compras-view";
+
+export const metadata: Metadata = { title: "Lista de Compras" };
+
+const PAGE_SIZE = 5;
+
+type TabKey = "all" | "paid" | "pending" | "expired" | "affiliates";
+
+export default async function ComprasPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    q?: string;
+    ticket?: string;
+    page?: string;
+  }>;
+}) {
+  const session = await requireAdmin();
+  const tenantId = await getActiveTenantIdForAdmin(session.user);
+  const { id } = await params;
+  const sp = await searchParams;
+  const tab = (sp.tab ?? "all") as TabKey;
+  const q = (sp.q ?? "").trim();
+  const ticketQ = (sp.ticket ?? "").trim();
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  const raffle = await prisma.raffle.findUnique({
+    where: { id },
+    include: {
+      images: { orderBy: { order: "asc" }, take: 1 },
+      surpriseBoxCombos: { orderBy: { threshold: "asc" } },
+      surpriseBoxPrizes: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!raffle || raffle.tenantId !== tenantId) notFound();
+
+  // Filtros aplicados na lista (não nos contadores das abas — abas mostram
+  // o universo total da rifa, não respeitam search).
+  const tabWhere: Prisma.ReservationWhereInput = (() => {
+    if (tab === "paid") return { status: "PAID" };
+    if (tab === "pending") return { status: "PENDING" };
+    if (tab === "expired") return { status: "EXPIRED" };
+    if (tab === "affiliates") return { affiliateId: { not: null } };
+    return {};
+  })();
+
+  const digits = q.replace(/\D/g, "");
+  const searchWhere: Prisma.ReservationWhereInput = q
+    ? {
+        OR: [
+          { participantName: { contains: q, mode: "insensitive" } },
+          ...(digits ? [{ participantCpf: { contains: digits } }] : []),
+          ...(digits ? [{ participantPhone: { contains: digits } }] : []),
+        ],
+      }
+    : {};
+  const ticketWhere: Prisma.ReservationWhereInput = ticketQ
+    ? { tickets: { some: { number: Number(ticketQ) || -1 } } }
+    : {};
+
+  const listWhere: Prisma.ReservationWhereInput = {
+    raffleId: raffle.id,
+    ...tabWhere,
+    ...searchWhere,
+    ...ticketWhere,
+  };
+
+  // Batch único pra montar header, abas, stats e lista.
+  const [
+    countAll,
+    countPaid,
+    countPending,
+    countExpired,
+    countAffiliates,
+    paidAgg,
+    pendingAgg,
+    soldTickets,
+    totalRows,
+    reservations,
+  ] = await Promise.all([
+    prisma.reservation.count({ where: { raffleId: raffle.id } }),
+    prisma.reservation.count({
+      where: { raffleId: raffle.id, status: "PAID" },
+    }),
+    prisma.reservation.count({
+      where: { raffleId: raffle.id, status: "PENDING" },
+    }),
+    prisma.reservation.count({
+      where: { raffleId: raffle.id, status: "EXPIRED" },
+    }),
+    prisma.reservation.count({
+      where: { raffleId: raffle.id, affiliateId: { not: null } },
+    }),
+    prisma.reservation.aggregate({
+      where: { raffleId: raffle.id, status: "PAID" },
+      _sum: { totalAmount: true },
+    }),
+    prisma.reservation.aggregate({
+      where: { raffleId: raffle.id, status: "PENDING" },
+      _sum: { totalAmount: true },
+    }),
+    prisma.ticket.count({ where: { raffleId: raffle.id } }),
+    prisma.reservation.count({ where: listWhere }),
+    prisma.reservation.findMany({
+      where: listWhere,
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+      include: {
+        _count: { select: { tickets: true } },
+        tickets: {
+          select: { number: true },
+          orderBy: { number: "asc" },
+        },
+      },
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const soldPercent =
+    raffle.totalNumbers > 0
+      ? Math.round((soldTickets / raffle.totalNumbers) * 10000) / 100
+      : 0;
+  const livres = Math.max(0, raffle.totalNumbers - soldTickets);
+
+  const status =
+    raffle.status === "ACTIVE"
+      ? "Ativo"
+      : raffle.status === "FINISHED"
+        ? "Concluído"
+        : raffle.status === "CANCELLED"
+          ? "Cancelado"
+          : "Rascunho";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            Lista de Compras
+          </h1>
+          <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Link href="/admin/sorteios" className="hover:text-foreground">
+              Sorteios
+            </Link>
+            <ChevronRight className="h-3 w-3" />
+            <span className="truncate">Sorteio: {raffle.id}</span>
+          </nav>
+        </div>
+      </div>
+
+      <RaffleComprasView
+        raffle={{
+          id: raffle.id,
+          slug: raffle.slug,
+          title: raffle.title,
+          shortDescription: raffle.shortDescription,
+          status,
+          isFree: raffle.isFree,
+          pricePerNumber: Number(raffle.pricePerNumber),
+          totalNumbers: raffle.totalNumbers,
+          imageUrl: raffle.images[0]?.url ?? null,
+          winnerTicketNumber: raffle.winnerTicketNumber,
+          winnerDrawnAt: raffle.winnerDrawnAt?.toISOString() ?? null,
+          winnerNote: raffle.winnerNote,
+        }}
+        stats={{
+          soldTickets,
+          livres,
+          reservados: countPending,
+          pagos: countPaid,
+          paidTotal: Number(paidAgg._sum.totalAmount ?? 0),
+          pendingTotal: Number(pendingAgg._sum.totalAmount ?? 0),
+          soldPercent,
+        }}
+        counts={{
+          all: countAll,
+          paid: countPaid,
+          pending: countPending,
+          expired: countExpired,
+          affiliates: countAffiliates,
+        }}
+        reservations={reservations.map((r) => ({
+          id: r.id,
+          participantName: r.participantName,
+          participantPhone: r.participantPhone,
+          participantCpf: r.participantCpf,
+          participantEmail: r.participantEmail,
+          createdAt: r.createdAt.toISOString(),
+          status: r.status as ReservationStatus,
+          ticketsCount: r._count.tickets,
+          ticketNumbers: r.tickets.map((t) => t.number),
+          totalAmount: Number(r.totalAmount),
+          unitPrice: Number(raffle.pricePerNumber),
+        }))}
+        filters={{ tab, q, ticket: ticketQ, page, pageSize: PAGE_SIZE }}
+        totalRows={totalRows}
+        totalPages={totalPages}
+        surpriseBox={{
+          enabled: raffle.surpriseBoxEnabled,
+          accumulative: raffle.surpriseBoxCombosAccumulative,
+          abrirTodas: raffle.surpriseBoxAbrirTodas,
+          exibirGanhadores: raffle.surpriseBoxExibirGanhadores,
+          displayOrder: raffle.surpriseBoxDisplayOrder,
+          combos: raffle.surpriseBoxCombos.map((c) => ({
+            id: c.id,
+            threshold: c.threshold,
+            boxCount: c.boxCount,
+            visible: c.visible,
+            highlighted: c.highlighted,
+          })),
+          prizes: raffle.surpriseBoxPrizes.map((p) => ({
+            id: p.id,
+            title: p.title,
+            prize: p.prize,
+            mode: p.mode,
+            odds: p.odds != null ? Number(p.odds) : null,
+            locked: p.locked,
+            claimed: p.claimedAt != null,
+          })),
+        }}
+      />
+    </div>
+  );
+}

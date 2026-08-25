@@ -1,0 +1,326 @@
+"use client";
+
+// Card de sorteio na listagem admin — inspirado no Sorteamos:
+// thumb + título + datas, status select, barra de ícones de ação e ring de %.
+// Todos os toggles são client-side (server action via useTransition + toast).
+
+import Link from "next/link";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+import {
+  Copy,
+  ExternalLink,
+  Pencil,
+  ShoppingCart,
+  Star,
+  TicketCheck,
+} from "lucide-react";
+
+import {
+  updateRaffleHighlightAction,
+  updateRaffleStatusAction,
+} from "@/server/actions/raffles";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { formatDate, formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+const STATUSES = [
+  { value: "DRAFT", label: "Rascunho" },
+  { value: "ACTIVE", label: "Ativo" },
+  { value: "FINISHED", label: "Encerrado" },
+  { value: "CANCELLED", label: "Cancelado" },
+] as const;
+
+const STATUS_LABELS = Object.fromEntries(
+  STATUSES.map((s) => [s.value, s.label])
+);
+
+export interface RaffleCardData {
+  id: string;
+  title: string;
+  slug: string;
+  coverUrl: string | null;
+  status: "DRAFT" | "ACTIVE" | "FINISHED" | "CANCELLED";
+  drawDate: string | null; // ISO string
+  createdAt: string; // ISO string
+  showOnHome: boolean;
+  totalNumbers: number;
+  soldTickets: number; // count de tickets pagos (= compras)
+}
+
+export function RaffleCard({
+  raffle,
+  publicUrl,
+}: {
+  raffle: RaffleCardData;
+  publicUrl: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [highlight, setHighlight] = useState(raffle.showOnHome);
+  const [status, setStatus] = useState(raffle.status);
+  const soldPct = Math.min(
+    100,
+    raffle.totalNumbers > 0
+      ? Math.round((raffle.soldTickets / raffle.totalNumbers) * 100)
+      : 0
+  );
+
+  function toggleHighlight() {
+    const next = !highlight;
+    setHighlight(next); // otimista
+    startTransition(async () => {
+      const result = await updateRaffleHighlightAction({
+        id: raffle.id,
+        showOnHome: next,
+      });
+      if (!result.ok) {
+        setHighlight(!next);
+        toast.error(result.error);
+        return;
+      }
+      toast.success(next ? "Destacado na home" : "Removido dos destaques");
+    });
+  }
+
+  function changeStatus(value: string | null) {
+    if (!value || value === status) return;
+    const prev = status;
+    setStatus(value as typeof status);
+    startTransition(async () => {
+      const result = await updateRaffleStatusAction({
+        id: raffle.id,
+        status: value,
+      });
+      if (!result.ok) {
+        setStatus(prev);
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Status atualizado");
+    });
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(publicUrl).then(
+      () => toast.success("Link copiado"),
+      () => toast.error("Falha ao copiar link")
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* Thumb + info */}
+        <div className="flex gap-3 min-w-0 flex-1">
+          <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border">
+            {raffle.coverUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={raffle.coverUrl}
+                alt={raffle.title}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                <TicketCheck className="h-7 w-7 opacity-40" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-sm leading-snug line-clamp-2">
+              {raffle.title}
+            </p>
+            <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+              <div>
+                Sorteio:{" "}
+                {raffle.drawDate ? formatDateTime(raffle.drawDate) : "-"}
+              </div>
+              <div>Cadastro: {formatDate(raffle.createdAt)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className="flex items-center">
+          <Select
+            value={status}
+            onValueChange={changeStatus}
+            disabled={isPending}
+          >
+            <SelectTrigger className="w-full lg:w-36 h-9">
+              <SelectValue labels={STATUS_LABELS} />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUSES.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Ações */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <IconAction
+            label={highlight ? "Remover destaque" : "Destacar na home"}
+            onClick={toggleHighlight}
+            active={highlight}
+          >
+            <Star
+              className={cn(
+                "h-4 w-4",
+                highlight && "fill-primary text-primary"
+              )}
+            />
+          </IconAction>
+
+          <IconAction label="Copiar link" onClick={copyLink}>
+            <Copy className="h-4 w-4" />
+          </IconAction>
+
+          <IconLink
+            href={`/admin/sorteios/${raffle.id}/editar`}
+            label="Editar"
+          >
+            <Pencil className="h-4 w-4" />
+          </IconLink>
+
+          <IconLink
+            href={publicUrl}
+            label="Visualizar página"
+            external
+          >
+            <ExternalLink className="h-4 w-4" />
+          </IconLink>
+
+          <IconLink
+            href={`/admin/sorteios/${raffle.id}/compras`}
+            label="Ver compras"
+            accent
+          >
+            <ShoppingCart className="h-4 w-4" />
+          </IconLink>
+        </div>
+
+        {/* Ring de % vendido */}
+        <div className="flex items-center justify-end lg:justify-center lg:w-20 shrink-0">
+          <CircularProgress percent={soldPct} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IconAction({
+  label,
+  onClick,
+  active,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={cn(
+        "h-9 w-9 text-muted-foreground hover:text-foreground",
+        active && "text-primary hover:text-primary"
+      )}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function IconLink({
+  href,
+  label,
+  external,
+  accent,
+  children,
+}: {
+  href: string;
+  label: string;
+  external?: boolean;
+  accent?: boolean;
+  children: React.ReactNode;
+}) {
+  const className = cn(
+    "h-9 w-9 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
+    accent && "text-primary hover:text-primary hover:bg-primary/10"
+  );
+  if (external) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={label}
+        aria-label={label}
+        className={className}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} title={label} aria-label={label} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+function CircularProgress({ percent }: { percent: number }) {
+  const r = 16;
+  const c = 2 * Math.PI * r;
+  const offset = c - (percent / 100) * c;
+  return (
+    <div className="relative h-12 w-12" aria-label={`Compras ${percent}%`}>
+      <svg
+        viewBox="0 0 40 40"
+        className="h-full w-full -rotate-90"
+        aria-hidden
+      >
+        <circle
+          cx="20"
+          cy="20"
+          r={r}
+          fill="none"
+          stroke="var(--muted)"
+          strokeWidth="3.5"
+        />
+        <circle
+          cx="20"
+          cy="20"
+          r={r}
+          fill="none"
+          stroke="var(--primary)"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.3s" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold tabular-nums">
+        {percent}%
+      </div>
+    </div>
+  );
+}

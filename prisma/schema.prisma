@@ -1,0 +1,935 @@
+// Prisma schema — JobRifa
+//
+// Decisões importantes (documentação inline para Mateus aprender no caminho):
+//
+// 1) LAZY TICKET MODEL: a tabela `Ticket` NÃO recebe uma linha por número quando
+//    a rifa é criada. Uma rifa de 1.000.000 de números criaria 1M de linhas inúteis
+//    no banco. Em vez disso, só inserimos uma linha quando o número é reservado
+//    ou pago. A ausência de linha = número AVAILABLE. O `@@unique([raffleId, number])`
+//    funciona como o "lock" que impede dois clientes de reservarem o mesmo número
+//    ao mesmo tempo — o segundo INSERT falha com erro de constraint.
+//
+// 2) RESERVATION guarda os dados do participante mesmo se ele não tiver conta.
+//    A relação com User é opcional (`userId?`) para permitir compras anônimas
+//    que apenas exigem nome/CPF/telefone.
+//
+// 3) PaymentWebhookEvent garante idempotência: se o Mercado Pago disparar o mesmo
+//    webhook 2x, conseguimos detectar via `@@unique([provider, externalId])` e
+//    pular o processamento duplicado.
+//
+// 4) Todos os Decimal usam @db.Decimal(10,2) (até R$ 99.999.999,99) — suficiente
+//    para qualquer rifa realista, evita problemas de ponto flutuante.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =====================================================================
+// ENUMS
+// =====================================================================
+
+enum Role {
+  SUPER_ADMIN // dono da plataforma — vê todos os tenants
+  ADMIN // dono de um tenant — vê só os sorteios do tenant dele
+  AFFILIATE
+  PARTICIPANT
+}
+
+// Multi-tenant: cada Tenant é um "cliente da plataforma". Mateus = 1 tenant,
+// André = outro tenant, etc. Os sorteios pertencem ao tenant, o domínio
+// roteia pra ele e o admin do tenant só vê o que é dele.
+enum TenantHostKind {
+  PUBLIC // host onde o site público do tenant é servido (sorteios.vip)
+  ADMIN // host onde o painel admin do tenant é servido (admin.sorteios.vip)
+}
+
+enum RaffleStatus {
+  DRAFT
+  ACTIVE
+  FINISHED
+  CANCELLED
+}
+
+enum RafflePrivacy {
+  PUBLIC
+  PRIVATE
+}
+
+enum ReservationModel {
+  RANDOM_NUMBERS // sistema sorteia números aleatórios para o participante
+  SEQUENTIAL // números sequenciais
+  MANUAL // participante escolhe os números
+}
+
+enum RaffleModality {
+  LOTERIA_FEDERAL // sorteio baseado no resultado da Loteria Federal
+  OWN_DRAW // sorteio próprio com semente verificável
+}
+
+enum TicketStatus {
+  RESERVED // reservado, aguardando pagamento
+  PAID // pago
+  AWARDED // premiado
+  // Nota: não existe AVAILABLE — modelo lazy, ausência de linha = disponível
+}
+
+enum ReservationStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  BOLETO
+}
+
+enum PaymentProvider {
+  MERCADO_PAGO
+  SYNCPAY
+  CODEPAY
+}
+
+enum CommissionStatus {
+  PENDING
+  PAID
+}
+
+enum AnnouncementType {
+  INFO
+  WARNING
+  SUCCESS
+}
+
+enum DescriptionMode {
+  EXPANDED // descrição sempre visível
+  COLLAPSED // descrição aparece num <details> recolhido
+}
+
+enum ThemeMode {
+  LIGHT
+  DARK
+}
+
+// =====================================================================
+// USUÁRIOS E AUTENTICAÇÃO (compatível com Auth.js v5 + Prisma Adapter)
+// =====================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  // E-mail é opcional — o login do app é por nome + celular, sem senha.
+  // Mantemos o campo (e o unique) por compatibilidade com o Prisma Adapter
+  // do Auth.js e pra eventual recuperação/contato. Múltiplos NULLs são
+  // permitidos pelo Postgres em colunas unique.
+  email         String?   @unique
+  emailVerified DateTime?
+  passwordHash  String? // legado — não usado (login é passwordless por nome+celular)
+  name          String
+  // CPF não é mais usado pra login (passou a ser nome+celular). Continua
+  // como campo opcional pra dados antigos e edição via admin. Múltiplos
+  // NULLs são OK no @unique.
+  cpf           String?   @unique
+  // Celular é o identificador único do login (combinado com nome). Armazenado
+  // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
+  // novos sempre cadastram.
+  phone         String?   @unique
+  role          Role      @default(PARTICIPANT)
+  image         String?
+
+  // Multi-tenant: ADMIN e AFFILIATE pertencem a 1 tenant (membership).
+  // SUPER_ADMIN e PARTICIPANT são globais — não pertencem a nenhum tenant
+  // específico (PARTICIPANT pode comprar em qualquer um, SUPER_ADMIN vê
+  // todos no painel). Por isso o campo é nullable.
+  tenantId String?
+  tenant   Tenant? @relation("TenantMembers", fields: [tenantId], references: [id], onDelete: SetNull)
+
+  // Quem é dono do tenant. 1:1 — cada User pode ser dono de no máximo 1
+  // tenant (geralmente o ADMIN/SUPER_ADMIN principal). Setado quando o
+  // tenant é criado.
+  ownedTenant Tenant? @relation("TenantOwner")
+
+  accounts       Account[]
+  sessions       Session[]
+  reservations   Reservation[]
+  affiliate      Affiliate?
+  createdRaffles Raffle[]      @relation("CreatedRaffles")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@index([tenantId])
+}
+
+// Tenant é o "cliente" da plataforma — cada admin que comprou domínio próprio
+// e configurou apontamento DNS pra cá vira um Tenant. Slug é só identificador
+// interno (não aparece em URLs). Identidade externa = os hosts cadastrados.
+model Tenant {
+  id      String @id @default(cuid())
+  slug    String @unique // identificador interno: "mateus", "andre", ...
+  name    String // nome de exibição: "Sorteios VIP", "Skins Lendárias"
+  ownerId String @unique
+  owner   User   @relation("TenantOwner", fields: [ownerId], references: [id])
+
+  // Provider de PIX ativo + credenciais por gateway. Cada tenant configura
+  // o dele no painel admin; credenciais sensíveis (secret/password) são
+  // gravadas encriptadas (AES-256-GCM com chave em PAYMENT_SECRET_ENCRYPTION_KEY).
+  // Quando o campo aqui está NULL, o lib client cai pro env var legado
+  // (SYNCPAY_CLIENT_ID/SECRET) — backwards compat com o setup atual.
+  paymentProvider        PaymentProvider @default(SYNCPAY)
+  syncpayClientId        String?
+  syncpayClientSecretEnc String?
+  syncpayBaseUrl         String?
+  codepayClientId        String?
+  codepayPasswordEnc     String?
+
+  // Customização das páginas finais (pagamento confirmado / reserva
+  // expirada). Quando NULL, renderiza o texto padrão hardcoded. Cada
+  // tenant configura no admin em /configuracoes/mensagens.
+  paidTitle          String?
+  paidDescription    String? @db.Text
+  paidButtonLabel    String?
+  paidImageUrl       String?
+  expiredTitle       String?
+  expiredDescription String? @db.Text
+  expiredButtonLabel String?
+  expiredImageUrl    String?
+
+  // Identidade visual e textos do site (antes singleton em SiteSettings).
+  // Cada tenant edita os próprios em Admin → Configurações / Personalizar
+  // tema. Quando vazio/NULL, o componente cai num fallback razoável.
+  logoUrl                           String?
+  siteDescription                   String?
+  supportPhone                      String?
+  supportEmail                      String?
+  homeCampaignsTitle                String?
+  homeCampaignsCaption              String?
+  showWinnersOnHome                 Boolean   @default(false)
+  themeMode                         ThemeMode @default(LIGHT)
+  themePreset                       String    @default("orange")
+  headerAccent                      Boolean   @default(false)
+  cardColor                         String    @default("black")
+  termsOfUse                        String?   @db.Text
+  privacyPolicy                     String?   @db.Text
+  aboutUs                           String?   @db.Text
+  // Configurações da aba "Campanha / Compra" (per-tenant).
+  // loginMode: "phone" | "cpf" — qual identificador usar no login público.
+  // numbersNomenclature: como chamar as cotas na UI ("titulos"|"numeros"|"bilhetes"|"numeros_sorte").
+  // quantityCardsHeading: texto acima dos quick-picks na página de reserva.
+  // minPurchaseAge: idade mínima exigida pra reservar (16/18/21).
+  loginMode                         String    @default("phone")
+  numbersNomenclature               String    @default("titulos")
+  quantityCardsHeading              String?
+  minPurchaseAge                    Int       @default(18)
+  // Aba "Experiência do Usuário" — config global per-tenant que controla
+  // comportamento da UI pública (rankings, afiliados, share, etc.).
+  affiliateCookieHours              Int       @default(24)
+  rankingOrderBy                    String    @default("quantity") // "quantity" | "total"
+  rankingCacheMinutes               Int       @default(5)
+  requireAddressOnSignup            Boolean   @default(false)
+  allowPublicAffiliate              Boolean   @default(true)
+  shareButtonsGlobal                Boolean   @default(true)
+  allowQuantityKeyboardInput        Boolean   @default(true)
+  buyerPrivacy                      Boolean   @default(false)
+  carouselAutoPlay                  Boolean   @default(true)
+  showCardPrices                    Boolean   @default(true)
+  showAppButton                     Boolean   @default(true)
+  // Aba "Prêmios Instantâneos" — config global per-tenant.
+  // instantPrizesOrder: ordem em que as modalidades aparecem na página
+  // pública. Slugs: "awarded_numbers" | "awarded_box" | "reward_spin"
+  // | "scratch_card".
+  instantPrizesOrder                String[]  @default(["awarded_numbers", "awarded_box", "reward_spin", "scratch_card"])
+  awardedSectionTitle               String    @default("Títulos Premiados")
+  showAwardedOnlyWhenDistributed    Boolean   @default(false)
+  showAwardedNumbers                Boolean   @default(true)
+  showAwardedNumbersBoxes           Boolean   @default(true)
+  showAwardedNumbersRoulette        Boolean   @default(true)
+  showAwardedNumbersScratchCard     Boolean   @default(true)
+  aggregateInstantAwards            Boolean   @default(false)
+  disableInstantAwardsRepeatWinners Boolean   @default(false)
+  // Aba "Preços / Promoções" — toggles globais que afetam a tela de
+  // compra do site público.
+  showPromotionsPercentage          Boolean   @default(true)
+  showCombosPrice                   Boolean   @default(true)
+  showFees                          Boolean   @default(true)
+
+  hosts   TenantHost[]
+  raffles Raffle[]
+  members User[]       @relation("TenantMembers")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts
+// (raiz + www + admin). O proxy.ts e getCurrentTenant() resolvem o tenant
+// olhando o Host da request nessa tabela.
+model TenantHost {
+  id       String         @id @default(cuid())
+  tenantId String
+  host     String         @unique // "sorteios.vip", "www.sorteios.vip", "admin.sorteios.vip"
+  kind     TenantHostKind
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =====================================================================
+// RIFAS
+// =====================================================================
+
+model Raffle {
+  id                        String           @id @default(cuid())
+  // Slug é único POR TENANT — Mateus e André podem ter um "iphone-15".
+  // O índice composto está em @@unique abaixo. Não pode ser @unique global.
+  slug                      String
+  title                     String
+  shortDescription          String?
+  description               String?          @db.Text // HTML do Tiptap (sanitizado no servidor)
+  descriptionMode           DescriptionMode  @default(COLLAPSED)
+  status                    RaffleStatus     @default(DRAFT)
+  privacy                   RafflePrivacy    @default(PUBLIC)
+  category                  String?
+  totalNumbers              Int // ex: 100, 1000, 100000
+  pricePerNumber            Decimal          @db.Decimal(10, 2)
+  isFree                    Boolean          @default(false) // campanha gratuita
+  // Texto exibido no card de preço quando isFree=true. Vazio = usa default
+  // ("SORTEIO GRATUITO"). Admin pode personalizar pra "PARTICIPAÇÃO LIVRE",
+  // "ENTRADA GRÁTIS", etc.
+  freeLabel                 String?
+  hasFee                    Boolean          @default(false) // adicionar taxa por reserva
+  feeAmount                 Decimal?         @db.Decimal(10, 2)
+  reservationModel          ReservationModel @default(MANUAL)
+  modality                  RaffleModality   @default(OWN_DRAW)
+  drawDate                  DateTime?
+  salesStart                DateTime?
+  autoCloseOnDraw           Boolean          @default(true)
+  showDrawDate              Boolean          @default(true)
+  allowReceiptDownload      Boolean          @default(true)
+  showOnHome                Boolean          @default(false) // destacar na home
+  showProgressBar           Boolean          @default(true)
+  showParticipantName       Boolean          @default(false) // exibe nome de quem comprou
+  showDailyRanking          Boolean          @default(false)
+  showOverallRanking        Boolean          @default(false)
+  showShareButtons          Boolean          @default(true)
+  // Quick-picks da seleção de quantidade na página pública. Até 6 valores
+  // (ex: [5, 10, 100, 500, 1000, 5000]); array vazio = sem quick-picks.
+  // bestseller: índice 0-5 que ganha destaque "MAIS POPULAR" (-1 = nenhum).
+  selectionCards            Int[]            @default([])
+  selectionCardsBestseller  Int              @default(-1)
+  statusText                String?
+  // JSON: { name, phone, cpf, email, socialName, birthDate } -> bool.
+  // Tudo OFF por padrão: identidade vem da conta logada. Admin liga
+  // qualquer um pra forçar o campo a aparecer na "Dados adicionais" da
+  // reserva — útil pra reconfirmar telefone/email em rifas específicas.
+  requiredFields            Json             @default("{\"name\":false,\"phone\":false,\"cpf\":false,\"email\":false,\"socialName\":false,\"birthDate\":false}")
+  minPurchase               Int              @default(1)
+  maxPurchase               Int?
+  initialQuantity           Int? // quantidade pré-selecionada no input
+  maxPerBuyer               Int? // cap cumulativo por CPF (todas as reservas)
+  reservationTimeoutMinutes Int              @default(15)
+
+  // Quando setado, sobrescreve o tenant.paymentProvider só nesse sorteio
+  // (credenciais continuam vindo do tenant). NULL = herda o padrão do
+  // tenant. Configurado em Admin → Editar sorteio → aba Pagamento.
+  paymentProvider PaymentProvider?
+
+  // Config dos Títulos Premiados (prêmio instantâneo): ver AwardedTicket
+  // pra lista de números. Aqui ficam os toggles e textos de exibição.
+  awardedTicketsEnabled    Boolean @default(true)
+  awardedTicketsShowList   Boolean @default(true) // mostra lista pro público?
+  awardedTicketsViewMode   String  @default("list") // "list" | "modal"
+  awardedTicketsWinnerText String? @db.Text
+  awardedTicketsLoserShow  Boolean @default(true)
+  awardedTicketsLoserTitle String?
+  awardedTicketsLoserText  String? @db.Text
+
+  // Config das Promoções (combos de cotas com desconto). As entradas
+  // ficam em Promotion; aqui só os toggles e flags de exibição.
+  promotionsEnabled       Boolean @default(true)
+  // "Promoção em Dobro": cliente recebe 2x os números pelo mesmo valor.
+  // Hoje o toggle só é persistido; lógica de multiplicação de tickets
+  // ainda não foi implementada no createReservation (TODO).
+  promotionsDoubleEnabled Boolean @default(false)
+  // Quando true, várias promoções podem somar/acumular num mesmo pedido
+  // (semântica controlada na lógica de checkout — hoje só persistido).
+  promotionsAccumulative  Boolean @default(false)
+
+  // Config dos Prêmios (lista em Prize). Toggle de visibilidade pro
+  // público + bloco de E-book entregue após pagamento (estilo SkinsLendarias).
+  prizesShow      Boolean @default(true)
+  ebookEnabled    Boolean @default(false)
+  ebookTitle      String?
+  ebookText       String? @db.Text
+  ebookUrl        String?
+  ebookButtonText String?
+
+  // Caixas Surpresas: cliente ganha N caixas ao bater certo número de cotas
+  // pagas. A distribuição em si (sortear prêmios do pool, criar SurpriseBox
+  // por reserva PAID) será implementada em iteração futura — por ora só os
+  // toggles + tiers de combo. "Acumulativos" = somar todos os tiers atingidos
+  // (ex: 100 cotas → 1+3+10+15 caixas); off = só o maior tier ganha.
+  surpriseBoxEnabled            Boolean @default(false)
+  surpriseBoxCombosAccumulative Boolean @default(false)
+  // Toggles secundários do modal Caixas Surpresas (só fazem sentido com
+  // surpriseBoxEnabled=true): "Abrir todas" = comprador pode abrir as
+  // caixas todas de uma vez (sem animação individual); "Exibir Ganhadores"
+  // = mostra na pagina pública uma lista dos ganhadores das caixas.
+  surpriseBoxAbrirTodas         Boolean @default(false)
+  surpriseBoxExibirGanhadores   Boolean @default(false)
+  // Ordem de exibição dos ganhadores na lista pública: aleatório,
+  // crescente (mais antigos primeiro) ou decrescente (mais recentes).
+  surpriseBoxDisplayOrder       SurpriseBoxDisplayOrder @default(RANDOM)
+
+  // Ganhador do sorteio principal. Setado quando o admin declara o
+  // resultado pós-sorteio (Loteria Federal ou sorteio próprio). A rifa
+  // vira FINISHED nesse momento. winnerNote é livre — admin pode colar o
+  // extrato da Loteria, hash do bloco usado como semente, link do vídeo
+  // do sorteio, etc. Registro de auditoria pra transparência.
+  winnerTicketNumber Int?
+  winnerDrawnAt      DateTime?
+  winnerNote         String?   @db.Text
+
+  createdById String
+  createdBy   User   @relation("CreatedRaffles", fields: [createdById], references: [id])
+
+  // Tenant ao qual a rifa pertence. O slug é único dentro do tenant —
+  // domínios diferentes podem ter sorteios com o mesmo slug.
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  images            RaffleImage[]
+  prizes            Prize[]
+  tickets           Ticket[]
+  awardedTickets    AwardedTicket[]
+  reservations      Reservation[]
+  promotions        Promotion[]
+  discountLinks     DiscountLink[]
+  utmLinks          UtmLink[]
+  surpriseBoxCombos SurpriseBoxCombo[]
+  surpriseBoxPrizes SurpriseBoxPrize[]
+  surpriseBoxes     SurpriseBox[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([status, privacy])
+  @@index([createdById])
+  @@index([tenantId])
+}
+
+model RaffleImage {
+  id       String  @id @default(cuid())
+  raffleId String
+  url      String
+  order    Int     @default(0)
+  isCover  Boolean @default(false)
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@index([raffleId])
+}
+
+model Prize {
+  id          String  @id @default(cuid())
+  raffleId    String
+  position    Int // 1 = 1º prêmio, 2 = 2º prêmio, etc.
+  description String
+  imageUrl    String?
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@unique([raffleId, position])
+  @@index([raffleId])
+}
+
+// LAZY MODEL — só existe quando reservado/pago. Ver topo do arquivo.
+model Ticket {
+  id            String       @id @default(cuid())
+  raffleId      String
+  number        Int
+  status        TicketStatus
+  reservationId String?
+  paidAt        DateTime?
+
+  raffle      Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([raffleId, number])
+  @@index([raffleId, status])
+  @@index([reservationId])
+}
+
+model AwardedTicket {
+  id               String  @id @default(cuid())
+  raffleId         String
+  number           Int
+  prizeDescription String
+  isInstantPrize   Boolean @default(false)
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@unique([raffleId, number])
+  @@index([raffleId])
+}
+
+enum PromotionType {
+  QTY // "Compre exatamente N cotas por R$ X" (combo fixo)
+  MORE_THAN // "A partir de N cotas, pague R$ X" (tier por volume)
+}
+
+model Promotion {
+  id       String        @id @default(cuid())
+  raffleId String
+  quantity Int // ex: 10 títulos (QTY) ou limite mínimo (MORE_THAN)
+  price    Decimal       @db.Decimal(10, 2) // ex: R$ 50,00
+  label    String?
+  type     PromotionType @default(QTY)
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@index([raffleId])
+}
+
+// Tier de Caixas Surpresas: comprou ≥ threshold cotas → ganha boxCount caixas.
+// Configurado por rifa no modal "Distribuição das Caixas".
+// - visible: mostra esse combo na página pública (área de Caixas Surpresas)
+// - highlighted: destaca visualmente (badge/cor diferente) na lista pública
+model SurpriseBoxCombo {
+  id          String  @id @default(cuid())
+  raffleId    String
+  threshold   Int // "A partir de X Títulos"
+  boxCount    Int // "Ganha N CAIXAS!"
+  visible     Boolean @default(true)
+  highlighted Boolean @default(false)
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@unique([raffleId, threshold])
+  @@index([raffleId])
+}
+
+enum SurpriseBoxDisplayOrder {
+  RANDOM // ordem aleatória na listagem pública
+  ASC    // mais antigos primeiro
+  DESC   // mais recentes primeiro
+}
+
+enum SurpriseBoxPrizeMode {
+  RANDOM  // sorteio uniforme entre os itens disponíveis no pool
+  PERCENT // odds-based — admin define a chance (%) daquele item sair
+}
+
+enum SurpriseBoxStatus {
+  UNOPENED     // caixa criada pós-pagamento, aguardando o comprador abrir
+  OPENED_PRIZE // aberta e ganhou um prêmio (prizeId preenchido)
+  OPENED_EMPTY // aberta mas saiu vazia ("não foi dessa vez")
+}
+
+// Item/prêmio cadastrado no pool das Caixas Surpresas de uma rifa. Cada
+// linha = 1 unidade (estoque implícito = 1). O form admin permite criar
+// até 100 cópias de uma vez com o mesmo título/prêmio. Quando o item é
+// sorteado pra uma caixa aberta, claimedAt fica preenchido e a relação
+// inversa `claimedByBox` aponta pra SurpriseBox.
+//
+// - locked: admin "esconde" sem deletar — não entra no pool de sorteio.
+// - mode: RANDOM (uniforme) | PERCENT (chance individual em odds).
+// - odds: usado só em PERCENT. 0-100. Soma dos PERCENT pode ser < 100,
+//   resto vira chance de caixa vazia.
+model SurpriseBoxPrize {
+  id        String               @id @default(cuid())
+  raffleId  String
+  title     String // agrupador/categoria do prêmio (ex: "Skins Lendárias")
+  prize     String // descrição do que sai pro ganhador
+  mode      SurpriseBoxPrizeMode @default(RANDOM)
+  odds      Decimal?             @db.Decimal(5, 2) // só em PERCENT
+  locked    Boolean              @default(false)
+  claimedAt DateTime? // setado atomicamente quando uma caixa abre e leva esse item
+
+  raffle      Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  claimedByBox SurpriseBox?
+
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+  @@index([raffleId, locked, claimedAt])
+}
+
+// Caixa-instância gerada pós-pagamento. Cada reserva PAID que atingiu
+// algum combo recebe N SurpriseBox em status UNOPENED. O comprador abre
+// uma a uma (ou todas se surpriseBoxAbrirTodas estiver on), e cada
+// abertura tenta atomicamente sortear um item do pool. Se sair item =
+// status OPENED_PRIZE + prizeId. Se pool vazio/zerou = OPENED_EMPTY.
+model SurpriseBox {
+  id            String            @id @default(cuid())
+  raffleId      String
+  reservationId String
+  status        SurpriseBoxStatus @default(UNOPENED)
+  // 1:1 — prêmio sorteado. NULL enquanto UNOPENED ou se OPENED_EMPTY.
+  prizeId       String?           @unique
+  openedAt      DateTime?
+
+  raffle      Raffle            @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  reservation Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  prize       SurpriseBoxPrize? @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reservationId])
+  @@index([raffleId, status])
+}
+
+// =====================================================================
+// RESERVAS E PAGAMENTOS
+// =====================================================================
+
+model Reservation {
+  id       String  @id @default(cuid())
+  raffleId String
+  userId   String?
+
+  // Dados do participante (preenchidos mesmo sem conta).
+  // Apenas participantName é obrigatório no banco; demais campos são
+  // condicionados pelo admin via raffle.requiredFields.
+  participantName       String
+  participantPhone      String?
+  participantCpf        String? // só dígitos
+  participantEmail      String?
+  participantSocialName String?
+  participantBirthDate  DateTime?
+
+  totalAmount Decimal           @db.Decimal(10, 2)
+  status      ReservationStatus @default(PENDING)
+  expiresAt   DateTime
+  paidAt      DateTime?
+
+  affiliateId String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+
+  raffle    Raffle     @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  affiliate Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+
+  tickets      Ticket[]
+  payment      Payment?
+  commission   AffiliateCommission?
+  surpriseBoxes SurpriseBox[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([raffleId, status])
+  @@index([userId])
+  @@index([affiliateId])
+  @@index([status, expiresAt]) // job de expiração busca por aqui
+}
+
+model Payment {
+  id            String          @id @default(cuid())
+  reservationId String          @unique
+  provider      PaymentProvider
+  externalId    String          @unique // id retornado pelo gateway
+  status        PaymentStatus
+  amount        Decimal         @db.Decimal(10, 2)
+  method        PaymentMethod
+  rawResponse   Json?
+  paidAt        DateTime?
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model PaymentWebhookEvent {
+  id              String          @id @default(cuid())
+  provider        PaymentProvider
+  externalId      String // id da TRANSAÇÃO no gateway (Payment.externalId)
+  payload         Json
+  processedAt     DateTime?
+  processingError String?
+
+  createdAt DateTime @default(now())
+
+  // Sem unique aqui: cada transação dispara MÚLTIPLOS eventos ao longo
+  // do tempo (created, paid, expired, etc) e queremos logar todos. A
+  // idempotência do PROCESSAMENTO é garantida no handler — só atualiza
+  // Payment se ainda não estiver em estado terminal.
+  @@index([provider, externalId])
+  @@index([processedAt])
+}
+
+// =====================================================================
+// AFILIADOS
+// =====================================================================
+
+model Affiliate {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  code              String  @unique
+  commissionPercent Decimal @default(0) @db.Decimal(5, 2) // 0.00 a 100.00
+  totalSales        Decimal @default(0) @db.Decimal(12, 2)
+  totalCommission   Decimal @default(0) @db.Decimal(12, 2)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reservations Reservation[]
+  commissions  AffiliateCommission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AffiliateCommission {
+  id            String           @id @default(cuid())
+  affiliateId   String
+  reservationId String           @unique
+  amount        Decimal          @db.Decimal(10, 2)
+  status        CommissionStatus @default(PENDING)
+  paidAt        DateTime?
+
+  affiliate   Affiliate   @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([affiliateId, status])
+}
+
+// =====================================================================
+// CONFIGURAÇÃO E CONTEÚDO
+// =====================================================================
+
+model Bank {
+  id             String  @id @default(cuid())
+  name           String
+  agency         String
+  account        String
+  pixKey         String?
+  holderName     String
+  holderDocument String // CPF ou CNPJ
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DiscountLink {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  discountPercent Decimal?  @db.Decimal(5, 2)
+  discountAmount  Decimal?  @db.Decimal(10, 2)
+  validUntil      DateTime?
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  raffleId        String?
+
+  raffle Raffle? @relation(fields: [raffleId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+}
+
+model UtmLink {
+  id       String  @id @default(cuid())
+  label    String
+  url      String
+  source   String
+  medium   String
+  campaign String
+  raffleId String?
+
+  raffle Raffle? @relation(fields: [raffleId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+}
+
+model Webhook {
+  id              String    @id @default(cuid())
+  url             String
+  secret          String
+  events          String[] // Postgres array
+  enabled         Boolean   @default(true)
+  lastTriggeredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Integration {
+  id       String  @id @default(cuid())
+  provider String  @unique
+  config   Json
+  enabled  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faq {
+  id       String  @id @default(cuid())
+  question String
+  answer   String  @db.Text
+  order    Int     @default(0)
+  enabled  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
+
+model Announcement {
+  id        String           @id @default(cuid())
+  title     String
+  content   String           @db.Text
+  type      AnnouncementType @default(INFO)
+  enabled   Boolean          @default(true)
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, expiresAt])
+}
+
+model Contact {
+  id        String    @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  message   String    @db.Text
+  repliedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([repliedAt])
+}
+
+// Pool de CPFs pré-cadastrados — distribuído automaticamente no
+// registerAction, evitando que o usuário precise digitar CPF no cadastro.
+// Inserido via migration 20260515000000_add_cpf_pool a partir de uma lista
+// curada (559 CPFs com dígitos verificadores válidos). Claim é atômico via
+// `FOR UPDATE SKIP LOCKED` no Postgres: dois cadastros simultâneos pegam
+// linhas diferentes sem race. Quando o pool esgota, o cadastro continua
+// funcionando — o usuário simplesmente fica sem CPF e é solicitado na
+// reserva (mesmo fluxo de fallback que já existia).
+model CpfPool {
+  id             String    @id @default(cuid())
+  cpf            String    @unique // 11 dígitos
+  assignedUserId String?   @unique
+  assignedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([assignedUserId])
+}
+
+// Singleton: sempre 1 linha (id = "singleton")
+model SiteSettings {
+  id                   String    @id @default("singleton")
+  logoUrl              String?
+  themeMode            ThemeMode @default(LIGHT)
+  // Chave do preset de cor (ver ThemePreset em src/lib/theme-presets.ts).
+  // Mantida como string em vez de enum pra evitar migration de enum a cada
+  // novo preset.
+  themePreset          String    @default("orange")
+  // Se true, o header do site público pinta no tom do preset; caso contrário
+  // usa o background neutro do tema.
+  headerAccent         Boolean   @default(false)
+  // Cor dos cards de seleção rápida na reserva: "black" | "white" | "accent"
+  cardColor            String    @default("black")
+  // Personalização da página inicial pública.
+  // Strings vazias = não renderiza o cabeçalho da seção.
+  homeCampaignsTitle   String    @default("")
+  homeCampaignsCaption String    @default("")
+  showWinnersOnHome    Boolean   @default(false)
+  // Mantidos por compatibilidade — atualmente não usados pelo tema dinâmico
+  // (substituídos por themePreset). Permanecem aqui caso futuramente queira
+  // permitir cor customizada manual.
+  primaryColor         String    @default("#fda92d")
+  secondaryColor       String    @default("#71717a")
+  companyName          String    @default("Rifa Online")
+  // Tagline curta exibida no meta description e em alguns headers
+  // ("Sua sorte está aqui", por exemplo).
+  siteDescription      String    @default("")
+  supportEmail         String?
+  supportPhone         String?
+  termsOfUse           String?   @db.Text
+  privacyPolicy        String?   @db.Text
+  aboutUs              String?   @db.Text
+
+  // URL de uma imagem exibida na tela "Pagamento confirmado" como
+  // agradecimento ao comprador. Opcional — se vazia, a celebração só
+  // mostra o check verde + números.
+  thankYouImageUrl String?
+
+  updatedAt DateTime @updatedAt
+}

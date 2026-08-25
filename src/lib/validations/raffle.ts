@@ -1,0 +1,150 @@
+import { z } from "zod";
+
+export const raffleStatusSchema = z.enum([
+  "DRAFT",
+  "ACTIVE",
+  "FINISHED",
+  "CANCELLED",
+]);
+export const rafflePrivacySchema = z.enum(["PUBLIC", "PRIVATE"]);
+export const reservationModelSchema = z.enum([
+  "RANDOM_NUMBERS",
+  "SEQUENTIAL",
+  "MANUAL",
+]);
+export const raffleModalitySchema = z.enum(["LOTERIA_FEDERAL", "OWN_DRAW"]);
+export const descriptionModeSchema = z.enum(["EXPANDED", "COLLAPSED"]);
+
+export const requiredFieldsSchema = z.object({
+  name: z.boolean(),
+  phone: z.boolean(),
+  cpf: z.boolean(),
+  email: z.boolean(),
+  socialName: z.boolean().default(false),
+  birthDate: z.boolean().default(false),
+});
+
+// Schema da rifa — combina os campos das abas Geral E Títulos do form admin.
+// O server action recebe tudo junto e particiona em raffle.create/update.
+export const raffleGeneralSchema = z.object({
+  // Geral
+  title: z.string().min(3, "Título muito curto").max(200).trim(),
+  // URL amigável (slug). Opcional: se vazia no create, é gerada do título.
+  // Se preenchida, valida formato e checa unicidade no server action.
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Use apenas letras minúsculas, números e hífens"
+    )
+    .min(3, "Mínimo 3 caracteres")
+    .max(200)
+    .optional()
+    .or(z.literal("")),
+  shortDescription: z.string().max(280).optional().nullable(),
+  description: z.string().max(50_000).optional().nullable(),
+  descriptionMode: descriptionModeSchema.default("COLLAPSED"),
+  category: z.string().max(60).optional().nullable(),
+  privacy: rafflePrivacySchema,
+  showOnHome: z.coerce.boolean().default(false),
+  drawDate: z.coerce.date().optional().nullable(),
+  salesStart: z.coerce.date().optional().nullable(),
+  autoCloseOnDraw: z.coerce.boolean().default(true),
+  showDrawDate: z.coerce.boolean().default(true),
+  allowReceiptDownload: z.coerce.boolean().default(true),
+  showParticipantName: z.coerce.boolean().default(false),
+  statusText: z.string().max(200).optional().nullable(),
+  modality: raffleModalitySchema,
+  reservationModel: reservationModelSchema,
+  requiredFields: requiredFieldsSchema,
+
+  // Títulos
+  totalNumbers: z.coerce
+    .number()
+    .int("Deve ser um número inteiro")
+    .min(10, "Mínimo 10 números")
+    .max(10_000_000, "Máximo 10.000.000 números"),
+  pricePerNumber: z.coerce
+    .number()
+    .min(0, "Preço não pode ser negativo")
+    .max(99_999_999.99),
+  isFree: z.coerce.boolean().default(false),
+  // Texto custom no card de preço quando isFree=true. Vazio/null = usa default.
+  freeLabel: z
+    .string()
+    .max(60, "Máximo 60 caracteres")
+    .optional()
+    .nullable()
+    .transform((v) => (v && v.trim() ? v.trim() : null)),
+  hasFee: z.coerce.boolean().default(false),
+  feeAmount: z.coerce.number().min(0).max(99_999_999.99).optional().nullable(),
+  reservationTimeoutMinutes: z.coerce
+    .number()
+    .int()
+    .min(3, "Mínimo 3 minutos")
+    .max(120, "Máximo 120 minutos")
+    .default(15),
+  minPurchase: z.coerce.number().int().min(1).max(10_000).default(1),
+  maxPurchase: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000_000)
+    .optional()
+    .nullable(),
+  initialQuantity: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .optional()
+    .nullable(),
+  maxPerBuyer: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(10_000_000)
+    .optional()
+    .nullable(),
+  showProgressBar: z.coerce.boolean().default(true),
+  showDailyRanking: z.coerce.boolean().default(false),
+  showOverallRanking: z.coerce.boolean().default(false),
+  showShareButtons: z.coerce.boolean().default(true),
+  // Quick-picks da página pública (até 6 valores >= 1). bestseller é
+  // índice no array (-1 = nenhum destacado).
+  selectionCards: z
+    .array(z.coerce.number().int().min(1).max(10_000_000))
+    .max(6, "Máximo 6 cards")
+    .default([]),
+  selectionCardsBestseller: z.coerce
+    .number()
+    .int()
+    .min(-1)
+    .max(5)
+    .default(-1),
+});
+export type RaffleGeneralInput = z.infer<typeof raffleGeneralSchema>;
+
+// Reserva pública — apenas nome é obrigatório no schema base.
+// O ADMIN decide quais campos cobrar via raffle.requiredFields.
+// A UI deve render só os campos pedidos; este schema aceita os demais como opcionais.
+export const createReservationSchema = z.object({
+  raffleId: z.string().cuid(),
+  numbers: z
+    .array(z.coerce.number().int().min(1))
+    .min(1, "Selecione ao menos 1 número")
+    .max(10_000, "Limite por reserva: 10.000 números"),
+  participantName: z.string().min(2).max(120).trim(),
+  participantPhone: z.string().min(10).max(20).optional().nullable(),
+  participantCpf: z.string().min(11).max(14).optional().nullable(),
+  participantEmail: z.string().email().optional().nullable(),
+  participantSocialName: z.string().max(120).optional().nullable(),
+  participantBirthDate: z.coerce.date().optional().nullable(),
+  affiliateCode: z.string().max(64).optional().nullable(),
+  utmSource: z.string().max(120).optional().nullable(),
+  utmMedium: z.string().max(120).optional().nullable(),
+  utmCampaign: z.string().max(120).optional().nullable(),
+});
+export type CreateReservationInput = z.infer<typeof createReservationSchema>;

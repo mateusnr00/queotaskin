@@ -1,0 +1,157 @@
+import Link from "next/link";
+import { TicketCheck } from "lucide-react";
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/db";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { signOut } from "@/auth";
+import { cn } from "@/lib/utils";
+import { adminHref, isAdminOnSeparateHost } from "@/lib/admin-host";
+import { getCurrentTenant } from "@/lib/tenant";
+import { PublicMobileMenu } from "./public-mobile-menu";
+
+// Header público compacto inspirado no Sorteamos: logo à esquerda,
+// menu hambúrguer no mobile, ações no desktop. Quando admin liga
+// "Header com cor de destaque", o header inteiro pinta de primary.
+//
+// Quando o painel admin roda em host separado (admin.sorteios.vip), o link
+// "Admin" não é mostrado no site público — quem é admin acessa direto pelo
+// outro domínio. Em dev/preview (mesmo host pra tudo), o link aparece pra
+// quem é admin pra facilitar a navegação local.
+export async function SiteHeader() {
+  const session = await auth();
+  const [freshUser, tenantCtx, adminLinkHref, adminOnSeparateHost] =
+    await Promise.all([
+      session?.user?.id
+        ? prisma.user
+            .findUnique({
+              where: { id: session.user.id },
+              select: { role: true },
+            })
+            .catch(() => null)
+        : Promise.resolve(null),
+      getCurrentTenant().catch(() => null),
+      adminHref(),
+      isAdminOnSeparateHost(),
+    ]);
+  // Tenant traz só id/slug/name; busca os campos visuais (logo + accent)
+  // numa query separada — esses agora vivem no Tenant, não no global.
+  const tenantVisual = tenantCtx
+    ? await prisma.tenant
+        .findUnique({
+          where: { id: tenantCtx.id },
+          select: { logoUrl: true, headerAccent: true },
+        })
+        .catch(() => null)
+    : null;
+  // Em produção (host split ativo), o site público nunca mostra o link Admin
+  // — quem é admin acessa via admin.<dominio>. Só liga o link em dev/preview
+  // onde tudo vive no mesmo host.
+  const showAdminLink =
+    (freshUser?.role === "ADMIN" || freshUser?.role === "SUPER_ADMIN") &&
+    !adminOnSeparateHost;
+  const appName =
+    tenantCtx?.name || process.env.NEXT_PUBLIC_APP_NAME || "Rifa Online";
+  const logoUrl = tenantVisual?.logoUrl ?? null;
+  const accent = tenantVisual?.headerAccent ?? false;
+
+  return (
+    <header
+      className={cn(
+        "border-b sticky top-0 z-30 transition-colors",
+        accent
+          ? "bg-primary text-primary-foreground border-primary/80"
+          : "bg-background"
+      )}
+    >
+      <div className="container mx-auto flex h-14 items-center justify-between px-4 max-w-6xl">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt={appName}
+              className="h-8 w-8 rounded-lg object-cover"
+            />
+          ) : (
+            <span
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-lg",
+                accent
+                  ? "bg-primary-foreground text-primary"
+                  : "bg-foreground text-background"
+              )}
+            >
+              <TicketCheck className="h-4 w-4" />
+            </span>
+          )}
+          <span className="text-sm sm:text-base">{appName}</span>
+        </Link>
+
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-1 text-sm">
+          <Link
+            href="/sorteios"
+            className="px-3 py-1.5 rounded-md hover:bg-muted"
+          >
+            Campanhas
+          </Link>
+          {session?.user ? (
+            <>
+              <Link
+                href="/meus-titulos"
+                className="px-3 py-1.5 rounded-md hover:bg-muted"
+              >
+                Meus títulos
+              </Link>
+              {showAdminLink && (
+                <Link
+                  href={adminLinkHref}
+                  className="px-3 py-1.5 rounded-md hover:bg-muted"
+                >
+                  Admin
+                </Link>
+              )}
+              <span className="ml-2 text-xs text-muted-foreground">
+                {session.user.name?.split(" ")[0]}
+              </span>
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/" });
+                }}
+              >
+                <Button type="submit" variant="outline" size="sm">
+                  Sair
+                </Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-md hover:bg-muted"
+              >
+                Entrar
+              </Link>
+              <Link
+                href="/registro"
+                className={buttonVariants({ size: "sm" })}
+              >
+                Criar conta
+              </Link>
+            </>
+          )}
+        </nav>
+
+        {/* Mobile drawer */}
+        <PublicMobileMenu
+          isLoggedIn={Boolean(session?.user)}
+          userName={session?.user?.name ?? null}
+          showAdminLink={showAdminLink}
+          adminHref={adminLinkHref}
+        />
+      </div>
+    </header>
+  );
+}
