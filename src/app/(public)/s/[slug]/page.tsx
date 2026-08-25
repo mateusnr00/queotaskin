@@ -86,32 +86,38 @@ export default async function PublicRaffleDetailPage({
   // pra expirar.
   await expireForRaffle(raffle.id);
 
-  const currentUser = session?.user?.id
-    ? await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          id: true,
-          name: true,
-          cpf: true,
-          phone: true,
-          email: true,
-        },
-      })
-    : null;
-
-  const soldCount = await prisma.ticket.count({
-    where: { raffleId: raffle.id },
-  });
-
-  const takenNumbers =
+  // Estas quatro não dependem uma da outra: em série, cada uma paga a
+  // latência de rede até o banco. Em paralelo, paga-se uma vez só — o que
+  // pesa quando a função e o Postgres estão em regiões diferentes.
+  const [currentUser, soldCount, takenTickets, rankSettings] = await Promise.all([
+    session?.user?.id
+      ? prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
+            phone: true,
+            email: true,
+          },
+        })
+      : Promise.resolve(null),
+    prisma.ticket.count({ where: { raffleId: raffle.id } }),
+    // Só rifas pequenas listam os números tomados; nas grandes a grade não
+    // é renderizada e puxar 10 mil linhas seria desperdício.
     raffle.totalNumbers <= 500
-      ? (
-          await prisma.ticket.findMany({
-            where: { raffleId: raffle.id },
-            select: { number: true },
-          })
-        ).map((t) => t.number)
-      : [];
+      ? prisma.ticket.findMany({
+          where: { raffleId: raffle.id },
+          select: { number: true },
+        })
+      : Promise.resolve([]),
+    prisma.tenant.findUnique({
+      where: { id: tenant.id },
+      select: { xpPerBrl: true, rankEnabled: true },
+    }),
+  ]);
+
+  const takenNumbers = takenTickets.map((t) => t.number);
 
   const isActive = raffle.status === "ACTIVE";
   const soldPercent = Math.round((soldCount / raffle.totalNumbers) * 100);
@@ -151,10 +157,6 @@ export default async function PublicRaffleDetailPage({
   // Campanha exclusiva por nível: precisa do XP do visitante para saber se
   // libera o formulário. A decisão real é do servidor, em
   // createReservationAction — aqui é só apresentação.
-  const rankSettings = await prisma.tenant.findUnique({
-    where: { id: tenant.id },
-    select: { xpPerBrl: true, rankEnabled: true },
-  });
   const viewerXp =
     raffle.minLevel != null && session?.user?.id
       ? await getUserXp(session.user.id, tenant.id)
