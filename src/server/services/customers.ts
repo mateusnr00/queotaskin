@@ -1,3 +1,5 @@
+import type { Role } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 
 export type CustomerSort = "spent" | "recent" | "purchases" | "name";
@@ -7,6 +9,8 @@ export interface Customer {
   name: string;
   phone: string | null;
   email: string | null;
+  cpf: string | null;
+  role: Role;
   createdAt: Date;
   /** Total pago por ele neste tenant. */
   spent: number;
@@ -39,70 +43,75 @@ const PAGE_SIZE = 25;
  */
 export async function listCustomers(
   tenantId: string,
-  opts: { search?: string; sort?: CustomerSort; page?: number } = {},
+  opts: {
+    nome?: string;
+    cpf?: string;
+    email?: string;
+    telefone?: string;
+    sort?: CustomerSort;
+    page?: number;
+  } = {},
 ) {
-  const { search = "", sort = "spent" } = opts;
+  const { sort = "spent" } = opts;
   const page = Math.max(1, opts.page ?? 1);
 
-  // 1. Gasto, volume e última compra por usuário, restrito ao tenant.
-  const stats = await prisma.reservation.groupBy({
-    by: ["userId"],
-    where: { status: "PAID", userId: { not: null }, raffle: { tenantId } },
-    _sum: { totalAmount: true },
-    _count: { _all: true },
-    _max: { paidAt: true },
-  });
+  const nome = (opts.nome ?? "").trim();
+  const cpf = (opts.cpf ?? "").replace(/\D/g, "");
+  const email = (opts.email ?? "").trim();
+  const telefone = (opts.telefone ?? "").replace(/\D/g, "");
 
-  const porUsuario = new Map(
-    stats.map((s) => [
-      s.userId!,
+  // Todo mundo ligado ao tenant: membros e quem já reservou. Uma pessoa que
+  // criou conta e ainda não comprou aparece com os números zerados — é
+  // cliente em potencial, e sumir com ela esconderia metade da base.
+  const where = {
+    AND: [
       {
-        spent: Number(s._sum.totalAmount ?? 0),
-        purchases: s._count._all,
-        lastPurchaseAt: s._max.paidAt,
+        OR: [
+          { tenantId },
+          { reservations: { some: { raffle: { tenantId } } } },
+        ],
       },
-    ]),
-  );
+      ...(nome ? [{ name: { contains: nome, mode: "insensitive" as const } }] : []),
+      ...(cpf ? [{ cpf: { contains: cpf } }] : []),
+      ...(email ? [{ email: { contains: email, mode: "insensitive" as const } }] : []),
+      ...(telefone ? [{ phone: { contains: telefone } }] : []),
+    ],
+  };
 
-  const todosIds = [...porUsuario.keys()];
-  if (todosIds.length === 0) {
-    return {
-      customers: [] as Customer[],
-      total: 0,
-      pages: 1,
-      page: 1,
-      totals: { clientes: 0, novos30d: 0, receita: 0, ticketMedio: 0, recorrentes: 0 },
-    };
-  }
-
-  // 2. Dados cadastrais, já filtrados pela busca.
-  const termo = search.trim();
-  const digitos = termo.replace(/\D/g, "");
   const users = await prisma.user.findMany({
-    where: {
-      id: { in: todosIds },
-      ...(termo
-        ? {
-            OR: [
-              { name: { contains: termo, mode: "insensitive" as const } },
-              { email: { contains: termo, mode: "insensitive" as const } },
-              ...(digitos ? [{ phone: { contains: digitos } }] : []),
-            ],
-          }
-        : {}),
-    },
+    where,
     select: {
       id: true,
       name: true,
       phone: true,
       email: true,
+      cpf: true,
+      role: true,
       createdAt: true,
     },
   });
 
-  // 3. XP e números comprados, em duas agregações.
   const ids = users.map((u) => u.id);
-  const [progresso, ticketsPorUsuario] = await Promise.all([
+  if (ids.length === 0) {
+    return {
+      customers: [] as Customer[],
+      total: 0,
+      pages: 1,
+      page: 1,
+      totals: await calcularTotais(tenantId),
+    };
+  }
+
+  // Gasto, pedidos, última compra, XP e números — cinco agregações, nenhuma
+  // por linha. Buscar reserva dentro de um laço daria uma query por cliente.
+  const [stats, progresso, ticketsPorUsuario] = await Promise.all([
+    prisma.reservation.groupBy({
+      by: ["userId"],
+      where: { status: "PAID", userId: { in: ids }, raffle: { tenantId } },
+      _sum: { totalAmount: true },
+      _count: { _all: true },
+      _max: { paidAt: true },
+    }),
     prisma.userProgress.findMany({
       where: { tenantId, userId: { in: ids } },
       select: { userId: true, xp: true },
@@ -119,23 +128,35 @@ export async function listCustomers(
     `,
   ]);
 
+  const porUsuario = new Map(
+    stats.map((s) => [
+      s.userId!,
+      {
+        spent: Number(s._sum.totalAmount ?? 0),
+        purchases: s._count._all,
+        lastPurchaseAt: s._max.paidAt,
+      },
+    ]),
+  );
   const xpPorUsuario = new Map(progresso.map((p) => [p.userId, p.xp]));
   const numerosPorUsuario = new Map(
     ticketsPorUsuario.map((t) => [t.userId, Number(t.total)]),
   );
 
   const customers: Customer[] = users.map((u) => {
-    const s = porUsuario.get(u.id)!;
+    const s = porUsuario.get(u.id);
     return {
       id: u.id,
       name: u.name,
       phone: u.phone,
       email: u.email,
+      cpf: u.cpf,
+      role: u.role,
       createdAt: u.createdAt,
-      spent: s.spent,
-      purchases: s.purchases,
+      spent: s?.spent ?? 0,
+      purchases: s?.purchases ?? 0,
       tickets: numerosPorUsuario.get(u.id) ?? 0,
-      lastPurchaseAt: s.lastPurchaseAt,
+      lastPurchaseAt: s?.lastPurchaseAt ?? null,
       xp: xpPorUsuario.get(u.id) ?? 0,
     };
   });
@@ -149,22 +170,6 @@ export async function listCustomers(
   };
   customers.sort(ordenadores[sort]);
 
-  // Os totais consideram a base inteira, não a página nem a busca — senão o
-  // card "Receita" mudaria a cada vez que o admin digitasse no filtro.
-  const receita = [...porUsuario.values()].reduce((s, v) => s + v.spent, 0);
-  const compras = [...porUsuario.values()].reduce((s, v) => s + v.purchases, 0);
-  const trintaDias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-  const totals: CustomerTotals = {
-    clientes: todosIds.length,
-    novos30d: await prisma.user.count({
-      where: { id: { in: todosIds }, createdAt: { gte: trintaDias } },
-    }),
-    receita,
-    ticketMedio: compras > 0 ? receita / compras : 0,
-    recorrentes: [...porUsuario.values()].filter((v) => v.purchases > 1).length,
-  };
-
   const total = customers.length;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const inicio = (Math.min(page, pages) - 1) * PAGE_SIZE;
@@ -174,7 +179,38 @@ export async function listCustomers(
     total,
     pages,
     page: Math.min(page, pages),
-    totals,
+    totals: await calcularTotais(tenantId),
+  };
+}
+
+/**
+ * Totais da base inteira — de propósito fora do filtro. Se respondessem à
+ * busca, o card "Receita" mudaria a cada tecla digitada, o que não faz
+ * sentido para um número que deveria servir de referência fixa.
+ */
+async function calcularTotais(tenantId: string): Promise<CustomerTotals> {
+  const stats = await prisma.reservation.groupBy({
+    by: ["userId"],
+    where: { status: "PAID", userId: { not: null }, raffle: { tenantId } },
+    _sum: { totalAmount: true },
+    _count: { _all: true },
+  });
+
+  const receita = stats.reduce((s, v) => s + Number(v._sum.totalAmount ?? 0), 0);
+  const compras = stats.reduce((s, v) => s + v._count._all, 0);
+  const trintaDias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  return {
+    clientes: stats.length,
+    novos30d: await prisma.user.count({
+      where: {
+        createdAt: { gte: trintaDias },
+        OR: [{ tenantId }, { reservations: { some: { raffle: { tenantId } } } }],
+      },
+    }),
+    receita,
+    ticketMedio: compras > 0 ? receita / compras : 0,
+    recorrentes: stats.filter((v) => v._count._all > 1).length,
   };
 }
 

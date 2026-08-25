@@ -21,7 +21,6 @@ import {
   Users2,
   Trophy,
   TicketCheck,
-  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -36,7 +35,6 @@ const NAV_GERAL = [
   { href: "/admin/reservas", label: "Reservas", icon: ShoppingBag },
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/clientes", label: "Clientes", icon: Users2 },
-  { href: "/admin/usuarios", label: "Usuários", icon: Users },
   { href: "/admin/ranking", label: "Ranking", icon: Trophy },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
 ] as const;

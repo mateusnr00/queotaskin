@@ -1,84 +1,135 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const ORDENACOES = [
   { valor: "spent", rotulo: "Maior gasto" },
   { valor: "recent", rotulo: "Compra mais recente" },
-  { valor: "purchases", rotulo: "Mais compras" },
+  { valor: "purchases", rotulo: "Mais pedidos" },
   { valor: "name", rotulo: "Nome (A–Z)" },
 ] as const;
 
-/**
- * Busca e ordenação da lista de clientes.
- *
- * O estado vive na URL, não no componente: assim o admin pode compartilhar
- * ou favoritar uma busca, e o botão voltar do navegador funciona.
- */
-export function CustomersFilters({
-  search,
-  sort,
-}: {
-  search: string;
+export interface FiltrosCliente {
+  nome: string;
+  cpf: string;
+  email: string;
+  telefone: string;
   sort: string;
-}) {
+}
+
+/**
+ * Filtros da lista de clientes.
+ *
+ * Campos separados em vez de uma busca única: quem opera rifa procura por
+ * CPF quando o cliente liga reclamando de pagamento, e por telefone quando
+ * chega mensagem no WhatsApp — misturar tudo num campo só faria a busca por
+ * "11" casar com telefone, CPF e qualquer nome que tenha "11".
+ *
+ * O estado vive na URL: dá para favoritar um recorte e o voltar funciona.
+ */
+export function CustomersFilters({ filtros }: { filtros: FiltrosCliente }) {
   const router = useRouter();
-  const params = useSearchParams();
   const [pendente, iniciarTransicao] = useTransition();
 
-  function atualizar(campo: string, valor: string) {
-    const novos = new URLSearchParams(params.toString());
-    if (valor) novos.set(campo, valor);
-    else novos.delete(campo);
-    // Qualquer mudança de filtro volta pra primeira página — senão o admin
-    // busca um nome e cai numa página 3 que não existe no novo resultado.
-    novos.delete("page");
-    iniciarTransicao(() => router.push(`/admin/clientes?${novos.toString()}`));
+  const temFiltro = Boolean(
+    filtros.nome || filtros.cpf || filtros.email || filtros.telefone,
+  );
+
+  function enviar(dados: FormData) {
+    const params = new URLSearchParams();
+    for (const campo of ["nome", "cpf", "email", "telefone"] as const) {
+      const valor = String(dados.get(campo) ?? "").trim();
+      if (valor) params.set(campo, valor);
+    }
+    const sort = String(dados.get("sort") ?? "");
+    if (sort && sort !== "spent") params.set("sort", sort);
+    // Filtro novo sempre volta pra primeira página: buscar um nome e cair
+    // numa página 3 que não existe no novo resultado seria confuso.
+    const qs = params.toString();
+    iniciarTransicao(() =>
+      router.push(qs ? `/admin/clientes?${qs}` : "/admin/clientes"),
+    );
   }
 
   return (
-    <form
-      className="flex flex-wrap gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const campo = new FormData(e.currentTarget).get("search");
-        atualizar("search", String(campo ?? ""));
-      }}
-    >
-      <div className="relative min-w-56 flex-1">
-        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          name="search"
-          defaultValue={search}
-          placeholder="Buscar por nome, telefone ou e-mail"
-          className="pl-9"
+    <form action={enviar} className="space-y-3 rounded-xl border bg-card p-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Campo label="Nome" name="nome" defaultValue={filtros.nome} placeholder="João da Silva" />
+        <Campo
+          label="CPF"
+          name="cpf"
+          defaultValue={filtros.cpf}
+          placeholder="000.000.000-00"
+          inputMode="numeric"
+        />
+        <Campo
+          label="E-mail"
+          name="email"
+          defaultValue={filtros.email}
+          placeholder="cliente@email.com"
+        />
+        <Campo
+          label="Telefone"
+          name="telefone"
+          defaultValue={filtros.telefone}
+          placeholder="(62) 99999-9999"
+          inputMode="numeric"
         />
       </div>
 
-      <select
-        value={sort}
-        onChange={(e) => atualizar("sort", e.target.value)}
-        aria-label="Ordenar por"
-        className="h-9 rounded-md border bg-background px-3 text-sm"
-      >
-        {ORDENACOES.map((o) => (
-          <option key={o.valor} value={o.valor}>
-            {o.rotulo}
-          </option>
-        ))}
-      </select>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Ordenar por</Label>
+          <select
+            name="sort"
+            defaultValue={filtros.sort}
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+          >
+            {ORDENACOES.map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.rotulo}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      <button
-        type="submit"
-        disabled={pendente}
-        className="h-9 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-      >
-        {pendente ? "Buscando..." : "Buscar"}
-      </button>
+        <button
+          type="submit"
+          disabled={pendente}
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          <Search className="h-4 w-4" />
+          {pendente ? "Buscando..." : "Pesquisar"}
+        </button>
+
+        {temFiltro && (
+          <button
+            type="button"
+            onClick={() => iniciarTransicao(() => router.push("/admin/clientes"))}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm hover:bg-muted"
+          >
+            <X className="h-3.5 w-3.5" />
+            Limpar
+          </button>
+        )}
+      </div>
     </form>
+  );
+}
+
+function Campo({
+  label,
+  ...props
+}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Input {...props} />
+    </div>
   );
 }

@@ -35,22 +35,34 @@ const ORDENACOES_VALIDAS: CustomerSort[] = ["spent", "recent", "purchases", "nam
 export default async function AdminClientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; sort?: string; page?: string }>;
+  searchParams: Promise<{
+    nome?: string;
+    cpf?: string;
+    email?: string;
+    telefone?: string;
+    sort?: string;
+    page?: string;
+  }>;
 }) {
   const session = await getAdminOrThrow();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const sp = await searchParams;
 
-  const search = (sp.search ?? "").trim();
-  const sort = ORDENACOES_VALIDAS.includes(sp.sort as CustomerSort)
-    ? (sp.sort as CustomerSort)
-    : "spent";
+  const filtros = {
+    nome: (sp.nome ?? "").trim(),
+    cpf: (sp.cpf ?? "").trim(),
+    email: (sp.email ?? "").trim(),
+    telefone: (sp.telefone ?? "").trim(),
+    sort: ORDENACOES_VALIDAS.includes(sp.sort as CustomerSort)
+      ? (sp.sort as CustomerSort)
+      : ("spent" as CustomerSort),
+  };
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
 
   const { customers, total, pages, page: paginaAtual, totals } =
-    await listCustomers(tenantId, { search, sort, page });
+    await listCustomers(tenantId, { ...filtros, page });
 
-  // O pódio ignora busca e ordenação: é sempre o topo por gasto.
+  // O pódio ignora os filtros: é sempre o topo por gasto da base inteira.
   const { customers: topCustomers } = await listCustomers(tenantId, {
     sort: "spent",
     page: 1,
@@ -58,8 +70,11 @@ export default async function AdminClientesPage({
 
   function href(p: number) {
     const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (sort !== "spent") params.set("sort", sort);
+    if (filtros.nome) params.set("nome", filtros.nome);
+    if (filtros.cpf) params.set("cpf", filtros.cpf);
+    if (filtros.email) params.set("email", filtros.email);
+    if (filtros.telefone) params.set("telefone", filtros.telefone);
+    if (filtros.sort !== "spent") params.set("sort", filtros.sort);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/admin/clientes?${qs}` : "/admin/clientes";
@@ -113,7 +128,7 @@ export default async function AdminClientesPage({
 
       <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
         <div className="space-y-4">
-          <CustomersFilters search={search} sort={sort} />
+          <CustomersFilters filtros={filtros} />
 
           <Card className="overflow-hidden p-0">
             <div className="overflow-x-auto">
@@ -122,8 +137,10 @@ export default async function AdminClientesPage({
                   <TableRow>
                     <TableHead className="w-12 text-center">#</TableHead>
                     <TableHead>Cliente</TableHead>
+                    <TableHead>CPF</TableHead>
+                    <TableHead>E-mail</TableHead>
                     <TableHead>Patente</TableHead>
-                    <TableHead className="text-right">Compras</TableHead>
+                    <TableHead className="text-right">Pedidos</TableHead>
                     <TableHead className="text-right">Números</TableHead>
                     <TableHead className="text-right">Gasto</TableHead>
                     <TableHead>Última compra</TableHead>
@@ -134,12 +151,10 @@ export default async function AdminClientesPage({
                   {customers.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={10}
                         className="py-12 text-center text-sm text-muted-foreground"
                       >
-                        {search
-                          ? `Nenhum cliente encontrado para "${search}".`
-                          : "Ninguém comprou ainda. O primeiro pagamento abre esta lista."}
+                        Nenhum cliente encontrado com esses filtros.
                       </TableCell>
                     </TableRow>
                   ) : (
