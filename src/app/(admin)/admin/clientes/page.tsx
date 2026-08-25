@@ -12,7 +12,6 @@ import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { listCustomers, type CustomerSort } from "@/server/services/customers";
 import { StatCard } from "@/components/admin/customers/stat-card";
-import { TopCustomers } from "@/components/admin/customers/top-customers";
 import { CustomersFilters } from "@/components/admin/customers/customers-filters";
 import { CustomerRow } from "@/components/admin/customers/customer-row";
 import { Card } from "@/components/ui/card";
@@ -62,11 +61,6 @@ export default async function AdminClientesPage({
   const { customers, total, pages, page: paginaAtual, totals } =
     await listCustomers(tenantId, { ...filtros, page });
 
-  // O pódio ignora os filtros: é sempre o topo por gasto da base inteira.
-  const { customers: topCustomers } = await listCustomers(tenantId, {
-    sort: "spent",
-    page: 1,
-  });
 
   function href(p: number) {
     const params = new URLSearchParams();
@@ -126,8 +120,7 @@ export default async function AdminClientesPage({
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
-        <div className="space-y-4">
+      <div className="space-y-4">
           <CustomersFilters filtros={filtros} />
 
           <Card className="overflow-hidden p-0">
@@ -201,9 +194,6 @@ export default async function AdminClientesPage({
               </div>
             </div>
           )}
-        </div>
-
-        <TopCustomers customers={topCustomers.slice(0, 8)} />
       </div>
     </div>
   );

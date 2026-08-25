@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageCircle } from "lucide-react";
 
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { prisma } from "@/lib/db";
 import { leaderboard } from "@/server/services/xp";
+import { whatsappLink } from "@/server/services/customers";
 import { RankBadge } from "@/components/rank/rank-badge";
 import { rankFromXp } from "@/lib/rank";
 import { Card } from "@/components/ui/card";
@@ -83,13 +84,14 @@ export default async function AdminRankingPage() {
               <TableHead className="text-right">Gasto</TableHead>
               <TableHead className="text-center">Compras</TableHead>
               <TableHead>Última compra</TableHead>
+              <TableHead className="w-12 text-right">Zap</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-12 text-center text-sm text-muted-foreground"
                 >
                   Ninguém pontuou ainda. O primeiro número pago abre o ranking.
@@ -131,6 +133,23 @@ export default async function AdminRankingPage() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {row.lastPurchaseAt ? formatDate(row.lastPurchaseAt) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {/* O contato fica aqui e só aqui: é a lista de quem
+                          vale a pena chamar quando entra campanha nova. */}
+                      {whatsappLink(row.phone) ? (
+                        <a
+                          href={whatsappLink(row.phone)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Conversar com ${row.name} no WhatsApp`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
