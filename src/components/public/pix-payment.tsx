@@ -30,15 +30,17 @@ export function PixPayment({ qrDataUrl, pixCode }: Props) {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-4">
-      <div className="text-center space-y-1">
-        <h3 className="font-bold">Pague com Pix</h3>
+    <div className="space-y-4 rounded-2xl border bg-card p-4 md:p-5">
+      <div className="space-y-1 text-center">
+        <h2 className="text-base font-bold">Pague com Pix</h2>
         <p className="text-xs text-muted-foreground">
-          Escaneie o QR Code com o app do seu banco ou copie o código abaixo.
+          Escaneie o QR Code no app do seu banco ou copie o código.
         </p>
       </div>
 
       <div className="flex justify-center">
+        {/* Fundo branco fixo: o QR precisa de contraste alto para a câmera
+            ler, e no tema escuro ele sumiria contra o card. */}
         <div className="rounded-xl bg-white p-3 ring-1 ring-border">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -52,8 +54,8 @@ export function PixPayment({ qrDataUrl, pixCode }: Props) {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Código Pix copia e cola
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Ou copie e cole no app
         </label>
         <div className="relative">
           <textarea
@@ -64,7 +66,12 @@ export function PixPayment({ qrDataUrl, pixCode }: Props) {
             className="w-full font-mono text-[11px] leading-tight rounded-lg border bg-muted/30 p-2 pr-12 break-all resize-none"
           />
         </div>
-        <Button type="button" onClick={copy} className="w-full" size="lg">
+        <Button
+          type="button"
+          onClick={copy}
+          size="lg"
+          className="h-12 w-full text-base font-semibold"
+        >
           {copied ? (
             <>
               <Check className="mr-2 h-4 w-4" />
@@ -79,9 +86,9 @@ export function PixPayment({ qrDataUrl, pixCode }: Props) {
         </Button>
       </div>
 
-      <p className="text-[11px] text-muted-foreground text-center">
-        Após pagar, esta página atualiza automaticamente. Não feche enquanto
-        o pagamento estiver pendente.
+      <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+        Assim que o pagamento cair, esta página se atualiza sozinha e mostra
+        os seus números. Não feche até lá.
       </p>
     </div>
   );

@@ -2,10 +2,9 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import QRCode from "qrcode";
+import { Lock } from "lucide-react";
 
 import { prisma } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { ReservationCountdown } from "@/components/public/reservation-countdown";
 import { PaymentPoller } from "@/components/public/payment-poller";
 import { PixPayment } from "@/components/public/pix-payment";
@@ -222,75 +221,115 @@ export default async function ReservationReceiptPage({
       }).catch(() => null)
     : null;
 
+  const quantidade = reservation.tickets.length;
+
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-12">
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle>Reserva confirmada</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Sorteio: {reservation.raffle.title}
+    // Tela de pagamento pendente. A ordem segue o que a pessoa precisa
+    // fazer agora: quanto pagar, quanto tempo resta, e como pagar. Antes,
+    // o Pix ficava espremido entre o cronômetro e os dados do participante,
+    // e o título dizia "Reserva confirmada" numa reserva que ainda não
+    // estava paga.
+    <div className="mx-auto w-full max-w-md px-4 py-6 md:max-w-lg md:py-10">
+      <div className="space-y-4">
+        {/* ---------- cabeçalho ---------- */}
+        <div className="space-y-2 text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+            </span>
+            Aguardando pagamento
+          </span>
+          <h1 className="text-lg font-bold leading-tight tracking-tight">
+            {reservation.raffle.title}
+          </h1>
+        </div>
+
+        {/* ---------- valor + quantidade ---------- */}
+        {/* O que pagar vem antes de como pagar: é a primeira pergunta de
+            quem abre esta tela. */}
+        <div className="rounded-2xl border bg-gradient-to-br from-accent/40 to-accent/10 px-5 py-4 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Valor a pagar
           </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex justify-center">
-            <Badge variant="secondary">Aguardando pagamento</Badge>
-          </div>
+          <p className="mt-0.5 text-3xl font-extrabold tabular-nums tracking-tight text-primary">
+            {formatBRL(Number(reservation.totalAmount))}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {quantidade} {quantidade === 1 ? "número" : "números"} para{" "}
+            {reservation.participantName}
+          </p>
+        </div>
 
-          <ReservationCountdown
-            expiresAtIso={reservation.expiresAt.toISOString()}
+        <ReservationCountdown
+          expiresAtIso={reservation.expiresAt.toISOString()}
+        />
+        {showPix && <PaymentPoller />}
+
+        {showPix && qrDataUrl && pixCode && (
+          <>
+            <PixPayment qrDataUrl={qrDataUrl} pixCode={pixCode} />
+            <CheckPaymentButton reservationId={reservation.id} />
+          </>
+        )}
+
+        {!showPix && (
+          <PixError
+            reservationId={reservation.id}
+            error={
+              pixError ??
+              "Pix ainda não foi gerado. Tente novamente em instantes."
+            }
           />
-          {showPix && <PaymentPoller />}
+        )}
 
-          {showPix && qrDataUrl && pixCode && (
-            <>
-              <PixPayment qrDataUrl={qrDataUrl} pixCode={pixCode} />
-              <CheckPaymentButton reservationId={reservation.id} />
-            </>
-          )}
-
-          <div className="rounded-lg border p-4 space-y-2 text-sm">
-            <Info label="Participante">{reservation.participantName}</Info>
-            {reservation.participantPhone && (
-              <Info label="Telefone">
-                {formatPhone(reservation.participantPhone)}
-              </Info>
+        {/* ---------- números, ainda fechados ---------- */}
+        {/* Os números só se revelam depois do pagamento. Mostrá-los antes
+            dava a impressão de que a compra já estava garantida — e ela não
+            está: a reserva expira e os números voltam para o sorteio. Eles
+            aparecem na tela de confirmação, junto do comprovante. */}
+        <div className="rounded-2xl border bg-card p-4 text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Lock className="h-4 w-4" />
+          </div>
+          <p className="mt-2 text-sm font-semibold">
+            {quantidade} {quantidade === 1 ? "número reservado" : "números reservados"}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Eles aparecem aqui assim que o pagamento for confirmado.
+          </p>
+          {/* Silhueta do que virá: comunica que os números existem e são
+              seus, sem entregar quais. */}
+          <div
+            className="mt-3 flex flex-wrap justify-center gap-1.5 select-none"
+            aria-hidden
+          >
+            {Array.from({ length: Math.min(quantidade, 12) }).map((_, i) => (
+              <span
+                key={i}
+                className="rounded-md bg-muted px-3 py-1 text-xs font-mono text-transparent blur-[3px]"
+              >
+                000000
+              </span>
+            ))}
+            {quantidade > 12 && (
+              <span className="px-1 py-1 text-xs text-muted-foreground">
+                +{quantidade - 12}
+              </span>
             )}
           </div>
+        </div>
 
-          <div>
-            <h3 className="font-semibold mb-2">
-              Números reservados ({reservation.tickets.length})
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {reservation.tickets.map((t) => (
-                <span
-                  key={t.number}
-                  className="rounded border px-2 py-0.5 text-xs font-mono"
-                >
-                  {t.number}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between border-t pt-4">
-            <span className="text-sm text-muted-foreground">Total</span>
-            <span className="text-2xl font-bold">
-              {formatBRL(Number(reservation.totalAmount))}
-            </span>
-          </div>
-
-          {!showPix && (
-            <PixError
-              reservationId={reservation.id}
-              error={
-                pixError ??
-                "Pix ainda não foi gerado. Tente novamente em instantes."
-              }
-            />
+        {/* ---------- dados da reserva ---------- */}
+        <div className="rounded-2xl border bg-card p-4 text-sm">
+          <Info label="Participante">{reservation.participantName}</Info>
+          {reservation.participantPhone && (
+            <Info label="Telefone">
+              {formatPhone(reservation.participantPhone)}
+            </Info>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -314,7 +353,7 @@ async function getClientIp(): Promise<string> {
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-4">
+    <div className="flex justify-between gap-4 py-1">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right">{children}</span>
     </div>
