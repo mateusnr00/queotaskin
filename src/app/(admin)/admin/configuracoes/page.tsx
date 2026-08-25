@@ -18,6 +18,7 @@ export default async function ConfiguracoesPage() {
     select: {
       logoUrl: true,
       logoShape: true,
+      faviconUrl: true,
       name: true,
       siteDescription: true,
       supportPhone: true,
@@ -75,6 +76,7 @@ export default async function ConfiguracoesPage() {
         initial={{
           logoUrl: tenant.logoUrl,
           logoShape: tenant.logoShape,
+          faviconUrl: tenant.faviconUrl,
           companyName: tenant.name,
           siteDescription: tenant.siteDescription ?? "",
           supportPhone: tenant.supportPhone,

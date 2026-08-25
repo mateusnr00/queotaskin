@@ -291,12 +291,28 @@ const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3 MB (Sorteamos usa 3.1 MB)
 const LOGO_EXT =
   /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
+// Os dois espaços de imagem do site. Ficam separados porque têm formatos
+// incompatíveis: a logo é uma faixa larga com o nome escrito, o favicon é
+// lido a 16px num quadrado.
+export type SlotDeImagem = "logo" | "favicon";
+
+const COLUNA_POR_SLOT: Record<SlotDeImagem, "logoUrl" | "faviconUrl"> = {
+  logo: "logoUrl",
+  favicon: "faviconUrl",
+};
+
+function slotDoFormulario(valor: FormDataEntryValue | null): SlotDeImagem {
+  return valor === "favicon" ? "favicon" : "logo";
+}
+
 export async function uploadLogoAction(
   formData: FormData
 ): Promise<ActionResult<{ url: string }>> {
   try {
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
+    const slot = slotDoFormulario(formData.get("slot"));
+    const coluna = COLUNA_POR_SLOT[slot];
     if (!isStorageConfigured()) {
       return {
         ok: false,
@@ -322,10 +338,11 @@ export async function uploadLogoAction(
     // Apaga o logo anterior (best-effort) antes de subir o novo.
     const existing = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { logoUrl: true },
+      select: { logoUrl: true, faviconUrl: true },
     });
-    if (existing?.logoUrl) {
-      const oldPath = pathFromPublicUrl(existing.logoUrl);
+    const anterior = existing?.[coluna];
+    if (anterior) {
+      const oldPath = pathFromPublicUrl(anterior);
       if (oldPath) await deleteRaffleImage(oldPath);
     }
 
@@ -334,7 +351,7 @@ export async function uploadLogoAction(
 
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { logoUrl: url },
+      data: { [coluna]: url },
     });
 
     revalidatePath("/", "layout");
@@ -351,6 +368,7 @@ export async function uploadLogoAction(
 // host (postimg, imgur, etc). URL gravada como veio; só apaga o arquivo
 // anterior do Supabase se for um path nosso.
 const logoUrlSchema = z.object({
+  slot: z.enum(["logo", "favicon"]).default("logo"),
   url: z
     .string()
     .trim()
@@ -378,19 +396,21 @@ export async function setLogoByUrlAction(
       };
     }
 
-    // Se o logo anterior era do nosso bucket, apaga (best-effort).
+    const coluna = COLUNA_POR_SLOT[parsed.data.slot];
+    // Se a imagem anterior era do nosso bucket, apaga (best-effort).
     const existing = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { logoUrl: true },
+      select: { logoUrl: true, faviconUrl: true },
     });
-    if (existing?.logoUrl) {
-      const oldPath = pathFromPublicUrl(existing.logoUrl);
+    const anterior = existing?.[coluna];
+    if (anterior) {
+      const oldPath = pathFromPublicUrl(anterior);
       if (oldPath) await deleteRaffleImage(oldPath);
     }
 
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { logoUrl: parsed.data.url },
+      data: { [coluna]: parsed.data.url },
     });
 
     revalidatePath("/", "layout");
@@ -401,21 +421,25 @@ export async function setLogoByUrlAction(
   }
 }
 
-export async function removeLogoAction(): Promise<ActionResult> {
+export async function removeLogoAction(
+  slot: SlotDeImagem = "logo"
+): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
+    const coluna = COLUNA_POR_SLOT[slot];
     const existing = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { logoUrl: true },
+      select: { logoUrl: true, faviconUrl: true },
     });
-    if (existing?.logoUrl) {
-      const path = pathFromPublicUrl(existing.logoUrl);
+    const anterior = existing?.[coluna];
+    if (anterior) {
+      const path = pathFromPublicUrl(anterior);
       if (path) await deleteRaffleImage(path);
     }
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { logoUrl: null },
+      data: { [coluna]: null },
     });
     revalidatePath("/", "layout");
     return { ok: true, data: undefined };

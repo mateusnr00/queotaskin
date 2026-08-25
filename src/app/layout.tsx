@@ -29,15 +29,24 @@ export async function generateMetadata(): Promise<Metadata> {
   const fallback = process.env.NEXT_PUBLIC_APP_NAME ?? "Rifa Online";
   let name = fallback;
   let description: string | undefined;
+  let icone: string | undefined;
   try {
     const tenant = await getCurrentTenant();
     if (tenant) {
       const t = await prisma.tenant.findUnique({
         where: { id: tenant.id },
-        select: { name: true, siteDescription: true },
+        select: {
+          name: true,
+          siteDescription: true,
+          faviconUrl: true,
+          logoUrl: true,
+        },
       });
       if (t?.name) name = t.name;
       if (t?.siteDescription) description = t.siteDescription;
+      // Sem favicon próprio, a logo serve: um ícone da marca, ainda que
+      // apertado, comunica mais do que o padrão genérico do framework.
+      icone = t?.faviconUrl ?? t?.logoUrl ?? undefined;
     }
   } catch {
     // DB indisponível em build estático: cai no fallback do env.
@@ -47,6 +56,23 @@ export async function generateMetadata(): Promise<Metadata> {
     description:
       description ||
       "Participe das nossas rifas online. Pagamento via Pix, sorteios auditáveis.",
+    // Vem do banco, não de um arquivo no repositório: assim trocar o ícone
+    // é enviar uma imagem no painel, sem depender de um novo deploy.
+    //
+    // O ícone padrão mora em public/favicon.ico, não em src/app/. Em src/app
+    // o Next injeta um <link rel="icon"> próprio em toda página, que
+    // conviveria com o nosso e deixaria o navegador escolhendo entre dois.
+    // Em public/ ele fica sendo só o /favicon.ico que o navegador busca
+    // sozinho quando nenhum ícone foi cadastrado.
+    ...(icone
+      ? {
+          icons: {
+            icon: [{ url: icone }],
+            shortcut: [{ url: icone }],
+            apple: [{ url: icone }],
+          },
+        }
+      : {}),
   };
 }
 

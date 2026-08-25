@@ -63,6 +63,7 @@ interface Props {
   initial: {
     logoUrl: string | null;
     logoShape: "ROUND" | "RECTANGLE";
+    faviconUrl: string | null;
     companyName: string;
     siteDescription: string;
     supportPhone: string | null;
@@ -202,6 +203,11 @@ function GeralTab({ initial }: Props) {
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [faviconUrl, setFaviconUrl] = useState<string | null>(
+    initial.faviconUrl
+  );
+  const [enviandoFavicon, setEnviandoFavicon] = useState(false);
+  const faviconRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(original: File) {
     setIsUploading(true);
@@ -229,6 +235,50 @@ function GeralTab({ initial }: Props) {
       setIsUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
+  }
+
+  async function handleFavicon(original: File) {
+    setEnviandoFavicon(true);
+    try {
+      const { file } = await normalizeImage(original);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("slot", "favicon");
+
+      let result;
+      try {
+        result = await uploadLogoAction(fd);
+      } catch {
+        toast.error("Imagem grande demais para enviar");
+        return;
+      }
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setFaviconUrl(result.data.url);
+      toast.success("Ícone atualizado");
+      // O ícone sai do metadata da página, montado no servidor; sem
+      // recarregar, a aba continuaria com o anterior.
+      router.refresh();
+    } finally {
+      setEnviandoFavicon(false);
+      if (faviconRef.current) faviconRef.current.value = "";
+    }
+  }
+
+  function removerFavicon() {
+    if (!confirm("Remover o ícone atual?")) return;
+    startTransition(async () => {
+      const result = await removeLogoAction("favicon");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setFaviconUrl(null);
+      toast.success("Ícone removido");
+      router.refresh();
+    });
   }
 
   async function handleLogoUrl() {
@@ -441,6 +491,75 @@ function GeralTab({ initial }: Props) {
               Usar URL
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Ícone da aba. Separado da logo porque os formatos brigam: a logo é
+          uma faixa larga com o nome escrito, e isto é lido a 16px num
+          quadrado. Sem ícone próprio, a logo assume — apertada, mas ainda
+          da marca. */}
+      <div className="flex items-center gap-4 rounded-xl border bg-muted/30 p-4">
+        <input
+          ref={faviconRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFavicon(file);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => faviconRef.current?.click()}
+          disabled={enviandoFavicon || isPending}
+          className={cn(
+            "group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors",
+            faviconUrl
+              ? "border-transparent bg-background ring-1 ring-border"
+              : "border-border hover:border-primary"
+          )}
+          title="Enviar ícone"
+        >
+          {faviconUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={faviconUrl}
+              alt="Ícone do site"
+              className="h-full w-full object-contain p-1.5"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+              {enviandoFavicon ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Camera className="h-5 w-5" />
+              )}
+            </span>
+          )}
+        </button>
+
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-semibold">Ícone da aba (favicon)</p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Aparece na aba do navegador e nos favoritos, num quadrado de 16 a
+            32 pixels. Imagem larga com texto vira um borrão nesse tamanho —
+            funciona melhor um símbolo, uma letra ou o miolo da marca.
+            {!faviconUrl && " Enquanto estiver vazio, a logo é usada."}
+          </p>
+          {faviconUrl && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={removerFavicon}
+              disabled={isPending}
+              className="h-7 px-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Remover ícone
+            </Button>
+          )}
         </div>
       </div>
 

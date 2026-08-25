@@ -240,6 +240,10 @@ model Tenant {
   // Cada tenant edita os próprios em Admin → Configurações / Personalizar
   // tema. Quando vazio/NULL, o componente cai num fallback razoável.
   logoUrl                           String?
+  // Ícone da aba do navegador. Separado da logo de propósito: a logo é uma
+  // faixa larga, e o favicon é lido a 16px — a mesma imagem nos dois lugares
+  // vira um borrão na aba. Quando vazio, cai na logo.
+  faviconUrl                        String?
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
   logoShape                         LogoShape @default(RECTANGLE)
