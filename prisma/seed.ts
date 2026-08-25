@@ -363,6 +363,13 @@ async function main() {
   console.log("  ✓ ok");
 
   console.log("→ Criando campanhas de CS2...");
+  const createdRaffles: {
+    id: string;
+    title: string;
+    totalNumbers: number;
+    pricePerNumber: number;
+    minLevel: number | null;
+  }[] = [];
   for (const campaign of CAMPAIGNS) {
     const { prizes, selectionCards, ...data } = campaign;
 
@@ -397,25 +404,34 @@ async function main() {
       })),
     });
 
+    createdRaffles.push({
+      id: raffle.id,
+      title: raffle.title,
+      totalNumbers: raffle.totalNumbers,
+      pricePerNumber: Number(raffle.pricePerNumber),
+      minLevel: raffle.minLevel,
+    });
     console.log(`  ✓ /s/${data.slug} — ${prizes.length} prêmio(s)`);
   }
 
   console.log("→ Criando participantes de exemplo com rank...");
-  // XP direto no extrato: o seed não simula pagamento, então lança como BONUS
-  // com uma descrição honesta. O total desnormalizado sai da mesma soma que o
-  // serviço usa em produção.
+  // O XP vem de compras pagas de verdade, não de um bônus solto: assim o
+  // ranking do admin mostra gasto, volume e última compra coerentes, e a
+  // demonstração exercita o mesmo caminho que o webhook usa em produção.
   const DEMO_PLAYERS = [
-    { name: "Lucas Ferreira Alves", phone: "11988887777", xp: 312_000 },
-    { name: "Rafael Nazario Souza", phone: "47977776666", xp: 165_000 },
-    { name: "Bruno Carvalho Lima", phone: "31966665555", xp: 92_000 },
-    { name: "Thiago Martins Rocha", phone: "21955554444", xp: 41_500 },
-    { name: "Diego Almeida Costa", phone: "51944443333", xp: 18_700 },
-    { name: "Gabriel Pereira Dias", phone: "85933332222", xp: 6_200 },
-    { name: "Matheus Oliveira Reis", phone: "62922221111", xp: 1_800 },
-    { name: "Vinicius Barbosa Melo", phone: "41911110000", xp: 450 },
+    { name: "Lucas Ferreira Alves", phone: "11988887777", spent: 31_200 },
+    { name: "Rafael Nazario Souza", phone: "47977776666", spent: 16_500 },
+    { name: "Bruno Carvalho Lima", phone: "31966665555", spent: 9_200 },
+    { name: "Thiago Martins Rocha", phone: "21955554444", spent: 4_150 },
+    { name: "Diego Almeida Costa", phone: "51944443333", spent: 1_870 },
+    { name: "Gabriel Pereira Dias", phone: "85933332222", spent: 620 },
+    { name: "Matheus Oliveira Reis", phone: "62922221111", spent: 180 },
+    { name: "Vinicius Barbosa Melo", phone: "41911110000", spent: 45 },
   ];
 
-  for (const player of DEMO_PLAYERS) {
+  const sellable = createdRaffles.filter((c) => c.minLevel == null);
+
+  for (const [index, player] of DEMO_PLAYERS.entries()) {
     const demo = await prisma.user.upsert({
       where: { phone: player.phone },
       update: { name: player.name },
@@ -423,36 +439,99 @@ async function main() {
     });
 
     const already = await prisma.xpEntry.findFirst({
-      where: { userId: demo.id, tenantId: tenant.id, reason: "BONUS" },
+      where: { userId: demo.id, tenantId: tenant.id, reason: "PURCHASE" },
       select: { id: true },
     });
-    if (!already) {
+    if (already) continue;
+
+    // Divide o gasto em algumas compras, em campanhas e datas diferentes.
+    const parts = [0.5, 0.3, 0.2];
+    for (const [partIndex, share] of parts.entries()) {
+      const campaign = sellable[(index + partIndex) % sellable.length];
+      if (!campaign) break;
+
+      const unitPrice = campaign.pricePerNumber;
+      const amount = Math.max(unitPrice, Math.round(player.spent * share));
+      const quantity = Math.max(1, Math.floor(amount / unitPrice));
+      const total = quantity * unitPrice;
+      const paidAt = new Date(
+        Date.now() - (partIndex * 9 + index) * 24 * 60 * 60 * 1000,
+      );
+
+      const reservation = await prisma.reservation.create({
+        data: {
+          raffleId: campaign.id,
+          userId: demo.id,
+          participantName: player.name,
+          participantPhone: player.phone,
+          totalAmount: total,
+          status: "PAID",
+          paidAt,
+          expiresAt: paidAt,
+        },
+      });
+
+      // Números da reserva, sorteados entre os que ainda estão livres.
+      const taken = new Set(
+        (
+          await prisma.ticket.findMany({
+            where: { raffleId: campaign.id },
+            select: { number: true },
+          })
+        ).map((t) => t.number),
+      );
+      const numbers: number[] = [];
+      const cap = Math.min(quantity, campaign.totalNumbers - taken.size);
+      let guard = 0;
+      while (numbers.length < cap && guard++ < cap * 40) {
+        const n = Math.floor(Math.random() * campaign.totalNumbers);
+        if (taken.has(n)) continue;
+        taken.add(n);
+        numbers.push(n);
+      }
+      if (numbers.length > 0) {
+        await prisma.ticket.createMany({
+          data: numbers.map((number) => ({
+            raffleId: campaign.id,
+            number,
+            status: "PAID" as const,
+            reservationId: reservation.id,
+            paidAt,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      // Mesmo lançamento que awardXpForReservation faria: 10 XP por real,
+      // amarrado à reserva pelo índice único que garante a idempotência.
       await prisma.xpEntry.create({
         data: {
           userId: demo.id,
           tenantId: tenant.id,
-          amount: player.xp,
-          reason: "BONUS",
-          description: "XP de demonstração (seed)",
+          amount: Math.floor(total) * tenant.xpPerBrl,
+          reason: "PURCHASE",
+          reservationId: reservation.id,
+          description: campaign.title,
+          createdAt: paidAt,
         },
       });
     }
 
-    const total = await prisma.xpEntry.aggregate({
+    const totalXp = await prisma.xpEntry.aggregate({
       where: { userId: demo.id, tenantId: tenant.id },
       _sum: { amount: true },
     });
     await prisma.userProgress.upsert({
       where: { userId_tenantId: { userId: demo.id, tenantId: tenant.id } },
-      update: { xp: Math.max(0, total._sum.amount ?? 0) },
+      update: { xp: Math.max(0, totalXp._sum.amount ?? 0) },
       create: {
         userId: demo.id,
         tenantId: tenant.id,
-        xp: Math.max(0, total._sum.amount ?? 0),
+        xp: Math.max(0, totalXp._sum.amount ?? 0),
       },
     });
   }
-  console.log(`  ✓ ${DEMO_PLAYERS.length} participantes ranqueados`);
+  console.log(`  ✓ ${DEMO_PLAYERS.length} participantes com compras e rank`);
 
   console.log("\nPronto. Credencial admin:");
   console.log(`  Nome:    ${admin.name}`);

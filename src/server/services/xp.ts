@@ -234,47 +234,80 @@ export async function getUserXp(userId: string, tenantId: string): Promise<numbe
 }
 
 export interface LeaderboardRow {
+  position: number;
   userId: string;
   name: string;
+  phone: string | null;
   xp: number;
-  position: number;
+  /** Total pago pelo participante neste tenant. */
+  spent: number;
+  paidReservations: number;
+  lastPurchaseAt: Date | null;
 }
 
-/** Ranking público do tenant, do maior XP para o menor. */
+/**
+ * Ranking do tenant, do maior XP para o menor.
+ *
+ * É uma ferramenta de operação, não uma vitrine: por isso traz telefone,
+ * gasto e última compra junto do XP. A tela vive só no painel administrativo
+ * — expor publicamente quem gasta mais é convite a engenharia social.
+ */
 export async function leaderboard(
   tenantId: string,
-  take = 50,
+  take = 100,
 ): Promise<LeaderboardRow[]> {
   const rows = await prisma.userProgress.findMany({
     where: { tenantId, xp: { gt: 0 } },
     orderBy: [{ xp: "desc" }, { updatedAt: "asc" }],
     take,
-    select: { userId: true, xp: true, user: { select: { name: true } } },
+    select: {
+      userId: true,
+      xp: true,
+      user: { select: { name: true, phone: true } },
+    },
+  });
+  if (rows.length === 0) return [];
+
+  const userIds = rows.map((row) => row.userId);
+
+  // Gasto e volume de cada um, numa agregação só — restrita ao tenant, para
+  // o admin não ver somatório de compras feitas em outro operador.
+  const stats = await prisma.reservation.groupBy({
+    by: ["userId"],
+    where: {
+      userId: { in: userIds },
+      status: "PAID",
+      raffle: { tenantId },
+    },
+    _sum: { totalAmount: true },
+    _count: { _all: true },
+    _max: { paidAt: true },
   });
 
-  return rows.map((row, index) => ({
-    userId: row.userId,
-    name: row.user.name,
-    xp: row.xp,
-    position: index + 1,
-  }));
-}
+  const byUser = new Map(
+    stats.map((stat) => [
+      stat.userId!,
+      {
+        spent: Number(stat._sum.totalAmount ?? 0),
+        paidReservations: stat._count._all,
+        lastPurchaseAt: stat._max.paidAt,
+      },
+    ]),
+  );
 
-/** Posição do usuário no ranking do tenant (1-based), ou null se sem XP. */
-export async function leaderboardPosition(
-  userId: string,
-  tenantId: string,
-): Promise<number | null> {
-  const me = await prisma.userProgress.findUnique({
-    where: { userId_tenantId: { userId, tenantId } },
-    select: { xp: true },
+  return rows.map((row, index) => {
+    const stat = byUser.get(row.userId);
+    return {
+      position: index + 1,
+      userId: row.userId,
+      name: row.user.name,
+      phone: row.user.phone,
+      xp: row.xp,
+      spent: stat?.spent ?? 0,
+      paidReservations: stat?.paidReservations ?? 0,
+      lastPurchaseAt: stat?.lastPurchaseAt ?? null,
+    };
   });
-  if (!me || me.xp <= 0) return null;
-
-  const ahead = await prisma.userProgress.count({
-    where: { tenantId, xp: { gt: me.xp } },
-  });
-  return ahead + 1;
 }
 
 /** Últimos lançamentos do extrato, para a tela "como ganhei meu XP". */

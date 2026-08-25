@@ -34,11 +34,9 @@ function Panel({
 export function RankCard({
   xp,
   xpPerBrl,
-  position,
 }: {
   xp: number;
   xpPerBrl: number;
-  position: number | null;
 }) {
   const progress = rankProgress(xp, xpPerBrl);
   const { rank } = progress;
@@ -78,11 +76,6 @@ export function RankCard({
             <p className="font-mono text-lg font-bold tracking-tight tabular-nums sm:text-xl">
               {xp.toLocaleString("pt-BR")}
             </p>
-            {position != null && (
-              <p className="font-mono text-[11px] text-muted-foreground">
-                {position}º no ranking
-              </p>
-            )}
           </div>
         </div>
 

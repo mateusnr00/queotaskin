@@ -140,6 +140,17 @@ Consultar antes é seguro porque já estamos dentro do lock. O índice único
 contra um Postgres real — inclusive dez créditos concorrentes e a mesma
 reserva creditada cinco vezes em paralelo. Ele só roda contra banco local.
 
+### O ranking é interno
+
+A lista de quem mais pontuou vive **só no painel** (`/admin/ranking`), nunca
+no site público. Uma vitrine de quem gasta mais é convite a engenharia
+social — e o operador precisa de telefone, gasto e última compra ao lado do
+XP, o que num site aberto seria vazamento.
+
+O participante continua vendo **o próprio** progresso em `/minha-conta`:
+patente, barra até o próximo degrau e extrato de XP. O que ele não vê é a
+posição relativa nem quem está acima dele.
+
 ### Campanhas exclusivas
 
 `Raffle.minLevel` (1–21) restringe a campanha a quem alcançou aquele nível;
@@ -193,7 +204,7 @@ linha mostra. A barra fica no perfil, onde significa algo.
 | `src/components/rank/rank-chip.tsx` | Chip do header |
 | `src/components/rank/rank-card.tsx` | Cartão do perfil e escada |
 | `src/components/rank/rank-row.tsx` | Linha do ranking |
-| `src/app/(public)/ranking/` | Ranking público |
+| `src/app/(admin)/admin/ranking/` | Ranking (painel) |
 
 ### Ainda não implementado
 

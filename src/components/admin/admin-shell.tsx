@@ -18,6 +18,7 @@ import {
   Settings,
   ShoppingBag,
   PackageCheck,
+  Trophy,
   TicketCheck,
   Users,
   Wallet,
@@ -34,6 +35,7 @@ const NAV_GERAL = [
   { href: "/admin/reservas", label: "Reservas", icon: ShoppingBag },
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/usuarios", label: "Usuários", icon: Users },
+  { href: "/admin/ranking", label: "Ranking", icon: Trophy },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
 ] as const;
 

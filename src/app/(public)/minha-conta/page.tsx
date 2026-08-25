@@ -11,7 +11,7 @@ import { formatPhone } from "@/lib/cpf";
 import { SteamTradeUrlForm } from "@/components/forms/steam-trade-url-form";
 import { RankCard, RankLadder } from "@/components/rank/rank-card";
 import { XpHistory } from "@/components/rank/xp-history";
-import { getUserXp, leaderboardPosition, xpHistory } from "@/server/services/xp";
+import { getUserXp, xpHistory } from "@/server/services/xp";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -59,13 +59,12 @@ export default async function MyAccountPage() {
   });
 
   const rankOn = settings?.rankEnabled ?? true;
-  const [xp, position, history] = rankOn
+  const [xp, history] = rankOn
     ? await Promise.all([
         getUserXp(session.user.id, tenant.id),
-        leaderboardPosition(session.user.id, tenant.id),
         xpHistory(session.user.id, tenant.id, 10),
       ])
-    : [0, null, []];
+    : [0, []];
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
@@ -77,7 +76,7 @@ export default async function MyAccountPage() {
       </header>
 
       {rankOn && (
-        <RankCard xp={xp} xpPerBrl={settings?.xpPerBrl ?? 10} position={position} />
+        <RankCard xp={xp} xpPerBrl={settings?.xpPerBrl ?? 10} />
       )}
 
       {!user.steamTradeUrl && (
