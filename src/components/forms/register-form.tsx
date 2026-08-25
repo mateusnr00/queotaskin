@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -48,11 +49,11 @@ export function RegisterForm() {
         toast.error(result.error);
         return;
       }
-      // Loga automaticamente após registro — login é por nome + celular,
-      // sem senha. CPF não entra no login.
+      // Loga automaticamente após registro — login é por nome + CPF, sem
+      // senha. O celular fica guardado para a operação falar com o cliente.
       const login = await loginAction({
         name: values.name,
-        phone: values.phone,
+        cpf: values.cpf,
       });
       if (!login.ok) {
         toast.success("Conta criada. Faça login para continuar");
@@ -119,7 +120,7 @@ export function RegisterForm() {
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Celular</FormLabel>
+              <FormLabel>Celular *</FormLabel>
               <FormControl>
                 <Input
                   inputMode="tel"
@@ -139,6 +140,13 @@ export function RegisterForm() {
                   ref={field.ref}
                 />
               </FormControl>
+              {/* O celular não entra no login, então sem esta linha ele
+                  parece um campo pedido à toa. É por ele que a operação
+                  fala com quem comprou. */}
+              <FormDescription>
+                É por aqui que falamos com você sobre o pagamento e a entrega
+                do prêmio.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

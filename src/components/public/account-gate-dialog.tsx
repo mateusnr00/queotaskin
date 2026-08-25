@@ -82,7 +82,7 @@ export function AccountGateDialog({
             ) : modo === "criar" ? (
               "É rápido, sem senha e sem e-mail."
             ) : (
-              "Entre com o nome e o celular do cadastro."
+              "Entre com o nome e o CPF do cadastro."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -122,10 +122,10 @@ function FormularioCriar({ onPronto }: { onPronto: () => void }) {
         return;
       }
       // O cadastro não loga sozinho; o login vem logo em seguida com os
-      // mesmos dados (o fluxo é sem senha, por nome + celular).
+      // mesmos dados (o fluxo é sem senha, por nome + CPF).
       const entrou = await loginAction({
         name: values.name,
-        phone: values.phone,
+        cpf: values.cpf,
       });
       if (!entrou.ok) {
         toast.error("Conta criada, mas o login falhou. Tente entrar.");
@@ -204,7 +204,7 @@ function FormularioEntrar({ onPronto }: { onPronto: () => void }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { name: "", phone: "" },
+    defaultValues: { name: "", cpf: "" },
   });
 
   function onSubmit(values: LoginInput) {
@@ -236,17 +236,17 @@ function FormularioEntrar({ onPronto }: { onPronto: () => void }) {
         />
         <FormField
           control={form.control}
-          name="phone"
+          name="cpf"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Celular</FormLabel>
+              <FormLabel>CPF</FormLabel>
               <FormControl>
                 <Input
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="(11) 90000-0000"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="000.000.000-00"
                   {...field}
-                  value={formatPhone(field.value ?? "")}
+                  value={formatCpf(field.value ?? "")}
                   onChange={(e) => field.onChange(e.target.value)}
                 />
               </FormControl>

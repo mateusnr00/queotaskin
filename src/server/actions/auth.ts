@@ -4,7 +4,7 @@
 // - registerAction: cria conta com {name, cpf, phone}. Sem senha, sem e-mail.
 //   O CPF é digitado pelo usuário (validado por dígito verificador) e gravado
 //   no User.cpf — alimenta o PIX. Não é exibido na UI depois do cadastro.
-// - loginAction: autentica via nome + celular. Sem senha.
+// - loginAction: autentica via nome + CPF. Sem senha.
 // - logoutAction: derruba a sessão.
 //
 // Server Actions = funções TS que rodam SEMPRE no servidor, mesmo quando
@@ -91,7 +91,7 @@ export async function loginAction(
   if (!parsed.success) {
     return {
       ok: false,
-      error: "Nome ou celular inválido",
+      error: "Nome ou CPF inválido",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -99,13 +99,13 @@ export async function loginAction(
   try {
     await signIn("credentials", {
       name: parsed.data.name,
-      phone: parsed.data.phone,
+      cpf: parsed.data.cpf,
       redirect: false,
     });
     return { ok: true, data: undefined };
-  } catch (err) {
-    console.error("[loginAction] falha:", err);
-    return { ok: false, error: "Nome ou celular não encontrado" };
+  } catch {
+    // Sem log do erro: o objeto de credenciais carrega o CPF.
+    return { ok: false, error: "Nome ou CPF não encontrado" };
   }
 }
 

@@ -20,7 +20,7 @@ export default async function LoginPage({
     : "";
 
   // Mesma rota, dois formulários. No host do painel entra-se com e-mail e
-  // senha; no site público, com nome e celular. A regra de host é a mesma
+  // senha; no site público, com nome e CPF. A regra de host é a mesma
   // que o proxy usa para rotear (src/lib/host.ts), então as duas telas não
   // podem discordar sobre onde estão.
   const host = (await headers()).get("host") ?? "";
@@ -57,7 +57,7 @@ export default async function LoginPage({
       <div className="space-y-1.5">
         <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
         <p className="text-sm text-muted-foreground">
-          Informe seu nome completo e celular cadastrados. Sem senha.
+          Informe seu nome completo e o CPF do cadastro. Sem senha.
         </p>
       </div>
       <LoginForm />

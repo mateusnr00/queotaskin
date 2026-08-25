@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { loginAction } from "@/server/actions/auth";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
-import { formatPhone } from "@/lib/cpf";
+import { formatCpf } from "@/lib/cpf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,7 +32,7 @@ export function LoginForm() {
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { name: "", phone: "" },
+    defaultValues: { name: "", cpf: "" },
   });
 
   function onSubmit(values: LoginInput) {
@@ -72,24 +72,17 @@ export function LoginForm() {
         />
         <FormField
           control={form.control}
-          name="phone"
+          name="cpf"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Celular</FormLabel>
+              <FormLabel>CPF</FormLabel>
               <FormControl>
                 <Input
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="(11) 99999-9999"
-                  value={field.value}
-                  onChange={(e) => {
-                    const digits = e.target.value
-                      .replace(/\D/g, "")
-                      .slice(0, 11);
-                    field.onChange(
-                      digits.length >= 10 ? formatPhone(digits) : digits
-                    );
-                  }}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="000.000.000-00"
+                  value={formatCpf(field.value ?? "")}
+                  onChange={(e) => field.onChange(e.target.value)}
                   onBlur={field.onBlur}
                   name={field.name}
                   ref={field.ref}

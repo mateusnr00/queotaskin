@@ -21,7 +21,7 @@ export default async function RegisterPage({
         <h2 className="text-2xl font-bold tracking-tight">Criar conta</h2>
         <p className="text-sm text-muted-foreground">
           Preencha seus dados pra começar. Pra entrar depois é só nome
-          completo e celular.
+          completo e CPF.
         </p>
       </div>
       <RegisterForm />

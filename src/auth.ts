@@ -3,7 +3,7 @@
 //
 // São DOIS caminhos de entrada, para dois públicos:
 //
-// 1. "credentials" — participante, sem senha, por nome completo + celular.
+// 1. "credentials" — participante, sem senha, por nome completo + CPF.
 //    É o fluxo do site público: pedir senha na hora de comprar derrubaria
 //    conversão, e a conta só guarda os próprios títulos.
 //
@@ -40,18 +40,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       credentials: {
         name: { label: "Nome completo", type: "text" },
-        phone: { label: "Celular", type: "tel" },
+        cpf: { label: "CPF", type: "text" },
       },
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
         const user = await prisma.user.findUnique({
-          where: { phone: parsed.data.phone },
+          where: { cpf: parsed.data.cpf },
         });
         if (!user) return null;
 
-        // Celular bate — agora confere o nome (case-insensitive).
+        // CPF bate — agora confere o nome (case-insensitive).
         if (normalizeName(user.name) !== normalizeName(parsed.data.name)) {
           return null;
         }

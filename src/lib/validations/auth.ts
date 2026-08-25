@@ -9,9 +9,13 @@
 //   é exibido na UI depois do cadastro — fica só no banco pra alimentar
 //   o PIX. A SyncPay rejeitava CPFs sintéticos do pool antigo, por isso
 //   voltamos a coletar do usuário.
-// - Login é PASSWORDLESS por nome + celular. CPF NÃO é digitado no login —
-//   o celular é o identificador único, o nome é verificado por cima
-//   (case-insensitive). Funciona como "login e senha" pro usuário.
+// - Login é PASSWORDLESS por nome + CPF. O CPF é o identificador único e o
+//   nome é verificado por cima (case-insensitive) — funciona como "login e
+//   senha" pro usuário. É o padrão do mercado de rifa no Brasil: a pessoa
+//   sabe o próprio CPF de cor, e ele já foi digitado no cadastro.
+//
+// Quem opera o painel NÃO entra por aqui: admin usa e-mail + senha, em host
+// separado (ver auth.ts).
 
 import { z } from "zod";
 import { isValidCpf, onlyDigits } from "@/lib/cpf";
@@ -37,9 +41,16 @@ const phoneField = z
     "Celular inválido (DDD + número)"
   );
 
+// CPF validado por dígito verificador. Aceita máscara — só os dígitos vão
+// para o banco, que é como estão gravados.
+const cpfField = z
+  .string()
+  .transform(onlyDigits)
+  .refine(isValidCpf, "CPF inválido");
+
 export const loginSchema = z.object({
   name: nameField,
-  phone: phoneField,
+  cpf: cpfField,
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
@@ -71,12 +82,12 @@ export const changePasswordSchema = z
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+// Cadastro pede os três: nome, CPF e celular. O celular é obrigatório —
+// é por ele que a operação fala com o cliente quando um pagamento trava ou
+// um prêmio precisa ser entregue.
 export const registerSchema = z.object({
   name: nameField,
-  cpf: z
-    .string()
-    .transform(onlyDigits)
-    .refine(isValidCpf, "CPF inválido"),
+  cpf: cpfField,
   phone: phoneField,
 });
 export type RegisterInput = z.infer<typeof registerSchema>;

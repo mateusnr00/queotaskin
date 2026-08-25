@@ -21,7 +21,7 @@ export default async function TrocarSenhaPage() {
         <h2 className="text-2xl font-bold tracking-tight">Alterar senha</h2>
         <p className="text-sm text-muted-foreground">
           A senha vale só para o painel. O site público continua entrando por
-          nome e celular.
+          nome e CPF.
         </p>
       </div>
 
