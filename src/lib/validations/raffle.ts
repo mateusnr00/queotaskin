@@ -108,6 +108,14 @@ export const raffleGeneralSchema = z.object({
     .max(10_000_000)
     .optional()
     .nullable(),
+  // Campanha exclusiva: nível mínimo do rank para reservar. Null/0 = aberta.
+  minLevel: z.coerce
+    .number()
+    .int()
+    .min(1, "O nível mínimo vai de 1 a 21")
+    .max(21, "O nível mínimo vai de 1 a 21")
+    .optional()
+    .nullable(),
   showProgressBar: z.coerce.boolean().default(true),
   showDailyRanking: z.coerce.boolean().default(false),
   showOverallRanking: z.coerce.boolean().default(false),

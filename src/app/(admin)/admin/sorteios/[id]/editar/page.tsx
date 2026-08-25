@@ -238,6 +238,7 @@ export default async function EditRafflePage({
           maxPurchase: raffle.maxPurchase,
           initialQuantity: raffle.initialQuantity,
           maxPerBuyer: raffle.maxPerBuyer,
+          minLevel: raffle.minLevel,
           showProgressBar: raffle.showProgressBar,
           showDailyRanking: raffle.showDailyRanking,
           showOverallRanking: raffle.showOverallRanking,

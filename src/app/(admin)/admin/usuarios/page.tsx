@@ -20,6 +20,7 @@ import { UsersFilters } from "@/components/admin/users-filters";
 import { formatBRL } from "@/lib/format";
 import { formatCpf, formatPhone } from "@/lib/cpf";
 import { cn } from "@/lib/utils";
+import { RankBadge } from "@/components/rank/rank-badge";
 
 export const metadata: Metadata = { title: "Usuários" };
 
@@ -172,6 +173,18 @@ export default async function AdminUsersPage({
   // suprime no-unused
   void tixStats;
 
+  // XP dos usuários desta página, numa query só. Fora do tenant atual o XP
+  // não conta — o rank é por operador.
+  const xpByUser =
+    userIds.length === 0
+      ? new Map<string, number>()
+      : await prisma.userProgress
+          .findMany({
+            where: { tenantId, userId: { in: userIds } },
+            select: { userId: true, xp: true },
+          })
+          .then((rows) => new Map(rows.map((r) => [r.userId, r.xp])));
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function pageHref(p: number) {
@@ -221,6 +234,7 @@ export default async function AdminUsersPage({
               <TableHead>E-mail</TableHead>
               <TableHead>CPF</TableHead>
               <TableHead>Afiliado</TableHead>
+              <TableHead>Rank</TableHead>
               <TableHead>Função</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">Pedidos</TableHead>
@@ -233,7 +247,7 @@ export default async function AdminUsersPage({
             {users.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={11}
+                  colSpan={12}
                   className="py-12 text-center text-sm text-muted-foreground"
                 >
                   Nenhum usuário encontrado para os filtros atuais.
@@ -276,6 +290,9 @@ export default async function AdminUsersPage({
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <RankBadge xp={xpByUser.get(u.id) ?? 0} size="sm" />
                     </TableCell>
                     <TableCell>
                       <span

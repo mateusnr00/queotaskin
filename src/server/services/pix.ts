@@ -9,6 +9,7 @@
 // de novo.
 
 import { prisma } from "@/lib/db";
+import { awardXpForReservation } from "@/server/services/xp";
 import {
   getProviderForRaffle,
   type PaymentProviderClient,
@@ -264,6 +265,10 @@ export async function pollPaymentStatusIfPending(
           data: { status: "PAID", paidAt: new Date() },
         }),
       ]);
+      // Credita o XP do rank. Precisa acontecer aqui também: quando o
+      // webhook não chega e é o poller que confirma o pagamento, este é o
+      // único caminho que marca a reserva como paga.
+      await awardXpForReservation(reservationId);
     } else if (resolved === "REJECTED") {
       await prisma.payment.update({
         where: { id: paymentId },

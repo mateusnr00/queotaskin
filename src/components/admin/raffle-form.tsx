@@ -162,6 +162,7 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   maxPurchase: 100,
   initialQuantity: null,
   maxPerBuyer: null,
+  minLevel: null,
   showProgressBar: false,
   showDailyRanking: false,
   showOverallRanking: false,
@@ -947,6 +948,36 @@ export function RaffleForm({
                     </FormControl>
                     <FormDescription>
                       Coloque 0 para não ter limites de cotas por comprador.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="minLevel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Campanha exclusiva — nível mínimo</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={21}
+                        placeholder="Aberta a todos"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value ? Number(e.target.value) : null
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      De 1 a 21. Só quem estiver nesse nível do rank (ou em
+                      patente de prestígio) consegue reservar. Deixe vazio para
+                      abrir a campanha a todos.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

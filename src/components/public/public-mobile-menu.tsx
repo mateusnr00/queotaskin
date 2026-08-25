@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   Ticket,
   TicketCheck,
+  Trophy,
   UserCog,
   UserPlus,
   X,
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/", label: "Início", icon: Home },
   { href: "/sorteios", label: "Campanhas", icon: Ticket },
+  { href: "/ranking", label: "Ranking", icon: Trophy },
 ] as const;
 
 const NAV_LOGGED_IN = [

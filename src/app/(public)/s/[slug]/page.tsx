@@ -13,6 +13,9 @@ import { PrizesSection } from "@/components/public/prizes-section";
 import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
 import { headlineSkin } from "@/lib/cs2";
+import { MinLevelGate } from "@/components/rank/min-level-gate";
+import { meetsMinLevel } from "@/lib/rank";
+import { getUserXp } from "@/server/services/xp";
 import {
   AwardedTicketsSection,
   type PublicAwardedTicket,
@@ -144,6 +147,20 @@ export default async function PublicRaffleDetailPage({
     socialName: rawRF.socialName ?? DEFAULT_REQUIRED.socialName,
     birthDate: rawRF.birthDate ?? DEFAULT_REQUIRED.birthDate,
   };
+
+  // Campanha exclusiva por nível: precisa do XP do visitante para saber se
+  // libera o formulário. A decisão real é do servidor, em
+  // createReservationAction — aqui é só apresentação.
+  const rankSettings = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    select: { xpPerBrl: true, rankEnabled: true },
+  });
+  const viewerXp =
+    raffle.minLevel != null && session?.user?.id
+      ? await getUserXp(session.user.id, tenant.id)
+      : 0;
+  const levelLocked =
+    raffle.minLevel != null && !meetsMinLevel(viewerXp, raffle.minLevel);
 
   // Skin principal da campanha: a de maior raridade entre os prêmios. É ela
   // que abre a página e define a cor de destaque.
@@ -348,6 +365,13 @@ export default async function PublicRaffleDetailPage({
           <p className="py-8 text-center text-sm text-muted-foreground">
             Este sorteio não está mais disponível para venda.
           </p>
+        ) : levelLocked ? (
+          <MinLevelGate
+            minLevel={raffle.minLevel!}
+            xp={viewerXp}
+            xpPerBrl={rankSettings?.xpPerBrl ?? 10}
+            isLoggedIn={Boolean(currentUser)}
+          />
         ) : currentUser ? (
           <ReservationForm
             raffleId={raffle.id}

@@ -29,6 +29,8 @@ import { getCurrentTenant, assertRaffleInActiveTenant } from "@/lib/tenant";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { awardXpForReservation, getUserXp } from "@/server/services/xp";
+import { meetsMinLevel, rankFromXp } from "@/lib/rank";
 import type { ActionResult } from "@/server/actions/auth";
 
 // Campos opcionais que o usuário pode complementar no momento da reserva
@@ -124,6 +126,7 @@ export async function createReservationAction(
       status: true,
       pricePerNumber: true,
       tenantId: true,
+      minLevel: true,
     },
   });
   if (!raffle) return { ok: false, error: "Rifa não encontrada" };
@@ -133,6 +136,19 @@ export async function createReservationAction(
   }
   if (raffle.status !== "ACTIVE") {
     return { ok: false, error: "Rifa não está disponível" };
+  }
+
+  // Campanha exclusiva: exige nível mínimo. Checado aqui no servidor porque
+  // a página pública só esconde o formulário — esconder botão não é
+  // autorização.
+  if (raffle.minLevel != null) {
+    const xp = await getUserXp(user.id, tenant.id);
+    if (!meetsMinLevel(xp, raffle.minLevel)) {
+      return {
+        ok: false,
+        error: `Campanha exclusiva para o nível ${raffle.minLevel} ou acima. Você está no ${rankFromXp(xp).label.toLowerCase()}.`,
+      };
+    }
   }
 
   // CPF efetivo: form > conta. Quando vier do form e a conta ainda não tem,
@@ -480,6 +496,9 @@ export async function markReservationPaidAction(
         err
       )
     );
+
+    // Credita o XP do rank também na confirmação manual pelo painel.
+    await awardXpForReservation(reservation.id);
 
     revalidatePath("/admin/reservas");
     revalidatePath(`/comprovante/${reservationId}`);

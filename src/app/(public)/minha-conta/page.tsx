@@ -9,6 +9,9 @@ import { getCurrentTenant } from "@/lib/tenant";
 import { STEAM_DELIVERY_NOTICE } from "@/lib/cs2";
 import { formatPhone } from "@/lib/cpf";
 import { SteamTradeUrlForm } from "@/components/forms/steam-trade-url-form";
+import { RankCard, RankLadder } from "@/components/rank/rank-card";
+import { XpHistory } from "@/components/rank/xp-history";
+import { getUserXp, leaderboardPosition, xpHistory } from "@/server/services/xp";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +34,7 @@ export default async function MyAccountPage() {
   // entrega é específico desta página, então vem numa query própria.
   const settings = await prisma.tenant.findUnique({
     where: { id: tenant.id },
-    select: { steamDeliveryNotice: true },
+    select: { steamDeliveryNotice: true, xpPerBrl: true, rankEnabled: true },
   });
 
   const user = await prisma.user.findUnique({
@@ -55,6 +58,15 @@ export default async function MyAccountPage() {
     },
   });
 
+  const rankOn = settings?.rankEnabled ?? true;
+  const [xp, position, history] = rankOn
+    ? await Promise.all([
+        getUserXp(session.user.id, tenant.id),
+        leaderboardPosition(session.user.id, tenant.id),
+        xpHistory(session.user.id, tenant.id, 10),
+      ])
+    : [0, null, []];
+
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
       <header>
@@ -63,6 +75,10 @@ export default async function MyAccountPage() {
           Olá, {user.name.split(" ")[0]}! Mantenha seus dados de entrega em dia.
         </p>
       </header>
+
+      {rankOn && (
+        <RankCard xp={xp} xpPerBrl={settings?.xpPerBrl ?? 10} position={position} />
+      )}
 
       {!user.steamTradeUrl && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
@@ -109,6 +125,18 @@ export default async function MyAccountPage() {
           dados, fale com o suporte.
         </p>
       </section>
+
+      {rankOn && (
+        <section className="rounded-xl border bg-card p-4">
+          <h2 className="mb-1 text-base font-bold">Extrato de XP</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Últimos lançamentos da sua conta.
+          </p>
+          <XpHistory entries={history} />
+        </section>
+      )}
+
+      {rankOn && <RankLadder xp={xp} />}
 
       <Link
         href="/meus-titulos"

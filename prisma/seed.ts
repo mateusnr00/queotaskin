@@ -205,6 +205,36 @@ const CAMPAIGNS = [
     ],
   },
   {
+    slug: "vip-butterfly-doppler-ruby",
+    title: "[VIP] ★ Butterfly Knife | Doppler Ruby (Nova de Fábrica)",
+    shortDescription: "Exclusiva para nível 5 ou acima. A Ruby dos sonhos.",
+    description:
+      "Campanha exclusiva do rank: só quem já alcançou o nível 5 consegue reservar.\n\n" +
+      "Cada R$ 1 gasto em qualquer campanha vale 10 XP e conta para o seu nível.",
+    totalNumbers: 500,
+    pricePerNumber: 15,
+    minPurchase: 1,
+    maxPurchase: 100,
+    initialQuantity: 5,
+    showOnHome: false,
+    statusText: "Exclusiva VIP",
+    minLevel: 5,
+    selectionCards: [5, 10, 20, 50, 75, 100],
+    prizes: [
+      {
+        description: "★ Butterfly Knife | Doppler Ruby (Nova de Fábrica)",
+        skinName: "★ Butterfly Knife | Doppler",
+        skinRarity: "COVERT" as const,
+        skinWear: "FACTORY_NEW" as const,
+        skinFloat: 0.0119043,
+        skinStatTrak: false,
+        skinSouvenir: false,
+        skinValueBrl: 21500,
+        skinCollection: "Coleção Chroma",
+      },
+    ],
+  },
+  {
     slug: "awp-dragon-lore",
     title: "AWP | Dragon Lore (Testada em Campo)",
     shortDescription: "A lenda. A skin mais icônica da história do Counter-Strike.",
@@ -367,6 +397,60 @@ async function main() {
 
     console.log(`  ✓ /s/${data.slug} — ${prizes.length} prêmio(s)`);
   }
+
+  console.log("→ Criando participantes de exemplo com rank...");
+  // XP direto no extrato: o seed não simula pagamento, então lança como BONUS
+  // com uma descrição honesta. O total desnormalizado sai da mesma soma que o
+  // serviço usa em produção.
+  const DEMO_PLAYERS = [
+    { name: "Lucas Ferreira Alves", phone: "11988887777", xp: 312_000 },
+    { name: "Rafael Nazario Souza", phone: "47977776666", xp: 165_000 },
+    { name: "Bruno Carvalho Lima", phone: "31966665555", xp: 92_000 },
+    { name: "Thiago Martins Rocha", phone: "21955554444", xp: 41_500 },
+    { name: "Diego Almeida Costa", phone: "51944443333", xp: 18_700 },
+    { name: "Gabriel Pereira Dias", phone: "85933332222", xp: 6_200 },
+    { name: "Matheus Oliveira Reis", phone: "62922221111", xp: 1_800 },
+    { name: "Vinicius Barbosa Melo", phone: "41911110000", xp: 450 },
+  ];
+
+  for (const player of DEMO_PLAYERS) {
+    const demo = await prisma.user.upsert({
+      where: { phone: player.phone },
+      update: { name: player.name },
+      create: { name: player.name, phone: player.phone, role: "PARTICIPANT" },
+    });
+
+    const already = await prisma.xpEntry.findFirst({
+      where: { userId: demo.id, tenantId: tenant.id, reason: "BONUS" },
+      select: { id: true },
+    });
+    if (!already) {
+      await prisma.xpEntry.create({
+        data: {
+          userId: demo.id,
+          tenantId: tenant.id,
+          amount: player.xp,
+          reason: "BONUS",
+          description: "XP de demonstração (seed)",
+        },
+      });
+    }
+
+    const total = await prisma.xpEntry.aggregate({
+      where: { userId: demo.id, tenantId: tenant.id },
+      _sum: { amount: true },
+    });
+    await prisma.userProgress.upsert({
+      where: { userId_tenantId: { userId: demo.id, tenantId: tenant.id } },
+      update: { xp: Math.max(0, total._sum.amount ?? 0) },
+      create: {
+        userId: demo.id,
+        tenantId: tenant.id,
+        xp: Math.max(0, total._sum.amount ?? 0),
+      },
+    });
+  }
+  console.log(`  ✓ ${DEMO_PLAYERS.length} participantes ranqueados`);
 
   console.log("\nPronto. Credencial admin:");
   console.log(`  Nome:    ${admin.name}`);

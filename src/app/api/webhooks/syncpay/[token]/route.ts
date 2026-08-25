@@ -21,6 +21,7 @@ import { extractStatusInfo, getPixStatus } from "@/lib/syncpay";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { awardXpForReservation } from "@/server/services/xp";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -155,6 +156,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       (err) =>
         console.error("[syncpay webhook] autoGenerateSurpriseBoxes falhou:", err)
     );
+    // Credita o XP do rank. Idempotente: reentrega do webhook não dobra.
+    await awardXpForReservation(payment.reservationId);
   } else if (resolved === "REJECTED" && payment.status === "PENDING") {
     await prisma.payment.update({
       where: { id: payment.id },

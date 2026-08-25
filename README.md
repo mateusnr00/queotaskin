@@ -75,6 +75,95 @@ Counter-Strike, calibrado para o modo escuro.
 | `src/server/services/deliveries.ts` | Fila de entregas pós-sorteio |
 | `src/lib/cs2.test.ts` | Testes da lógica de domínio |
 
+## Sistema de rank
+
+Progressão por gasto, pensada para recorrência: o jogador volta porque o
+próximo nível está perto e porque campanhas exclusivas dependem dele.
+
+### A escada
+
+**Níveis 0 a 21**, como na Gamers Club. A curva é quadrática
+(`XP_STEP * L * (L+1) / 2`): o começo é rápido e o topo é de longo prazo.
+
+| Nível | XP | Equivale a |
+|---|---|---|
+| 1 | 100 | R$ 10 |
+| 5 | 1.500 | R$ 150 |
+| 10 | 5.500 | R$ 550 |
+| 21 | 23.100 | R$ 2.310 |
+
+**Acima do 21**, quatro patentes de prestígio na ordem da carreira de um
+profissional — primeiro você assina com uma org, depois vira lenda de Major,
+depois levanta o troféu e, no fim, entra pra história:
+
+| Patente | XP | Equivale a |
+|---|---|---|
+| Pro Player | 40.000 | R$ 4.000 |
+| Legend | 80.000 | R$ 8.000 |
+| Campeão de Major | 150.000 | R$ 15.000 |
+| GOAT | 300.000 | R$ 30.000 |
+
+Toda a escada sai de `src/lib/rank.ts` — mudar limiares, ordem ou nomes é
+mexer só naquele arquivo.
+
+### Como o XP é creditado
+
+**10 XP por real** gasto em números pagos (ajustável por tenant em
+`Tenant.xpPerBrl`). Centavos são truncados: R$ 19,90 rende os mesmos 190 XP
+que R$ 19,00.
+
+O XP **não expira e não é gasto** — o nível é permanente. Um rank que cai
+puniria quem parou de comprar, que é o oposto do objetivo.
+
+### Integridade
+
+`XpEntry` é um extrato e a **fonte da verdade**; `UserProgress.xp` é só o
+total desnormalizado, para o ranking ordenar sem varrer o extrato.
+
+Todo crédito roda dentro de uma transação com **advisory lock por (usuário,
+tenant)** e o total é **recalculado a partir do extrato** depois do insert,
+nunca incrementado a partir de uma leitura anterior. Sem isso, dois
+pagamentos simultâneos do mesmo usuário leem o mesmo total antigo e o segundo
+apaga o crédito do primeiro.
+
+A idempotência é feita **consultando antes de inserir**, nunca capturando a
+violação do índice único: no Postgres um statement que falha aborta a
+transação inteira (SQLSTATE 25P02) e os comandos seguintes são recusados.
+Consultar antes é seguro porque já estamos dentro do lock. O índice único
+`(userId, reason, reservationId)` fica como rede de segurança.
+
+`src/server/services/xp.integration.test.ts` cobre exatamente esses casos
+contra um Postgres real — inclusive dez créditos concorrentes e a mesma
+reserva creditada cinco vezes em paralelo. Ele só roda contra banco local.
+
+### Campanhas exclusivas
+
+`Raffle.minLevel` (1–21) restringe a campanha a quem alcançou aquele nível;
+quem está em patente de prestígio passa em qualquer exigência. É o que dá
+consequência ao rank — sem isso ele seria só um selo.
+
+O bloqueio é decidido **no servidor**, em `createReservationAction`. A página
+pública apenas mostra o aviso, e ele é escrito para motivar: *"Faltam 1.500
+XP — cerca de R$ 150 em outras campanhas para liberar esta."*
+
+### Onde mexer
+
+| Arquivo | O quê |
+|---|---|
+| `src/lib/rank.ts` | Curva, limiares, patentes, cores |
+| `src/server/services/xp.ts` | Crédito, estorno, ajuste, ranking |
+| `src/components/rank/` | Selo, cartão de progresso, escada, gate |
+| `src/app/(public)/ranking/` | Ranking público |
+
+### Ainda não implementado
+
+- **Estorno automático.** `reverseXpForReservation` está pronta e testada,
+  mas a plataforma não tem fluxo de estorno (o status `REFUNDED` existe no
+  enum e nada o aplica). Quando existir, chame a função no mesmo ponto.
+- **Pontos gastáveis.** O SKNRS separa `xp` (permanente, define o nível) de
+  `balance` (gastável, resgatável). Aqui só existe o XP. O extrato já
+  comporta a segunda moeda quando fizer sentido.
+
 ## Pré-requisitos
 
 - **Node.js 20.19+ ou 22+** (atualmente Node 20.18.1 está instalado — recomendo atualizar)

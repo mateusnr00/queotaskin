@@ -173,8 +173,10 @@ model User {
   accounts       Account[]
   sessions       Session[]
   reservations   Reservation[]
+  xpEntries      XpEntry[]
+  progress       UserProgress[]
   affiliate      Affiliate?
-  createdRaffles Raffle[]      @relation("CreatedRaffles")
+  createdRaffles Raffle[]       @relation("CreatedRaffles")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -280,10 +282,18 @@ model Tenant {
   showPromotionsPercentage          Boolean   @default(true)
   showCombosPrice                   Boolean   @default(true)
   showFees                          Boolean   @default(true)
+  // Economia do rank. `xpPerBrl` é quanto XP cada real gasto credita — 10
+  // por padrão. Mexer nele não reescreve o histórico: o extrato guarda o
+  // valor já creditado em cada compra.
+  xpPerBrl                          Int       @default(10)
+  rankEnabled                       Boolean   @default(true)
+  rankShowOnHome                    Boolean   @default(true)
 
-  hosts   TenantHost[]
-  raffles Raffle[]
-  members User[]       @relation("TenantMembers")
+  hosts     TenantHost[]
+  raffles   Raffle[]
+  members   User[]         @relation("TenantMembers")
+  xpEntries XpEntry[]
+  progress  UserProgress[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -457,6 +467,11 @@ model Raffle {
   winnerDrawnAt      DateTime?
   winnerNote         String?   @db.Text
 
+  /// Campanha exclusiva: nível mínimo (1–21) para conseguir reservar.
+  /// NULL = aberta a todos. Quem já está em patente de prestígio passa em
+  /// qualquer exigência. É o que dá consequência ao rank.
+  minLevel Int?
+
   createdById String
   createdBy   User   @relation("CreatedRaffles", fields: [createdById], references: [id])
 
@@ -518,6 +533,60 @@ enum SkinWear {
   FIELD_TESTED
   WELL_WORN
   BATTLE_SCARRED
+}
+
+/// Motivo de um lançamento de XP.
+enum XpReason {
+  /// Compra paga — a única entrada que faz o rank subir.
+  PURCHASE
+  /// Estorno de uma compra: lançamento negativo.
+  REFUND
+  /// Ajuste manual pelo painel administrativo.
+  ADMIN_ADJUST
+  /// Bônus de campanha, evento ou compensação.
+  BONUS
+}
+
+/// Extrato de XP. É a fonte da verdade: `UserProgress.xp` é apenas o total
+/// desnormalizado, recalculado a partir daqui. Ter o extrato permite explicar
+/// ao usuário de onde veio cada ponto e reverter um estorno sem chute.
+model XpEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  tenantId      String
+  amount        Int
+  reason        XpReason
+  reservationId String?
+  description   String?
+  createdAt     DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  /// Idempotência: uma reentrega de webhook não credita duas vezes.
+  /// reservationId NULL fica fora do índice parcial, então ajustes manuais
+  /// e bônus podem se repetir.
+  @@unique([userId, reason, reservationId])
+  @@index([userId, tenantId, createdAt(sort: Desc)])
+  @@index([tenantId])
+}
+
+/// Progresso do participante em um tenant. O rank é por operador: comprar no
+/// site de outro não pode levantar o nível aqui.
+model UserProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  xp        Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId, xp(sort: Desc)])
 }
 
 model Prize {
@@ -724,6 +793,7 @@ model Reservation {
   affiliate Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
 
   tickets       Ticket[]
+  xpEntries     XpEntry[]
   payment       Payment?
   commission    AffiliateCommission?
   surpriseBoxes SurpriseBox[]

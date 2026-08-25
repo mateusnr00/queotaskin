@@ -96,6 +96,12 @@ export async function SiteHeader() {
           >
             Campanhas
           </Link>
+          <Link
+            href="/ranking"
+            className="px-3 py-1.5 rounded-md hover:bg-muted"
+          >
+            Ranking
+          </Link>
           {session?.user ? (
             <>
               <Link
