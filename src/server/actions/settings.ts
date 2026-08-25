@@ -33,6 +33,9 @@ const themeSchema = z.object({
 // home). Tudo opcional — atualiza só o que veio.
 const siteSettingsSchema = z.object({
   companyName: z.string().min(1, "Nome obrigatório").max(120).optional(),
+  // Como a logo se encaixa no cabeçalho. Só quem envia a imagem sabe se ela
+  // é um emblema (círculo) ou uma faixa com o nome (sem recorte).
+  logoShape: z.enum(["ROUND", "RECTANGLE"]).optional(),
   siteDescription: z.string().max(200).optional(),
   supportPhone: z
     .string()
@@ -199,6 +202,7 @@ export async function updateSiteAction(
     // form novo usa /configuracoes/mensagens que escreve direto lá).
     const update: Record<string, unknown> = {};
     if (data.companyName !== undefined) update.name = data.companyName;
+    if (data.logoShape !== undefined) update.logoShape = data.logoShape;
     if (data.siteDescription !== undefined) update.siteDescription = data.siteDescription;
     if (data.supportPhone !== undefined) update.supportPhone = data.supportPhone;
     if (data.supportEmail !== undefined) update.supportEmail = data.supportEmail;

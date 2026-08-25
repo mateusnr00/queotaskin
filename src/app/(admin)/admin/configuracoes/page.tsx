@@ -17,6 +17,7 @@ export default async function ConfiguracoesPage() {
     where: { id: tenantId },
     select: {
       logoUrl: true,
+      logoShape: true,
       name: true,
       siteDescription: true,
       supportPhone: true,
@@ -73,6 +74,7 @@ export default async function ConfiguracoesPage() {
       <SettingsForm
         initial={{
           logoUrl: tenant.logoUrl,
+          logoShape: tenant.logoShape,
           companyName: tenant.name,
           siteDescription: tenant.siteDescription ?? "",
           supportPhone: tenant.supportPhone,

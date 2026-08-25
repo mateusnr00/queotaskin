@@ -44,6 +44,15 @@ enum Role {
 // Multi-tenant: cada Tenant é um "cliente da plataforma". Mateus = 1 tenant,
 // André = outro tenant, etc. Os sorteios pertencem ao tenant, o domínio
 // roteia pra ele e o admin do tenant só vê o que é dele.
+// Formato da logo no cabeçalho. Decide o recorte, e recorte errado destrói
+// a marca: uma logo em faixa ("SKINS LENDÁRIAS") dentro de um círculo perde
+// as pontas, e um emblema redondo numa caixa larga fica flutuando no vazio.
+// Quem envia a imagem sabe qual é o caso; o site não tem como adivinhar.
+enum LogoShape {
+  ROUND // emblema/avatar: recorta em círculo
+  RECTANGLE // faixa/wordmark: cabe inteira, sem recorte
+}
+
 enum TenantHostKind {
   PUBLIC // host onde o site público do tenant é servido (sorteios.vip)
   ADMIN // host onde o painel admin do tenant é servido (admin.sorteios.vip)
@@ -223,6 +232,9 @@ model Tenant {
   // Cada tenant edita os próprios em Admin → Configurações / Personalizar
   // tema. Quando vazio/NULL, o componente cai num fallback razoável.
   logoUrl                           String?
+  // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
+  // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
+  logoShape                         LogoShape @default(RECTANGLE)
   siteDescription                   String?
   supportPhone                      String?
   supportEmail                      String?

@@ -9,6 +9,7 @@
 // Identidade do site (Geral) usa um único Salvar; experiência do usuário
 // salva inline igual ao painel de tema.
 
+import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
@@ -61,6 +62,7 @@ type NumbersNomenclature =
 interface Props {
   initial: {
     logoUrl: string | null;
+    logoShape: "ROUND" | "RECTANGLE";
     companyName: string;
     siteDescription: string;
     supportPhone: string | null;
@@ -186,7 +188,11 @@ function Tab({
 // ---------------- ABA GERAL ----------------
 
 function GeralTab({ initial }: Props) {
+  const router = useRouter();
   const [logoUrl, setLogoUrl] = useState<string | null>(initial.logoUrl);
+  const [logoShape, setLogoShape] = useState<"ROUND" | "RECTANGLE">(
+    initial.logoShape
+  );
   const [companyName, setCompanyName] = useState(initial.companyName);
   const [siteDescription, setSiteDescription] = useState(initial.siteDescription);
   const [supportPhone, setSupportPhone] = useState(initial.supportPhone ?? "");
@@ -259,6 +265,22 @@ function GeralTab({ initial }: Props) {
     });
   }
 
+  function escolherFormato(shape: "ROUND" | "RECTANGLE") {
+    const anterior = logoShape;
+    setLogoShape(shape);
+    startTransition(async () => {
+      const result = await updateSiteAction({ logoShape: shape });
+      if (!result.ok) {
+        setLogoShape(anterior);
+        toast.error(result.error);
+        return;
+      }
+      // O cabeçalho é montado no servidor a partir do Tenant; sem isso a
+      // escolha só apareceria no próximo carregamento da página.
+      router.refresh();
+    });
+  }
+
   function save() {
     startTransition(async () => {
       const result = await updateSiteAction({
@@ -294,7 +316,12 @@ function GeralTab({ initial }: Props) {
           onClick={() => fileRef.current?.click()}
           disabled={isUploading || isPending}
           className={cn(
-            "relative h-32 w-32 rounded-full overflow-hidden border-2 border-dashed transition-colors group",
+            "group relative overflow-hidden border-2 border-dashed transition-all",
+            // O preview imita o cabeçalho: círculo recorta, faixa mostra a
+            // imagem inteira. Dá para ver o corte antes de publicar.
+            logoShape === "ROUND"
+              ? "h-32 w-32 rounded-full"
+              : "h-24 w-full max-w-[260px] rounded-xl",
             logoUrl
               ? "border-transparent ring-1 ring-border"
               : "border-border hover:border-primary"
@@ -305,7 +332,10 @@ function GeralTab({ initial }: Props) {
             <img
               src={logoUrl}
               alt="Logo"
-              className="h-full w-full object-cover"
+              className={cn(
+                "h-full w-full",
+                logoShape === "ROUND" ? "object-cover" : "object-contain p-2"
+              )}
             />
           ) : (
             <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground bg-muted/30">
@@ -329,10 +359,33 @@ function GeralTab({ initial }: Props) {
             </div>
           )}
         </button>
-        <p className="text-[11px] text-muted-foreground text-center">
-          Permitidos *.jpeg, *.jpg, *.png, *.gif, *.webp
-          <br />
-          Tamanho máximo 3 MB
+        {/* O formato é escolha de quem envia: o site não tem como saber se a
+            imagem é um emblema ou uma faixa com o nome escrito. */}
+        <div className="flex w-full max-w-[280px] gap-1 rounded-xl bg-muted/60 p-1">
+          {[
+            { valor: "RECTANGLE" as const, rotulo: "Retangular" },
+            { valor: "ROUND" as const, rotulo: "Redonda" },
+          ].map((op) => (
+            <button
+              key={op.valor}
+              type="button"
+              onClick={() => escolherFormato(op.valor)}
+              disabled={isPending}
+              className={cn(
+                "flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                logoShape === op.valor
+                  ? "bg-background shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {op.rotulo}
+            </button>
+          ))}
+        </div>
+        <p className="max-w-[280px] text-center text-[11px] leading-relaxed text-muted-foreground">
+          {logoShape === "ROUND"
+            ? "A imagem é recortada num círculo e o nome do site aparece ao lado. Bom para emblema ou mascote."
+            : "A imagem aparece inteira, sem corte, e substitui o nome do site no cabeçalho. Bom para logo em faixa com o nome escrito."}
         </p>
         {logoUrl && (
           <Button
