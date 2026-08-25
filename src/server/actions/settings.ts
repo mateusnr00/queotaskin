@@ -282,13 +282,10 @@ export async function updateSiteAction(
 // =============================================================
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3 MB (Sorteamos usa 3.1 MB)
-const ALLOWED_LOGO_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/jpg",
-  "image/gif",
-  "image/webp",
-];
+// Qualquer image/* serve. Lista fixa rejeitava AVIF, HEIC e arquivos que o
+// navegador entrega sem file.type — daí a checagem também pela extensão.
+const LOGO_EXT =
+  /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
 export async function uploadLogoAction(
   formData: FormData
@@ -308,14 +305,14 @@ export async function uploadLogoAction(
     if (!(file instanceof File)) {
       return { ok: false, error: "Arquivo inválido" };
     }
-    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
-      return {
-        ok: false,
-        error: "Formato não permitido (use PNG, JPG, GIF ou WebP)",
-      };
+    if (!file.type.startsWith("image/") && !LOGO_EXT.test(file.name)) {
+      return { ok: false, error: "O arquivo não parece ser uma imagem" };
     }
     if (file.size > MAX_LOGO_BYTES) {
-      return { ok: false, error: "Arquivo maior que 3 MB" };
+      return {
+        ok: false,
+        error: "Imagem grande demais para enviar — tente uma menor",
+      };
     }
 
     // Apaga o logo anterior (best-effort) antes de subir o novo.

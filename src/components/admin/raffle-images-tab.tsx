@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { normalizeImage } from "@/lib/image-normalize";
 import { cn } from "@/lib/utils";
 
 export interface RaffleImageItem {
@@ -71,16 +72,30 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setIsUploading(true);
+    let enviadas = 0;
     try {
-      for (const file of Array.from(files)) {
+      for (const original of Array.from(files)) {
+        // Encolhe no navegador antes de enviar: o corpo de uma Server Action
+        // não passa de alguns MB, e render de skin em PNG estoura isso.
+        const { file } = await normalizeImage(original);
         const fd = new FormData();
         fd.append("raffleId", raffleId);
         fd.append("file", file);
-        const result = await uploadRaffleImageAction(fd);
-        if (!result.ok) {
-          toast.error(result.error);
+
+        let result;
+        try {
+          result = await uploadRaffleImageAction(fd);
+        } catch {
+          // Corpo recusado antes de chegar na action: o erro vem como falha
+          // de rede, sem mensagem nossa. Traduz para algo acionável.
+          toast.error(`"${original.name}" é grande demais para enviar`);
           continue;
         }
+        if (!result.ok) {
+          toast.error(`"${original.name}": ${result.error}`);
+          continue;
+        }
+        enviadas += 1;
         setImages((prev) => [
           ...prev,
           {
@@ -91,7 +106,9 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
           },
         ]);
       }
-      toast.success("Imagens enviadas");
+      if (enviadas > 0) {
+        toast.success(enviadas === 1 ? "Imagem enviada" : `${enviadas} imagens enviadas`);
+      }
     } finally {
       setIsUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -138,7 +155,7 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/png,image/jpeg,image/jpg,image/webp"
+        accept="image/*"
         multiple
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}

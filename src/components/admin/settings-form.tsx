@@ -49,6 +49,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { normalizeImage } from "@/lib/image-normalize";
 
 type LoginMode = "phone" | "cpf";
 type NumbersNomenclature =
@@ -196,12 +197,22 @@ function GeralTab({ initial }: Props) {
   const [isUploading, setIsUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function handleFile(file: File) {
+  async function handleFile(original: File) {
     setIsUploading(true);
     try {
+      // Mesmo motivo da aba de imagens: encolhe antes de enviar, porque o
+      // corpo da Server Action tem teto e o corte acontece no framework.
+      const { file } = await normalizeImage(original);
       const fd = new FormData();
       fd.append("file", file);
-      const result = await uploadLogoAction(fd);
+
+      let result;
+      try {
+        result = await uploadLogoAction(fd);
+      } catch {
+        toast.error("Imagem grande demais para enviar");
+        return;
+      }
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -271,7 +282,7 @@ function GeralTab({ initial }: Props) {
         <input
           ref={fileRef}
           type="file"
-          accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+          accept="image/*"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

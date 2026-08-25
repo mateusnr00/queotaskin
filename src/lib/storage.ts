@@ -54,7 +54,7 @@ export async function uploadRaffleImage(
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error } = await client.storage.from(bucket).upload(path, buffer, {
-    contentType: file.type || "application/octet-stream",
+    contentType: guessContentType(file),
     upsert: false,
   });
   if (error) throw new Error(`Falha no upload: ${error.message}`);
@@ -81,11 +81,58 @@ export function pathFromPublicUrl(publicUrl: string): string | null {
   return publicUrl.slice(i + marker.length);
 }
 
+// Extensão -> tipo MIME. O navegador nem sempre preenche file.type (arquivo
+// vindo de gerenciador de arquivos, formato que ele não conhece), e mandar
+// "application/octet-stream" faz o Storage servir a imagem como download em
+// vez de exibi-la. Quando dá para deduzir pelo nome, deduzimos.
+const EXT_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  jfif: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  heic: "image/heic",
+  heif: "image/heif",
+  svg: "image/svg+xml",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  ico: "image/x-icon",
+};
+
+const MIME_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+  "image/bmp": "bmp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "image/svg+xml": "svg",
+  "image/tiff": "tiff",
+  "image/x-icon": "ico",
+};
+
 function guessExtension(file: File): string {
   const fromName = file.name.split(".").pop()?.toLowerCase();
+  if (fromName && Object.hasOwn(EXT_MIME, fromName)) {
+    return fromName === "jfif" ? "jpg" : fromName;
+  }
+  const fromType = MIME_EXT[file.type.toLowerCase()];
+  if (fromType) return fromType;
+  // Extensão desconhecida mas plausível: preserva em vez de virar ".bin",
+  // que quebraria a exibição no navegador.
   if (fromName && /^[a-z0-9]{1,5}$/.test(fromName)) return fromName;
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  if (file.type === "image/jpeg" || file.type === "image/jpg") return "jpg";
   return "bin";
+}
+
+function guessContentType(file: File): string {
+  if (file.type.toLowerCase().startsWith("image/")) return file.type;
+  const fromName = file.name.split(".").pop()?.toLowerCase();
+  if (fromName && EXT_MIME[fromName]) return EXT_MIME[fromName];
+  return file.type || "application/octet-stream";
 }
