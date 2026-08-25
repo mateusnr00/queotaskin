@@ -55,6 +55,32 @@ Escopo **Production**. Gere os segredos com `openssl rand -base64 32`.
 | `SEED_ADMIN_PHONE` | seu celular com DDD, só dígitos (10 ou 11) |
 | `RUN_SEED` | `1` |
 
+**Upload de imagens** — sem as três, o botão de enviar capa responde
+"Supabase Storage não está configurado":
+
+| Variável | Onde achar |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → Data API → Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API Keys → `service_role` (secreta) |
+| `SUPABASE_STORAGE_BUCKET` | nome do bucket, ex. `raffle-images` |
+
+O bucket precisa existir e ser **público** (o site mostra as capas para
+visitante deslogado). A escrita não depende de política: a service role
+ignora RLS e vive só no servidor. Para criar do zero:
+
+```sql
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('raffle-images', 'raffle-images', true, 10485760,
+        ARRAY['image/png','image/jpeg','image/jpg','image/webp','image/gif']);
+
+CREATE POLICY "raffle_images_public_read"
+  ON storage.objects FOR SELECT USING (bucket_id = 'raffle-images');
+```
+
+> A `SERVICE_ROLE_KEY` dá acesso total ao banco, ignorando RLS. Ela é
+> server-only — nunca prefixe com `NEXT_PUBLIC_`, ou vai parar no bundle do
+> navegador.
+
 **Recomendadas** — o site sobe sem elas, mas alguma função fica capenga:
 
 | Variável | Para quê |
