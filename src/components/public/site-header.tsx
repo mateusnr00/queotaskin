@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TicketCheck } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
@@ -75,10 +75,7 @@ export async function SiteHeader() {
   const appName =
     tenantCtx?.name || process.env.NEXT_PUBLIC_APP_NAME || "Rifa Online";
   const logoUrl = tenantVisual?.logoUrl ?? null;
-  // Marca em faixa já traz o nome desenhado; repetir "QuéOta Skin" ao lado
-  // dela duplicaria a leitura e é o que os sites de referência evitam.
-  // Emblema redondo não diz o nome, então ali o texto fica.
-  const logoEmFaixa = tenantVisual?.logoShape === "RECTANGLE";
+  const logoShape = tenantVisual?.logoShape ?? "RECTANGLE";
   const accent = tenantVisual?.headerAccent ?? false;
 
   return (
@@ -91,37 +88,15 @@ export async function SiteHeader() {
       )}
     >
       <div className="container mx-auto flex h-14 items-center justify-between px-4 max-w-6xl">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          {logoUrl ? (
-            // object-contain na faixa: a imagem inteira cabe na altura do
-            // header e a largura acompanha a proporção, sem recorte. No
-            // emblema, object-cover preenche o círculo — que é o que se
-            // espera de um avatar.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoUrl}
-              alt={appName}
-              className={cn(
-                logoEmFaixa
-                  ? "h-8 w-auto max-w-[170px] object-contain sm:max-w-[220px]"
-                  : "h-8 w-8 rounded-full object-cover"
-              )}
-            />
-          ) : (
-            <span
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-lg",
-                accent
-                  ? "bg-primary-foreground text-primary"
-                  : "bg-foreground text-background"
-              )}
-            >
-              <TicketCheck className="h-4 w-4" />
-            </span>
-          )}
-          {!logoEmFaixa && (
-            <span className="text-sm sm:text-base">{appName}</span>
-          )}
+        <Link href="/">
+          <BrandMark
+            marca={{ name: appName, logoUrl, logoShape }}
+            fallbackClassName={
+              accent
+                ? "bg-primary-foreground text-primary"
+                : "bg-foreground text-background"
+            }
+          />
         </Link>
 
         {/* Desktop nav */}

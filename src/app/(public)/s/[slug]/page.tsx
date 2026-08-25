@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CalendarDays } from "lucide-react";
@@ -24,6 +23,7 @@ import {
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { raffleUrl } from "@/lib/raffle-url";
 import { getCurrentTenant } from "@/lib/tenant";
+import { getBrand } from "@/lib/brand";
 
 export async function generateMetadata({
   params,
@@ -35,11 +35,44 @@ export async function generateMetadata({
   if (!tenant) return { title: "Sorteio" };
   const raffle = await prisma.raffle.findUnique({
     where: { tenantId_slug: { tenantId: tenant.id, slug } },
-    select: { title: true, shortDescription: true },
+    select: {
+      title: true,
+      shortDescription: true,
+      images: {
+        where: { isCover: true },
+        take: 1,
+        select: { url: true },
+      },
+    },
   });
+  if (!raffle) return { title: "Sorteio" };
+
+  // A imagem da campanha é a melhor imagem que este link pode carregar: quem
+  // recebe no WhatsApp vê a skin, não um retângulo cinza.
+  //
+  // A logo entra como reserva porque o Next SUBSTITUI o openGraph do layout
+  // raiz em vez de mesclar — sem isto, campanha sem imagem perderia também a
+  // imagem do site e o link voltaria a chegar sem nada.
+  const marca = await getBrand();
+  const imagem = raffle.images[0]?.url ?? marca.logoUrl ?? undefined;
+  const descricao = raffle.shortDescription ?? undefined;
+
   return {
-    title: raffle?.title ?? "Sorteio",
-    description: raffle?.shortDescription ?? undefined,
+    title: raffle.title,
+    description: descricao,
+    openGraph: {
+      type: "website",
+      title: raffle.title,
+      description: descricao,
+      locale: "pt_BR",
+      ...(imagem ? { images: [{ url: imagem, alt: raffle.title }] } : {}),
+    },
+    twitter: {
+      card: imagem ? "summary_large_image" : "summary",
+      title: raffle.title,
+      description: descricao,
+      ...(imagem ? { images: [imagem] } : {}),
+    },
   };
 }
 
@@ -206,7 +239,7 @@ export default async function PublicRaffleDetailPage({
 
   return (
     // Coluna única em qualquer largura: no desktop a página é a mesma do
-    // celular, só com mais folga e a capa maior. O que mudou foi a ORDEM.
+    // celular, só com mais folga e a imagem maior. O que mudou foi a ORDEM.
     //
     // Antes, descrição, ficha da skin, prêmios e títulos premiados ficavam
     // entre o preço e o seletor de números, e era preciso rolar três telas
@@ -214,9 +247,9 @@ export default async function PublicRaffleDetailPage({
     // Pro, MM Skins) os cards de quantidade aparecem na primeira dobra, sem
     // exceção — é a decisão que a página existe para provocar.
     <div className="mx-auto w-full max-w-md px-4 py-5 md:max-w-2xl md:py-10">
-      {/* ---------- capa + título ---------- */}
+      {/* ---------- imagem + título ---------- */}
       <div className="space-y-4 md:space-y-5">
-        {/* No celular a capa sangra até as bordas, como nas três
+        {/* No celular a imagem sangra até as bordas, como nas três
             referências: a moldura arredondada com margem lateral encolhia
             a imagem justamente onde ela precisa vender. */}
         <RaffleCover
@@ -434,7 +467,7 @@ export default async function PublicRaffleDetailPage({
 // A versão anterior era um card à parte: rótulo "Progresso da venda", barra
 // de 36px e as contagens embaixo — quatro linhas para dizer "37% vendido".
 // Nas três referências do mercado a barra é uma faixa fina logo abaixo da
-// capa, com a porcentagem dentro dela. Encolher isso devolve espaço da
+// imagem, com a porcentagem dentro dela. Encolher isso devolve espaço da
 // primeira dobra para o que de fato converte: preço e seletor de números.
 //
 // A % continua legível sobre qualquer fundo pelo mesmo truque de duas

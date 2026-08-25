@@ -51,11 +51,31 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     // DB indisponível em build estático: cai no fallback do env.
   }
+  const descricao =
+    description ||
+    "Participe das nossas rifas online. Pagamento via Pix, sorteios auditáveis.";
+
   return {
     title: { default: name, template: `%s · ${name}` },
-    description:
-      description ||
-      "Participe das nossas rifas online. Pagamento via Pix, sorteios auditáveis.",
+    description: descricao,
+    // Rifa circula por link no WhatsApp, e link sem imagem chega como um
+    // retângulo cinza — some no meio da conversa. A logo já resolve o caso
+    // geral; a página da campanha sobrescreve com a capa da skin, que vende
+    // muito mais.
+    openGraph: {
+      type: "website",
+      siteName: name,
+      title: name,
+      description: descricao,
+      locale: "pt_BR",
+      ...(icone ? { images: [{ url: icone, alt: name }] } : {}),
+    },
+    twitter: {
+      card: icone ? "summary_large_image" : "summary",
+      title: name,
+      description: descricao,
+      ...(icone ? { images: [icone] } : {}),
+    },
     // Vem do banco, não de um arquivo no repositório: assim trocar o ícone
     // é enviar uma imagem no painel, sem depender de um novo deploy.
     //

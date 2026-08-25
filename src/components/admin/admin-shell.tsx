@@ -28,6 +28,8 @@ import {
 import { logoutAction } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/brand/brand-mark";
+import type { Marca } from "@/lib/brand";
 
 const NAV_GERAL = [
   { href: "/admin", label: "Início", icon: LayoutDashboard },
@@ -46,13 +48,15 @@ const NAV_CONFIG = [
   { href: "/admin/personalizar-tema", label: "Personalizar tema", icon: Palette },
 ] as const;
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Rifa";
 
 export function AdminShell({
   userName,
+  marca,
   children,
 }: {
   userName: string;
+  /** Identidade do tenant, carregada no layout (isto aqui é cliente). */
+  marca: Marca;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -66,14 +70,8 @@ export function AdminShell({
     <div className="flex min-h-screen flex-col md:flex-row bg-muted/30">
       {/* Topbar mobile */}
       <header className="md:hidden flex items-center justify-between border-b bg-background px-4 py-3 sticky top-0 z-30">
-        <Link
-          href="/admin"
-          className="flex items-center gap-2 font-semibold"
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
-            <TicketCheck className="h-4 w-4" />
-          </span>
-          <span>{APP_NAME}</span>
+        <Link href="/admin">
+          <BrandMark marca={marca} classeDoNome="text-sm" />
         </Link>
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 font-semibold text-foreground">
@@ -112,15 +110,12 @@ export function AdminShell({
         )}
       >
         <div className="flex items-center justify-between px-4 py-4 border-b">
-          <Link
-            href="/admin"
-            onClick={closeDrawer}
-            className="flex items-center gap-2 font-semibold"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
-              <TicketCheck className="h-4 w-4" />
-            </span>
-            <span>{APP_NAME}</span>
+          <Link href="/admin" onClick={closeDrawer}>
+            <BrandMark
+              marca={marca}
+              classeDoNome="text-sm"
+              larguraMaxima="max-w-[150px]"
+            />
           </Link>
           <Button
             type="button"

@@ -1,15 +1,20 @@
 import Link from "next/link";
-import { TicketCheck } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { getBrand } from "@/lib/brand";
 
 // Layout split inspirado no Sorteamos: ilustração/branding à esquerda em
 // gradiente, formulário à direita centralizado. No mobile o branding fica
 // em cima como banner compacto.
-export default function AuthLayout({
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "Rifa Online";
+  // O nome vem do tenant, não da variável de ambiente: com NEXT_PUBLIC_APP_NAME
+  // ausente esta tela dizia "Rifa Online" para quem estava entrando no
+  // QuéOta Skin — e num deploy multi-tenant diria o nome de um site só.
+  const marca = await getBrand();
+  const appName = marca.name;
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Painel de branding */}
@@ -25,14 +30,14 @@ export default function AuthLayout({
         />
 
         <div className="relative z-10 flex flex-1 flex-col justify-between p-8 md:p-12">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-base font-semibold"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background">
-              <TicketCheck className="h-4 w-4" />
-            </span>
-            {appName}
+          <Link href="/" className="inline-flex">
+            <BrandMark
+              marca={marca}
+              alturaDaFaixa="h-9"
+              ladoDoEmblema="h-9 w-9"
+              larguraMaxima="max-w-[200px]"
+              classeDoNome="text-base"
+            />
           </Link>
 
           <div className="hidden md:block space-y-3 pb-6 max-w-md">
