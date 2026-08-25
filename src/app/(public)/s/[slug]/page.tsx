@@ -365,6 +365,17 @@ export default async function PublicRaffleDetailPage({
           <p className="py-8 text-center text-sm text-muted-foreground">
             Este sorteio não está mais disponível para venda.
           </p>
+        ) : remaining <= 0 ? (
+          // Sem esse ramo, o formulário aparecia normalmente e a reserva só
+          // falhava no submit — com uma mensagem genérica de erro, que faz
+          // parecer defeito e não campanha esgotada.
+          <div className="py-8 text-center">
+            <p className="text-sm font-semibold">Todos os números foram vendidos</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              O sorteio acontece na data marcada. Acompanhe o resultado aqui
+              mesmo.
+            </p>
+          </div>
         ) : levelLocked ? (
           <MinLevelGate
             minLevel={raffle.minLevel!}

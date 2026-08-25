@@ -286,10 +286,18 @@ export async function createReservationAction(
     }
   }
 
+  // Distingue esgotado de disputa por número: "tente novamente" numa rifa
+  // vendida por inteiro manda o comprador bater numa porta que não abre.
+  const livres =
+    raffle.totalNumbers -
+    (await prisma.ticket.count({ where: { raffleId: raffle.id } }));
+
   return {
     ok: false,
     error:
-      "Não conseguimos reservar os números (alta demanda). Tente novamente.",
+      livres <= 0
+        ? "Todos os números desta campanha já foram vendidos."
+        : "Não conseguimos reservar os números (alta demanda). Tente novamente.",
   };
 }
 

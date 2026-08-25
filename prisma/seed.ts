@@ -444,18 +444,30 @@ async function main() {
     });
     if (already) continue;
 
-    // Divide o gasto em algumas compras, em campanhas e datas diferentes.
-    const parts = [0.5, 0.3, 0.2];
-    for (const [partIndex, share] of parts.entries()) {
-      const campaign = sellable[(index + partIndex) % sellable.length];
-      if (!campaign) break;
+    // Distribui o gasto entre campanhas, respeitando a capacidade de cada
+    // uma. Sem esse teto o seed criava reservas de R$ 15.600 numa rifa de
+    // 100 números a R$ 1,50 — dinheiro que não corresponde a número nenhum,
+    // e que ainda esgotava a campanha logo no primeiro participante.
+    let remainingSpend = player.spent;
 
-      const unitPrice = campaign.pricePerNumber;
-      const amount = Math.max(unitPrice, Math.round(player.spent * share));
-      const quantity = Math.max(1, Math.floor(amount / unitPrice));
-      const total = quantity * unitPrice;
+    for (const [partIndex, campaign] of sellable.entries()) {
+      if (remainingSpend <= 0) break;
+
+      const sold = await prisma.ticket.count({ where: { raffleId: campaign.id } });
+      const free = campaign.totalNumbers - sold;
+      if (free <= 0) continue;
+
+      // No máximo um quinto do que sobrou da campanha, para os oito
+      // participantes caberem sem ninguém esgotar a rifa sozinho.
+      const affordable = Math.floor(remainingSpend / campaign.pricePerNumber);
+      const quantity = Math.min(affordable, Math.floor(free / 5));
+      if (quantity < 1) continue;
+
+      const total = quantity * campaign.pricePerNumber;
+      remainingSpend -= total;
+
       const paidAt = new Date(
-        Date.now() - (partIndex * 9 + index) * 24 * 60 * 60 * 1000,
+        Date.now() - (partIndex * 7 + index) * 24 * 60 * 60 * 1000,
       );
 
       const reservation = await prisma.reservation.create({
@@ -481,26 +493,23 @@ async function main() {
         ).map((t) => t.number),
       );
       const numbers: number[] = [];
-      const cap = Math.min(quantity, campaign.totalNumbers - taken.size);
       let guard = 0;
-      while (numbers.length < cap && guard++ < cap * 40) {
+      while (numbers.length < quantity && guard++ < quantity * 40) {
         const n = Math.floor(Math.random() * campaign.totalNumbers);
         if (taken.has(n)) continue;
         taken.add(n);
         numbers.push(n);
       }
-      if (numbers.length > 0) {
-        await prisma.ticket.createMany({
-          data: numbers.map((number) => ({
-            raffleId: campaign.id,
-            number,
-            status: "PAID" as const,
-            reservationId: reservation.id,
-            paidAt,
-          })),
-          skipDuplicates: true,
-        });
-      }
+      await prisma.ticket.createMany({
+        data: numbers.map((number) => ({
+          raffleId: campaign.id,
+          number,
+          status: "PAID" as const,
+          reservationId: reservation.id,
+          paidAt,
+        })),
+        skipDuplicates: true,
+      });
 
       // Mesmo lançamento que awardXpForReservation faria: 10 XP por real,
       // amarrado à reserva pelo índice único que garante a idempotência.
