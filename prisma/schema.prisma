@@ -142,25 +142,33 @@ enum ThemeMode {
 // =====================================================================
 
 model User {
-  id            String    @id @default(cuid())
+  id                 String    @id @default(cuid())
   // E-mail é opcional — o login do app é por nome + celular, sem senha.
   // Mantemos o campo (e o unique) por compatibilidade com o Prisma Adapter
   // do Auth.js e pra eventual recuperação/contato. Múltiplos NULLs são
   // permitidos pelo Postgres em colunas unique.
-  email         String?   @unique
-  emailVerified DateTime?
-  passwordHash  String? // legado — não usado (login é passwordless por nome+celular)
-  name          String
+  email              String?   @unique
+  emailVerified      DateTime?
+  // Senha só existe para quem opera o painel. Participante continua entrando
+  // por nome + celular, sem senha: é o fluxo do site público, e pedir senha
+  // ali derrubaria conversão. Admin é o contrário — a conta comanda dinheiro
+  // e dados de terceiros, e nome + celular são públicos demais para proteger
+  // isso.
+  passwordHash       String?
+  // Marca senha temporária: o painel obriga a trocar antes de liberar
+  // qualquer outra tela. Serve ao primeiro acesso e a resets.
+  mustChangePassword Boolean   @default(false)
+  name               String
   // CPF não é mais usado pra login (passou a ser nome+celular). Continua
   // como campo opcional pra dados antigos e edição via admin. Múltiplos
   // NULLs são OK no @unique.
-  cpf           String?   @unique
+  cpf                String?   @unique
   // Celular é o identificador único do login (combinado com nome). Armazenado
   // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
   // novos sempre cadastram.
-  phone         String?   @unique
-  role          Role      @default(PARTICIPANT)
-  image         String?
+  phone              String?   @unique
+  role               Role      @default(PARTICIPANT)
+  image              String?
 
   // Link de troca da Steam — é por ele que a skin ganha é entregue.
   // Formato: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...

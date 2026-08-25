@@ -6,6 +6,8 @@
 
 import type { NextAuthConfig } from "next-auth";
 
+import { isAdminHost, urlDaRequisicao } from "@/lib/host";
+
 export const authConfig = {
   pages: {
     signIn: "/login",
@@ -29,9 +31,17 @@ export const authConfig = {
         return isLoggedIn;
       }
 
-      // Quem já está logado não vê login/registro de novo.
+      // Quem já está logado não vê login/registro de novo. O destino sai do
+      // Host da requisição, não de request.nextUrl: atrás de proxy aquele
+      // vira "localhost:3000" e o redirect cai numa origem inexistente.
+      //
+      // No host do painel o destino é /admin — mandar para "/" ali só
+      // provoca um segundo salto, porque a raiz do painel volta para /admin.
       if (isAuthRoute && isLoggedIn) {
-        return Response.redirect(new URL("/", request.nextUrl));
+        const host = request.headers.get("host") ?? "";
+        return Response.redirect(
+          urlDaRequisicao(request, isAdminHost(host) ? "/admin" : "/")
+        );
       }
 
       return true;

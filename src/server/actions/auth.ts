@@ -13,8 +13,14 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { signIn, signOut } from "@/auth";
-import { registerSchema, loginSchema } from "@/lib/validations/auth";
+import { auth, signIn, signOut } from "@/auth";
+import bcrypt from "bcryptjs";
+import {
+  registerSchema,
+  loginSchema,
+  adminLoginSchema,
+  changePasswordSchema,
+} from "@/lib/validations/auth";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -101,6 +107,73 @@ export async function loginAction(
     console.error("[loginAction] falha:", err);
     return { ok: false, error: "Nome ou celular não encontrado" };
   }
+}
+
+// Entrada do painel. Mensagem de erro única de propósito: dizer "e-mail não
+// encontrado" entregaria quais contas existem para quem estivesse testando.
+export async function adminLoginAction(raw: unknown): Promise<ActionResult> {
+  const parsed = adminLoginSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "E-mail ou senha inválidos" };
+  }
+
+  try {
+    await signIn("admin-password", {
+      email: parsed.data.email,
+      password: parsed.data.password,
+      redirect: false,
+    });
+    return { ok: true, data: undefined };
+  } catch {
+    // Não loga o erro com os dados: a senha vem no objeto de credenciais.
+    return { ok: false, error: "E-mail ou senha inválidos" };
+  }
+}
+
+// Troca da própria senha. Exige a atual mesmo com sessão válida — sessão
+// roubada não deve conseguir trocar a senha e trancar o dono para fora.
+export async function changeOwnPasswordAction(
+  raw: unknown
+): Promise<ActionResult> {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return { ok: false, error: "Sessão expirada. Entre de novo." };
+
+  const parsed = changePasswordSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Dados inválidos",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, passwordHash: true },
+  });
+  if (!user || (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN")) {
+    return { ok: false, error: "Sem permissão" };
+  }
+  if (!user.passwordHash) {
+    return { ok: false, error: "Esta conta ainda não tem senha definida" };
+  }
+
+  const confere = await bcrypt.compare(
+    parsed.data.currentPassword,
+    user.passwordHash
+  );
+  if (!confere) return { ok: false, error: "Senha atual incorreta" };
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await bcrypt.hash(parsed.data.newPassword, 12),
+      mustChangePassword: false,
+    },
+  });
+
+  return { ok: true, data: undefined };
 }
 
 export async function logoutAction() {

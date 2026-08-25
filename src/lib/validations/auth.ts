@@ -45,6 +45,32 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 // Cadastro pede nome + CPF + celular. CPF é validado por dígito verificador;
 // nunca é exibido na UI depois do cadastro.
+// Entrada do painel: e-mail + senha. O mínimo de 8 caracteres vale também
+// no cadastro da senha (ver changePasswordSchema) — aqui só evita gastar um
+// bcrypt.compare com string vazia.
+export const adminLoginSchema = z.object({
+  email: z.string().email("E-mail inválido"),
+  password: z.string().min(1, "Informe a senha"),
+});
+export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
+
+// Troca de senha do painel. 10 caracteres é mais que o mínimo usual porque
+// esta conta comanda pagamento e dados de terceiros.
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Informe a senha atual"),
+    newPassword: z
+      .string()
+      .min(10, "A senha precisa de pelo menos 10 caracteres")
+      .max(200),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "As senhas não conferem",
+    path: ["confirmPassword"],
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
 export const registerSchema = z.object({
   name: nameField,
   cpf: z

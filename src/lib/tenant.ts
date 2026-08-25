@@ -13,6 +13,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 
 import { prisma } from "@/lib/db";
+import { isHostDeDesenvolvimento } from "@/lib/host";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { type TenantHostKind } from "@prisma/client";
 
@@ -26,7 +27,14 @@ export type TenantContext = {
 
 async function readHost(): Promise<string> {
   const h = await headers();
-  return (h.get("host") ?? "").toLowerCase().trim();
+  // A porta sai: TenantHost guarda o domínio puro ("queotaskin.com"), e um
+  // host com porta nunca casaria com o registro. Só aparece fora da Vercel
+  // — em teste local com domínio real, por exemplo — mas o lookup falhando
+  // devolve 404 em toda página, o que é um jeito ruim de descobrir isso.
+  return (h.get("host") ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/:\d+$/, "");
 }
 
 // Lookup do tenant pelo host. Cached por request — múltiplas chamadas no
@@ -38,7 +46,7 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
   // Pula o split em dev/preview: localhost e *.vercel.app não estão
   // mapeados em TenantHost, então iam dar null e quebrar tudo. Em vez
   // disso pegamos o tenant default (= o único cadastrado em dev).
-  if (host.endsWith(".vercel.app") || host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+  if (isHostDeDesenvolvimento(host)) {
     const fallback = await prisma.tenant.findFirst({
       orderBy: { createdAt: "asc" },
       include: { hosts: { take: 1, where: { kind: "PUBLIC" } } },

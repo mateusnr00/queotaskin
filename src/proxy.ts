@@ -33,6 +33,12 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
+import {
+  hostAdminDoPublico,
+  isAdminHost,
+  isHostDeDesenvolvimento,
+  urlDaRequisicao,
+} from "@/lib/host";
 
 const { auth } = NextAuth(authConfig);
 
@@ -45,29 +51,11 @@ const PUBLIC_ROUTE_PREFIXES = [
   "/comprovante/",
 ];
 
-function isAdminHost(host: string): boolean {
-  return host.startsWith("admin.") || host.startsWith("painel.");
-}
-
-// Dado um host admin, devolve o host público equivalente. Ex:
-// "admin.sorteios.vip" → "sorteios.vip", "painel.foo.com" → "foo.com".
-function publicHostFromAdmin(adminHost: string): string {
-  return adminHost.replace(/^(admin|painel)\./, "");
-}
-
-// Dado um host público, devolve o host admin equivalente. Ex:
-// "sorteios.vip" → "admin.sorteios.vip", "www.foo.com" → "admin.foo.com"
-// (drop www. e prefixa admin.).
-function adminHostFromPublic(publicHost: string): string {
-  const base = publicHost.replace(/^www\./, "");
-  return `admin.${base}`;
-}
-
 export default auth((req) => {
   const url = req.nextUrl;
 
   const host = (req.headers.get("host") ?? "").toLowerCase();
-  if (host.endsWith(".vercel.app") || host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+  if (isHostDeDesenvolvimento(host)) {
     return NextResponse.next();
   }
 
@@ -83,9 +71,13 @@ export default auth((req) => {
       path === "/" ||
       PUBLIC_ROUTE_PREFIXES.some((p) => path.startsWith(p));
     if (isPublicRoute) {
-      const target = url.clone();
-      target.pathname = "/admin";
-      return NextResponse.redirect(target);
+      return NextResponse.redirect(urlDaRequisicao(req, "/admin"));
+    }
+    // Cadastro não existe no painel: conta de admin é criada por quem já
+    // opera, nunca por auto-serviço. Deixar /registro aberto aqui permitiria
+    // criar conta pelo endereço do painel.
+    if (path === "/registro") {
+      return NextResponse.redirect(urlDaRequisicao(req, "/login"));
     }
     return NextResponse.next();
   }
@@ -93,14 +85,13 @@ export default auth((req) => {
   // No host público, /admin* redireciona pra admin.<host> pra a pessoa
   // logada continuar a navegação sem fricção.
   if (isAdminPath) {
-    const target = new URL(url.toString());
-    target.host = adminHostFromPublic(host);
+    const target = urlDaRequisicao(req, path);
+    target.host = hostAdminDoPublico(host);
+    // O caminho do painel costuma carregar querystring útil (filtros,
+    // paginação); ao contrário dos outros redirects, aqui ela é preservada.
+    target.search = url.search;
     return NextResponse.redirect(target);
   }
-
-  // Esconde o publicHostFromAdmin do tree-shaker — exportado pra testes
-  // futuros e legibilidade do módulo.
-  void publicHostFromAdmin;
 
   return NextResponse.next();
 });

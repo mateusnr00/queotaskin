@@ -29,13 +29,29 @@ export async function requireAuth() {
 async function freshUser(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true, tenantId: true },
+    select: { role: true, tenantId: true, mustChangePassword: true },
   });
 }
 
 // Garante que o usuário é ADMIN ou SUPER_ADMIN. Retorna a session enriquecida
 // com role + tenantId atualizados (não o que tinha no JWT).
 export async function requireAdmin() {
+  const sessao = await requireAdminSemTrocaDeSenha();
+  // Senha temporária tranca o painel inteiro até ser trocada. Deixar navegar
+  // com ela esvazia o reset: a senha que foi entregue por fora continuaria
+  // valendo indefinidamente.
+  if (sessao.mustChangePassword) {
+    redirect("/trocar-senha");
+  }
+  return sessao;
+}
+
+/**
+ * Igual ao requireAdmin, mas sem redirecionar quem tem senha temporária —
+ * usado pela própria tela de troca de senha, que senão redirecionaria para
+ * si mesma em laço.
+ */
+export async function requireAdminSemTrocaDeSenha() {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login");
@@ -45,6 +61,7 @@ export async function requireAdmin() {
     redirect("/");
   }
   return {
+    mustChangePassword: fresh.mustChangePassword,
     ...session,
     user: {
       ...session.user,
