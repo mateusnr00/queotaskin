@@ -23,10 +23,34 @@ function run(label, args) {
   }
 }
 
-if (!process.env.DIRECT_URL) {
+// Em produção, banco não configurado é erro de build — não um aviso.
+//
+// Antes isso só logava e seguia, e o resultado era o pior dos mundos: build
+// verde, deploy publicado, e 500 em toda página porque o app não alcança o
+// banco. Falhar aqui troca uma investigação de meia hora por uma mensagem
+// que diz exatamente o que falta.
+//
+// Preview continua pulando: ali o objetivo é só validar a compilação, e as
+// env vars de banco normalmente existem apenas no escopo Production.
+const isProduction = process.env.VERCEL_ENV === "production";
+const faltando = ["DATABASE_URL", "DIRECT_URL"].filter((v) => !process.env[v]);
+
+if (faltando.length > 0) {
+  if (isProduction) {
+    console.error(
+      `[build] ${faltando.join(" e ")} não configurada(s) no escopo Production.\n` +
+        "\nO app não sobe sem elas — cada página responderia 500.\n" +
+        "Pegue as duas em Supabase → Project Settings → Database → Connection string:\n" +
+        "  DATABASE_URL  → pooler, porta 6543 (?pgbouncer=true)\n" +
+        "  DIRECT_URL    → pooler, porta 5432\n" +
+        "\nDetalhes em DEPLOY.md."
+    );
+    process.exit(1);
+  }
+
   console.log(
-    "[build] DIRECT_URL ausente — pulando `prisma migrate deploy`. " +
-      "Configure a env var no escopo Production pra ativar migrations."
+    `[build] ${faltando.join(" e ")} ausente(s) — pulando \`prisma migrate deploy\`. ` +
+      "Fora de produção isso é esperado: o build só valida a compilação."
   );
   process.exit(0);
 }

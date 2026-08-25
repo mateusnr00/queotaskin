@@ -54,6 +54,11 @@ pelo painel. Trocá-la depois torna ilegível o que já foi salvo.
 O login do admin é **nome + celular**, sem senha. Os dois valores vêm de
 `SEED_ADMIN_NAME` e `SEED_ADMIN_PHONE` — use os seus, não os de exemplo.
 
+> Se `DATABASE_URL` ou `DIRECT_URL` faltarem no escopo **Production**, o build
+> falha de propósito, com a lista do que está faltando. Antes ele passava em
+> silêncio e publicava um site que respondia 500 em toda página — build verde
+> escondendo deploy quebrado.
+
 ### Sobre `RUN_SEED`
 
 O banco sobe vazio, e sem um `Tenant` cadastrado toda página pública responde
