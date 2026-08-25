@@ -15,14 +15,15 @@ link de troca da Steam, fila de entregas — está documentada na seção
 
 ## Deploy
 
-Este repositório **ainda não tem** branch `main`, projeto na Vercel nem
-`prisma migrate deploy` no build de produção. A regra de auto-merge que veio
-do `rifa-system` foi removida porque descrevia a infraestrutura daquele
-repositório, não deste.
+`main` é a branch de produção. O build roda
+`prisma generate → scripts/migrate-deploy.mjs → next build`, e o script do
+meio aplica as migrations quando `DIRECT_URL` existe (só no escopo
+Production; Preview pula e apenas compila).
 
-Enquanto o deploy não estiver montado: desenvolva na branch combinada,
-commite e faça push. **Não abra nem mergeie PR sem o usuário pedir.**
+Bootstrap de um ambiente novo: setar `RUN_SEED=1` no primeiro build faz o
+mesmo script rodar `prisma/seed.ts` depois das migrations. Sem isso o banco
+sobe vazio e toda página pública responde 404 — sem `Tenant` cadastrado
+nenhum host resolve. **Remova a variável depois do primeiro deploy**; o seed
+é idempotente, mas build não é lugar de escrever dados.
 
-Quando a Vercel for conectada, adicionar aqui o fluxo real (incluindo o
-passo de migrations no build — as migrations em `prisma/migrations/` precisam
-rodar antes do `next build` em produção, como fazia o `scripts/migrate-deploy.mjs`).
+Não abra nem mergeie PR sem o usuário pedir.
