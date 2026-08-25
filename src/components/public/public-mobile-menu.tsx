@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   Ticket,
   TicketCheck,
+  UserCog,
   UserPlus,
   X,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const NAV = [
 
 const NAV_LOGGED_IN = [
   { href: "/meus-titulos", label: "Meus títulos", icon: TicketCheck },
+  { href: "/minha-conta", label: "Minha conta", icon: UserCog },
 ] as const;
 
 export function PublicMobileMenu({

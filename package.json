@@ -1,5 +1,5 @@
 {
-  "name": "rifa-system",
+  "name": "queota-skin",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -64,5 +64,6 @@
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^2.1.9"
-  }
+  },
+  "description": "QuéOta Skin — sorteios de skins de Counter-Strike 2"
 }

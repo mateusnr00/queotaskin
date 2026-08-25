@@ -17,6 +17,7 @@ import {
   Palette,
   Settings,
   ShoppingBag,
+  PackageCheck,
   TicketCheck,
   Users,
   Wallet,
@@ -31,6 +32,7 @@ const NAV_GERAL = [
   { href: "/admin", label: "Início", icon: LayoutDashboard },
   { href: "/admin/sorteios", label: "Sorteios", icon: TicketCheck },
   { href: "/admin/reservas", label: "Reservas", icon: ShoppingBag },
+  { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/usuarios", label: "Usuários", icon: Users },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
 ] as const;

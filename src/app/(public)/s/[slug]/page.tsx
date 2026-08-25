@@ -10,6 +10,9 @@ import { ReservationForm } from "@/components/public/reservation-form";
 import type { RequiredFields } from "@/components/public/reservation-form";
 import { SocialShare } from "@/components/public/social-share";
 import { PrizesSection } from "@/components/public/prizes-section";
+import { toSkinPrize } from "@/lib/prize-mapper";
+import { SkinHero } from "@/components/cs2/skin-hero";
+import { headlineSkin } from "@/lib/cs2";
 import {
   AwardedTicketsSection,
   type PublicAwardedTicket,
@@ -142,6 +145,11 @@ export default async function PublicRaffleDetailPage({
     birthDate: rawRF.birthDate ?? DEFAULT_REQUIRED.birthDate,
   };
 
+  // Skin principal da campanha: a de maior raridade entre os prêmios. É ela
+  // que abre a página e define a cor de destaque.
+  const skinPrizes = raffle.prizes.map(toSkinPrize);
+  const headlinePrize = headlineSkin(skinPrizes);
+
   // Pra cada título premiado, descobre se já foi comprado/contemplado e por
   // quem. Aparece como "VICTOR 🏆" no card; sem comprador = "Disponível".
   const showAwarded =
@@ -254,6 +262,16 @@ export default async function PublicRaffleDetailPage({
         />
       )}
 
+      {/* Ficha da skin principal — o prêmio de maior raridade da campanha.
+          Fica acima do preço de propósito: o jogador decide pela skin,
+          não pelo valor da cota. */}
+      {raffle.prizesShow && headlinePrize && (
+        <SkinHero
+          prize={headlinePrize}
+          extraPrizes={raffle.prizes.length - 1}
+        />
+      )}
+
       {/* Card de preço — destaque visual com gradiente sutil. Rifas
           gratuitas mostram um texto custom centralizado (default
           "SORTEIO GRATUITO") em vez do valor + label "Por apenas". */}
@@ -311,9 +329,7 @@ export default async function PublicRaffleDetailPage({
         ))}
 
       {raffle.prizesShow && raffle.prizes.length > 0 && (
-        <PrizesSection
-          prizes={raffle.prizes.map((p) => ({ description: p.description }))}
-        />
+        <PrizesSection prizes={skinPrizes} />
       )}
 
       {showAwarded && publicAwardedTickets.length > 0 && (

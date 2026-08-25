@@ -268,6 +268,61 @@ const prizesSchema = z.object({
     .array(
       z.object({
         description: z.string().min(1, "Descrição obrigatória").max(500).trim(),
+        // Metadados da skin de CS2. Todos opcionais — um prêmio pode não
+        // ser skin (saldo, periférico) e aí só a descrição é usada.
+        imageUrl: z
+          .string()
+          .max(2048)
+          .optional()
+          .default("")
+          .refine(
+            (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
+            "URL da imagem deve começar com http:// ou https://"
+          ),
+        skinName: z.string().max(200).optional().default(""),
+        skinRarity: z
+          .enum([
+            "CONSUMER",
+            "INDUSTRIAL",
+            "MIL_SPEC",
+            "RESTRICTED",
+            "CLASSIFIED",
+            "COVERT",
+            "CONTRABAND",
+            "EXTRAORDINARY",
+          ])
+          .optional()
+          .nullable()
+          .default(null),
+        skinWear: z
+          .enum([
+            "FACTORY_NEW",
+            "MINIMAL_WEAR",
+            "FIELD_TESTED",
+            "WELL_WORN",
+            "BATTLE_SCARRED",
+          ])
+          .optional()
+          .nullable()
+          .default(null),
+        skinFloat: z.coerce
+          .number()
+          .min(0, "Float não pode ser negativo")
+          .max(1, "Float vai de 0 a 1")
+          .optional()
+          .nullable()
+          .default(null),
+        skinStatTrak: z.boolean().default(false),
+        skinSouvenir: z.boolean().default(false),
+        skinValueBrl: z.coerce
+          .number()
+          .min(0)
+          .max(99_999_999.99)
+          .optional()
+          .nullable()
+          .default(null),
+        skinCollection: z.string().max(160).optional().default(""),
+        skinInspectUrl: z.string().max(2048).optional().default(""),
       })
     )
     .max(10, "Máximo de 10 prêmios"),
@@ -318,6 +373,16 @@ export async function setRafflePrizesAction(
           raffleId,
           position: i + 1,
           description: p.description,
+          imageUrl: norm(p.imageUrl),
+          skinName: norm(p.skinName),
+          skinRarity: p.skinRarity,
+          skinWear: p.skinWear,
+          skinFloat: p.skinFloat,
+          skinStatTrak: p.skinStatTrak,
+          skinSouvenir: p.skinSouvenir,
+          skinValueBrl: p.skinValueBrl,
+          skinCollection: norm(p.skinCollection),
+          skinInspectUrl: norm(p.skinInspectUrl),
         })),
       }),
     ]);

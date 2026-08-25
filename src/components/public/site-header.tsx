@@ -104,6 +104,12 @@ export async function SiteHeader() {
               >
                 Meus títulos
               </Link>
+              <Link
+                href="/minha-conta"
+                className="px-3 py-1.5 rounded-md hover:bg-muted"
+              >
+                Minha conta
+              </Link>
               {showAdminLink && (
                 <Link
                   href={adminLinkHref}

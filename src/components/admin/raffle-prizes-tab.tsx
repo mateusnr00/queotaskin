@@ -8,9 +8,14 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { BookOpen, Info, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Info, Plus } from "lucide-react";
 
 import { setRafflePrizesAction } from "@/server/actions/raffle-content";
+import {
+  EMPTY_PRIZE,
+  SkinPrizeEditor,
+  type PrizeDraft,
+} from "@/components/admin/skin-prize-editor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +35,7 @@ interface EbookConfig {
 
 interface Props {
   raffleId: string;
-  initialPrizes: { description: string }[];
+  initialPrizes: PrizeDraft[];
   initialConfig: {
     show: boolean;
     ebook: EbookConfig;
@@ -45,23 +50,21 @@ export function RafflePrizesTab({
   const [show, setShow] = useState(initialConfig.show);
   const [ebook, setEbook] = useState<EbookConfig>(initialConfig.ebook);
 
-  const [prizes, setPrizes] = useState<string[]>(
-    initialPrizes.length > 0
-      ? initialPrizes.map((p) => p.description)
-      : [""]
+  const [prizes, setPrizes] = useState<PrizeDraft[]>(
+    initialPrizes.length > 0 ? initialPrizes : [{ ...EMPTY_PRIZE }]
   );
   const [isPending, startTransition] = useTransition();
 
-  function updatePrize(idx: number, value: string) {
-    setPrizes((prev) => prev.map((p, i) => (i === idx ? value : p)));
+  function updatePrize(idx: number, patch: Partial<PrizeDraft>) {
+    setPrizes((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
   }
   function addPrize() {
     if (prizes.length >= MAX_PRIZES) return;
-    setPrizes((prev) => [...prev, ""]);
+    setPrizes((prev) => [...prev, { ...EMPTY_PRIZE }]);
   }
   function removePrize(idx: number) {
     setPrizes((prev) =>
-      prev.length === 1 ? [""] : prev.filter((_, i) => i !== idx)
+      prev.length === 1 ? [{ ...EMPTY_PRIZE }] : prev.filter((_, i) => i !== idx)
     );
   }
 
@@ -70,10 +73,10 @@ export function RafflePrizesTab({
   }
 
   function save() {
+    // Prêmio sem descrição é linha vazia deixada pelo admin — descarta.
     const cleaned = prizes
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0)
-      .map((description) => ({ description }));
+      .map((p) => ({ ...p, description: p.description.trim() }))
+      .filter((p) => p.description.length > 0);
 
     startTransition(async () => {
       const result = await setRafflePrizesAction({
@@ -101,7 +104,8 @@ export function RafflePrizesTab({
         <p className="text-blue-900 dark:text-blue-200">
           Informe os prêmios pelos quais os participantes concorrem. Você pode
           cadastrar até {MAX_PRIZES} prêmios. Eles aparecem ordenados na
-          página pública do sorteio.
+          página pública do sorteio — e quando você preenche a ficha da skin,
+          o card ganha a cor oficial da raridade do CS2.
         </p>
       </div>
 
@@ -186,32 +190,17 @@ export function RafflePrizesTab({
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold">Lista de Prêmios</p>
           <span className="text-xs text-muted-foreground tabular-nums">
-            {prizes.filter((p) => p.trim()).length}/{MAX_PRIZES}
+            {prizes.filter((p) => p.description.trim()).length}/{MAX_PRIZES}
           </span>
         </div>
         {prizes.map((prize, idx) => (
-          <div key={idx} className="flex items-end gap-2">
-            <div className="flex-1 space-y-1.5">
-              <Label className="text-xs">
-                Prêmio {idx + 1}º colocado
-              </Label>
-              <Input
-                value={prize}
-                onChange={(e) => updatePrize(idx, e.target.value)}
-                placeholder="Ex: iPhone 16 Pro"
-                maxLength={500}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => removePrize(idx)}
-              aria-label="Remover"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <SkinPrizeEditor
+            key={idx}
+            index={idx}
+            prize={prize}
+            onChange={(patch) => updatePrize(idx, patch)}
+            onRemove={() => removePrize(idx)}
+          />
         ))}
 
         {prizes.length < MAX_PRIZES && (

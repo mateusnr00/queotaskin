@@ -27,7 +27,8 @@ export type ThemePresetKey =
   | "deepPurple"
   | "blueGrey"
   | "amber"
-  | "lightBlue";
+  | "lightBlue"
+  | "cs2";
 
 export interface ThemePreset {
   label: string;
@@ -153,6 +154,16 @@ export const THEME_PRESETS: Record<ThemePresetKey, ThemePreset> = {
     foreground: "oklch(0.98 0 0)",
     accent: "oklch(0.94 0.02 240)",
     accentFg: "oklch(0.32 0.04 240)",
+  },
+  // Preset do QuéOta Skin: o laranja quente do HUD do Counter-Strike.
+  // Foi calibrado pra ficar legível sobre o fundo escuro (themeMode DARK),
+  // que é como o público de CS espera ver um site de skins.
+  cs2: {
+    label: "CS2 (QuéOta Skin)",
+    color: "oklch(0.70 0.19 48)",
+    foreground: "oklch(0.15 0.02 250)",
+    accent: "oklch(0.28 0.06 48)",
+    accentFg: "oklch(0.88 0.10 60)",
   },
   amber: {
     label: "Âmbar",

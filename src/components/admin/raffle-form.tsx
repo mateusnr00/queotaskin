@@ -29,6 +29,7 @@ import {
 
 import { RaffleImagesTab, type RaffleImageItem } from "@/components/admin/raffle-images-tab";
 import { RafflePrizesTab } from "@/components/admin/raffle-prizes-tab";
+import type { PrizeDraft } from "@/components/admin/skin-prize-editor";
 import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
 import { RaffleAwardedTicketsTab } from "@/components/admin/raffle-awarded-tickets-tab";
@@ -67,9 +68,8 @@ import { toSlug } from "@/lib/slug";
 
 type Mode = { kind: "create" } | { kind: "edit"; id: string };
 
-interface PrizeData {
-  description: string;
-}
+// O prêmio carrega a ficha de skin do CS2 — ver PrizeDraft.
+type PrizeData = PrizeDraft;
 interface PromotionData {
   quantity: number;
   price: number;

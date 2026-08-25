@@ -153,6 +153,11 @@ model User {
   role          Role      @default(PARTICIPANT)
   image         String?
 
+  // Link de troca da Steam — é por ele que a skin ganha é entregue.
+  // Formato: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...
+  steamTradeUrl String?
+  steamId       String?
+
   // Multi-tenant: ADMIN e AFFILIATE pertencem a 1 tenant (membership).
   // SUPER_ADMIN e PARTICIPANT são globais — não pertencem a nenhum tenant
   // específico (PARTICIPANT pode comprar em qualquer um, SUPER_ADMIN vê
@@ -244,6 +249,12 @@ model Tenant {
   rankingOrderBy                    String    @default("quantity") // "quantity" | "total"
   rankingCacheMinutes               Int       @default(5)
   requireAddressOnSignup            Boolean   @default(false)
+  // Nicho CS2: exigir o link de troca da Steam já no cadastro, em vez de
+  // pedir só na hora de entregar o prêmio. Evita correria pós-sorteio.
+  requireSteamTradeUrl              Boolean   @default(false)
+  // Aviso exibido junto ao campo de link de troca (retenção de 7 dias do
+  // Steam Guard, prazo de envio, etc.). Vazio = usa o texto padrão.
+  steamDeliveryNotice               String?   @db.Text
   allowPublicAffiliate              Boolean   @default(true)
   shareButtonsGlobal                Boolean   @default(true)
   allowQuantityKeyboardInput        Boolean   @default(true)
@@ -425,14 +436,14 @@ model Raffle {
   // por reserva PAID) será implementada em iteração futura — por ora só os
   // toggles + tiers de combo. "Acumulativos" = somar todos os tiers atingidos
   // (ex: 100 cotas → 1+3+10+15 caixas); off = só o maior tier ganha.
-  surpriseBoxEnabled            Boolean @default(false)
-  surpriseBoxCombosAccumulative Boolean @default(false)
+  surpriseBoxEnabled            Boolean                 @default(false)
+  surpriseBoxCombosAccumulative Boolean                 @default(false)
   // Toggles secundários do modal Caixas Surpresas (só fazem sentido com
   // surpriseBoxEnabled=true): "Abrir todas" = comprador pode abrir as
   // caixas todas de uma vez (sem animação individual); "Exibir Ganhadores"
   // = mostra na pagina pública uma lista dos ganhadores das caixas.
-  surpriseBoxAbrirTodas         Boolean @default(false)
-  surpriseBoxExibirGanhadores   Boolean @default(false)
+  surpriseBoxAbrirTodas         Boolean                 @default(false)
+  surpriseBoxExibirGanhadores   Boolean                 @default(false)
   // Ordem de exibição dos ganhadores na lista pública: aleatório,
   // crescente (mais antigos primeiro) ou decrescente (mais recentes).
   surpriseBoxDisplayOrder       SurpriseBoxDisplayOrder @default(RANDOM)
@@ -487,12 +498,51 @@ model RaffleImage {
   @@index([raffleId])
 }
 
+/// Raridade da skin no CS2. As cores oficiais de cada faixa ficam em
+/// `src/lib/cs2.ts` e colorem a borda do card na interface.
+enum SkinRarity {
+  CONSUMER
+  INDUSTRIAL
+  MIL_SPEC
+  RESTRICTED
+  CLASSIFIED
+  COVERT
+  CONTRABAND
+  EXTRAORDINARY
+}
+
+/// Desgaste (exterior) da skin. O float exato vai em Prize.skinFloat.
+enum SkinWear {
+  FACTORY_NEW
+  MINIMAL_WEAR
+  FIELD_TESTED
+  WELL_WORN
+  BATTLE_SCARRED
+}
+
 model Prize {
   id          String  @id @default(cuid())
   raffleId    String
   position    Int // 1 = 1º prêmio, 2 = 2º prêmio, etc.
   description String
   imageUrl    String?
+
+  // Metadados da skin de CS2 premiada. Todos opcionais: um prêmio pode ser
+  // um item que não é skin (saldo, periférico) e aí é só `description`.
+  // Quando skinRarity está preenchida, o card do prêmio ganha a cor oficial
+  // da raridade e a página pública exibe a ficha técnica completa.
+  skinName       String?
+  skinRarity     SkinRarity?
+  skinWear       SkinWear?
+  /// Float exato do item (0.0000 a 1.0000), como aparece no inspecionar.
+  skinFloat      Float?
+  skinStatTrak   Boolean     @default(false)
+  skinSouvenir   Boolean     @default(false)
+  /// Valor de mercado em reais, exibido como "avaliada em".
+  skinValueBrl   Decimal?    @db.Decimal(10, 2)
+  skinCollection String?
+  /// Link `steam://rungame/730/...` para inspecionar o item no jogo.
+  skinInspectUrl String?
 
   raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
 
@@ -571,17 +621,17 @@ model SurpriseBoxCombo {
 
 enum SurpriseBoxDisplayOrder {
   RANDOM // ordem aleatória na listagem pública
-  ASC    // mais antigos primeiro
-  DESC   // mais recentes primeiro
+  ASC // mais antigos primeiro
+  DESC // mais recentes primeiro
 }
 
 enum SurpriseBoxPrizeMode {
-  RANDOM  // sorteio uniforme entre os itens disponíveis no pool
+  RANDOM // sorteio uniforme entre os itens disponíveis no pool
   PERCENT // odds-based — admin define a chance (%) daquele item sair
 }
 
 enum SurpriseBoxStatus {
-  UNOPENED     // caixa criada pós-pagamento, aguardando o comprador abrir
+  UNOPENED // caixa criada pós-pagamento, aguardando o comprador abrir
   OPENED_PRIZE // aberta e ganhou um prêmio (prizeId preenchido)
   OPENED_EMPTY // aberta mas saiu vazia ("não foi dessa vez")
 }
@@ -606,7 +656,7 @@ model SurpriseBoxPrize {
   locked    Boolean              @default(false)
   claimedAt DateTime? // setado atomicamente quando uma caixa abre e leva esse item
 
-  raffle      Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  raffle       Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   claimedByBox SurpriseBox?
 
   createdAt DateTime @default(now())
@@ -673,9 +723,9 @@ model Reservation {
   user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   affiliate Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
 
-  tickets      Ticket[]
-  payment      Payment?
-  commission   AffiliateCommission?
+  tickets       Ticket[]
+  payment       Payment?
+  commission    AffiliateCommission?
   surpriseBoxes SurpriseBox[]
 
   createdAt DateTime @default(now())

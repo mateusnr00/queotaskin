@@ -9,6 +9,7 @@ import { RaffleStatusActions } from "@/components/admin/raffle-status-actions";
 import { RaffleDangerZone } from "@/components/admin/raffle-danger-zone";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { toPrizeDraft } from "@/lib/prize-mapper";
 
 export const metadata: Metadata = { title: "Editar sorteio" };
 
@@ -175,9 +176,7 @@ export default async function EditRafflePage({
           isCover: img.isCover,
           order: img.order,
         }))}
-        initialPrizes={raffle.prizes.map((p) => ({
-          description: p.description,
-        }))}
+        initialPrizes={raffle.prizes.map(toPrizeDraft)}
         initialPrizesConfig={{
           show: raffle.prizesShow,
           ebook: {
