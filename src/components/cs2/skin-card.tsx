@@ -1,4 +1,6 @@
 import Image from "next/image";
+
+import { podeOtimizar } from "@/lib/image-src";
 import { ExternalLink } from "lucide-react";
 
 import {
@@ -85,6 +87,7 @@ export function SkinCard({
               alt={fullSkinName(prize)}
               fill
               sizes="96px"
+              unoptimized={!podeOtimizar(prize.imageUrl)}
               className="object-contain"
             />
           ) : (

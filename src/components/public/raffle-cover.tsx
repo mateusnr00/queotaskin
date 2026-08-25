@@ -1,5 +1,7 @@
 import Image from "next/image";
 
+import { podeOtimizar } from "@/lib/image-src";
+
 import { RARITY_LABEL, rarityColor } from "@/lib/cs2";
 import { cn } from "@/lib/utils";
 import type { SkinRarity } from "@prisma/client";
@@ -52,6 +54,7 @@ export function RaffleCover({
           fill
           sizes={sizes}
           priority={priority}
+          unoptimized={!podeOtimizar(url)}
           className="object-cover"
         />
       </div>
