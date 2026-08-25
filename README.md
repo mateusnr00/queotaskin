@@ -1,6 +1,12 @@
-# JobRifa — Sistema de Rifas/Sorteios Online
+# QuéOta Skin — Sorteios de skins de Counter-Strike 2
 
-Plataforma de rifas online (marca branca), single-tenant, construída em Next.js 16 + Supabase Postgres.
+Plataforma de sorteios (rifas) nichada em skins de CS2: facas, luvas e
+coberturas lendárias, com pagamento por PIX e entrega por oferta de troca
+na Steam.
+
+Construída sobre o motor de rifas do JobRifa (Next.js 16 + Postgres), com
+uma camada de domínio própria do Counter-Strike descrita em
+[Camada CS2](#camada-cs2).
 
 ## Stack
 
@@ -19,6 +25,56 @@ Plataforma de rifas online (marca branca), single-tenant, construída em Next.js
 - **PDF**: `@react-pdf/renderer` (Fase 2)
 - **Testes**: Vitest
 
+## Camada CS2
+
+O que diferencia o QuéOta Skin de uma plataforma de rifa genérica.
+
+### Ficha da skin no prêmio
+
+Cada `Prize` carrega os metadados do item: nome, **raridade** (as 8 faixas
+do CS2, com as cores oficiais da Valve), **desgaste** (FN/MW/FT/WW/BS),
+**float**, StatTrak™, Souvenir, valor de mercado, coleção e link de
+inspeção no jogo. Todos os campos são opcionais — um prêmio que não é skin
+(saldo, periférico) usa só a descrição e renderiza num card neutro.
+
+Cadastro em **Admin → Sorteios → Editar → Prêmios**. Ao digitar o float, o
+painel confere se o desgaste escolhido bate com as faixas oficiais e
+oferece a correção em um clique.
+
+### Destaque automático
+
+`headlineSkin()` elege o prêmio de **maior raridade** como o destaque da
+campanha. Num kit com faca, luvas e AK, quem abre a página é a luva
+Extraordinária — e a moldura do bloco assume a cor dourada dela.
+
+### Entrega na Steam
+
+O participante cadastra o **link de troca** em `/minha-conta`. A validação
+aceita apenas o formato exato que a Steam gera: um link truncado passaria
+no cadastro e só falharia na hora de enviar a skin, que é o pior momento
+para descobrir. Do link é derivado o **SteamID64**, útil para conferir que
+o ganhador não trocou de conta entre a compra e o sorteio.
+
+Depois do sorteio, **Admin → Entregas** lista cada campanha sorteada com o
+ganhador, contato, link de troca copiável e os prêmios a enviar. A tela
+sinaliza quem ainda não cadastrou o link e alerta quando o número
+declarado não consta como vendido.
+
+### Tema
+
+O preset `cs2` (Admin → Personalizar tema) usa o laranja do HUD do
+Counter-Strike, calibrado para o modo escuro.
+
+### Onde mexer
+
+| Arquivo | O quê |
+|---|---|
+| `src/lib/cs2.ts` | Cores, rótulos, faixas de float, validação de link de troca |
+| `src/components/cs2/` | `SkinCard`, `SkinHero`, selos de raridade/desgaste |
+| `src/components/admin/skin-prize-editor.tsx` | Cadastro da ficha da skin |
+| `src/server/services/deliveries.ts` | Fila de entregas pós-sorteio |
+| `src/lib/cs2.test.ts` | Testes da lógica de domínio |
+
 ## Pré-requisitos
 
 - **Node.js 20.19+ ou 22+** (atualmente Node 20.18.1 está instalado — recomendo atualizar)
@@ -31,8 +87,8 @@ Plataforma de rifas online (marca branca), single-tenant, construída em Next.js
 ### 1. Clone e instale dependências
 
 ```bash
-git clone <repo-url> rifa-system
-cd rifa-system
+git clone <repo-url> queotaskin
+cd queotaskin
 npm install
 ```
 
