@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { MessageCircle, Pencil } from "lucide-react";
 
+import { ModBadge } from "@/components/rank/mod-badge";
+
 import { RankBadge } from "@/components/rank/rank-badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatBRL, formatDate } from "@/lib/format";
@@ -66,7 +68,13 @@ export function CustomerRow({
       </TableCell>
 
       <TableCell>
-        <RankBadge xp={customer.xp} size="sm" />
+        {/* Moderador mostra o cargo no lugar do nível: aqui a coluna é uma
+            só, e quem administra precisa reconhecer a equipe de relance. */}
+        {customer.showModBadge ? (
+          <ModBadge size={26} uid={`mod-${customer.id}`} />
+        ) : (
+          <RankBadge xp={customer.xp} size="sm" />
+        )}
       </TableCell>
 
       <TableCell className="text-right text-sm tabular-nums">

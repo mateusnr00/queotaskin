@@ -52,6 +52,18 @@ export async function SiteHeader() {
         .catch(() => null)
     : null;
 
+  // Selo de moderador: interruptor por pessoa, não derivado do papel. Falhar
+  // aqui só tira o selo, nunca derruba o cabeçalho.
+  const ehMod = session?.user?.id
+    ? await prisma.user
+        .findUnique({
+          where: { id: session.user.id },
+          select: { showModBadge: true },
+        })
+        .then((u) => u?.showModBadge ?? false)
+        .catch(() => false)
+    : false;
+
   // Chip de rank no header. Só monta quando há usuário, tenant e o rank está
   // ligado, falhar aqui não pode derrubar o cabeçalho do site inteiro.
   const rankChip =
@@ -135,6 +147,7 @@ export async function SiteHeader() {
                     name={session.user.name?.split(" ")[0] ?? "Você"}
                     xp={rankChip.xp}
                     xpPerBrl={rankChip.xpPerBrl}
+                    mod={ehMod}
                   />
                 </span>
               ) : (
@@ -181,6 +194,7 @@ export async function SiteHeader() {
               xp={rankChip.xp}
               xpPerBrl={rankChip.xpPerBrl}
               compact
+              mod={ehMod}
             />
           </div>
         )}

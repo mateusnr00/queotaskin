@@ -9,6 +9,7 @@ function cliente(parcial: Partial<Customer> & { name: string }): Customer {
     email: null,
     cpf: null,
     role: "PARTICIPANT",
+    showModBadge: false,
     createdAt: new Date("2026-01-01"),
     spent: 0,
     purchases: 0,

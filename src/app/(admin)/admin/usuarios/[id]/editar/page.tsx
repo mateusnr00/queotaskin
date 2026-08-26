@@ -30,6 +30,7 @@ export default async function EditUserPage({
       role: true,
       email: true,
       passwordHash: true,
+      showModBadge: true,
       tenantId: true,
       createdAt: true,
       _count: { select: { reservations: true } },
@@ -83,6 +84,7 @@ export default async function EditUserPage({
           cpf: user.cpf ?? "",
           phone: user.phone ?? "",
           role: user.role,
+          showModBadge: user.showModBadge,
         }}
       />
     </div>

@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { KeyRound } from "lucide-react";
+import { KeyRound, ShieldCheck } from "lucide-react";
 
 import {
   gerarSenhaDePainelAction,
@@ -16,6 +16,7 @@ import { userEditSchema, type UserEditInput } from "@/lib/validations/auth";
 import { formatCpf, formatPhone } from "@/lib/cpf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Form,
   FormControl,
@@ -254,6 +255,33 @@ export function UserEditForm({
                 </FormDescription>
               )}
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="showModBadge"
+          render={({ field }) => (
+            <FormItem className="flex items-start justify-between gap-4 rounded-xl border bg-muted/20 p-4">
+              <div className="space-y-1">
+                <FormLabel className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  Mostrar selo de MOD
+                </FormLabel>
+                <FormDescription className="leading-relaxed">
+                  Marca a pessoa como moderadora onde o selo dela aparece.
+                  Independe do papel: dá para ser admin sem o selo, que é como
+                  a conta passa por cliente comum, e dá para ter o selo sem
+                  ser admin.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
             </FormItem>
           )}
         />

@@ -158,6 +158,13 @@ model User {
   // Marca senha temporária: o painel obriga a trocar antes de liberar
   // qualquer outra tela. Serve ao primeiro acesso e a resets.
   mustChangePassword Boolean   @default(false)
+
+  /// Mostra o selo de moderador ao lado do nome.
+  ///
+  /// Interruptor por pessoa, e não algo derivado do papel, porque cargo e
+  /// aparência pública são decisões separadas: existe admin que precisa
+  /// passar por cliente comum, e pode existir moderador que não é admin.
+  showModBadge       Boolean   @default(false)
   name               String
   // CPF não é mais usado pra login (passou a ser nome+celular). Continua
   // como campo opcional pra dados antigos e edição via admin. Múltiplos

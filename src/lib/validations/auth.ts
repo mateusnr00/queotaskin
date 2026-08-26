@@ -126,6 +126,7 @@ export const userEditSchema = z.object({
       "Telefone inválido (DDD + número)"
     ),
   role: z.enum(["SUPER_ADMIN", "ADMIN", "AFFILIATE", "PARTICIPANT"]),
+  showModBadge: z.boolean(),
 });
 export type UserEditInput = z.infer<typeof userEditSchema>;
 

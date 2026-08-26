@@ -68,7 +68,7 @@ export async function updateUserAction(
       };
     }
 
-    const { id, name, email, cpf, phone, role } = parsed.data;
+    const { id, name, email, cpf, phone, role, showModBadge } = parsed.data;
 
     // Anti-lockout: o próprio admin não pode se rebaixar.
     if (session.user.id === id && role !== "ADMIN" && role !== "SUPER_ADMIN") {
@@ -138,6 +138,7 @@ export async function updateUserAction(
           cpf: cpf || null,
           phone: phone || null,
           role: finalRole,
+          showModBadge,
           // Se promovendo pra ADMIN/AFFILIATE e ainda não pertence a um tenant,
           // linka ao tenant atual.
           ...((finalRole === "ADMIN" || finalRole === "AFFILIATE") &&

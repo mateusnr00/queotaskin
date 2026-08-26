@@ -11,6 +11,7 @@ export interface Customer {
   email: string | null;
   cpf: string | null;
   role: Role;
+  showModBadge: boolean;
   createdAt: Date;
   /** Total pago por ele neste tenant. */
   spent: number;
@@ -134,6 +135,7 @@ export async function listCustomers(
       email: true,
       cpf: true,
       role: true,
+      showModBadge: true,
       createdAt: true,
     },
   });
@@ -199,6 +201,7 @@ export async function listCustomers(
       email: u.email,
       cpf: u.cpf,
       role: u.role,
+      showModBadge: u.showModBadge,
       createdAt: u.createdAt,
       spent: s?.spent ?? 0,
       purchases: s?.purchases ?? 0,
