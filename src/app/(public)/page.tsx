@@ -4,6 +4,7 @@ import { TicketCheck, Trophy } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { statusDaCampanha } from "@/lib/campanha-status";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
+import { contarVendidosPorRifa } from "@/server/services/vendidos";
 import type { SkinRarity } from "@prisma/client";
 
 import { RaffleCover } from "@/components/public/raffle-cover";
@@ -76,15 +77,9 @@ export default async function HomePage() {
   });
 
   // Quantos números já saíram de cada campanha, numa agregação só.
-  const vendidos = await prisma.ticket.groupBy({
-    by: ["raffleId"],
-    where: {
-      raffleId: { in: activeRaffles.map((r) => r.id) },
-      status: { in: ["PAID", "AWARDED"] },
-    },
-    _count: { _all: true },
-  });
-  const vendidosPorRifa = new Map(vendidos.map((v) => [v.raffleId, v._count._all]));
+  const vendidosPorRifa = await contarVendidosPorRifa(
+    activeRaffles.map((r) => r.id)
+  );
   const statusConfig = await getConfiguracaoDeStatus();
 
   const awarded = showWinners

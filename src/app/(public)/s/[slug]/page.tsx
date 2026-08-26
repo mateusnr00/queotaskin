@@ -5,6 +5,7 @@ import { CalendarDays } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { expireForRaffle } from "@/server/services/reservations";
+import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
 import { ReservationForm } from "@/components/public/reservation-form";
 import type { RequiredFields } from "@/components/public/reservation-form";
 import { SocialShare } from "@/components/public/social-share";
@@ -147,10 +148,11 @@ export default async function PublicRaffleDetailPage({
   // pra expirar.
   await expireForRaffle(raffle.id);
 
-  // Estas quatro não dependem uma da outra: em série, cada uma paga a
+  // Estas cinco não dependem uma da outra: em série, cada uma paga a
   // latência de rede até o banco. Em paralelo, paga-se uma vez só, o que
   // pesa quando a função e o Postgres estão em regiões diferentes.
-  const [currentUser, soldCount, takenTickets, rankSettings] = await Promise.all([
+  const [currentUser, soldCount, ocupados, takenTickets, rankSettings] =
+    await Promise.all([
     session?.user?.id
       ? prisma.user.findUnique({
           where: { id: session.user.id },
@@ -163,7 +165,11 @@ export default async function PublicRaffleDetailPage({
           },
         })
       : Promise.resolve(null),
-    prisma.ticket.count({ where: { raffleId: raffle.id } }),
+    // Vendidos e ocupados são perguntas diferentes e ambas fazem falta
+    // aqui: a barra mostra o que foi pago, e o que resta para comprar
+    // desconta também os números presos em reserva aberta.
+    contarVendidos(raffle.id),
+    contarOcupados(raffle.id),
     // Só rifas pequenas listam os números tomados; nas grandes a grade não
     // é renderizada e puxar 10 mil linhas seria desperdício.
     raffle.totalNumbers <= 500
@@ -172,18 +178,21 @@ export default async function PublicRaffleDetailPage({
           select: { number: true },
         })
       : Promise.resolve([]),
-    prisma.tenant.findUnique({
-      where: { id: tenant.id },
-      select: { xpPerBrl: true, rankEnabled: true },
-    }),
-  ]);
+      prisma.tenant.findUnique({
+        where: { id: tenant.id },
+        select: { xpPerBrl: true, rankEnabled: true },
+      }),
+    ]);
 
   const takenNumbers = takenTickets.map((t) => t.number);
 
   const isActive = raffle.status === "ACTIVE";
   const statusConfig = await getConfiguracaoDeStatus();
   const soldPercent = Math.round((soldCount / raffle.totalNumbers) * 100);
-  const remaining = raffle.totalNumbers - soldCount;
+  // Disponível é o que ninguém segura. Descontar só os pagos ofereceria
+  // números que já estão em reserva de outra pessoa, e a compra falharia no
+  // envio com erro genérico.
+  const remaining = raffle.totalNumbers - ocupados;
   const shareUrl = await raffleUrl(raffle.slug);
 
   // Ganhador do sorteio principal: se o admin registrou, busca o dono
