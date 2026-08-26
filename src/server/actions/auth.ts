@@ -21,6 +21,7 @@ import {
   chavesDoLogin,
   estaBloqueado,
   ipDaRequisicao,
+  registrarFalha,
 } from "@/server/services/login-throttle";
 import bcrypt from "bcryptjs";
 import {
@@ -49,6 +50,19 @@ export async function registerAction(
   }
 
   const { name, cpf, phone } = parsed.data;
+
+  // Freio por IP: o cadastro é sem senha e sem captcha, então é criação livre
+  // de contas (munição para abuso de reserva) e um oráculo de enumeração. Usa
+  // o mesmo freio do login, por IP.
+  const ipReg = ipDaRequisicao(await headers());
+  const chaveReg = `registro:${ipReg ?? "sem-ip"}`;
+  if ((await estaBloqueado([chaveReg])).bloqueado) {
+    return {
+      ok: false,
+      error: "Muitas tentativas de cadastro. Espere alguns minutos e tente de novo.",
+    };
+  }
+  await registrarFalha([chaveReg]);
 
   // Onde a pessoa se cadastrou.
   //
@@ -81,22 +95,8 @@ export async function registerAction(
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2002"
     ) {
-      const target = err.meta?.target;
-      const targetStr = Array.isArray(target)
-        ? target.join(",")
-        : String(target ?? "");
-      if (targetStr.includes("phone")) {
-        return {
-          ok: false,
-          error: "Celular já cadastrado. Tente entrar em vez de criar conta.",
-        };
-      }
-      if (targetStr.includes("cpf")) {
-        return {
-          ok: false,
-          error: "Já existe uma conta com esses dados.",
-        };
-      }
+      // Mensagem única, sem distinguir a coluna (phone/cpf): uma resposta
+      // específica por campo vira oráculo de enumeração de quem já tem conta.
       return { ok: false, error: "Já existe uma conta com esses dados." };
     }
     console.error("[registerAction] erro criando user:", err);
