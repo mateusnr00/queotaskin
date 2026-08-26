@@ -21,6 +21,7 @@ import {
   AwardedTicketsSection,
   type PublicAwardedTicket,
 } from "@/components/public/awarded-tickets-section";
+import { SurpriseBoxesCombos } from "@/components/public/surprise-boxes-combos";
 import { SurpriseBoxesSection } from "@/components/public/surprise-boxes-section";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { raffleUrl } from "@/lib/raffle-url";
@@ -111,6 +112,13 @@ export default async function PublicRaffleDetailPage({
         // Prêmios das caixas surpresa, com quem levou cada um. O nome vem
         // pela caixa que reivindicou o prêmio, então prêmio ainda não aberto
         // simplesmente não tem caixa e aparece como disponível.
+        // Degraus visíveis, do menor para o maior: a leitura natural é
+        // "quanto preciso comprar para ganhar mais".
+        surpriseBoxCombos: {
+          where: { visible: true },
+          orderBy: { threshold: "asc" },
+          select: { threshold: true, boxCount: true, highlighted: true },
+        },
         surpriseBoxPrizes: {
           orderBy: { createdAt: "asc" },
           select: {
@@ -279,6 +287,14 @@ export default async function PublicRaffleDetailPage({
     if (raffle.surpriseBoxDisplayOrder === "ASC") return itens;
     return [...itens].sort((a, b) => a.id.localeCompare(b.id));
   })();
+
+  const combosPublicos = raffle.surpriseBoxEnabled
+    ? raffle.surpriseBoxCombos.map((c) => ({
+        titulos: c.threshold,
+        caixas: c.boxCount,
+        destaque: c.highlighted,
+      }))
+    : [];
 
   const awardedViewMode: "list" | "modal" =
     raffle.awardedTicketsViewMode === "modal" ? "modal" : "list";
@@ -505,6 +521,12 @@ export default async function PublicRaffleDetailPage({
             viewMode={awardedViewMode}
           />
         )}
+
+        <SurpriseBoxesCombos
+          combos={combosPublicos}
+          precoPorNumero={Number(raffle.pricePerNumber)}
+          acumulativo={raffle.surpriseBoxCombosAccumulative}
+        />
 
         <SurpriseBoxesSection caixas={caixasPublicas} />
 

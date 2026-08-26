@@ -202,6 +202,18 @@ export default async function ReservationReceiptPage({
           customButtonLabel={tenantMessages?.paidButtonLabel}
           customImageUrl={tenantMessages?.paidImageUrl}
         >
+          {/* Caixas antes do XP: aqui há ação a fazer, e ali só informação.
+              E as duas ficam antes dos botões porque "Ver mais campanhas"
+              tira a pessoa da página, e ela sairia sem abrir a caixa que
+              acabou de ganhar. */}
+          {boxes.length > 0 && (
+            <SurpriseBoxesClaim
+              reservationId={reservation.id}
+              boxes={boxes}
+              allowOpenAll={reservation.raffle.surpriseBoxAbrirTodas}
+            />
+          )}
+
           {xp && (
             <XpGanho
               ganho={xp.ganho}
@@ -210,13 +222,6 @@ export default async function ReservationReceiptPage({
             />
           )}
         </PaidCelebration>
-        {boxes.length > 0 && (
-          <SurpriseBoxesClaim
-            reservationId={reservation.id}
-            boxes={boxes}
-            allowOpenAll={reservation.raffle.surpriseBoxAbrirTodas}
-          />
-        )}
       </div>
     );
   }

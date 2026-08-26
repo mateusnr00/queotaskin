@@ -69,7 +69,17 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
                   : "border-transparent bg-muted/30"
               )}
             >
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {/* O prêmio em pílula, como na referência: separa o item do
+                  estado e mantém a coluna da direita alinhada mesmo com nome
+                  comprido. */}
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate rounded-full border px-2.5 py-1 text-xs font-bold",
+                  temDono
+                    ? "border-emerald-500/40 bg-background/70"
+                    : "border-border bg-background/60"
+                )}
+              >
                 {c.premio}
               </span>
               {temDono ? (
