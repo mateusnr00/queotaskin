@@ -33,6 +33,7 @@ export function RaffleCover({
   variant = "hero",
   ajuste = "cobrir",
   className,
+  style,
   sizes = "(min-width: 768px) 640px, 100vw",
   priority = false,
 }: {
@@ -49,13 +50,23 @@ export function RaffleCover({
    * o produto, e cortar o topo come a logo e o nome da skin.
    */
   ajuste?: "cobrir" | "conter";
+  /**
+   * Para a proporção da moldura vir de QUADRO_DA_SKIN em vez de um número
+   * repetido à mão numa classe do Tailwind. Escrever `aspect-[1800/1350]` no
+   * chamador cria uma segunda fonte da verdade que ninguém lembra de mudar
+   * junto com a constante.
+   */
+  style?: React.CSSProperties;
   className?: string;
   sizes?: string;
   priority?: boolean;
 }) {
   if (url) {
     return (
-      <div className={cn("relative overflow-hidden bg-muted", className)}>
+      <div
+        className={cn("relative overflow-hidden bg-muted", className)}
+        style={style}
+      >
         <Image
           src={url}
           alt={title}
@@ -79,6 +90,7 @@ export function RaffleCover({
       className={cn("relative overflow-hidden", className)}
       style={{
         background: `radial-gradient(120% 90% at 50% 115%, ${accent}38, transparent 62%), linear-gradient(180deg, #0e1015, #15181e)`,
+        ...style,
       }}
     >
       {/* Hachura diagonal fina, textura de painel, quase imperceptível. */}

@@ -12,7 +12,7 @@ import { PrizesSection } from "@/components/public/prizes-section";
 import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
-import { headlineSkin } from "@/lib/cs2";
+import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
 import { meetsMinLevel } from "@/lib/rank";
 import { getUserXp } from "@/server/services/xp";
@@ -261,10 +261,11 @@ export default async function PublicRaffleDetailPage({
           skinName={headlinePrize?.skinName}
           rarity={headlinePrize?.skinRarity}
           ajuste="conter"
-          // A moldura tem a proporção do quadro padrão da skin (1774x1350).
-          // Com 16/9 e recorte, a arte perdia a logo no topo e o nome do
-          // desgaste embaixo, que é metade do que ela comunica.
-          className="-mx-4 aspect-[1774/1350] w-[calc(100%+2rem)] md:mx-0 md:w-full md:rounded-2xl"
+          // A proporção vem da constante do quadro, não de um número escrito
+          // aqui: com 16/9 e recorte, a arte perdia a logo no topo e o nome
+          // do desgaste embaixo, que é metade do que ela comunica.
+          style={{ aspectRatio: PROPORCAO_DA_SKIN }}
+          className="-mx-4 w-[calc(100%+2rem)] md:mx-0 md:w-full md:rounded-2xl"
           sizes="(min-width: 768px) 640px, 100vw"
           priority
         />

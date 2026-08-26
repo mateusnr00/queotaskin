@@ -20,16 +20,17 @@ function sobras(
 
 describe("encaixarNoQuadro", () => {
   it("imagem já na proporção preenche o quadro inteiro", () => {
-    const r = encaixarNoQuadro({ largura: 1774, altura: 1350 }, QUADRO);
-    expect(r).toEqual({ x: 0, y: 0, largura: 1774, altura: 1350 });
+    const r = encaixarNoQuadro({ ...QUADRO }, QUADRO);
+    expect(r).toEqual({ x: 0, y: 0, ...QUADRO });
   });
 
   it("mesma proporção em outro tamanho também preenche", () => {
-    const r = encaixarNoQuadro({ largura: 887, altura: 675 }, QUADRO);
-    expect({ largura: r.largura, altura: r.altura }).toEqual({
-      largura: 1774,
-      altura: 1350,
-    });
+    const metade = {
+      largura: QUADRO.largura / 2,
+      altura: QUADRO.altura / 2,
+    };
+    const r = encaixarNoQuadro(metade, QUADRO);
+    expect({ largura: r.largura, altura: r.altura }).toEqual({ ...QUADRO });
   });
 
   it("nunca estoura o quadro, que seria corte", () => {
@@ -81,6 +82,20 @@ describe("encaixarNoQuadro", () => {
       const r = encaixarNoQuadro(origem, QUADRO);
       for (const v of Object.values(r)) expect(Number.isFinite(v)).toBe(true);
     }
+  });
+});
+
+describe("QUADRO_DA_SKIN", () => {
+  it("é o tamanho real da arte, 1800x1350", () => {
+    // Ancorado de propósito. O resto do arquivo deriva do quadro para
+    // acompanhar mudanças, e sem esta linha nada perceberia o número sendo
+    // trocado por engano: os testes continuariam verdes com o quadro errado,
+    // e o defeito só apareceria como faixa vazia na capa em produção.
+    expect(QUADRO_DA_SKIN).toEqual({ largura: 1800, altura: 1350 });
+  });
+
+  it("é 4:3, que é a proporção que a arte é feita", () => {
+    expect(QUADRO_DA_SKIN.largura / QUADRO_DA_SKIN.altura).toBeCloseTo(4 / 3, 6);
   });
 });
 

@@ -209,7 +209,7 @@ export async function normalizeImage(
     // A escada começa alta quando há quadro pedido, porque ali a imagem é
     // arte de campanha: fundo escuro com gradiente e brilho, onde compressão
     // agressiva vira faixa visível. E custa pouco: medido num quadro
-    // 1774x1350 desse tipo, 0.85 dá 37 KB e 0.95 dá 66 KB, os dois muito
+    // 1800x1350 desse tipo, 0.85 dá 37 KB e 0.95 dá 66 KB, os dois muito
     // abaixo do teto de envio. Trocar 29 KB por não ter banda no gradiente é
     // barato.
     //

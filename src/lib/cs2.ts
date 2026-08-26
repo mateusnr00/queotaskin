@@ -177,7 +177,7 @@ export const STEAM_DELIVERY_NOTICE =
  * é por isso que mudar esses números muda também preview e miniatura, sem
  * precisar caçar tamanho escrito à mão em cada tela.
  */
-export const QUADRO_DA_SKIN = { largura: 1774, altura: 1350 } as const;
+export const QUADRO_DA_SKIN = { largura: 1800, altura: 1350 } as const;
 
 /** Pronto para `style={{ aspectRatio }}`. */
 export const PROPORCAO_DA_SKIN = `${QUADRO_DA_SKIN.largura} / ${QUADRO_DA_SKIN.altura}`;
