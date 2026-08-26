@@ -17,6 +17,7 @@ export default async function MensagensPage() {
     where: { id: tenantId },
     select: {
       paidTitle: true,
+      earlyText: true,
       halfwayText: true,
       almostGoneText: true,
       soldOutText: true,
@@ -58,6 +59,7 @@ export default async function MensagensPage() {
       <MessagesSettingsForm
         initial={{
           paidTitle: tenant.paidTitle ?? "",
+          earlyText: tenant.earlyText ?? "",
           halfwayText: tenant.halfwayText ?? "",
           almostGoneText: tenant.almostGoneText ?? "",
           soldOutText: tenant.soldOutText ?? "",

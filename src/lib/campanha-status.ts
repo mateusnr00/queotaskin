@@ -1,15 +1,19 @@
 // Selo da campanha: o texto laranja no canto do card.
 //
-// Antes ele era digitado por campanha e ficava congelado. "Adquira já"
-// continuava lá com 95% vendido, e campanha esgotada seguia chamando para
-// comprar número que não existe mais. Agora a urgência acompanha a venda
-// sozinha, e o texto digitado só vale enquanto nenhuma faixa foi atingida.
+// Ele acompanha a venda, e as quatro faixas são automáticas.
+//
+// A faixa inicial também. Antes ela usava um texto digitado por campanha, e
+// isso deixava o selo mentir na direção contrária: alguém escreveu "corre que
+// está acabando" no campo e a frase apareceu numa campanha com zero vendido.
+// Urgência é conclusão sobre o estado da venda, e conclusão o sistema tira,
+// não quem digita.
 //
 // A ordem é do fim para o começo de propósito: esgotado vence quase no fim,
-// que vence metade, que vence o texto do admin. Quem está em 95% precisa ler
-// "últimos números", não "exclusiva VIP".
+// que vence metade, que vence o início. Quem está em 95% precisa ler
+// "últimos números".
 
 export interface ConfiguracaoDeStatus {
+  earlyText: string | null;
   halfwayText: string | null;
   almostGoneText: string | null;
   soldOutText: string | null;
@@ -19,13 +23,14 @@ export interface ConfiguracaoDeStatus {
 
 /** Usados quando o tenant não personalizou o texto. */
 export const STATUS_PADRAO = {
+  early: "Adquira já!",
   halfway: "Mais da metade vendida",
   almostGone: "Últimos números!",
   soldOut: "Aguardando sorteio",
-  manual: "Adquira já!",
 } as const;
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeStatus = {
+  earlyText: null,
   halfwayText: null,
   almostGoneText: null,
   soldOutText: null,
@@ -38,19 +43,17 @@ export const CONFIGURACAO_PADRAO: ConfiguracaoDeStatus = {
  *
  * @param vendidos  números já vendidos
  * @param total     números da campanha
- * @param textoManual  o que o admin digitou em Status, se digitou
  */
 export function statusDaCampanha(
   vendidos: number,
   total: number,
-  textoManual: string | null | undefined,
   config: ConfiguracaoDeStatus = CONFIGURACAO_PADRAO
 ): string {
-  const manual = textoManual?.trim() || STATUS_PADRAO.manual;
+  const inicio = config.earlyText?.trim() || STATUS_PADRAO.early;
 
   // Campanha sem números configurados não tem percentual que faça sentido:
   // dividir por zero daria Infinity e prenderia o selo em "esgotado".
-  if (total <= 0) return manual;
+  if (total <= 0) return inicio;
 
   const percentual = (vendidos / total) * 100;
 
@@ -69,5 +72,5 @@ export function statusDaCampanha(
     return config.halfwayText?.trim() || STATUS_PADRAO.halfway;
   }
 
-  return manual;
+  return inicio;
 }

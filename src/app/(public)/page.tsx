@@ -59,7 +59,6 @@ export default async function HomePage() {
       slug: true,
       title: true,
       shortDescription: true,
-      statusText: true,
       pricePerNumber: true,
       isFree: true,
       freeLabel: true,
@@ -166,7 +165,6 @@ export default async function HomePage() {
                 statusBadge={statusDaCampanha(
                   vendidosPorRifa.get(featured.id) ?? 0,
                   featured.totalNumbers,
-                  featured.statusText,
                   statusConfig
                 )}
               />
@@ -179,7 +177,6 @@ export default async function HomePage() {
                     statusBadge={statusDaCampanha(
                       vendidosPorRifa.get(r.id) ?? 0,
                       r.totalNumbers,
-                      r.statusText,
                       statusConfig
                     )}
                   />
@@ -259,7 +256,6 @@ interface RaffleCardData {
   slug: string;
   title: string;
   shortDescription: string | null;
-  statusText: string | null;
   pricePerNumber: unknown;
   isFree: boolean;
   freeLabel: string | null;

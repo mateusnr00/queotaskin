@@ -244,7 +244,6 @@ export default async function EditRafflePage({
           showDrawDate: raffle.showDrawDate,
           allowReceiptDownload: raffle.allowReceiptDownload,
           showParticipantName: raffle.showParticipantName,
-          statusText: raffle.statusText ?? "",
           modality: raffle.modality,
           reservationModel: raffle.reservationModel,
           requiredFields,

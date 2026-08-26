@@ -112,7 +112,6 @@ export default async function PublicRafflesListPage() {
                         {statusDaCampanha(
                           vendidosPorRifa.get(r.id) ?? 0,
                           r.totalNumbers,
-                          r.statusText,
                           statusConfig
                         )}
                       </span>

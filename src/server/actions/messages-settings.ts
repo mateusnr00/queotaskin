@@ -32,6 +32,7 @@ const messagesSchema = z.object({
   expiredButtonLabel: z.string().max(60).optional().default(""),
   expiredImageUrl: urlOrEmpty,
   // Selo automático do card, por faixa de vendas.
+  earlyText: z.string().max(60).optional().default(""),
   halfwayText: z.string().max(60).optional().default(""),
   almostGoneText: z.string().max(60).optional().default(""),
   soldOutText: z.string().max(60).optional().default(""),
@@ -73,6 +74,7 @@ export async function updateMessagesSettingsAction(
       expiredDescription: norm(d.expiredDescription),
       expiredButtonLabel: norm(d.expiredButtonLabel),
       expiredImageUrl: norm(d.expiredImageUrl),
+      earlyText: norm(d.earlyText),
       halfwayText: norm(d.halfwayText),
       almostGoneText: norm(d.almostGoneText),
       soldOutText: norm(d.soldOutText),

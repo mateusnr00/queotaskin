@@ -246,6 +246,12 @@ model Tenant {
   // venda sozinha.
   //
   // Texto nulo cai no padrão em lib/campanha-status.ts.
+  /// Texto do selo enquanto a venda ainda não chegou na metade.
+  ///
+  /// É automático como os outros três. Já foi um campo por campanha, e ali
+  /// alguém escreveu "corre que está acabando", que apareceu com zero
+  /// vendido: urgência é conclusão sobre a venda, e conclusão o sistema tira.
+  earlyText         String?
   halfwayText       String?
   almostGoneText    String?
   soldOutText       String?

@@ -55,6 +55,10 @@ export const raffleGeneralSchema = z.object({
   showDrawDate: z.coerce.boolean().default(true),
   allowReceiptDownload: z.coerce.boolean().default(true),
   showParticipantName: z.coerce.boolean().default(false),
+  // Continua aceito para não quebrar payload antigo, mas não alimenta mais
+  // o selo: a faixa inicial virou automática e o texto dela mora em
+  // Configurações > Mensagens. A coluna fica no banco, os dados não se
+  // perdem, e nada na interface escreve aqui.
   statusText: z.string().max(200).optional().nullable(),
   modality: raffleModalitySchema,
   reservationModel: reservationModelSchema,

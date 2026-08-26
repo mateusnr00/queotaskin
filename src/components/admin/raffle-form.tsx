@@ -158,7 +158,6 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   showDrawDate: false,
   allowReceiptDownload: false,
   showParticipantName: false,
-  statusText: "",
   modality: "OWN_DRAW",
   reservationModel: "MANUAL",
   requiredFields: {
@@ -702,23 +701,14 @@ export function RaffleForm({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="statusText"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Texto do status *</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        placeholder="Adquira já!"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* O campo "Texto do status" saiu daqui.
+                  
+                  Ele alimentava o selo enquanto a venda não chegava na
+                  metade, e foi por ali que "corre que está acabando" apareceu
+                  numa campanha com zero vendido. A faixa inicial passou a ser
+                  automática como as outras três, e o texto dela agora fica em
+                  Configurações > Mensagens, num lugar só para todas as
+                  campanhas. */}
 
               {/* Início das vendas, select Imediatamente/Agendado, revela
                   o datetime-local só quando Agendado. */}

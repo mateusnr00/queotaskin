@@ -23,6 +23,7 @@ export const getConfiguracaoDeStatus = cache(
       const t = await prisma.tenant.findUnique({
         where: { id: tenant.id },
         select: {
+          earlyText: true,
           halfwayText: true,
           almostGoneText: true,
           soldOutText: true,

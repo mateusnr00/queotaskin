@@ -36,6 +36,7 @@ const schema = z.object({
   expiredButtonLabel: z.string().max(60).optional().default(""),
   expiredImageUrl: z.string().max(2048).optional().default(""),
   // Selo automático do card, por faixa de vendas.
+  earlyText: z.string().max(60).optional().default(""),
   halfwayText: z.string().max(60).optional().default(""),
   almostGoneText: z.string().max(60).optional().default(""),
   soldOutText: z.string().max(60).optional().default(""),
@@ -282,6 +283,26 @@ export function MessagesSettingsForm({ initial }: Props) {
               escreveu em Status na própria campanha.
             </p>
           </div>
+
+          {/* A faixa inicial não tem "a partir de %": ela é o começo. */}
+          <FormField
+            control={form.control}
+            name="earlyText"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Começo da venda</FormLabel>
+                <FormControl>
+                  <Input placeholder="Adquira já!" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Vale de zero até a metade. Evite urgência aqui: com pouca
+                  coisa vendida, &quot;corre que está acabando&quot; se
+                  contradiz na frente do cliente.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
             <FormField

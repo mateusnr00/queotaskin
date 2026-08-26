@@ -280,7 +280,6 @@ export default async function PublicRaffleDetailPage({
             {statusDaCampanha(
               soldCount,
               raffle.totalNumbers,
-              raffle.statusText,
               statusConfig
             )}
           </span>
