@@ -379,16 +379,10 @@ function QuantityPicker({
                 className={cn(
                   "relative flex flex-col items-center gap-0 rounded-xl border-2 px-2 py-2.5 text-center transition-all",
                   popular
-                    ? "border-amber-500 bg-amber-500/10"
+                    ? "card-popular-pulsa border-amber-500 bg-amber-500/10"
                     : "border-border hover:border-primary/40 active:border-primary"
                 )}
               >
-                {/* Só no card popular. Nos seis a luz virava agitação de
-                    fundo e nenhum se destacava, que é o oposto do que ela
-                    existe para fazer. Em um só, ela aponta para a escolha
-                    que o admin marcou. */}
-                {popular && <span aria-hidden className="brilho-do-card" />}
-
                 {popular && (
                   <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white whitespace-nowrap">
                     Mais popular

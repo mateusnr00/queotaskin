@@ -155,52 +155,33 @@
   animation: pulso-cta 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Luz atravessando o card. A faixa é branca com opacidade baixa e passa
- * inclinada, como reflexo em vidro.
+/* Pulso do card mais popular.
  *
- * Só o card marcado como mais popular a recebe. Nos seis ela virava agitação
- * de fundo e nenhum se destacava, que é o oposto do que ela existe para
- * fazer. Com um só, o intervalo pode cair para 5s sem virar ruído. */
-@keyframes brilho-card {
+ * Antes aqui passava uma faixa de luz atravessando o card. Saiu: o card já
+ * carrega o selo "MAIS POPULAR", a borda âmbar e o fundo âmbar, então a
+ * faixa era a quarta coisa dizendo a mesma coisa, e o conjunto virava
+ * informação demais no lugar de destaque.
+ *
+ * O anel não desloca nada, ao contrário de animar escala ou borda: box-shadow
+ * fica fora do fluxo, então os cards vizinhos não se mexem a cada ciclo.
+ *
+ * Amplitude baixa de propósito. O anel para em 5px porque a grade tem 8px de
+ * espaço entre cards: passar disso encostaria no vizinho e o destaque
+ * viraria bagunça. */
+@keyframes pulso-popular {
   0% {
-    transform: translateX(-150%) skewX(-20deg);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-amber-500) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 5px color-mix(in oklch, var(--color-amber-500) 0%, transparent);
   }
   100% {
-    transform: translateX(350%) skewX(-20deg);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-amber-500) 0%, transparent);
   }
 }
 
-/* Camada própria em vez de ::after no card.
- *
- * A faixa precisa de overflow:hidden para não vazar, e o card tem o selo
- * "MAIS POPULAR" posicionado FORA dele, acima da borda. Recortar no próprio
- * card cortaria esse selo pela metade. Aqui o recorte fica nesta camada, que
- * ocupa só a área interna, e o selo continua inteiro. */
-.brilho-do-card {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  /* Sem isso a camada fica por cima e engole o clique no card, que é o único
-     motivo de ele existir. */
-  pointer-events: none;
-}
-
-.brilho-do-card::after {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  inline-size: 45%;
-  inset-inline-start: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 0%,
-    rgb(255 255 255 / 0.07) 45%,
-    rgb(255 255 255 / 0.14) 50%,
-    rgb(255 255 255 / 0.07) 55%,
-    transparent 100%
-  );
-  animation: brilho-card 5s ease-in-out infinite;
+.card-popular-pulsa {
+  animation: pulso-popular 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* Pulso do selo de status ("Adquira já!", "Últimos números!").
@@ -228,10 +209,8 @@
  * em quem tem sensibilidade vestibular, e aqui ele é enfeite. */
 @media (prefers-reduced-motion: reduce) {
   .cta-pulsa,
-  .selo-pulsa {
+  .selo-pulsa,
+  .card-popular-pulsa {
     animation: none;
-  }
-  .brilho-do-card {
-    display: none;
   }
 }
