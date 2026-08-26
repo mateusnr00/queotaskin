@@ -1,4 +1,4 @@
-// Helpers para CPF — armazenamos SOMENTE dígitos no banco.
+// Helpers para CPF, armazenamos SOMENTE dígitos no banco.
 // Formatação fica para a camada de UI.
 
 export function onlyDigits(value: string): string {

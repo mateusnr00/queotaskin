@@ -113,7 +113,7 @@ export function RaffleAwardedTicketsTab({
   }
 
   // Gera um número aleatório entre 1 e totalNumbers que não esteja na lista
-  // ainda. Não consulta o servidor — confia no estado local pra evitar
+  // ainda. Não consulta o servidor, confia no estado local pra evitar
   // colisão. Se o usuário cadastrar 2 sorteios com mesmo número, o save
   // detecta dup e reporta erro.
   function generateRandom(idx: number) {

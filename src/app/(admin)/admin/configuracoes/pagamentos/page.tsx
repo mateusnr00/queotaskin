@@ -59,7 +59,7 @@ export default async function PagamentosPage() {
       <PaymentSettingsForm
         initial={{
           // Tenant.paymentProvider pode ser MERCADO_PAGO (enum legado), mas
-          // o form só conhece SYNCPAY/CODEPAY — caímos pra SYNCPAY se vier
+          // o form só conhece SYNCPAY/CODEPAY, caímos pra SYNCPAY se vier
           // qualquer outra coisa.
           provider:
             tenant.paymentProvider === "CODEPAY" ? "CODEPAY" : "SYNCPAY",

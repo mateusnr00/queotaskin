@@ -43,7 +43,7 @@ export default async function EditRafflePage({
   // Bloqueia cross-tenant: admin de outro tenant não pode editar essa rifa.
   if (raffle.tenantId !== tenantId) notFound();
 
-  // Estado do gateway no tenant — usado pela aba Pagamento pra mostrar
+  // Estado do gateway no tenant, usado pela aba Pagamento pra mostrar
   // qual é o "padrão do site" e se as credenciais de cada provider já
   // foram cadastradas.
   const tenant = await prisma.tenant.findUniqueOrThrow({

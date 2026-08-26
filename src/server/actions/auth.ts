@@ -3,7 +3,7 @@
 // Server Actions de autenticação. Fluxo PASSWORDLESS por nome + celular:
 // - registerAction: cria conta com {name, cpf, phone}. Sem senha, sem e-mail.
 //   O CPF é digitado pelo usuário (validado por dígito verificador) e gravado
-//   no User.cpf — alimenta o PIX. Não é exibido na UI depois do cadastro.
+//   no User.cpf, alimenta o PIX. Não é exibido na UI depois do cadastro.
 // - loginAction: autentica via nome + CPF. Sem senha.
 // - logoutAction: derruba a sessão.
 //
@@ -83,7 +83,7 @@ export async function registerAction(
 }
 
 // Login passwordless via nome + celular. O provider Credentials no auth.ts
-// busca pelo celular e confere o nome — sem senha.
+// busca pelo celular e confere o nome, sem senha.
 export async function loginAction(
   raw: unknown
 ): Promise<ActionResult> {
@@ -130,7 +130,7 @@ export async function adminLoginAction(raw: unknown): Promise<ActionResult> {
   }
 }
 
-// Troca da própria senha. Exige a atual mesmo com sessão válida — sessão
+// Troca da própria senha. Exige a atual mesmo com sessão válida, sessão
 // roubada não deve conseguir trocar a senha e trancar o dono para fora.
 export async function changeOwnPasswordAction(
   raw: unknown

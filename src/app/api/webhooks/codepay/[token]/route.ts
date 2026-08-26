@@ -9,7 +9,7 @@
 //
 // Idempotência: cada transação dispara múltiplos eventos ao longo do
 // tempo. Logamos todos sem dedupe (auditoria), e o update do Payment é
-// condicional — só transiciona se ainda não está em estado terminal.
+// condicional, só transiciona se ainda não está em estado terminal.
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";

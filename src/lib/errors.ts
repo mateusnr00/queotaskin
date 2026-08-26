@@ -1,4 +1,4 @@
-// Erros de domínio — usar em vez de `throw new Error("string")` para que
+// Erros de domínio, usar em vez de `throw new Error("string")` para que
 // a camada de UI/Server Actions consiga decidir como responder (status code,
 // mensagem amigável, etc).
 

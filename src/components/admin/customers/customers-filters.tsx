@@ -27,7 +27,7 @@ export interface FiltrosCliente {
  *
  * Campos separados em vez de uma busca única: quem opera rifa procura por
  * CPF quando o cliente liga reclamando de pagamento, e por telefone quando
- * chega mensagem no WhatsApp — misturar tudo num campo só faria a busca por
+ * chega mensagem no WhatsApp, misturar tudo num campo só faria a busca por
  * "11" casar com telefone, CPF e qualquer nome que tenha "11".
  *
  * O estado vive na URL: dá para favoritar um recorte e o voltar funciona.

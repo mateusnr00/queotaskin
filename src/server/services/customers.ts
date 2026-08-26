@@ -25,7 +25,7 @@ export interface CustomerTotals {
   novos30d: number;
   receita: number;
   ticketMedio: number;
-  /** Clientes que compraram mais de uma vez — indicador de recorrência. */
+  /** Clientes que compraram mais de uma vez, indicador de recorrência. */
   recorrentes: number;
 }
 
@@ -34,7 +34,7 @@ const PAGE_SIZE = 25;
 /**
  * Painel de clientes de um tenant.
  *
- * "Cliente" aqui é quem já pagou pelo menos uma reserva — não todo usuário
+ * "Cliente" aqui é quem já pagou pelo menos uma reserva, não todo usuário
  * cadastrado. Quem só criou conta aparece em Usuários; aqui é a lista de
  * quem sustenta a operação.
  *
@@ -61,7 +61,7 @@ export async function listCustomers(
   const telefone = (opts.telefone ?? "").replace(/\D/g, "");
 
   // Todo mundo ligado ao tenant: membros e quem já reservou. Uma pessoa que
-  // criou conta e ainda não comprou aparece com os números zerados — é
+  // criou conta e ainda não comprou aparece com os números zerados, é
   // cliente em potencial, e sumir com ela esconderia metade da base.
   const where = {
     AND: [
@@ -102,7 +102,7 @@ export async function listCustomers(
     };
   }
 
-  // Gasto, pedidos, última compra, XP e números — cinco agregações, nenhuma
+  // Gasto, pedidos, última compra, XP e números, cinco agregações, nenhuma
   // por linha. Buscar reserva dentro de um laço daria uma query por cliente.
   const [stats, progresso, ticketsPorUsuario] = await Promise.all([
     prisma.reservation.groupBy({
@@ -184,7 +184,7 @@ export async function listCustomers(
 }
 
 /**
- * Totais da base inteira — de propósito fora do filtro. Se respondessem à
+ * Totais da base inteira, de propósito fora do filtro. Se respondessem à
  * busca, o card "Receita" mudaria a cada tecla digitada, o que não faz
  * sentido para um número que deveria servir de referência fixa.
  */

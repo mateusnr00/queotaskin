@@ -1,7 +1,7 @@
 import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
 import { MAX_LEVEL, PRESTIGE_RANKS, TIERS, rankProgress, xpForLevel } from "@/lib/rank";
 
-/** Painel com aresta de acento à esquerda — a marca visual do rank. */
+/** Painel com aresta de acento à esquerda, a marca visual do rank. */
 function Panel({
   color,
   children,
@@ -28,7 +28,7 @@ function Panel({
 /**
  * Cartão de progresso do participante.
  *
- * O "faltam R$ X" é o que puxa a recorrência — número redondo e acionável,
+ * O "faltam R$ X" é o que puxa a recorrência, número redondo e acionável,
  * bem melhor do que exibir só o XP cru.
  */
 export function RankCard({
@@ -63,7 +63,7 @@ export function RankCard({
               className="text-[11px] font-bold tracking-[0.12em] uppercase"
               style={{ color: rank.color }}
             >
-              {/* No prestígio o nome já é o título — repetir a faixa embaixo
+              {/* No prestígio o nome já é o título, repetir a faixa embaixo
                   seria eco. Ali cabe melhor o que a patente significa. */}
               {rank.prestige ? rank.prestige.description : rank.tierName}
             </p>
@@ -110,7 +110,7 @@ export function RankCard({
             <b className="font-semibold text-foreground">
               {progress.xpToNext.toLocaleString("pt-BR")} XP
             </b>{" "}
-            — cerca de{" "}
+            , cerca de{" "}
             <b className="font-semibold text-foreground">
               R$ {progress.brlToNext.toLocaleString("pt-BR")}
             </b>{" "}
@@ -154,7 +154,7 @@ export function RankLadder({ xp }: { xp: number }) {
                 {Array.from({ length: last - tier.from + 1 }, (_, i) => {
                   const level = tier.from + i;
                   // Apaga só o que ainda não foi conquistado. Quem chegou ao
-                  // prestígio passou por toda a escada — apagá-la inteira
+                  // prestígio passou por toda a escada, apagá-la inteira
                   // faria a conquista parecer o contrário do que é.
                   const reached = xp >= xpForLevel(level);
                   const isCurrent = active && current.level === level;

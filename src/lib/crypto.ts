@@ -1,6 +1,6 @@
 // Encriptação simétrica AES-256-GCM pra secrets de gateway no banco.
 //
-// Por que GCM: dá autenticidade junto com confidencialidade — se alguém
+// Por que GCM: dá autenticidade junto com confidencialidade, se alguém
 // trocar um byte do ciphertext em trânsito (ou na coluna), o decrypt
 // detecta e lança em vez de retornar lixo.
 //
@@ -11,7 +11,7 @@
 //
 // Formato do ciphertext (string base64):
 //   [12 bytes IV][N bytes ciphertext][16 bytes tag]
-// Tudo concatenado, em UMA string base64 — fica curto na coluna e facilita
+// Tudo concatenado, em UMA string base64, fica curto na coluna e facilita
 // query/log sem ter que parsear JSON.
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";

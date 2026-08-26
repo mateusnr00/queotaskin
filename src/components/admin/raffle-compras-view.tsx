@@ -3,7 +3,7 @@
 // Lista de Compras por sorteio. Espelha o painel do SkinsLendarias:
 // - Header rico com imagem, título, status, e linha de ícones de ação.
 // - Painel expansível (controlado pelo "olho") com barra de progresso,
-//   livres/reservados/pagos + totais R$ — quando OFF os dados sensíveis
+//   livres/reservados/pagos + totais R$, quando OFF os dados sensíveis
 //   do comprador (telefone/CPF/email/reservationId) ficam mascarados.
 // - 5 tabs com contadores: Todos / Pagos / Reservado / Expirados / Afiliados.
 // - Busca por nome (q) e por número do título (ticket).
@@ -324,7 +324,7 @@ function RaffleHeaderCard({
         </Button>
       </div>
 
-      {/* Ações do header — 6 botões espelhando SkinsLendarias. */}
+      {/* Ações do header, 6 botões espelhando SkinsLendarias. */}
       <div className="border-t pt-3 flex items-center gap-1 flex-wrap">
         <HeaderActionButton
           label={showDetails ? "Esconder detalhes" : "Mostrar detalhes"}
@@ -487,7 +487,7 @@ function RankingModal({
   }
 
   // Carrega top 10 na primeira abertura do modal. Não chama de novo se
-  // o admin já filtrou por data e fechou — preserva o resultado anterior.
+  // o admin já filtrou por data e fechou, preserva o resultado anterior.
   useEffect(() => {
     if (open && !loaded) fetchRanking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -584,7 +584,7 @@ function RankingRow({ buyer }: { buyer: TopBuyer }) {
   const phoneMasked =
     phoneDigits.length >= 10
       ? `(${phoneDigits.slice(0, 2)}) ****-****`
-      : "—";
+      : "-";
   const isFirst = buyer.rank === 1;
   return (
     <li className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
@@ -641,7 +641,7 @@ function RankingRow({ buyer }: { buyer: TopBuyer }) {
 
 // Estado client-side dos combos enquanto o admin edita; só vira commit no save.
 type ComboDraft = {
-  // key local pra render — id do banco ou "tmp-..." pra linha nova.
+  // key local pra render, id do banco ou "tmp-..." pra linha nova.
   key: string;
   threshold: string; // string pra controlled input; coerce no save
   boxCount: string;
@@ -975,7 +975,7 @@ function CaixasModalBody({
           <PrizesTable prizes={prizes} disabled={isPending} />
         )}
 
-        {/* Tabela de caixas distribuídas (vazia por enquanto — vem na próxima PR) */}
+        {/* Tabela de caixas distribuídas (vazia por enquanto, vem na próxima PR) */}
         <div className="rounded-lg border overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
@@ -1043,7 +1043,7 @@ function CaixasModalBody({
   );
 }
 
-// Sub-modal "Inserir caixa" — formulário pra criar uma caixa surpresa
+// Sub-modal "Inserir caixa", formulário pra criar uma caixa surpresa
 // manual (não vem do combo automático). Schema de SurpriseBox ainda não
 // existe, então hoje o Salvar mostra toast "em breve" e o layout fica
 // pronto pra ligar quando o backend entrar.
@@ -1262,7 +1262,7 @@ function InserirCaixaBody({
   );
 }
 
-// Lista compacta dos prêmios cadastrados no pool — agrupada por title +
+// Lista compacta dos prêmios cadastrados no pool, agrupada por title +
 // prize pra não duplicar visualmente quando o admin cria várias unidades.
 // Cada grupo mostra contador (claimed/total) + ações de lock/remove.
 function PrizesTable({
@@ -1410,7 +1410,7 @@ function PrizesTable({
   );
 }
 
-// Sub-modal "Distribuição das Caixas" — espelha o print do SkinsLendarias.
+// Sub-modal "Distribuição das Caixas", espelha o print do SkinsLendarias.
 // Toggle "Combos Acumulativos" no topo + tabela editável de tiers.
 function DistribuicaoCaixasModal({
   open,
@@ -1457,7 +1457,7 @@ function DistribuicaoCaixasBody({
   // Espelha o print do SkinsLendarias: red alert no topo quando 0 combos,
   // header simples, checkbox "Combos Acumulativos ***", botão âmbar
   // "Cadastrar combo" e tabela inline (A partir de [N] Títulos | Ganha [N]
-  // CAIXAS! | Exibir | Destacar | trash). Sem botões Salvar/Cancelar —
+  // CAIXAS! | Exibir | Destacar | trash). Sem botões Salvar/Cancelar,
   // todas as mudanças persistem automaticamente.
   const [draft, setDraft] = useState<ComboDraft[]>(combos);
   const [accum, setAccum] = useState(accumulative);
@@ -1472,7 +1472,7 @@ function DistribuicaoCaixasBody({
   }
 
   function addRow() {
-    // Linha nova vai vazia — só persiste quando admin preenche threshold +
+    // Linha nova vai vazia, só persiste quando admin preenche threshold +
     // boxCount e dá blur. Antes disso, a row fica como rascunho local.
     setDraft((d) => [
       ...d,
@@ -1491,7 +1491,7 @@ function DistribuicaoCaixasBody({
   }
 
   function blurRow() {
-    // Persiste no servidor — backend filtra linhas com threshold/boxCount
+    // Persiste no servidor, backend filtra linhas com threshold/boxCount
     // inválidos, então rascunhos vazios não são gravados.
     commit(draft, accum);
   }
@@ -1823,7 +1823,7 @@ function WinnerBody({
             id="winner-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Ex: Resultado da Loteria Federal do dia 15/08/2026 — extração 5842. Link do vídeo do sorteio, hash do bloco usado como semente, etc."
+            placeholder="Ex: Resultado da Loteria Federal do dia 15/08/2026, extração 5842. Link do vídeo do sorteio, hash do bloco usado como semente, etc."
             disabled={isPending}
             maxLength={2000}
             rows={4}
@@ -2400,19 +2400,19 @@ function ReservationDetailsModal({
             />
             <DetailField
               label="CPF"
-              value={row.participantCpf ? formatCpf(row.participantCpf) : "—"}
+              value={row.participantCpf ? formatCpf(row.participantCpf) : "-"}
               mono
             />
             <DetailField
               label="Telefone"
               value={
-                row.participantPhone ? formatPhone(row.participantPhone) : "—"
+                row.participantPhone ? formatPhone(row.participantPhone) : "-"
               }
               mono
             />
             <DetailField
               label="E-mail"
-              value={row.participantEmail || "—"}
+              value={row.participantEmail || "-"}
               className="sm:col-span-2"
             />
             <DetailField

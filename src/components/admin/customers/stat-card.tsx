@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * Cartão de indicador do topo do painel.
  *
  * O número é o protagonista: vem grande, tabular e em primeiro, com o rótulo
- * abaixo. O ícone fica atrás, discreto — presença sem competir com o dado.
+ * abaixo. O ícone fica atrás, discreto, presença sem competir com o dado.
  */
 export function StatCard({
   label,

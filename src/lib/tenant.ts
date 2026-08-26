@@ -28,8 +28,8 @@ export type TenantContext = {
 async function readHost(): Promise<string> {
   const h = await headers();
   // A porta sai: TenantHost guarda o domínio puro ("queotaskin.com"), e um
-  // host com porta nunca casaria com o registro. Só aparece fora da Vercel
-  // — em teste local com domínio real, por exemplo — mas o lookup falhando
+  // host com porta nunca casaria com o registro. Só aparece fora da Vercel,
+  // em teste local com domínio real por exemplo, mas o lookup falhando
   // devolve 404 em toda página, o que é um jeito ruim de descobrir isso.
   return (h.get("host") ?? "")
     .toLowerCase()
@@ -37,7 +37,7 @@ async function readHost(): Promise<string> {
     .replace(/:\d+$/, "");
 }
 
-// Lookup do tenant pelo host. Cached por request — múltiplas chamadas no
+// Lookup do tenant pelo host. Cached por request, múltiplas chamadas no
 // mesmo render só fazem 1 query.
 export const getCurrentTenant = cache(async (): Promise<TenantContext | null> => {
   const host = await readHost();
@@ -76,7 +76,7 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
   };
 });
 
-// Mesma coisa, mas garante que existe — lança se não achou. Útil em
+// Mesma coisa, mas garante que existe, lança se não achou. Útil em
 // páginas que sabidamente só fazem sentido com tenant resolvido.
 export async function getCurrentTenantOrThrow(): Promise<TenantContext> {
   const t = await getCurrentTenant();
@@ -86,7 +86,7 @@ export async function getCurrentTenantOrThrow(): Promise<TenantContext> {
   return t;
 }
 
-// Heurística pra detectar host admin sem consultar o banco — usada no
+// Heurística pra detectar host admin sem consultar o banco, usada no
 // proxy.ts (Edge runtime, sem acesso a Prisma). Convenção: hosts admin
 // começam com "admin." ou "painel.".
 export function isAdminHostByConvention(host: string): boolean {

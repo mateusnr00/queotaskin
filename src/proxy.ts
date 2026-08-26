@@ -20,15 +20,15 @@
 //        do participante.
 //      - Host admin: rotas públicas (/, /sorteios, /s/, /meus-titulos,
 //        /comprovante/) redirecionam pra /admin. Login/registro continuam
-//        acessíveis — são necessários pra autenticar antes do painel.
+//        acessíveis, são necessários pra autenticar antes do painel.
 //
 //    Como o proxy roda em edge runtime (sem Prisma), não consultamos a
-//    tabela TenantHost aqui — a heurística de prefixo já basta pra
+//    tabela TenantHost aqui, a heurística de prefixo já basta pra
 //    decidir o split. A resolução completa do tenant acontece nas pages
 //    (via getCurrentTenant()).
 //
 //    Previews da Vercel (*.vercel.app) e localhost ficam de fora do split
-//    pra não atrapalhar dev/preview — todas as rotas seguem no mesmo host.
+//    pra não atrapalhar dev/preview, todas as rotas seguem no mesmo host.
 
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
@@ -42,7 +42,7 @@ import {
 
 const { auth } = NextAuth(authConfig);
 
-// Rotas públicas que NÃO devem existir no host admin — quando o usuário
+// Rotas públicas que NÃO devem existir no host admin, quando o usuário
 // digita uma delas em admin.<dominio>, joga ele pra /admin.
 const PUBLIC_ROUTE_PREFIXES = [
   "/sorteios",

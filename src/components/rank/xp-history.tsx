@@ -18,7 +18,7 @@ export interface XpHistoryRow {
   createdAt: Date;
 }
 
-/** Extrato de XP — responde "de onde veio meu XP" sem passar pelo suporte. */
+/** Extrato de XP, responde "de onde veio meu XP" sem passar pelo suporte. */
 export function XpHistory({ entries }: { entries: XpHistoryRow[] }) {
   if (entries.length === 0) {
     return (

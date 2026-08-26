@@ -71,7 +71,7 @@ import { toSlug } from "@/lib/slug";
 
 type Mode = { kind: "create" } | { kind: "edit"; id: string };
 
-// O prêmio carrega a ficha de skin do CS2 — ver PrizeDraft.
+// O prêmio carrega a ficha de skin do CS2, ver PrizeDraft.
 type PrizeData = PrizeDraft;
 interface PromotionData {
   quantity: number;
@@ -82,14 +82,14 @@ interface PromotionData {
 
 interface RaffleFormProps {
   mode: Mode;
-  /** Título atual — a exclusão pede que ele seja digitado para confirmar. */
+  /** Título atual, a exclusão pede que ele seja digitado para confirmar. */
   raffleTitle?: string;
   defaultValues?: Partial<RaffleGeneralInput>;
-  // Dados de conteúdo das abas — só preenchidos no modo edit.
+  // Dados de conteúdo das abas, só preenchidos no modo edit.
   initialImages?: RaffleImageItem[];
   initialPrizes?: PrizeData[];
   initialPromotions?: PromotionData[];
-  // Dados da aba "Pagamento" — só populados no modo edit.
+  // Dados da aba "Pagamento", só populados no modo edit.
   initialPaymentProvider?: "SYNCPAY" | "CODEPAY" | null;
   tenantPaymentDefault?: "SYNCPAY" | "CODEPAY" | "MERCADO_PAGO";
   configuredProviders?: { syncpay: boolean; codepay: boolean };
@@ -130,7 +130,7 @@ interface RaffleFormProps {
 // campos sempre ON são name/phone/cpf em requiredFields (vêm do cadastro
 // obrigatório do usuário; admin não pode desligar na UI). Selects com
 // enum (privacy/modality/reservationModel/descriptionMode) ficam no
-// primeiro valor pra evitar estado indefinido — admin troca se quiser.
+// primeiro valor pra evitar estado indefinido, admin troca se quiser.
 const DEFAULT_VALUES: RaffleGeneralInput = {
   title: "",
   slug: "",
@@ -616,7 +616,7 @@ export function RaffleForm({
                 )}
               />
 
-              {/* Início das vendas — select Imediatamente/Agendado, revela
+              {/* Início das vendas, select Imediatamente/Agendado, revela
                   o datetime-local só quando Agendado. */}
               <FormField
                 control={form.control}
@@ -634,7 +634,7 @@ export function RaffleForm({
                           if (v === "immediate") {
                             field.onChange(null);
                           } else if (!field.value) {
-                            // Default: amanhã 00:00 — admin ajusta no
+                            // Default: amanhã 00:00, admin ajusta no
                             // datetime picker que aparece abaixo.
                             const tomorrow = new Date();
                             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -975,7 +975,7 @@ export function RaffleForm({
                 name="minLevel"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Campanha exclusiva — nível mínimo</FormLabel>
+                    <FormLabel>Campanha exclusiva: nível mínimo</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -1082,7 +1082,7 @@ export function RaffleForm({
                 <SelectionCardsField control={form.control} />
               </div>
 
-              {/* Switches finais — barra de progresso, rankings e extras. */}
+              {/* Switches finais, barra de progresso, rankings e extras. */}
               <div className="space-y-2 border-t pt-5">
                 <SwitchField
                   control={form.control}
@@ -1186,7 +1186,7 @@ export function RaffleForm({
 
           {/* =================== EXCLUIR =================== */}
           {/* Ficava solta abaixo do formulário, então era o único bloco
-              presente em todas as abas — e a única ação sempre à mão era
+              presente em todas as abas, e a única ação sempre à mão era
               apagar a campanha. Agora exige entrar aqui de propósito. */}
           <TabsContent value="excluir">
             {isEdit ? (
@@ -1198,7 +1198,7 @@ export function RaffleForm({
         </Tabs>
 
         {/* A barra de salvar acompanha as abas do formulário principal.
-            As outras abas trazem a própria barra, com a própria action —
+            As outras abas trazem a própria barra, com a própria action,
             e a de Excluir não tem barra, porque lá não se salva nada. */}
         {(activeTab === "geral" || activeTab === "titulos") && (
           <StickySaveBar
@@ -1234,7 +1234,7 @@ export function RaffleForm({
   );
 }
 
-// Card "em breve" — disponível pra reuso em tabs futuras (atualmente
+// Card "em breve", disponível pra reuso em tabs futuras (atualmente
 // todas as principais já estão implementadas, mas mantido como helper
 // pronto pra Alertas/Upsell/Anti Spam/etc).
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1282,7 +1282,7 @@ function SaveFirstHint({ label }: { label: string }) {
 }
 
 // Tab com ícone e label, em formato pílula. Quando ativa, ganha
-// background do card e ring sutil — sensação de chip selecionado.
+// background do card e ring sutil, sensação de chip selecionado.
 function TabIcon({
   value,
   icon: Icon,

@@ -46,7 +46,7 @@ export default async function ComprasPage({
   });
   if (!raffle || raffle.tenantId !== tenantId) notFound();
 
-  // Filtros aplicados na lista (não nos contadores das abas — abas mostram
+  // Filtros aplicados na lista (não nos contadores das abas, abas mostram
   // o universo total da rifa, não respeitam search).
   const tabWhere: Prisma.ReservationWhereInput = (() => {
     if (tab === "paid") return { status: "PAID" };

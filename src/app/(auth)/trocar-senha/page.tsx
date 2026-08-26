@@ -7,7 +7,7 @@ import { ChangePasswordForm } from "@/components/admin/change-password-form";
 export const metadata: Metadata = { title: "Alterar senha" };
 
 // Fica fora do grupo (admin) de propósito. O layout do painel chama
-// requireAdmin, que manda para cá quem tem senha temporária — se esta página
+// requireAdmin, que manda para cá quem tem senha temporária, se esta página
 // usasse aquele layout, redirecionaria para si mesma em laço. E, para uma
 // troca obrigatória, a tela sem menu é a certa: não há para onde navegar
 // antes de resolver.

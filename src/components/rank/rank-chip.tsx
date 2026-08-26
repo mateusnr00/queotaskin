@@ -5,7 +5,7 @@ import { rankProgress } from "@/lib/rank";
 
 /**
  * Chip compacto do rank para o header: selo, nome, patente e a barra até o
- * próximo degrau numa linha só. É a leitura de relance — o detalhe fica em
+ * próximo degrau numa linha só. É a leitura de relance, o detalhe fica em
  * /minha-conta, para onde ele leva.
  */
 export function RankChip({
@@ -44,7 +44,7 @@ export function RankChip({
             style={{ color: rank.color }}
           >
             {/* No prestígio o numeral romano sozinho não diz nada fora de
-                contexto — o nome da patente comunica melhor. */}
+                contexto, o nome da patente comunica melhor. */}
             {rank.prestige ? rank.prestige.label.toUpperCase() : `NV.${rank.numeral}`}
           </span>
         </span>

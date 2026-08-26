@@ -80,7 +80,7 @@ export function ChangePasswordForm() {
                 </FormControl>
                 <FormDescription>
                   Pelo menos 10 caracteres. Esta conta enxerga os dados de todos
-                  os clientes — vale usar algo que você não use em outro lugar.
+                  os clientes, então vale usar algo que você não use em outro lugar.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

@@ -21,7 +21,7 @@ BEGIN
   LIMIT 1;
 
   IF target_user_id IS NULL THEN
-    RAISE NOTICE 'Tenant "mateus" não encontrada — pulando atualização.';
+    RAISE NOTICE 'Tenant "mateus" não encontrada, pulando atualização.';
     RETURN;
   END IF;
 

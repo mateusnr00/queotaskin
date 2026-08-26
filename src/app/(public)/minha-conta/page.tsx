@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Minha conta" };
 
 // Área da conta do participante. O único dado editável aqui é o link de
-// troca da Steam — é por ele que a skin ganha chega. Nome e celular são o
+// troca da Steam, é por ele que a skin ganha chega. Nome e celular são o
 // próprio login (passwordless), então mudá-los trocaria as credenciais;
 // isso fica com o admin.
 export default async function MyAccountPage() {
@@ -115,8 +115,8 @@ export default async function MyAccountPage() {
         <h2 className="mb-3 text-base font-bold">Dados de acesso</h2>
         <dl className="grid gap-2 sm:grid-cols-2">
           <Row label="Nome" value={user.name} />
-          <Row label="Celular" value={user.phone ? formatPhone(user.phone) : "—"} />
-          <Row label="E-mail" value={user.email ?? "—"} />
+          <Row label="Celular" value={user.phone ? formatPhone(user.phone) : "-"} />
+          <Row label="E-mail" value={user.email ?? "-"} />
           <Row label="Campanhas pagas" value={String(paidReservations)} />
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">

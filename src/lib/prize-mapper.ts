@@ -5,7 +5,7 @@ import type { SkinPrize } from "@/components/cs2/skin-card";
 /**
  * Converte o Prize do Prisma para o formato aceito pelos componentes de
  * cliente. O `skinValueBrl` é Decimal e não atravessa a fronteira
- * servidor→cliente do React — vira número aqui.
+ * servidor→cliente do React, vira número aqui.
  */
 export function toSkinPrize(prize: Prize): SkinPrize {
   return {

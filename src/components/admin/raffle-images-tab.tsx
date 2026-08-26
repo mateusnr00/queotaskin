@@ -273,7 +273,7 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
             procurar um "Salvar" que não existe. */}
       </Card>
       <StickySaveBar
-        status={`Qualquer formato de imagem serve — ela é reduzida automaticamente antes do envio. Até ${MAX_IMAGES_PER_RAFFLE} imagens por sorteio. Alterações aqui são salvas na hora.`}
+        status={`Qualquer formato de imagem serve. Ela é reduzida automaticamente antes do envio. Até ${MAX_IMAGES_PER_RAFFLE} imagens por sorteio. Alterações aqui são salvas na hora.`}
       />
     </>
   );

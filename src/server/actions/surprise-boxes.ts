@@ -9,7 +9,7 @@
 //   claimedAt IS NULL como guarda + retry curto).
 // - Prêmios bloqueados nunca saem.
 // - Caixa só pode ser aberta pela reserva dona dela (link público com
-//   reservationId — mesmo modelo de ownership do comprovante).
+//   reservationId, mesmo modelo de ownership do comprovante).
 //
 // Sorteio:
 // - Roll 0-100.
@@ -92,7 +92,7 @@ export async function openSurpriseBoxAction(
       return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
     }
 
-    // Tenta até 3x — race em concorrência (prize foi pego por outra caixa).
+    // Tenta até 3x, race em concorrência (prize foi pego por outra caixa).
     for (let attempt = 0; attempt < MAX_DRAW_RETRIES; attempt++) {
       const drawn = await drawPrize(box.raffleId);
 
@@ -103,7 +103,7 @@ export async function openSurpriseBoxAction(
           data: { status: "OPENED_EMPTY", openedAt: new Date() },
         });
         if (updated.count === 0) {
-          // Outra request abriu a mesma caixa no meio do caminho — re-lê.
+          // Outra request abriu a mesma caixa no meio do caminho, re-lê.
           return await refetchOpened(boxId);
         }
         return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
@@ -116,7 +116,7 @@ export async function openSurpriseBoxAction(
             where: { id: drawn.id, claimedAt: null, locked: false },
             data: { claimedAt: new Date() },
           });
-          if (claimed.count === 0) return null; // race — outro vencedor
+          if (claimed.count === 0) return null; // race, outro vencedor
 
           const boxUpdated = await tx.surpriseBox.updateMany({
             where: { id: boxId, status: "UNOPENED" },
@@ -144,7 +144,7 @@ export async function openSurpriseBoxAction(
         });
 
       if (result === "BOX_RACE") {
-        // Outra request foi mais rápida — re-lê o resultado.
+        // Outra request foi mais rápida, re-lê o resultado.
         return await refetchOpened(boxId);
       }
       if (result) {
@@ -156,7 +156,7 @@ export async function openSurpriseBoxAction(
       // result === null → race no prize, tenta de novo (retry loop).
     }
 
-    // Todos os retries falharam — sela como vazio pra não travar o usuário.
+    // Todos os retries falharam, sela como vazio pra não travar o usuário.
     await prisma.surpriseBox.updateMany({
       where: { id: boxId, status: "UNOPENED" },
       data: { status: "OPENED_EMPTY", openedAt: new Date() },
@@ -168,7 +168,7 @@ export async function openSurpriseBoxAction(
   }
 }
 
-// Lê o estado pós-abertura quando uma race aconteceu — outra request
+// Lê o estado pós-abertura quando uma race aconteceu, outra request
 // fechou o estado, só precisamos retornar o que ficou gravado.
 async function refetchOpened(
   boxId: string
@@ -190,7 +190,7 @@ async function refetchOpened(
   return { ok: false, error: "Estado inconsistente, tente de novo" };
 }
 
-// Sorteio do prêmio. Não modifica nada — só decide quem ganha. O claim
+// Sorteio do prêmio. Não modifica nada, só decide quem ganha. O claim
 // atômico é feito pelo caller via updateMany com claimedAt IS NULL.
 //
 // Returns null se pool vazio.
@@ -221,7 +221,7 @@ async function drawPrize(
     }
   }
 
-  // Nenhum PERCENT casou — picks uniforme entre os RANDOM disponíveis.
+  // Nenhum PERCENT casou, picks uniforme entre os RANDOM disponíveis.
   if (random.length > 0) {
     const pick = random[Math.floor(Math.random() * random.length)]!;
     return { id: pick.id };

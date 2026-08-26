@@ -496,7 +496,7 @@ function GeralTab({ initial }: Props) {
 
       {/* Ícone da aba. Separado da logo porque os formatos brigam: a logo é
           uma faixa larga com o nome escrito, e isto é lido a 16px num
-          quadrado. Sem ícone próprio, a logo assume — apertada, mas ainda
+          quadrado. Sem ícone próprio, a logo assume, apertada mas ainda
           da marca. */}
       <div className="flex items-center gap-4 rounded-xl border bg-muted/30 p-4">
         <input
@@ -543,8 +543,8 @@ function GeralTab({ initial }: Props) {
           <p className="text-sm font-semibold">Ícone da aba (favicon)</p>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Aparece na aba do navegador e nos favoritos, num quadrado de 16 a
-            32 pixels. Imagem larga com texto vira um borrão nesse tamanho —
-            funciona melhor um símbolo, uma letra ou o miolo da marca.
+            32 pixels. Imagem larga com texto vira um borrão nesse tamanho.
+            Funciona melhor um símbolo, uma letra ou o miolo da marca.
             {!faviconUrl && " Enquanto estiver vazio, a logo é usada."}
           </p>
           {faviconUrl && (

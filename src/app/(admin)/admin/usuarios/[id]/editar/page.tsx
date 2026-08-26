@@ -42,7 +42,7 @@ export default async function EditUserPage({
 
   if (!user) notFound();
   // Só permite editar se o user pertence ao tenant atual (membro ou
-  // já comprou em alguma rifa) — exceto SUPER_ADMIN que vê todos.
+  // já comprou em alguma rifa), exceto SUPER_ADMIN que vê todos.
   const belongsToTenant =
     user.tenantId === tenantId || user.reservations.length > 0;
   if (!belongsToTenant && session.user.role !== "SUPER_ADMIN") {
@@ -50,7 +50,7 @@ export default async function EditUserPage({
   }
 
   // Conta sem CPF (criada antes do passwordless por CPF): admin precisa
-  // preencher um CPF válido antes de salvar — o schema exige.
+  // preencher um CPF válido antes de salvar, o schema exige.
   const isSelf = session?.user?.id === user.id;
 
   return (

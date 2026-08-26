@@ -1,14 +1,14 @@
-// Helpers de autorização — chamados no topo de Server Components/Actions
+// Helpers de autorização, chamados no topo de Server Components/Actions
 // que exigem perfil específico.
 //
 // IMPORTANTE: o JWT do NextAuth guarda o `role` no momento do login. Se o
 // admin promove alguém, o JWT antigo continuaria mostrando o role antigo
 // até a pessoa relogar. Por isso aqui consultamos o role direto do banco
-// em todas as checagens admin — assim a promoção vale imediatamente, sem
+// em todas as checagens admin, assim a promoção vale imediatamente, sem
 // precisar logout/login.
 //
 // Multi-tenant: ADMIN só pode operar no tenant ao qual pertence
-// (User.tenantId). SUPER_ADMIN é global — opera em qualquer tenant
+// (User.tenantId). SUPER_ADMIN é global, opera em qualquer tenant
 // (geralmente o tenant resolvido pelo host atual).
 
 import { redirect } from "next/navigation";
@@ -47,7 +47,7 @@ export async function requireAdmin() {
 }
 
 /**
- * Igual ao requireAdmin, mas sem redirecionar quem tem senha temporária —
+ * Igual ao requireAdmin, mas sem redirecionar quem tem senha temporária,
  * usado pela própria tela de troca de senha, que senão redirecionaria para
  * si mesma em laço.
  */

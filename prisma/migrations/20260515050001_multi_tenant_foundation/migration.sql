@@ -92,7 +92,7 @@ END $$;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM "Raffle" WHERE "tenantId" IS NULL) THEN
-    RAISE EXCEPTION 'Existem rifas sem tenantId — crie ao menos 1 ADMIN no banco antes de aplicar essa migration (rode prisma db seed).';
+    RAISE EXCEPTION 'Existem rifas sem tenantId, crie ao menos 1 ADMIN no banco antes de aplicar essa migration (rode prisma db seed).';
   END IF;
 END $$;
 
@@ -104,7 +104,7 @@ ALTER TABLE "Raffle" ADD CONSTRAINT "Raffle_tenantId_fkey"
 
 CREATE INDEX "Raffle_tenantId_idx" ON "Raffle"("tenantId");
 
--- Slug deixa de ser único globalmente — passa a ser único por tenant.
+-- Slug deixa de ser único globalmente, passa a ser único por tenant.
 ALTER TABLE "Raffle" DROP CONSTRAINT IF EXISTS "Raffle_slug_key";
 DROP INDEX IF EXISTS "Raffle_slug_key";
 CREATE UNIQUE INDEX "Raffle_tenantId_slug_key" ON "Raffle"("tenantId", "slug");

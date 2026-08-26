@@ -8,7 +8,7 @@ import { toSlug } from "@/lib/slug";
 const shortId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 6);
 
 // Garante slug único dentro do tenant: gera a partir do título; em colisão
-// adiciona sufixo curto. Tenta no máximo 5 vezes — basta para evitar loop
+// adiciona sufixo curto. Tenta no máximo 5 vezes, basta para evitar loop
 // infinito.
 export async function generateUniqueSlug(
   title: string,

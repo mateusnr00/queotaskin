@@ -1,8 +1,8 @@
 "use client";
 
-// Gráfico de vendas (últimos 60 minutos) — agrupado por minuto e por status.
+// Gráfico de vendas (últimos 60 minutos), agrupado por minuto e por status.
 // Os dados chegam pré-bucketados do server. A linha laranja é Pagos, amarela
-// Reservados e azul Expirados — mesmas cores das CSS vars chart-*.
+// Reservados e azul Expirados, mesmas cores das CSS vars chart-*.
 
 import {
   Area,

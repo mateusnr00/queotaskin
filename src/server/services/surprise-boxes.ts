@@ -11,11 +11,11 @@
 // 3. Calcula quantas caixas o comprador ganha:
 //    - Acumulativo: soma todos os combos com threshold ≤ tickets.
 //    - Não acumulativo: pega só o combo com maior threshold ≤ tickets.
-// 4. Cria N SurpriseBox em status UNOPENED (não sorteia prêmio ainda —
+// 4. Cria N SurpriseBox em status UNOPENED (não sorteia prêmio ainda,
 //    isso só acontece quando o comprador "abre" a caixa).
 //
 // A abertura em si (sorteio do prêmio, decremento de estoque) fica numa
-// server action separada (openSurpriseBoxAction — próxima PR).
+// server action separada (openSurpriseBoxAction, próxima PR).
 
 import { prisma } from "@/lib/db";
 

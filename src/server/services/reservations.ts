@@ -1,4 +1,4 @@
-// Serviço de reservas — coração da concorrência do sistema.
+// Serviço de reservas, coração da concorrência do sistema.
 //
 // COMO EVITAMOS VENDA DUPLA DE NÚMEROS:
 //
@@ -7,7 +7,7 @@
 //
 // 2. Tentamos inserir todos os tickets dentro de uma transação Prisma. Se UM
 //    INSERT falha com erro de unique constraint (P2002), a transação inteira
-//    rola pra trás — nenhum ticket é criado, nenhuma reserva é gravada.
+//    rola pra trás, nenhum ticket é criado, nenhuma reserva é gravada.
 //
 // 3. Depois do erro, fazemos uma query separada pra descobrir QUAIS números
 //    estão tomados e devolvemos isso pra UI mostrar uma mensagem útil ao
@@ -184,7 +184,7 @@ export async function createReservation(input: CreateReservationInput) {
 
   // 5. Transação: cria reserva + tickets. Se qualquer ticket colidir, rolla tudo.
   //    Reservas grátis pulam o ciclo PENDING → PIX → PAID: já nascem PAID
-  //    com os tickets PAID e paidAt agora — não tem o que cobrar, não tem
+  //    com os tickets PAID e paidAt agora, não tem o que cobrar, não tem
   //    countdown, não tem cobrança Pix. O job de expiração ignora qualquer
   //    coisa que não esteja PENDING, então a reserva fica garantida pra
   //    sempre. A UI do comprovante já detecta PAID e renderiza a tela

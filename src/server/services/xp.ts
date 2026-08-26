@@ -5,7 +5,7 @@
 //
 // Concorrência: creditar é `insere no extrato → recalcula o total`. Feito em
 // duas idas ao banco sem trava, dois pagamentos simultâneos do mesmo usuário
-// leem o mesmo total antigo e o segundo sobrescreve o primeiro — o XP de uma
+// leem o mesmo total antigo e o segundo sobrescreve o primeiro, o XP de uma
 // das compras some. Por isso todo crédito roda dentro de uma transação com
 // `pg_advisory_xact_lock` por (usuário, tenant), e o total é RECALCULADO a
 // partir do extrato depois do insert, nunca incrementado a partir de uma
@@ -19,7 +19,7 @@ import { xpForPurchase } from "@/lib/rank";
 // Idempotência é resolvida com "consulta antes de inserir", nunca capturando
 // a violação do índice único: no Postgres, um statement que falha aborta a
 // transação inteira (SQLSTATE 25P02) e todo comando seguinte é recusado até o
-// rollback — então não dá para capturar o erro e continuar somando o extrato.
+// rollback, então não dá para capturar o erro e continuar somando o extrato.
 // Consultar antes é seguro porque já estamos dentro do advisory lock: nenhuma
 // outra transação consegue inserir para o mesmo (usuário, tenant) no meio do
 // caminho. O índice único fica como rede de segurança.
@@ -74,7 +74,7 @@ async function recomputeTotal(
  * Credita XP de uma reserva paga. Idempotente: o índice único
  * (userId, reason, reservationId) faz a segunda chamada virar no-op.
  *
- * Nunca lança — XP é efeito colateral do pagamento, e falhar aqui não pode
+ * Nunca lança, XP é efeito colateral do pagamento, e falhar aqui não pode
  * derrubar a confirmação de uma compra que o cliente já pagou.
  */
 export async function awardXpForReservation(
@@ -147,7 +147,7 @@ export async function awardXpForReservation(
  *
  * AINDA SEM CHAMADOR AUTOMÁTICO: a plataforma tem o status REFUNDED no enum,
  * mas nenhum fluxo que o aplique. Quando o estorno for implementado, chame
- * esta função no mesmo ponto em que a reserva vira REFUNDED — é para isso que
+ * esta função no mesmo ponto em que a reserva vira REFUNDED, é para isso que
  * o extrato existe. Até lá, dá para chamá-la manualmente num script.
  */
 export async function reverseXpForReservation(
@@ -181,7 +181,7 @@ export async function reverseXpForReservation(
           amount: -purchase.amount,
           reason: "REFUND",
           reservationId,
-          description: `Estorno — ${purchase.description ?? "compra"}`,
+          description: `Estorno de ${purchase.description ?? "compra"}`,
         },
       });
 
@@ -196,7 +196,7 @@ export async function reverseXpForReservation(
 
 /**
  * Lançamento manual pelo painel (bônus de evento, compensação, correção).
- * Sem reservationId, então pode repetir — cada chamada é um lançamento novo.
+ * Sem reservationId, então pode repetir, cada chamada é um lançamento novo.
  * Diferente dos créditos automáticos, este LANÇA em caso de erro: o admin
  * precisa saber que o ajuste não foi aplicado.
  */
@@ -249,8 +249,9 @@ export interface LeaderboardRow {
  * Ranking do tenant, do maior XP para o menor.
  *
  * É uma ferramenta de operação, não uma vitrine: por isso traz telefone,
- * gasto e última compra junto do XP. A tela vive só no painel administrativo
- * — expor publicamente quem gasta mais é convite a engenharia social.
+ * gasto e última compra junto do XP. A tela vive só no painel
+ * administrativo: expor publicamente quem gasta mais é convite a
+ * engenharia social.
  */
 export async function leaderboard(
   tenantId: string,
@@ -270,7 +271,7 @@ export async function leaderboard(
 
   const userIds = rows.map((row) => row.userId);
 
-  // Gasto e volume de cada um, numa agregação só — restrita ao tenant, para
+  // Gasto e volume de cada um, numa agregação só, restrita ao tenant, para
   // o admin não ver somatório de compras feitas em outro operador.
   const stats = await prisma.reservation.groupBy({
     by: ["userId"],

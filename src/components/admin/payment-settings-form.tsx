@@ -3,7 +3,7 @@
 // Form de configuração do gateway de PIX por tenant.
 //
 // - Toggle provider (SyncPay/CodePay) muda quais campos aparecem.
-// - Secrets nunca voltam do servidor — quando já tem um salvo, mostramos
+// - Secrets nunca voltam do servidor, quando já tem um salvo, mostramos
 //   placeholder "•••• já configurado" e enviar vazio = manter o atual.
 // - Mostra a URL exata do webhook que o admin precisa cadastrar no painel
 //   do gateway (CodePay é global no painel deles; SyncPay vem no postback

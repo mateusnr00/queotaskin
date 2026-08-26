@@ -28,7 +28,7 @@ import { MAX_IMAGES_PER_RAFFLE, MAX_IMAGE_BYTES } from "@/lib/raffle-images";
 // =============================================================
 
 // Qualquer image/* passa. Barrar por lista fixa rejeitava AVIF, HEIC e GIF,
-// e o navegador nem sempre preenche file.type — daí o fallback pela extensão.
+// e o navegador nem sempre preenche file.type, daí o fallback pela extensão.
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
 export async function uploadRaffleImageAction(
@@ -63,7 +63,7 @@ export async function uploadRaffleImageAction(
     if (file.size > MAX_IMAGE_BYTES) {
       return {
         ok: false,
-        error: "Imagem grande demais para enviar — tente uma menor",
+        error: "Imagem grande demais para enviar. Tente uma menor",
       };
     }
 
@@ -99,12 +99,12 @@ export async function uploadRaffleImageAction(
   }
 }
 
-// Adicionar imagem via URL externa — caminho manual quando o upload do
+// Adicionar imagem via URL externa, caminho manual quando o upload do
 // Supabase tá quebrado ou o admin já tem a imagem hospedada em outro
 // lugar (postimg, imgur, etc). A URL é gravada como está; nada de
 // re-upload pro nosso bucket. Como o delete do storage só roda quando
 // `pathFromPublicUrl` reconhece o domínio do Supabase, URLs externas
-// permanecem nos hosts de origem mesmo após o admin remover o card —
+// permanecem nos hosts de origem mesmo após o admin remover o card,
 // comportamento correto pra não tentar deletar arquivo de terceiros.
 const addImageByUrlSchema = z.object({
   raffleId: z.string().cuid(),
@@ -275,7 +275,7 @@ const prizesSchema = z.object({
     .array(
       z.object({
         description: z.string().min(1, "Descrição obrigatória").max(500).trim(),
-        // Metadados da skin de CS2. Todos opcionais — um prêmio pode não
+        // Metadados da skin de CS2. Todos opcionais, um prêmio pode não
         // ser skin (saldo, periférico) e aí só a descrição é usada.
         imageUrl: z
           .string()
@@ -428,7 +428,7 @@ const promotionsSchema = z.object({
 });
 
 // Escolha de gateway pra um sorteio específico. null = herda o padrão do
-// tenant. Credenciais não passam por aqui — só a escolha do provider.
+// tenant. Credenciais não passam por aqui, só a escolha do provider.
 const paymentProviderSchema = z.object({
   raffleId: z.string().cuid(),
   paymentProvider: z.enum(["SYNCPAY", "CODEPAY"]).nullable(),
@@ -620,7 +620,7 @@ export async function setRaffleAwardedTicketsAction(
 }
 
 // =============================================================
-// CAIXAS SURPRESAS — combos (X cotas → N caixas)
+// CAIXAS SURPRESAS, combos (X cotas → N caixas)
 // =============================================================
 
 const surpriseBoxCombosSchema = z.object({
@@ -643,7 +643,7 @@ const surpriseBoxCombosSchema = z.object({
 });
 
 // Substitui a lista inteira a cada save (mesmo padrão de Promotion/Prize).
-// Dedup por threshold — combos com mesma quantidade colidem no @@unique.
+// Dedup por threshold, combos com mesma quantidade colidem no @@unique.
 export async function setRaffleSurpriseBoxCombosAction(
   raw: unknown
 ): Promise<ActionResult> {
@@ -713,7 +713,7 @@ export async function setRaffleSurpriseBoxCombosAction(
 }
 
 // =============================================================
-// CAIXAS SURPRESAS — pool de prêmios (lista de itens da caixa)
+// CAIXAS SURPRESAS, pool de prêmios (lista de itens da caixa)
 // =============================================================
 
 const surpriseBoxPrizeBatchSchema = z.object({
@@ -729,7 +729,7 @@ const surpriseBoxPrizeBatchSchema = z.object({
   locked: z.boolean().default(false),
 });
 
-// Cria N unidades do mesmo prêmio (1 linha = 1 unidade no banco — modelo
+// Cria N unidades do mesmo prêmio (1 linha = 1 unidade no banco, modelo
 // que casa com a listagem pública "115/500 Disponível/Ganhador").
 export async function createSurpriseBoxPrizesAction(
   raw: unknown
@@ -772,7 +772,7 @@ const surpriseBoxPrizeIdSchema = z.object({
 });
 
 // Toggle lock/unlock de um prêmio. Prêmio com claimedAt setado (já saiu
-// numa caixa) não pode mudar lock — não faria diferença.
+// numa caixa) não pode mudar lock, não faria diferença.
 export async function toggleSurpriseBoxPrizeLockAction(
   raw: unknown
 ): Promise<ActionResult> {
@@ -806,7 +806,7 @@ export async function toggleSurpriseBoxPrizeLockAction(
 }
 
 // Remove um prêmio do pool. Prêmio já sorteado (claimedAt setado) não
-// pode ser deletado — preserva histórico do ganhador.
+// pode ser deletado, preserva histórico do ganhador.
 export async function deleteSurpriseBoxPrizeAction(
   raw: unknown
 ): Promise<ActionResult> {
@@ -846,7 +846,7 @@ const setWinnerSchema = z.object({
   raffleId: z.string().cuid(),
   ticketNumber: z.coerce.number().int().min(1).max(10_000_000),
   note: z.string().max(2000).optional().default(""),
-  // Se true, promove o sorteio pra FINISHED. Default true — declarar
+  // Se true, promove o sorteio pra FINISHED. Default true, declarar
   // ganhador implica encerrar a rifa. Admin pode desligar (raro) se quer
   // registrar antes e fechar depois.
   finish: z.boolean().default(true),
@@ -890,7 +890,7 @@ export async function setRaffleWinnerAction(
       };
     }
 
-    // Busca o dono do ticket sorteado. Precisa ser PAID ou AWARDED — se o
+    // Busca o dono do ticket sorteado. Precisa ser PAID ou AWARDED, se o
     // número não foi comprado, o admin errou o input.
     const ticket = await prisma.ticket.findFirst({
       where: {
@@ -923,7 +923,7 @@ export async function setRaffleWinnerAction(
     revalidatePath(`/admin/sorteios/${raffleId}/compras`);
     revalidatePath(`/admin/sorteios`);
     revalidatePath(`/sorteios`);
-    // O slug da rifa pública muda por tenant — invalida o pai que abriga
+    // O slug da rifa pública muda por tenant, invalida o pai que abriga
     // todas as rifas públicas.
     revalidatePath(`/s/`);
 
@@ -948,7 +948,7 @@ const clearWinnerSchema = z.object({
   raffleId: z.string().cuid(),
 });
 
-// Desfaz a definição de ganhador — volta a rifa pro estado ACTIVE se
+// Desfaz a definição de ganhador, volta a rifa pro estado ACTIVE se
 // estava FINISHED. Útil se o admin declarou o número errado.
 export async function clearRaffleWinnerAction(
   raw: unknown

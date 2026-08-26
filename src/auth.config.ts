@@ -14,10 +14,10 @@ export const authConfig = {
   },
   session: { strategy: "jwt" },
   callbacks: {
-    // Roda em TODA request graças ao middleware — decide se a URL pode passar.
+    // Roda em TODA request graças ao middleware, decide se a URL pode passar.
     // Aqui o middleware roda em edge runtime (sem Prisma), então só conferimos
     // se está logado. A checagem de role ADMIN é feita a nível de página via
-    // `requireAdmin()` (que consulta o banco) — isso garante que promoções
+    // `requireAdmin()` (que consulta o banco), isso garante que promoções
     // valem imediatamente, sem o usuário precisar relogar.
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
@@ -35,7 +35,7 @@ export const authConfig = {
       // Host da requisição, não de request.nextUrl: atrás de proxy aquele
       // vira "localhost:3000" e o redirect cai numa origem inexistente.
       //
-      // No host do painel o destino é /admin — mandar para "/" ali só
+      // No host do painel o destino é /admin, mandar para "/" ali só
       // provoca um segundo salto, porque a raiz do painel volta para /admin.
       if (isAuthRoute && isLoggedIn) {
         const host = request.headers.get("host") ?? "";

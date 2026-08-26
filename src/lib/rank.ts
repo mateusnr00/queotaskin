@@ -5,7 +5,7 @@
 // tiradas da carreira de um jogador profissional.
 //
 // XP só entra por compra paga (10 XP por real, ajustável por tenant). XP não
-// é gasto nem expira: o nível é permanente. Isso é proposital — um rank que
+// é gasto nem expira: o nível é permanente. Isso é proposital, um rank que
 // pode cair pune quem parou de comprar, e o objetivo é o contrário.
 
 export const XP_PER_BRL_DEFAULT = 10;
@@ -18,7 +18,7 @@ export const MAX_LEVEL = 21;
  *
  * Tabela, não fórmula. Uma curva fechada obriga a escada a caber na equação;
  * aqui os degraus foram escolhidos um a um, e o começo é de propósito bem
- * mais barato que o topo — nível 1 sai por R$ 100 e o 21 pede R$ 30 mil
+ * mais barato que o topo, nível 1 sai por R$ 100 e o 21 pede R$ 30 mil
  * acumulados.
  *
  * Os valores estão em XP. A tabela foi definida em reais na régua padrão de
@@ -26,28 +26,28 @@ export const MAX_LEVEL = 21;
  * enquanto o tenant não mudar essa régua em Admin → Ranking.
  */
 export const XP_POR_NIVEL: readonly number[] = [
-  0, //          nível 0  — R$ 0
-  1_000, //      nível 1  — R$ 100
-  2_500, //      nível 2  — R$ 250
-  5_000, //      nível 3  — R$ 500
-  8_000, //      nível 4  — R$ 800
-  12_000, //     nível 5  — R$ 1.200
-  17_000, //     nível 6  — R$ 1.700
-  23_000, //     nível 7  — R$ 2.300
-  30_000, //     nível 8  — R$ 3.000
-  38_000, //     nível 9  — R$ 3.800
-  47_000, //     nível 10 — R$ 4.700
-  57_000, //     nível 11 — R$ 5.700
-  70_000, //     nível 12 — R$ 7.000
-  85_000, //     nível 13 — R$ 8.500
-  100_000, //    nível 14 — R$ 10.000
-  120_000, //    nível 15 — R$ 12.000
-  145_000, //    nível 16 — R$ 14.500
-  170_000, //    nível 17 — R$ 17.000
-  200_000, //    nível 18 — R$ 20.000
-  230_000, //    nível 19 — R$ 23.000
-  260_000, //    nível 20 — R$ 26.000
-  300_000, //    nível 21 — R$ 30.000
+  0, //          nível 0 , R$ 0
+  1_000, //      nível 1 , R$ 100
+  2_500, //      nível 2 , R$ 250
+  5_000, //      nível 3 , R$ 500
+  8_000, //      nível 4 , R$ 800
+  12_000, //     nível 5 , R$ 1.200
+  17_000, //     nível 6 , R$ 1.700
+  23_000, //     nível 7 , R$ 2.300
+  30_000, //     nível 8 , R$ 3.000
+  38_000, //     nível 9 , R$ 3.800
+  47_000, //     nível 10, R$ 4.700
+  57_000, //     nível 11, R$ 5.700
+  70_000, //     nível 12, R$ 7.000
+  85_000, //     nível 13, R$ 8.500
+  100_000, //    nível 14, R$ 10.000
+  120_000, //    nível 15, R$ 12.000
+  145_000, //    nível 16, R$ 14.500
+  170_000, //    nível 17, R$ 17.000
+  200_000, //    nível 18, R$ 20.000
+  230_000, //    nível 19, R$ 23.000
+  260_000, //    nível 20, R$ 26.000
+  300_000, //    nível 21, R$ 30.000
 ];
 
 export function xpForLevel(level: number): number {
@@ -82,7 +82,7 @@ export interface PrestigeRank {
  * Patentes acima do nível 21, em ordem crescente de prestígio.
  *
  * A lista precisa ficar em ordem crescente de XP: prestigeFromXp percorre de
- * ponta a ponta e guarda a última alcançada. Reordenar é só mexer aqui — a UI
+ * ponta a ponta e guarda a última alcançada. Reordenar é só mexer aqui, a UI
  * e os cálculos derivam tudo desta lista.
  */
 export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
@@ -122,7 +122,7 @@ export interface Tier {
 /**
  * Faixas dos níveis 0–21, nomeadas como as patentes do competitivo do CS.
  *
- * A cor é o único elemento cromático de cada componente de rank — por isso é
+ * A cor é o único elemento cromático de cada componente de rank, por isso é
  * dessaturada de propósito. Uma lista de ranking com sete cores neon vira
  * ruído; puxada para o sóbrio, ela informa sem gritar.
  */
@@ -221,7 +221,7 @@ export interface RankProgress {
 }
 
 /**
- * Progresso até o próximo degrau — seja o próximo nível numérico ou a
+ * Progresso até o próximo degrau, seja o próximo nível numérico ou a
  * próxima patente de prestígio.
  */
 export function rankProgress(
@@ -291,7 +291,7 @@ function nextStep(
 
 /**
  * XP ganho por uma compra. Trunca para o real cheio: R$ 19,90 rende os
- * mesmos 190 XP que R$ 19,00. Mesma regra do SKNRS — evita que centavos
+ * mesmos 190 XP que R$ 19,00. Mesma regra do SKNRS, evita que centavos
  * virem XP fracionado e mantém a conta legível pro comprador.
  */
 export function xpForPurchase(

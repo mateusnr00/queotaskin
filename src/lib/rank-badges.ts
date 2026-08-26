@@ -1,7 +1,7 @@
 // Os 21 selos de nível, como dados.
 //
-// A silhueta sobe em quatro degraus — hexágono (1–5), losango (6–11),
-// heptágono (12–18) e octógono (19–21) — e a cor percorre roxo, azul, verde,
+// A silhueta sobe em quatro degraus, hexágono (1–5), losango (6–11),
+// heptágono (12–18) e octógono (19–21), e a cor percorre roxo, azul, verde,
 // amarelo e vermelho até o arco-íris do topo. Assim dá para saber a faixa de
 // alguém pela forma, mesmo de longe ou sem distinguir matiz.
 //
@@ -46,7 +46,7 @@ export const DESIGN_POR_NIVEL: Record<number, DesignDeNivel> = {
 };
 
 // Nível 0: quem criou conta e ainda não gastou nada. Cinza, fora da escala
-// cromática que vai do roxo ao vermelho — o selo diz "você ainda não entrou
+// cromática que vai do roxo ao vermelho, o selo diz "você ainda não entrou
 // na escada", e a primeira compra já muda a cor.
 export const DESIGN_NIVEL_ZERO: DesignDeNivel = {
   forma: "hexagono",

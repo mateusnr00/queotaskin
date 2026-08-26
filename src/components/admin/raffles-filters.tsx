@@ -2,7 +2,7 @@
 
 // Barra de filtros da lista de sorteios. Sincroniza com URL query params:
 // q (texto), status, privacy, drawDate (YYYY-MM-DD). Submete via Link para
-// não precisar de cliente complexo — mas usa useTransition pra spinner suave.
+// não precisar de cliente complexo, mas usa useTransition pra spinner suave.
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";

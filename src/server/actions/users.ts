@@ -8,7 +8,7 @@
 // - Um admin NÃO pode rebaixar a si mesmo (anti-lockout: se for o único
 //   admin e mudar de role, ninguém mais consegue entrar no painel).
 //
-// Não permitimos editar e-mail aqui — login do sistema é por nome+celular,
+// Não permitimos editar e-mail aqui, login do sistema é por nome+celular,
 // e-mail é só contato opcional.
 
 import { revalidatePath } from "next/cache";

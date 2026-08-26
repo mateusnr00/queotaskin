@@ -1,7 +1,7 @@
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes, APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
 # QuéOta Skin
@@ -9,8 +9,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 Sorteios de skins de Counter-Strike 2, construído sobre o motor de rifas do
 JobRifa (importado de `mateusnr00/rifa-system`).
 
-A camada de domínio do CS2 — ficha de skin nos prêmios, cores de raridade,
-link de troca da Steam, fila de entregas — está documentada na seção
+A camada de domínio do CS2, ficha de skin nos prêmios, cores de raridade,
+link de troca da Steam, fila de entregas, está documentada na seção
 **Camada CS2** do `README.md`. Comece por `src/lib/cs2.ts`.
 
 ## Deploy
@@ -22,7 +22,7 @@ Production; Preview pula e apenas compila).
 
 Bootstrap de um ambiente novo: setar `RUN_SEED=1` no primeiro build faz o
 mesmo script rodar `prisma/seed.ts` depois das migrations. Sem isso o banco
-sobe vazio e toda página pública responde 404 — sem `Tenant` cadastrado
+sobe vazio e toda página pública responde 404, sem `Tenant` cadastrado
 nenhum host resolve. **Remova a variável depois do primeiro deploy**: build
 não é lugar de escrever dados.
 

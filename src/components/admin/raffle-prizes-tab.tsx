@@ -76,7 +76,7 @@ export function RafflePrizesTab({
   }
 
   function save() {
-    // Prêmio sem descrição é linha vazia deixada pelo admin — descarta.
+    // Prêmio sem descrição é linha vazia deixada pelo admin, descarta.
     const cleaned = prizes
       .map((p) => ({ ...p, description: p.description.trim() }))
       .filter((p) => p.description.length > 0);
@@ -109,7 +109,7 @@ export function RafflePrizesTab({
           <p className="text-blue-900 dark:text-blue-200">
             Informe os prêmios pelos quais os participantes concorrem. Você pode
             cadastrar até {MAX_PRIZES} prêmios. Eles aparecem ordenados na
-            página pública do sorteio — e quando você preenche a ficha da skin,
+            página pública do sorteio. Quando você preenche a ficha da skin,
             o card ganha a cor oficial da raridade do CS2.
           </p>
         </div>
@@ -193,7 +193,7 @@ export function RafflePrizesTab({
             checked={showSkinSpecs}
             onChange={setShowSkinSpecs}
             label="Mostrar ficha técnica da skin"
-            description="Exibe raridade, desgaste, float, coleção e valor de mercado acima do preço. Ocupa espaço no celular — vale nas skins caras, onde o float justifica o valor. Desligado por padrão."
+            description="Exibe raridade, desgaste, float, coleção e valor de mercado acima do preço. Ocupa espaço no celular, então vale nas skins caras, onde o float justifica o valor. Desligado por padrão."
           />
         </div>
 

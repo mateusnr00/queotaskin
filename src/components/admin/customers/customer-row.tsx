@@ -58,11 +58,11 @@ export function CustomerRow({
       </TableCell>
 
       <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground">
-        {customer.cpf ? formatCpf(customer.cpf) : "—"}
+        {customer.cpf ? formatCpf(customer.cpf) : "-"}
       </TableCell>
 
       <TableCell className="max-w-44 truncate text-xs text-muted-foreground">
-        {customer.email ?? "—"}
+        {customer.email ?? "-"}
       </TableCell>
 
       <TableCell>
@@ -82,7 +82,7 @@ export function CustomerRow({
       </TableCell>
 
       <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
-        {customer.lastPurchaseAt ? formatDate(customer.lastPurchaseAt) : "—"}
+        {customer.lastPurchaseAt ? formatDate(customer.lastPurchaseAt) : "-"}
       </TableCell>
 
       <TableCell className="text-right">
@@ -97,7 +97,7 @@ export function CustomerRow({
             <MessageCircle className="h-4 w-4" />
           </a>
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">-</span>
         )}
       </TableCell>
     </TableRow>

@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Meus títulos" };
 
 // Página que lista todas as reservas do usuário logado, com status e
 // (quando pago) os números reservados. Inspirada no padrão "Meus títulos"
-// de plataformas concorrentes — cartão por reserva com capa da campanha.
+// de plataformas concorrentes, cartão por reserva com capa da campanha.
 //
 // Reservas EXPIRADAS/CANCELADAS continuam aparecendo: o histórico é parte
 // da experiência ("já tentei essa, não paguei a tempo"). Só PAGAS expõem
@@ -25,7 +25,7 @@ export default async function MyTicketsPage() {
   const tenant = await getCurrentTenant();
   if (!tenant) notFound();
 
-  // Filtra pelo tenant atual — o participante pode ter comprado em vários
+  // Filtra pelo tenant atual, o participante pode ter comprado em vários
   // tenants, mas "Meus títulos" no domínio do Mateus só lista os do Mateus.
   const reservations = await prisma.reservation.findMany({
     where: {
@@ -48,7 +48,7 @@ export default async function MyTicketsPage() {
     },
   });
 
-  // Snapshot do "agora" no servidor — o React Compiler proíbe Date.now()
+  // Snapshot do "agora" no servidor, o React Compiler proíbe Date.now()
   // dentro do render dos componentes filhos.
   const now = new Date().getTime();
 
@@ -110,7 +110,7 @@ function ReservationCard({
   const isPending = reservation.status === "PENDING";
   // Pendente vira ativo só enquanto não expirou. Após expiresAt, mesmo que
   // o status ainda esteja PENDING (cron não rodou), tratamos como expirado
-  // pra UI — a próxima visita à rifa libera os números.
+  // pra UI, a próxima visita à rifa libera os números.
   const stillPending = isPending && reservation.expiresAt.getTime() > now;
   const linkable = isPaid || stillPending;
   const href = linkable ? `/comprovante/${reservation.id}` : null;

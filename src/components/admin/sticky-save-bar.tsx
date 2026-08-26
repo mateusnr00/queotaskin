@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // Rodapé de salvar do editor de sorteio, fixado na base da janela.
 //
 // Antes só Geral e Títulos tinham barra fixa; as outras abas terminavam num
-// botão solto no fim do card, que rolava para fora da tela em aba longa —
+// botão solto no fim do card, que rolava para fora da tela em aba longa,
 // então o único elemento sempre visível na página era o de excluir o
 // sorteio, bem o oposto do que merece essa posição.
 //
@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 // action. Ela só padroniza onde o botão fica.
 //
 // Precisa ficar FORA do <Card> da aba: o Card tem overflow-hidden, e um
-// ancestral com overflow recortado desativa position:sticky no filho — a
+// ancestral com overflow recortado desativa position:sticky no filho, a
 // barra viraria um rodapé comum, sem grudar.
 export function StickySaveBar({
   status,

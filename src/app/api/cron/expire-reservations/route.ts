@@ -1,8 +1,8 @@
 // Endpoint chamado periodicamente para expirar reservas pendentes.
 //
 // Como será chamado em produção (escolha uma):
-//   1. Vercel Cron (vercel.json) — chama esse endpoint a cada N minutos.
-//   2. Inngest — quando a conta estiver configurada, mover a lógica para
+//   1. Vercel Cron (vercel.json), chama esse endpoint a cada N minutos.
+//   2. Inngest, quando a conta estiver configurada, mover a lógica para
 //      uma função Inngest. Esse endpoint pode permanecer como fallback.
 //
 // Segurança: o endpoint exige um header `Authorization: Bearer <secret>`

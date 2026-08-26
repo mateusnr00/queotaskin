@@ -9,15 +9,15 @@ import type { SkinRarity } from "@prisma/client";
 /**
  * Capa da campanha.
  *
- * Quando não há imagem cadastrada, em vez do ícone genérico — que deixava
- * todos os cards idênticos e mortos — desenha uma vitrine a partir dos dados
+ * Quando não há imagem cadastrada, em vez do ícone genérico, que deixava
+ * todos os cards idênticos e mortos, desenha uma vitrine a partir dos dados
  * da própria skin: o brilho na cor da raridade, o nome tipografado e o selo.
  * Cada campanha fica visualmente distinta mesmo antes de alguém subir a arte.
  */
 /**
  * Abreviação da arma para a miniatura: "★ AK-47 | Redline" -> "AK-47".
  * Na miniatura o título já está do lado, então repetir o nome inteiro só
- * gera quebra de linha em três — o que interessa ali é identificar de relance.
+ * gera quebra de linha em três, o que interessa ali é identificar de relance.
  */
 function siglaDaArma(nome: string): string {
   const semEstrela = nome.replace(/^[^A-Za-z0-9]+/, "");
@@ -72,7 +72,7 @@ export function RaffleCover({
         background: `radial-gradient(120% 90% at 50% 115%, ${accent}38, transparent 62%), linear-gradient(180deg, #0e1015, #15181e)`,
       }}
     >
-      {/* Hachura diagonal fina — textura de painel, quase imperceptível. */}
+      {/* Hachura diagonal fina, textura de painel, quase imperceptível. */}
       <div
         aria-hidden
         className="absolute inset-0 opacity-[0.05]"

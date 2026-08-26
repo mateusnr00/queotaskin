@@ -91,7 +91,7 @@ export default async function AdminDashboardPage() {
       _count: { _all: true },
     }),
     prisma.raffle.count({ where: { status: "ACTIVE", tenantId } }),
-    // Distinct buyers (PAID) hoje — usa raw para distinct count.
+    // Distinct buyers (PAID) hoje, usa raw para distinct count.
     // Filtra pelo tenant via JOIN com Raffle.
     prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
       SELECT COUNT(DISTINCT r."participantCpf")::bigint AS count

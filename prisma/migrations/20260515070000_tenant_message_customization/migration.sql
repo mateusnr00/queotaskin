@@ -3,7 +3,7 @@
 -- padrão hardcoded.
 --
 -- Backfill: a coluna global SiteSettings.thankYouImageUrl (singleton) vira
--- o valor inicial de Tenant.paidImageUrl pra todo tenant — assim a imagem
+-- o valor inicial de Tenant.paidImageUrl pra todo tenant, assim a imagem
 -- que o admin já tinha configurado continua aparecendo após o deploy. Os
 -- novos tenants criados depois nascem com NULL.
 

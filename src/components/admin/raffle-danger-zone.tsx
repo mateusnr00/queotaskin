@@ -1,7 +1,7 @@
 "use client";
 
 // Bloco "Danger Zone" no rodapé do editor de sorteio. Apaga a rifa
-// permanentemente — cascateia tickets, reservas, prêmios, imagens, etc.
+// permanentemente, cascateia tickets, reservas, prêmios, imagens, etc.
 // Pra evitar exclusão acidental, exige digitar o título exato antes de
 // liberar o botão.
 

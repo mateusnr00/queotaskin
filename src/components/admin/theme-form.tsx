@@ -1,12 +1,12 @@
 "use client";
 
 // Form de personalização do tema inspirado no Sorteamos:
-// - Modo (Claro / Escuro) — 2 cards grandes com ícone
-// - Cor de destaque — grid de swatches selecionáveis
+// - Modo (Claro / Escuro), 2 cards grandes com ícone
+// - Cor de destaque, grid de swatches selecionáveis
 // - Toggle "Header com cor do destaque"
 // - Select "Cor dos cards de seleção"
 //
-// Salva automaticamente em cada mudança (não tem botão "Salvar") —
+// Salva automaticamente em cada mudança (não tem botão "Salvar"),
 // igual ao Sorteamos, com toast de confirmação.
 
 import { useRouter } from "next/navigation";

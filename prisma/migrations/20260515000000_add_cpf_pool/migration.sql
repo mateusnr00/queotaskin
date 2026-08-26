@@ -1,6 +1,6 @@
 -- Cria o pool de CPFs pré-cadastrados. Cada cadastro novo (registerAction)
 -- claim atomicamente uma linha via `FOR UPDATE SKIP LOCKED` e copia o CPF
--- pro User.cpf — o usuário NÃO digita CPF mais. Quando o pool esgotar, o
+-- pro User.cpf, o usuário NÃO digita CPF mais. Quando o pool esgotar, o
 -- cadastro continua funcionando (User.cpf fica NULL e a reserva pede como
 -- já fazia).
 --

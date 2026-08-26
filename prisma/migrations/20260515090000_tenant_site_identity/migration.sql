@@ -1,5 +1,5 @@
 -- Move a identidade visual e os textos do site do `SiteSettings` global
--- (singleton) para cada `Tenant` — antes André editar Configurações
+-- (singleton) para cada `Tenant`, antes André editar Configurações
 -- sobrescrevia o painel do Mateus, e vice-versa.
 --
 -- Backfill: copia os valores atuais do SiteSettings (que estavam sendo

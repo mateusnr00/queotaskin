@@ -76,7 +76,7 @@ ALTER TABLE "Tenant"
   ADD COLUMN "rankShowOnHome" BOOLEAN NOT NULL DEFAULT true;
 
 -- Campanha exclusiva: nível mínimo para reservar. NULL = aberta a todos.
--- É o que dá consequência ao rank — sem isso ele é só um selo.
+-- É o que dá consequência ao rank, sem isso ele é só um selo.
 ALTER TABLE "Raffle"
   ADD COLUMN "minLevel" INTEGER;
 

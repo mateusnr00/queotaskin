@@ -237,7 +237,7 @@ const deleteRaffleSchema = z.object({
 // usam SetNull (o link sobrevive, só desvincula).
 //
 // Antes do DELETE, tentamos limpar as imagens do bucket Supabase
-// (best-effort — se falhar, a rifa some do banco mesmo assim e o arquivo
+// (best-effort, se falhar, a rifa some do banco mesmo assim e o arquivo
 // fica órfão no storage, que é menor mal que bloquear a exclusão).
 export async function deleteRaffleAction(
   raw: unknown

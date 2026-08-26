@@ -1,5 +1,5 @@
 -- Configurações da aba "Campanha / Compra" no painel admin (per-tenant).
--- loginMode: "phone" ou "cpf" — qual identificador usar no login público.
+-- loginMode: "phone" ou "cpf", qual identificador usar no login público.
 -- numbersNomenclature: como chamar as cotas ("titulos"/"numeros"/"bilhetes"/"numeros_sorte").
 -- quantityCardsHeading: texto custom acima dos quick-picks na reserva.
 -- minPurchaseAge: idade mínima exigida pra reservar (16/18/21).

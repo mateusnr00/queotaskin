@@ -1,7 +1,7 @@
 // Selos das patentes de prestígio, acima do nível 21.
 //
 // Ao contrário dos níveis, que se distinguem por número, aqui a patente é
-// escrita no próprio selo — e cada uma tem estrutura própria: Pro Player e
+// escrita no próprio selo, e cada uma tem estrutura própria: Pro Player e
 // MVP usam octógono de três camadas com traços nos cantos; o GOAT herda a
 // borda arco-íris e ganha coroa.
 //
@@ -23,7 +23,7 @@ const OCTOGONO = {
   centro: "69,25 131,25 175,69 175,131 131,175 69,175 25,131 25,69",
 };
 
-/** Traços decorativos nos quatro cantos — o par de cima usa o tom claro. */
+/** Traços decorativos nos quatro cantos, o par de cima usa o tom claro. */
 interface Tracos {
   cima: [string, string];
   baixo: [string, string];
@@ -79,7 +79,7 @@ const DESIGNS: Partial<Record<PrestigeKey, DesignDePatente>> = {
   },
 };
 
-/** Paleta da borda do GOAT — um degradê por lado, fechando a volta. */
+/** Paleta da borda do GOAT, um degradê por lado, fechando a volta. */
 const ARCO_IRIS_GOAT: string[][] = [
   ["#FF004C", "#FF00B8", "#A900FF"],
   ["#A900FF", "#4B47FF"],

@@ -4,7 +4,7 @@
 //
 // Por que isso existe: o corpo de uma Server Action é limitado a 1 MB pelo
 // Next e a 4,5 MB pela Vercel. Render de skin em PNG passa dos dois com
-// facilidade, e o corte acontece no framework — a action nem roda, então a
+// facilidade, e o corte acontece no framework, a action nem roda, então a
 // validação dela nunca chega a produzir uma mensagem útil. Em vez de brigar
 // com o teto, encolhemos o arquivo antes de ele virar requisição.
 //
@@ -87,7 +87,7 @@ function renamed(file: File, blob: Blob, ext: string): File {
 /**
  * Reduz e reencoda a imagem para caber no envio. Se qualquer etapa falhar
  * (formato que o navegador não decodifica, canvas indisponível), devolve o
- * arquivo original — quem valida de verdade é o servidor, e é melhor tentar
+ * arquivo original, quem valida de verdade é o servidor, e é melhor tentar
  * enviar do que barrar aqui.
  */
 export async function normalizeImage(file: File): Promise<NormalizeResult> {

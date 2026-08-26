@@ -1,4 +1,4 @@
-// Helpers de armazenamento de imagens — usa Supabase Storage com a service
+// Helpers de armazenamento de imagens, usa Supabase Storage com a service
 // role key (server-only). Bucket configurado via SUPABASE_STORAGE_BUCKET.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -9,7 +9,7 @@ let cached: SupabaseClient | null = null;
 // Strip BOM (U+FEFF) e whitespace das envs. Sem isso, um valor colado
 // no painel da Vercel a partir de um arquivo com BOM gera o erro
 // "Cannot convert argument to a ByteString because the character at
-// index 0 has a value of 65279" no upload — porque o cliente Supabase
+// index 0 has a value of 65279" no upload, porque o cliente Supabase
 // usa essas strings como header HTTP (latin1 only).
 function readEnv(name: string): string | undefined {
   const raw = process.env[name];

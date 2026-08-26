@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Campanhas" };
 
-// Lista pública de campanhas — versão completa (sem painel lateral de
+// Lista pública de campanhas, versão completa (sem painel lateral de
 // ganhadores como na home). Reaproveita o card compacto.
 //
 // Multi-tenant: filtra pelo tenant do host atual.

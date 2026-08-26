@@ -81,7 +81,7 @@ export default async function ReservationReceiptPage({
   if (reservation.raffle.tenantId !== tenant.id) notFound();
 
   // Auto-cura: reservas grátis (total 0) que ficaram presas em PENDING
-  // antes da correção de fluxo. Promove pra PAID na hora — não tem o que
+  // antes da correção de fluxo. Promove pra PAID na hora, não tem o que
   // cobrar, não tem por que esperar. Cobre tanto a reserva quanto os
   // tickets que ainda estavam RESERVED.
   if (
@@ -128,7 +128,7 @@ export default async function ReservationReceiptPage({
   }
 
   // Carrega os textos/imagens customizados do tenant. Cada campo pode estar
-  // null — os componentes caem pros defaults nesse caso.
+  // null, os componentes caem pros defaults nesse caso.
   const tenantMessages = await prisma.tenant.findUnique({
     where: { id: tenant.id },
     select: {
@@ -178,7 +178,7 @@ export default async function ReservationReceiptPage({
   }
 
   // ── Estado expirado/cancelado: convida a refazer a reserva. Sem
-  // countdown, sem PixError, sem badge — nada disso faz sentido aqui.
+  // countdown, sem PixError, sem badge, nada disso faz sentido aqui.
   if (
     reservation.status === "EXPIRED" ||
     reservation.status === "CANCELLED"
@@ -285,7 +285,7 @@ export default async function ReservationReceiptPage({
 
         {/* ---------- números, ainda fechados ---------- */}
         {/* Os números só se revelam depois do pagamento. Mostrá-los antes
-            dava a impressão de que a compra já estava garantida — e ela não
+            dava a impressão de que a compra já estava garantida, e ela não
             está: a reserva expira e os números voltam para o sorteio. Eles
             aparecem na tela de confirmação, junto do comprovante. */}
         <div className="rounded-2xl border bg-card p-4 text-center">

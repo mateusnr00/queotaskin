@@ -1,17 +1,17 @@
-// Seed script — popula o banco com dados iniciais.
+// Seed script, popula o banco com dados iniciais.
 // Rodar com: npm run db:seed
 //
 // É idempotente: re-rodar não duplica dados (upsert por celular/slug).
 //
 // Login do sistema é PASSWORDLESS por nome + celular. O admin do seed
-// também usa esse fluxo — defina SEED_ADMIN_PHONE no .env (DDD + número,
+// também usa esse fluxo, defina SEED_ADMIN_PHONE no .env (DDD + número,
 // 10 ou 11 dígitos) e SEED_ADMIN_NAME.
 //
 // Multi-tenant: o seed cria o tenant default "mateus" apontando pros
 // hosts conhecidos (sorteios.vip / www.sorteios.vip / admin.sorteios.vip)
 // e linka o admin do seed como SUPER_ADMIN dono desse tenant. Em outros
 // deploys (ambiente paralelo, white-label) cada admin tem seu próprio
-// tenant — esse seed apenas inicializa o primeiro.
+// tenant, esse seed apenas inicializa o primeiro.
 
 import { PrismaClient } from "@prisma/client";
 
@@ -27,7 +27,7 @@ const DEFAULT_ADMIN_HOST = "admin.queotaskin.com";
 
 
 // Catálogo de campanhas do seed. Skins reais do CS2 com raridade, desgaste
-// e float coerentes — serve tanto de demonstração quanto de referência de
+// e float coerentes, serve tanto de demonstração quanto de referência de
 // como cadastrar uma campanha de verdade no painel.
 //
 // Os prêmios saem sem imagem de propósito: a arte de cada skin é enviada
@@ -37,7 +37,7 @@ const DEFAULT_ADMIN_HOST = "admin.queotaskin.com";
 const CAMPAIGNS = [
   {
     slug: "karambit-doppler-phase-2",
-    title: "★ Karambit | Doppler (Nova de Fábrica) — Phase 2",
+    title: "★ Karambit | Doppler (Nova de Fábrica) Phase 2",
     shortDescription: "A faca mais desejada do CS2 pode ser sua por R$ 4,99.",
     description:
       "Karambit Doppler Phase 2 Nova de Fábrica, float baixíssimo e padrão limpo.\n\n" +
@@ -51,14 +51,14 @@ const CAMPAIGNS = [
     initialQuantity: 10,
     showOnHome: true,
     statusText: "Corre que está acabando!",
-    // Única campanha com a ficha técnica ligada — serve de exemplo do que o
+    // Única campanha com a ficha técnica ligada, serve de exemplo do que o
     // toggle faz. Numa skin de R$ 4.890 o float e o padrão justificam o
     // preço; nas mais baratas a ficha só empurraria o botão pra baixo.
     showSkinSpecs: true,
     selectionCards: [5, 10, 25, 50, 100, 250],
     prizes: [
       {
-        description: "★ Karambit | Doppler (Nova de Fábrica) — Phase 2",
+        description: "★ Karambit | Doppler (Nova de Fábrica) Phase 2",
         skinName: "★ Karambit | Doppler",
         skinRarity: "COVERT" as const,
         skinWear: "FACTORY_NEW" as const,
@@ -75,7 +75,7 @@ const CAMPAIGNS = [
     title: "★ Butterfly Knife | Fade (Nova de Fábrica)",
     shortDescription: "Fade 95%+ com degradê completo. A borboleta dos sonhos.",
     description:
-      "Butterfly Knife Fade Nova de Fábrica — um dos padrões mais valorizados do jogo.\n\n" +
+      "Butterfly Knife Fade Nova de Fábrica, um dos padrões mais valorizados do jogo.\n\n" +
       "Sorteio pela Loteria Federal na data indicada. O número vencedor é " +
       "formado pelos primeiros prêmios do concurso, conforme o regulamento.",
     totalNumbers: 5000,
@@ -101,7 +101,7 @@ const CAMPAIGNS = [
   },
   {
     slug: "kit-dos-sonhos-faca-e-luvas",
-    title: "Kit dos Sonhos — Faca + Luvas + AK",
+    title: "Kit dos Sonhos: Faca + Luvas + AK",
     shortDescription: "Três prêmios numa campanha só. Um número, três chances de setup.",
     description:
       "O kit completo: uma Talon Knife Marble Fade, um par de Specialist Gloves " +
@@ -157,7 +157,7 @@ const CAMPAIGNS = [
     title: "AK-47 | Redline (Testada em Campo)",
     shortDescription: "A clássica que nunca sai de moda. Números a R$ 1,50.",
     description:
-      "Perfeita para quem está começando a coleção. Campanha rápida de 100 números — " +
+      "Perfeita para quem está começando a coleção. Campanha rápida de 100 números, " +
       "sorteia assim que fechar.",
     totalNumbers: 100,
     pricePerNumber: 1.5,
@@ -296,7 +296,7 @@ async function main() {
   console.log("→ Criando tenant default...");
   // Identidade do QuéOta Skin: tema escuro + preset laranja do CS2, cotas
   // chamadas de "números" (é como o público de skin fala) e link de troca
-  // da Steam exigido já no cadastro — sem ele não há como entregar o prêmio.
+  // da Steam exigido já no cadastro, sem ele não há como entregar o prêmio.
   const tenantIdentity = {
     name: DEFAULT_TENANT_NAME,
     siteDescription:
@@ -317,7 +317,7 @@ async function main() {
     steamDeliveryNotice:
       "A skin é enviada por oferta de troca na Steam em até 24h após a " +
       "confirmação do ganhador. Mantenha o Steam Guard Mobile ativo há pelo " +
-      "menos 7 dias — sem isso a Valve retém a troca por até 15 dias.",
+      "menos 7 dias. Sem isso a Valve retém a troca por até 15 dias.",
   };
 
   const tenant = await prisma.tenant.upsert({
@@ -401,7 +401,7 @@ async function main() {
     // Prêmios entram só quando a campanha ainda não tem nenhum.
     //
     // Recriar a lista a cada seed apagava o que o admin tivesse editado no
-    // painel — o seed não é dono desses dados depois do primeiro deploy. E,
+    // painel, o seed não é dono desses dados depois do primeiro deploy. E,
     // com dois builds da Vercel rodando o seed ao mesmo tempo contra o mesmo
     // banco (produção e branch saem do mesmo commit), o delete de um caía no
     // meio do insert do outro e estourava a unique de (raffleId, position).
@@ -425,7 +425,7 @@ async function main() {
       pricePerNumber: Number(raffle.pricePerNumber),
       minLevel: raffle.minLevel,
     });
-    console.log(`  ✓ /s/${data.slug} — ${prizes.length} prêmio(s)`);
+    console.log(`  ✓ /s/${data.slug}: ${prizes.length} prêmio(s)`);
   }
 
   console.log("→ Criando participantes de exemplo com rank...");
@@ -460,7 +460,7 @@ async function main() {
 
     // Distribui o gasto entre campanhas, respeitando a capacidade de cada
     // uma. Sem esse teto o seed criava reservas de R$ 15.600 numa rifa de
-    // 100 números a R$ 1,50 — dinheiro que não corresponde a número nenhum,
+    // 100 números a R$ 1,50, dinheiro que não corresponde a número nenhum,
     // e que ainda esgotava a campanha logo no primeiro participante.
     let remainingSpend = player.spent;
 

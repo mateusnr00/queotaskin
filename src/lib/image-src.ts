@@ -1,7 +1,7 @@
 // A qual host o otimizador do next/image pode ir buscar imagem.
 //
 // O otimizador responde 400 Bad Request para qualquer host que não esteja em
-// images.remotePatterns (ver next.config.ts) — foi o que deixou a capa da
+// images.remotePatterns (ver next.config.ts), foi o que deixou a capa da
 // campanha quebrada mesmo com o upload correto e a URL certa no banco.
 //
 // As capas enviadas pelo painel vivem no Storage do Supabase e estão na

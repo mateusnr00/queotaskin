@@ -2,7 +2,7 @@
 
 // Server Action de reserva. EXIGE sessão: o usuário precisa ter conta
 // cadastrada (CPF + nome) antes de reservar. Os dados do participante
-// (nome/CPF) NÃO vêm mais do formulário — são puxados da conta logada.
+// (nome/CPF) NÃO vêm mais do formulário, são puxados da conta logada.
 // Telefone/e-mail/etc continuam opcionais e podem ser enviados pelo form.
 
 import { revalidatePath } from "next/cache";
@@ -37,7 +37,7 @@ import type { ActionResult } from "@/server/actions/auth";
 // (sem prejudicar o "fonte da verdade" que é a conta logada).
 const optionalExtras = {
   // CPF é capturado aqui quando a conta não tem um cadastrado e a campanha
-  // exige (Pix sempre exige). Aceita vazio — o action decide se erra.
+  // exige (Pix sempre exige). Aceita vazio, o action decide se erra.
   participantCpf: z
     .string()
     .transform(onlyDigits)
@@ -102,7 +102,7 @@ export async function createReservationAction(
   const input = parsed.data;
   const isManual = "numbers" in input;
 
-  // Busca os dados de identidade direto da conta logada — nome vem SEMPRE
+  // Busca os dados de identidade direto da conta logada, nome vem SEMPRE
   // daqui (a UI não pode sobrescrever). CPF é flexível: prioriza o que veio
   // do form (campanha pedindo CPF a quem ainda não tem na conta), com
   // fallback pro user.cpf se já existir.
@@ -139,7 +139,7 @@ export async function createReservationAction(
   }
 
   // Campanha exclusiva: exige nível mínimo. Checado aqui no servidor porque
-  // a página pública só esconde o formulário — esconder botão não é
+  // a página pública só esconde o formulário, esconder botão não é
   // autorização.
   if (raffle.minLevel != null) {
     const xp = await getUserXp(user.id, tenant.id);
@@ -166,7 +166,7 @@ export async function createReservationAction(
         data: { cpf: cpfFromForm },
       });
     } catch {
-      // Se já existir outra conta com esse CPF (P2002), seguimos — o CPF
+      // Se já existir outra conta com esse CPF (P2002), seguimos, o CPF
       // ainda vai pro participantCpf da reserva; só não fica no perfil.
     }
   }
@@ -200,7 +200,7 @@ export async function createReservationAction(
         where: { id: reservation.id },
         data: { userId: user.id },
       });
-      // Cria a cobrança Pix (best-effort) — mas só quando há valor a
+      // Cria a cobrança Pix (best-effort), mas só quando há valor a
       // cobrar. Reservas grátis já nascem PAID, gerar Pix nelas só causa
       // ruído.
       if (Number(reservation.totalAmount) > 0) {
@@ -379,7 +379,7 @@ export async function checkPaymentStatusAction(
   return { ok: true, data: { status: polled } };
 }
 
-// Marca uma reserva como paga MANUALMENTE — usado pelo admin quando o
+// Marca uma reserva como paga MANUALMENTE, usado pelo admin quando o
 // webhook do gateway falhou e ele confirma o pagamento por fora (ex.: viu
 // no painel da CodePay/SyncPay). Atomicidade total: Payment + Reservation
 // + Ticket transicionam juntos. Idempotente (chamar 2x em PAID não faz
@@ -435,10 +435,10 @@ export async function markReservationPaidAction(
     }
 
     // Se a reserva expirou, os tickets foram deletados pelo cron (modelo
-    // lazy). Recria antes da transação principal — computeTicketsToRecreate
+    // lazy). Recria antes da transação principal, computeTicketsToRecreate
     // lê o estado atual da tabela Ticket. Risco de race se outro comprador
     // pegar os mesmos números entre o pick e o insert: aceitamos (chance
-    // baixa, e o insert falha em P2002 se acontecer — admin tenta de novo).
+    // baixa, e o insert falha em P2002 se acontecer, admin tenta de novo).
     let toRecreate: number[] | null = null;
     if (
       reservation.status === "EXPIRED" &&

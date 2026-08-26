@@ -1,6 +1,6 @@
 "use client";
 
-// Botão "Marcar como paga" no admin — usado quando o webhook do gateway
+// Botão "Marcar como paga" no admin, usado quando o webhook do gateway
 // falhou e o admin precisa confirmar manualmente. Pede confirmação com
 // dialog do browser pra evitar clique acidental.
 

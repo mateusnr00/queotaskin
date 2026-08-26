@@ -2,7 +2,7 @@
 
 // Seção pública "Prêmios". Renderiza só um botão full-width; clique abre
 // um Dialog com a lista ordenada (1º, 2º, …). Igual ao padrão do
-// SkinsLendarias — economiza espaço acima do form de reserva.
+// SkinsLendarias, economiza espaço acima do form de reserva.
 //
 // Quando o prêmio traz metadados de skin de CS2, o item da lista vira um
 // SkinCard completo (moldura na cor da raridade, float, StatTrak, valor).

@@ -12,7 +12,7 @@ export default async function AuthLayout({
 }) {
   // O nome vem do tenant, não da variável de ambiente: com NEXT_PUBLIC_APP_NAME
   // ausente esta tela dizia "Rifa Online" para quem estava entrando no
-  // QuéOta Skin — e num deploy multi-tenant diria o nome de um site só.
+  // QuéOta Skin, e num deploy multi-tenant diria o nome de um site só.
   const marca = await getBrand();
   const appName = marca.name;
   return (

@@ -9,7 +9,7 @@
 //
 // Idempotência: a SyncPay dispara múltiplos eventos por transação
 // (criada → paga → ... ). Logamos TODOS em PaymentWebhookEvent (sem
-// unique), e o update do Payment é condicional — só transiciona se
+// unique), e o update do Payment é condicional, só transiciona se
 // ainda não está em estado terminal (APPROVED/REJECTED). Webhook
 // duplicado da mesma fase vira no-op.
 
@@ -95,7 +95,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   if (resolved === "APPROVED" && payment.status !== "APPROVED") {
     // Caso especial: webhook chegou tarde, a reserva já expirou e o cron
     // deletou os tickets. Calcula quantos recriar (números aleatórios) ANTES
-    // da transação principal — computeTicketsToRecreate lê o estado atual
+    // da transação principal, computeTicketsToRecreate lê o estado atual
     // de Ticket.
     const needsRecreate =
       payment.reservation?.status === "EXPIRED" &&

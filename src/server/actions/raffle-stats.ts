@@ -69,7 +69,7 @@ export async function getTopBuyersAction(
       _count: { _all: true },
     });
 
-    // groupBy não soma tickets — busca contagem real (PAID/AWARDED) por par.
+    // groupBy não soma tickets, busca contagem real (PAID/AWARDED) por par.
     const buyers: TopBuyer[] = await Promise.all(
       grouped.map(async (g) => {
         const ticketCount = await prisma.ticket.count({

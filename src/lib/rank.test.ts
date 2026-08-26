@@ -50,7 +50,7 @@ describe("xpForPurchase", () => {
 });
 
 describe("xpForLevel / levelFromXp", () => {
-  it("nível 0 não custa nada — todo mundo começa ranqueado", () => {
+  it("nível 0 não custa nada, todo mundo começa ranqueado", () => {
     expect(xpForLevel(0)).toBe(0);
     expect(levelFromXp(0)).toBe(0);
   });
@@ -69,7 +69,7 @@ describe("xpForLevel / levelFromXp", () => {
     }
   });
 
-  it("cada degrau custa mais que o anterior — a escada não afrouxa", () => {
+  it("cada degrau custa mais que o anterior, a escada não afrouxa", () => {
     let anterior = XP_POR_NIVEL[1]! - XP_POR_NIVEL[0]!;
     for (let n = 2; n <= MAX_LEVEL; n++) {
       const degrau = XP_POR_NIVEL[n]! - XP_POR_NIVEL[n - 1]!;
@@ -188,7 +188,7 @@ describe("rankProgress", () => {
     expect(p.xpToNext).toBe(0);
   });
 
-  it("arredonda os reais que faltam pra cima — R$ 0,50 não sobe nível", () => {
+  it("arredonda os reais que faltam pra cima, R$ 0,50 não sobe nível", () => {
     // Faltando 5 XP, meio real não basta: precisa gastar R$ 1.
     const p = rankProgress(xpForLevel(1) - 5);
     expect(p.brlToNext).toBe(1);

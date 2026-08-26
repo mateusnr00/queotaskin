@@ -13,7 +13,7 @@ import { notFound } from "next/navigation";
 const MAX_RAFFLES = 12;
 const MAX_WINNERS = 6;
 
-// Home pública — layout inspirado no Sorteamos:
+// Home pública, layout inspirado no Sorteamos:
 // 2 colunas no desktop (Campanhas | Ganhadores). Mobile empilha.
 // Primeira campanha aparece em formato hero/destacado; demais como cards
 // compactos (imagem esquerda + conteúdo direita).
@@ -284,7 +284,7 @@ function SalesBar({ sold, total }: { sold: number; total: number }) {
   );
 }
 
-// Card grande de destaque — capa grande, título, preço e progresso.
+// Card grande de destaque, capa grande, título, preço e progresso.
 function FeaturedRaffleCard({
   raffle,
   sold,
@@ -351,7 +351,7 @@ function FeaturedRaffleCard({
   );
 }
 
-// Card compacto — capa à esquerda, conteúdo à direita.
+// Card compacto, capa à esquerda, conteúdo à direita.
 function CompactRaffleCard({
   raffle,
   sold,

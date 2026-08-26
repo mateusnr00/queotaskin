@@ -49,7 +49,7 @@ export function RegisterForm() {
         toast.error(result.error);
         return;
       }
-      // Loga automaticamente após registro — login é por nome + CPF, sem
+      // Loga automaticamente após registro, login é por nome + CPF, sem
       // senha. O celular fica guardado para a operação falar com o cliente.
       const login = await loginAction({
         name: values.name,

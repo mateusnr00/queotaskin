@@ -129,7 +129,7 @@ export default async function AdminReportsPage({
 
   // Agrega in-memory pelo bucket escolhido.
   // Para escalar (centenas de milhares de reservas), trocar pra query SQL
-  // com date_trunc — Prisma raw query. Por enquanto JS é suficiente.
+  // com date_trunc, Prisma raw query. Por enquanto JS é suficiente.
   const bucketKeyFn =
     group === "day" ? isoDay : group === "week" ? isoWeek : isoMonth;
 

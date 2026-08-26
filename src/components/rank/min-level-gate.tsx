@@ -6,7 +6,7 @@ import { rankFromXp, tierForLevel, xpForLevel } from "@/lib/rank";
 /**
  * Aviso de campanha exclusiva por nível.
  *
- * Esconder o formulário é apresentação — quem autoriza é a guarda no
+ * Esconder o formulário é apresentação, quem autoriza é a guarda no
  * servidor, em createReservationAction. Aqui o objetivo é o oposto de
  * esconder: mostrar exatamente quanto falta, para virar motivação.
  */
@@ -40,7 +40,7 @@ export function MinLevelGate({
         <Lock className="mt-0.5 h-4 w-4 shrink-0" style={{ color: target.color }} />
         <div className="min-w-0">
           <h2 className="text-sm font-bold">
-            Exclusiva — nível {minLevel} ou acima
+            Exclusiva: nível {minLevel} ou acima
           </h2>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
             {isLoggedIn ? (
@@ -50,7 +50,7 @@ export function MinLevelGate({
                 <b className="font-semibold text-foreground">
                   {xpNeeded.toLocaleString("pt-BR")} XP
                 </b>{" "}
-                — cerca de{" "}
+                , cerca de{" "}
                 <b className="font-semibold text-foreground">
                   R$ {brlNeeded.toLocaleString("pt-BR")}
                 </b>{" "}

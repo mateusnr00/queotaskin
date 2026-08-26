@@ -55,7 +55,7 @@ const THROTTLE_MS = 8_000;
 
 export async function ensurePixForReservation(
   reservationId: string,
-  /** IP do cliente final (opcional — gateway exige, mas default funciona). */
+  /** IP do cliente final (opcional, gateway exige, mas default funciona). */
   ip?: string
 ): Promise<EnsurePixResult> {
   const reservation = await prisma.reservation.findUnique({
@@ -219,7 +219,7 @@ function extractPixCode(raw: unknown): string | null {
 }
 
 // Polling de status no gateway como FALLBACK ao webhook. Só funciona pros
-// providers que implementam `getStatus` (SyncPay sim; CodePay não — webhook
+// providers que implementam `getStatus` (SyncPay sim; CodePay não, webhook
 // only). Throttled per-reservation pra não estourar rate limit.
 const lastStatusPollByPayment = new Map<string, number>();
 const STATUS_POLL_THROTTLE_MS = 15_000;

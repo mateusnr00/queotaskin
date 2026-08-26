@@ -3,7 +3,7 @@
 // Aba "Promoções" no editar-sorteio. Espelha o painel do SkinsLendarias:
 //
 // - Switch "Ativar Promoção em Dobro" (cliente recebe 2x os números pelo
-//   mesmo valor; só persistido por enquanto — lógica de multiplicação na
+//   mesmo valor; só persistido por enquanto, lógica de multiplicação na
 //   reserva é TODO no createReservation).
 // - Switch "Ativar Promoções" (master da seção).
 // - Select "Tipo de promoção" (QTY = combo fixo "N por R$ X" / MORE_THAN
@@ -86,7 +86,7 @@ export function RafflePromotionsTab({
   );
   const [isPending, startTransition] = useTransition();
 
-  // Tipo "padrão" da seção — vale como default pra novas linhas, e o
+  // Tipo "padrão" da seção, vale como default pra novas linhas, e o
   // SkinsLendarias mostra um único select grande no topo (vez de por linha).
   // Mantemos a edição por linha pra dar flexibilidade, mas o select do
   // topo aplica a todas quando muda.
@@ -174,7 +174,7 @@ export function RafflePromotionsTab({
             checked={doubleEnabled}
             onChange={setDoubleEnabled}
             label="Ativar Promoção em Dobro"
-            description="Cliente recebe o dobro dos números pelo mesmo valor pago. (Ainda não implementado na geração de tickets — só salva a configuração por enquanto.)"
+            description="Cliente recebe o dobro dos números pelo mesmo valor pago. (Ainda não implementado na geração de tickets: por enquanto só salva a configuração.)"
           />
           {doubleEnabled && (
             <div className="flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs">

@@ -2,7 +2,7 @@
 
 // Editor de um prêmio com metadados de skin de CS2.
 //
-// A descrição é o único campo obrigatório — prêmios que não são skin
+// A descrição é o único campo obrigatório, prêmios que não são skin
 // (saldo, periférico) usam só ela e deixam o bloco de skin fechado. Quando
 // o admin preenche o float, o desgaste é sugerido automaticamente a partir
 // das faixas oficiais da Valve, porque errar isso é fácil e o comprador

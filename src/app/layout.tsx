@@ -59,7 +59,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: name, template: `%s · ${name}` },
     description: descricao,
     // Rifa circula por link no WhatsApp, e link sem imagem chega como um
-    // retângulo cinza — some no meio da conversa. A logo já resolve o caso
+    // retângulo cinza, some no meio da conversa. A logo já resolve o caso
     // geral; a página da campanha sobrescreve com a capa da skin, que vende
     // muito mais.
     openGraph: {

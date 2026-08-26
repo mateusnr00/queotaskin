@@ -1,7 +1,7 @@
 "use server";
 
 // Textos e imagens das páginas finais (pagamento confirmado / reserva
-// expirada). Por tenant — cada admin customiza as mensagens que aparecem
+// expirada). Por tenant, cada admin customiza as mensagens que aparecem
 // pros compradores dele. Campos vazios = volta pro texto padrão da UI.
 
 import { revalidatePath } from "next/cache";

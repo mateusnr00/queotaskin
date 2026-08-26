@@ -1,4 +1,4 @@
-// Schemas Zod para autenticação — usados em Server Actions E em formulários
+// Schemas Zod para autenticação, usados em Server Actions E em formulários
 // no cliente (via @hookform/resolvers/zod). Validação dupla: o cliente roda
 // pra UX (mostra erro antes de submeter), e o servidor roda pra SEGURANÇA
 // (nunca confiar no que veio do cliente).
@@ -6,11 +6,11 @@
 // Decisão de produto:
 // - Cadastro pede nome completo + CPF + celular. O CPF é digitado pelo
 //   próprio usuário (real, validado por dígito verificador) e nunca mais
-//   é exibido na UI depois do cadastro — fica só no banco pra alimentar
+//   é exibido na UI depois do cadastro, fica só no banco pra alimentar
 //   o PIX. A SyncPay rejeitava CPFs sintéticos do pool antigo, por isso
 //   voltamos a coletar do usuário.
 // - Login é PASSWORDLESS por nome + CPF. O CPF é o identificador único e o
-//   nome é verificado por cima (case-insensitive) — funciona como "login e
+//   nome é verificado por cima (case-insensitive), funciona como "login e
 //   senha" pro usuário. É o padrão do mercado de rifa no Brasil: a pessoa
 //   sabe o próprio CPF de cor, e ele já foi digitado no cadastro.
 //
@@ -31,7 +31,7 @@ const nameField = z
     "Informe nome e sobrenome"
   );
 
-// Celular brasileiro: DDD (2) + 8 ou 9 dígitos. Aceita máscara — só os
+// Celular brasileiro: DDD (2) + 8 ou 9 dígitos. Aceita máscara, só os
 // dígitos vão pro banco.
 const phoneField = z
   .string()
@@ -41,7 +41,7 @@ const phoneField = z
     "Celular inválido (DDD + número)"
   );
 
-// CPF validado por dígito verificador. Aceita máscara — só os dígitos vão
+// CPF validado por dígito verificador. Aceita máscara, só os dígitos vão
 // para o banco, que é como estão gravados.
 const cpfField = z
   .string()
@@ -57,7 +57,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 // Cadastro pede nome + CPF + celular. CPF é validado por dígito verificador;
 // nunca é exibido na UI depois do cadastro.
 // Entrada do painel: e-mail + senha. O mínimo de 8 caracteres vale também
-// no cadastro da senha (ver changePasswordSchema) — aqui só evita gastar um
+// no cadastro da senha (ver changePasswordSchema), aqui só evita gastar um
 // bcrypt.compare com string vazia.
 export const adminLoginSchema = z.object({
   email: z.string().email("E-mail inválido"),
@@ -82,7 +82,7 @@ export const changePasswordSchema = z
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
-// Cadastro pede os três: nome, CPF e celular. O celular é obrigatório —
+// Cadastro pede os três: nome, CPF e celular. O celular é obrigatório,
 // é por ele que a operação fala com o cliente quando um pagamento trava ou
 // um prêmio precisa ser entregue.
 export const registerSchema = z.object({
@@ -93,7 +93,7 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 // Edição admin: continua aceitando CPF (campo legado), telefone e papel.
-// CPF aqui é opcional — contas criadas após a migração pra login por
+// CPF aqui é opcional, contas criadas após a migração pra login por
 // nome+celular não terão CPF; o admin pode preencher se quiser.
 export const userEditSchema = z.object({
   id: z.string().cuid(),

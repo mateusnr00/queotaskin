@@ -1,6 +1,6 @@
 // Cliente CodePay (gateway brasileiro de PIX cash-in).
 //
-// Base URL: https://production.codetech.technology — confirmada nos curls
+// Base URL: https://production.codetech.technology, confirmada nos curls
 // passados pelo painel codepay.one. Override via CODEPAY_BASE_URL se eles
 // trocarem.
 //
@@ -10,7 +10,7 @@
 //
 // Cash-in (Pix dinâmico, com valor): POST /cli/payment/pix/generate-pix
 //   body: { value, externalId, expiration }
-//   resp: { data: { pix, paymentId, movId, ... } } — `pix` é o copia-cola.
+//   resp: { data: { pix, paymentId, movId, ... } }, `pix` é o copia-cola.
 //
 // Webhook: a CodePay envia POST pra URL configurada GLOBALMENTE no painel
 // dela (não tem campo de webhook na request). O usuário precisa cadastrar
@@ -102,7 +102,7 @@ function jwtExpMs(token: string): number | null {
     ) as { exp?: number };
     if (typeof payload.exp === "number") return payload.exp * 1000;
   } catch {
-    /* ignore — usa default */
+    /* ignore, usa default */
   }
   return null;
 }
@@ -138,7 +138,7 @@ export async function createPixCharge(
   if (!res.ok) {
     if (res.status === 401) {
       // Token expirou no meio do request; invalida cache pra próxima tentar
-      // de novo. Não tenta retry aqui — deixa pra camada superior.
+      // de novo. Não tenta retry aqui, deixa pra camada superior.
       tokenCache.delete(creds.clientId);
     }
     throw new Error(`CodePay generate-pix falhou ${res.status}: ${text}`);
@@ -167,7 +167,7 @@ export async function createPixCharge(
 
 // Extrai identifier + status de um payload de webhook da CodePay. Como a
 // doc deles não documenta o shape exato do webhook, usamos o mesmo walker
-// recursivo do SyncPay — procura keys "id-like" (paymentId, movId, id, ...)
+// recursivo do SyncPay, procura keys "id-like" (paymentId, movId, id, ...)
 // e qualquer key terminando em "status".
 const ID_KEYS = new Set([
   "paymentid",

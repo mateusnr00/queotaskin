@@ -3,7 +3,7 @@
 // As cores de raridade são as oficiais da Valve (mesmas do inventário do
 // jogo). Elas aparecem na borda/glow dos cards de prêmio, então o usuário
 // reconhece de longe se a campanha é de uma Covert vermelha ou de uma faca
-// dourada — a leitura é a mesma que ele já tem dentro do jogo.
+// dourada, a leitura é a mesma que ele já tem dentro do jogo.
 
 import type { SkinRarity, SkinWear } from "@prisma/client";
 
@@ -30,7 +30,7 @@ export const RARITY_COLOR: Record<SkinRarity, string> = {
   EXTRAORDINARY: "#ffd700",
 };
 
-/** Ordem crescente de valor — usada para achar o prêmio "principal". */
+/** Ordem crescente de valor, usada para achar o prêmio "principal". */
 export const RARITY_ORDER: Record<SkinRarity, number> = {
   CONSUMER: 0,
   INDUSTRIAL: 1,
@@ -68,7 +68,7 @@ export const WEAR_RANGE: Record<SkinWear, [number, number]> = {
   BATTLE_SCARRED: [0.45, 1],
 };
 
-/** Desgaste correspondente a um float — usado para validar o cadastro. */
+/** Desgaste correspondente a um float, usado para validar o cadastro. */
 export function wearFromFloat(value: number): SkinWear | null {
   if (!Number.isFinite(value) || value < 0 || value > 1) return null;
   const found = (Object.entries(WEAR_RANGE) as [SkinWear, [number, number]][]).find(
@@ -119,7 +119,7 @@ export function fullSkinName(prize: SkinLike & { description?: string }): string
   return `${alreadyPrefixed ? "" : prefix}${base}${alreadyHasWear ? "" : wear}`;
 }
 
-/** Prêmio de maior raridade da lista — é ele que define a cor do card. */
+/** Prêmio de maior raridade da lista, é ele que define a cor do card. */
 export function headlineSkin<T extends SkinLike>(prizes: T[]): T | null {
   const withRarity = prizes.filter((p) => p.skinRarity);
   if (withRarity.length === 0) return prizes[0] ?? null;
@@ -146,7 +146,7 @@ const TRADE_URL_PATTERN =
 
 /**
  * Valida o link de troca da Steam. Só aceita o formato exato que a Steam
- * gera — um link truncado ou de outro domínio faz a entrega falhar
+ * gera, um link truncado ou de outro domínio faz a entrega falhar
  * silenciosamente depois do sorteio, que é o pior momento pra descobrir.
  */
 export function isValidTradeUrl(url: string): boolean {
@@ -163,4 +163,4 @@ export function steamIdFromTradeUrl(url: string): string | null {
 
 export const STEAM_DELIVERY_NOTICE =
   "A skin é enviada por oferta de troca na Steam. Mantenha o Steam Guard Mobile " +
-  "ativo há pelo menos 7 dias — sem isso a Valve retém a troca por até 15 dias.";
+  "ativo há pelo menos 7 dias. Sem isso a Valve retém a troca por até 15 dias.";

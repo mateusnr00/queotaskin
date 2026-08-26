@@ -2,7 +2,7 @@
 -- da MESMA transação (created, paid, expired, etc). Causava: a SyncPay
 -- dispara o evento de "criada" 2s depois do reserve, depois dispara o
 -- "paga" quando o cliente paga. A constraint só deixava o primeiro
--- entrar — o "paga" caía em P2002 e era ignorado, e a reserva ficava
+-- entrar, o "paga" caía em P2002 e era ignorado, e a reserva ficava
 -- eternamente PENDING.
 --
 -- Originalmente foi criada como UNIQUE INDEX (não CONSTRAINT), então

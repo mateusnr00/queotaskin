@@ -27,7 +27,7 @@ export interface Delivery {
  * dados de quem comprou o número e o link de troca da Steam dele.
  *
  * O ganhador é resolvido pelo caminho winnerTicketNumber → Ticket → Reservation
- * → User. O link de troca vem do User quando a reserva tem conta associada —
+ * → User. O link de troca vem do User quando a reserva tem conta associada,
  * reservas de convidado não têm para onde enviar, e a tela sinaliza isso.
  */
 export async function listDeliveries(tenantId: string): Promise<Delivery[]> {

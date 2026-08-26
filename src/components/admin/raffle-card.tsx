@@ -1,6 +1,6 @@
 "use client";
 
-// Card de sorteio na listagem admin — inspirado no Sorteamos:
+// Card de sorteio na listagem admin, inspirado no Sorteamos:
 // thumb + título + datas, status select, barra de ícones de ação e ring de %.
 // Todos os toggles são client-side (server action via useTransition + toast).
 

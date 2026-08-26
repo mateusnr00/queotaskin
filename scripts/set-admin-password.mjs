@@ -8,7 +8,7 @@
 // bloqueado até a pessoa escolher a própria senha. É o comportamento certo
 // para uma senha que trafegou por fora do sistema.
 //
-// A senha nunca é gravada em log nem no banco em texto puro — só o hash
+// A senha nunca é gravada em log nem no banco em texto puro, só o hash
 // bcrypt. Rode com DATABASE_URL apontando para o ambiente desejado.
 
 import { randomBytes } from "node:crypto";

@@ -16,7 +16,7 @@ import { RankChip } from "@/components/rank/rank-chip";
 // "Header com cor de destaque", o header inteiro pinta de primary.
 //
 // Quando o painel admin roda em host separado (admin.sorteios.vip), o link
-// "Admin" não é mostrado no site público — quem é admin acessa direto pelo
+// "Admin" não é mostrado no site público, quem é admin acessa direto pelo
 // outro domínio. Em dev/preview (mesmo host pra tudo), o link aparece pra
 // quem é admin pra facilitar a navegação local.
 export async function SiteHeader() {
@@ -36,7 +36,7 @@ export async function SiteHeader() {
       isAdminOnSeparateHost(),
     ]);
   // Tenant traz só id/slug/name; busca os campos visuais (logo + accent)
-  // numa query separada — esses agora vivem no Tenant, não no global.
+  // numa query separada, esses agora vivem no Tenant, não no global.
   const tenantVisual = tenantCtx
     ? await prisma.tenant
         .findUnique({
@@ -53,7 +53,7 @@ export async function SiteHeader() {
     : null;
 
   // Chip de rank no header. Só monta quando há usuário, tenant e o rank está
-  // ligado — falhar aqui não pode derrubar o cabeçalho do site inteiro.
+  // ligado, falhar aqui não pode derrubar o cabeçalho do site inteiro.
   const rankChip =
     session?.user?.id && tenantCtx && tenantVisual?.rankEnabled
       ? await prisma.userProgress
@@ -66,9 +66,9 @@ export async function SiteHeader() {
           .then((p) => ({ xp: p?.xp ?? 0, xpPerBrl: tenantVisual.xpPerBrl }))
           .catch(() => null)
       : null;
-  // Em produção (host split ativo), o site público nunca mostra o link Admin
-  // — quem é admin acessa via admin.<dominio>. Só liga o link em dev/preview
-  // onde tudo vive no mesmo host.
+  // Em produção (host split ativo), o site público nunca mostra o link
+  // Admin: quem é admin acessa via admin.<dominio>. Só liga o link em
+  // dev/preview, onde tudo vive no mesmo host.
   const showAdminLink =
     (freshUser?.role === "ADMIN" || freshUser?.role === "SUPER_ADMIN") &&
     !adminOnSeparateHost;

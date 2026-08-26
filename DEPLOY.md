@@ -14,7 +14,7 @@ pooler: o Supavisor mantém a própria lista de usuários por projeto e só o
 pooler responde `FATAL: tenant/user <papel>.<ref> not found`.
 
 Para menor privilégio seria preciso registrar o papel no pooler pelo painel do
-Supabase, ou conectar direto — e a conexão direta é IPv6, que a Vercel não
+Supabase, ou conectar direto, e a conexão direta é IPv6, que a Vercel não
 alcança.
 
 As duas connection strings saem de **Supabase → Project Settings → Database →
@@ -22,10 +22,10 @@ Connection string**. Use a senha do banco definida na criação do projeto (ou
 gerada em **Reset database password**):
 
 ```
-# App (pooler em transaction mode — é o que serverless precisa)
+# App (pooler em transaction mode, é o que serverless precisa)
 DATABASE_URL="postgresql://postgres.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
-# Migrations (session mode — migration não roda em transaction pooler)
+# Migrations (session mode, migration não roda em transaction pooler)
 DIRECT_URL="postgresql://postgres.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler.supabase.com:5432/postgres"
 ```
 
@@ -39,7 +39,7 @@ exato do painel; o resto do formato é este.
 
 Escopo **Production**. Gere os segredos com `openssl rand -base64 32`.
 
-**Obrigatórias** — sem qualquer uma delas o site não sobe:
+**Obrigatórias**, sem qualquer uma delas o site não sobe:
 
 | Variável | Valor |
 |---|---|
@@ -47,15 +47,15 @@ Escopo **Production**. Gere os segredos com `openssl rand -base64 32`.
 | `DIRECT_URL` | pooler, porta 5432 (acima) |
 | `AUTH_SECRET` | `openssl rand -base64 32` |
 
-**Primeiro deploy** — criam o admin e populam o banco, depois podem sair:
+**Primeiro deploy**, criam o admin e populam o banco, depois podem sair:
 
 | Variável | Valor |
 |---|---|
-| `SEED_ADMIN_NAME` | seu nome completo — é metade do login do admin |
+| `SEED_ADMIN_NAME` | seu nome completo, é metade do login do admin |
 | `SEED_ADMIN_PHONE` | seu celular com DDD, só dígitos (10 ou 11) |
 | `RUN_SEED` | `1` |
 
-**Upload de imagens** — sem as três, o botão de enviar capa responde
+**Upload de imagens**, sem as três, o botão de enviar capa responde
 "Supabase Storage não está configurado":
 
 | Variável | Onde achar |
@@ -78,10 +78,10 @@ CREATE POLICY "raffle_images_public_read"
 ```
 
 > A `SERVICE_ROLE_KEY` dá acesso total ao banco, ignorando RLS. Ela é
-> server-only — nunca prefixe com `NEXT_PUBLIC_`, ou vai parar no bundle do
+> server-only, nunca prefixe com `NEXT_PUBLIC_`, ou vai parar no bundle do
 > navegador.
 
-**Recomendadas** — o site sobe sem elas, mas alguma função fica capenga:
+**Recomendadas**, o site sobe sem elas, mas alguma função fica capenga:
 
 | Variável | Para quê |
 |---|---|
@@ -97,11 +97,11 @@ definidas: o Auth.js detecta a URL pela `VERCEL_URL`, e o nome do site vem do
 pelo painel. Trocá-la depois torna ilegível o que já foi salvo.
 
 O login do admin é **nome + celular**, sem senha. Os dois valores vêm de
-`SEED_ADMIN_NAME` e `SEED_ADMIN_PHONE` — use os seus, não os de exemplo.
+`SEED_ADMIN_NAME` e `SEED_ADMIN_PHONE`, use os seus, não os de exemplo.
 
 > Se `DATABASE_URL` ou `DIRECT_URL` faltarem no escopo **Production**, o build
 > falha de propósito, com a lista do que está faltando. Antes ele passava em
-> silêncio e publicava um site que respondia 500 em toda página — build verde
+> silêncio e publicava um site que respondia 500 em toda página, build verde
 > escondendo deploy quebrado.
 
 ### Sobre `RUN_SEED`
@@ -113,7 +113,7 @@ exemplo e participantes.
 
 **Remova a variável depois do primeiro deploy.** Build não é lugar de escrever
 dados, e a Vercel dispara dois builds pelo mesmo commit (produção e branch)
-apontando para o mesmo banco — dois seeds simultâneos disputando as mesmas
+apontando para o mesmo banco, dois seeds simultâneos disputando as mesmas
 linhas já derrubaram um deploy.
 
 Como rede de proteção, o script pula o seed quando o banco já tem `Tenant`
@@ -125,7 +125,7 @@ o que foi editado no painel.
 
 Em dev/preview (`localhost`, `*.vercel.app`) o tenant é resolvido por
 fallback: pega o primeiro cadastrado. Com domínio próprio, cadastre os hosts
-em `TenantHost` — o seed já cria `queotaskin.com`, `www.queotaskin.com` e
+em `TenantHost`, o seed já cria `queotaskin.com`, `www.queotaskin.com` e
 `admin.queotaskin.com`. Ajuste para o seu domínio real via painel ou SQL.
 
 O painel admin pode viver em host separado (`admin.<dominio>`); veja
@@ -144,6 +144,6 @@ gateway aparece na própria tela de pagamentos.
 ## 5. Cron
 
 `vercel.json` não define cron ainda. A rota `/api/cron/expire-reservations`
-libera números de reservas vencidas e deveria rodar de minuto em minuto —
+libera números de reservas vencidas e deveria rodar de minuto em minuto,
 sem ela, números só voltam pra rifa quando alguém dispara uma nova reserva.
 Proteja com `CRON_SECRET`.

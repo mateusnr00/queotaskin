@@ -4,7 +4,7 @@
 // sorteio específico. Credenciais ficam no tenant (Admin → Configurações
 // → Pagamentos); aqui o admin só decide qual gateway esse sorteio usa.
 //
-// "Padrão do site" = NULL no banco — quando o admin trocar o default do
+// "Padrão do site" = NULL no banco, quando o admin trocar o default do
 // tenant, esse sorteio acompanha. Os outros valores fixam o gateway
 // independente do default.
 

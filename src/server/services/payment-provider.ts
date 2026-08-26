@@ -7,7 +7,7 @@
 //
 // O factory `getProviderForRaffle` carrega tudo, decripta secrets, decide
 // qual gateway usar pra ESSE sorteio e devolve um cliente pronto. O resto
-// do app só chama `provider.createPixCharge(...)` — não importa qual é.
+// do app só chama `provider.createPixCharge(...)`, não importa qual é.
 
 import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
 
@@ -24,7 +24,7 @@ import {
 } from "@/lib/codepay";
 
 export interface PaymentProviderClient {
-  /** Nome canônico — vai pro Payment.provider e pra URL do webhook. */
+  /** Nome canônico, vai pro Payment.provider e pra URL do webhook. */
   name: PaymentProviderEnum;
   /** Path do webhook esperado por esse gateway, p.ex. "syncpay" ou "codepay". */
   webhookPath: string;
@@ -32,7 +32,7 @@ export interface PaymentProviderClient {
     pixCode: string;
     identifier: string;
   }>;
-  /** Polling opcional — só SyncPay implementa hoje. */
+  /** Polling opcional, só SyncPay implementa hoje. */
   getStatus?(
     identifier: string
   ): Promise<{ status: "PENDING" | "APPROVED" | "REJECTED"; raw: unknown }>;
@@ -53,7 +53,7 @@ export interface CreatePixInput {
   };
 }
 
-// Credenciais do tenant já decriptadas. Os dois objetos são independentes —
+// Credenciais do tenant já decriptadas. Os dois objetos são independentes,
 // um tenant pode ter SyncPay+CodePay configurados ao mesmo tempo e cada
 // sorteio escolhe qual usar.
 interface TenantCredentials {
@@ -123,7 +123,7 @@ async function loadTenantCredentials(tenantId: string): Promise<
     return {
       ok: false,
       error:
-        "PAYMENT_SECRET_ENCRYPTION_KEY não definida no Vercel — impossível decriptar credenciais.",
+        "PAYMENT_SECRET_ENCRYPTION_KEY não definida no Vercel. Impossível decriptar credenciais.",
       code: "ENCRYPTION_KEY_MISSING",
     };
   }
@@ -198,7 +198,7 @@ function buildProvider(
           const charge = await codepayCreatePix(cpCreds, {
             amount: input.amount,
             externalRef: input.externalRef,
-            // CodePay não tem campo de webhook por request — é global no painel.
+            // CodePay não tem campo de webhook por request, é global no painel.
           });
           return { pixCode: charge.pix_code, identifier: charge.identifier };
         },
@@ -206,7 +206,7 @@ function buildProvider(
     };
   }
 
-  // SYNCPAY (default). syncpay creds podem ser undefined — nesse caso o
+  // SYNCPAY (default). syncpay creds podem ser undefined, nesse caso o
   // client SyncPay cai pros env vars legados (SYNCPAY_CLIENT_ID/SECRET).
   const spCreds = creds.syncpay;
   return {

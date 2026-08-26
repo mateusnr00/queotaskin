@@ -1,5 +1,5 @@
 // Formatadores pt-BR. Toda exibição de data/hora é fixada no fuso de Brasília
-// (America/Sao_Paulo) — o servidor (Vercel) roda em UTC, então sem a opção
+// (America/Sao_Paulo), o servidor (Vercel) roda em UTC, então sem a opção
 // `timeZone` os horários sairiam 3 horas adiantados.
 
 const TZ = "America/Sao_Paulo";

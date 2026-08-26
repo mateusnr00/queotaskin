@@ -2,7 +2,7 @@
 --
 -- Cada Prize passa a poder descrever uma skin de verdade (raridade, desgaste,
 -- float, StatTrak, valor de mercado), e cada User guarda o link de troca da
--- Steam — é por ele que o prêmio é entregue.
+-- Steam, é por ele que o prêmio é entregue.
 
 CREATE TYPE "SkinRarity" AS ENUM (
   'CONSUMER',

@@ -1,6 +1,6 @@
 "use server";
 
-// Configurações de pagamento por tenant — escolha de gateway (SyncPay /
+// Configurações de pagamento por tenant, escolha de gateway (SyncPay /
 // CodePay) e credenciais. Secrets são encriptados antes de gravar (AES-256-GCM
 // via PAYMENT_SECRET_ENCRYPTION_KEY).
 //
@@ -62,7 +62,7 @@ export async function updatePaymentSettingsAction(
     return {
       ok: false,
       error:
-        "PAYMENT_SECRET_ENCRYPTION_KEY não definida no Vercel — impossível gravar credenciais com segurança.",
+        "PAYMENT_SECRET_ENCRYPTION_KEY não definida no Vercel. Impossível gravar credenciais com segurança.",
     };
   }
 
@@ -76,7 +76,7 @@ export async function updatePaymentSettingsAction(
     };
   }
 
-  // Monta update — só inclui secret se veio valor.
+  // Monta update, só inclui secret se veio valor.
   const update: Record<string, unknown> = {
     paymentProvider: data.provider,
     syncpayClientId: data.syncpayClientId || null,

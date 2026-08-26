@@ -1,6 +1,6 @@
 // Auto-award: depois que um lote de tickets vai pra PAID, transiciona pra
 // AWARDED os que casarem com algum AwardedTicket cadastrado pra rifa
-// (sistema de "títulos premiados" — números específicos que valem prêmio
+// (sistema de "títulos premiados", números específicos que valem prêmio
 // instantâneo). Idempotente: tickets que já estão AWARDED não mexem.
 //
 // Chamado por:

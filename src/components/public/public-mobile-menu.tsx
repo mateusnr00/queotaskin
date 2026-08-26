@@ -1,6 +1,6 @@
 "use client";
 
-// Drawer mobile do site público — inspirado no Sorteamos.
+// Drawer mobile do site público, inspirado no Sorteamos.
 // Mostra links pras seções e o botão Entrar/Sair.
 
 import Link from "next/link";

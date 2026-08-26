@@ -1,4 +1,4 @@
-// shadcn/ui form helpers — wrapper fino sobre react-hook-form.
+// shadcn/ui form helpers, wrapper fino sobre react-hook-form.
 // Gera ids ARIA, conecta erro do field ao Label e mostra a mensagem do Zod.
 "use client";
 

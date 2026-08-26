@@ -15,7 +15,7 @@
 const DEFAULT_API_BASE = "https://api.syncpayments.com.br";
 
 // Credenciais por tenant. Quando vazio, cai pros env vars legados
-// (SYNCPAY_CLIENT_ID/SECRET/BASE_URL) — compat com setup single-tenant.
+// (SYNCPAY_CLIENT_ID/SECRET/BASE_URL), compat com setup single-tenant.
 export interface SyncPayCredentials {
   clientId: string;
   clientSecret: string;
@@ -47,7 +47,7 @@ export interface PixCashInClient {
 }
 
 export interface PixChargeResponse {
-  /** Texto livre de retorno do provider — útil pra log. */
+  /** Texto livre de retorno do provider, útil pra log. */
   message?: string;
   /** EMV/BR Code (copia-cola) do Pix. Usado pra gerar QR Code também. */
   pix_code: string;
@@ -61,7 +61,7 @@ export function isSyncPayConfigured(creds?: Partial<SyncPayCredentials>): boolea
   return Boolean(resolved.clientId && resolved.clientSecret);
 }
 
-// Cache do token por clientId — múltiplos tenants têm clientIds diferentes
+// Cache do token por clientId, múltiplos tenants têm clientIds diferentes
 // e não podem compartilhar token.
 const tokenCache = new Map<string, { token: string; exp: number }>();
 
@@ -125,7 +125,7 @@ interface CreatePixChargeInput {
 // Resposta do gateway vem em formatos imprevisíveis (com/sem wrapper
 // `data`, nomes de campos variando, IDs numéricos ou string). Em vez de
 // listar todos os caminhos possíveis, fazemos walk recursivo e usamos
-// assinatura: o EMV BR Code SEMPRE começa com "00020" — então achamos
+// assinatura: o EMV BR Code SEMPRE começa com "00020", então achamos
 // pix_code procurando essa marca. Pro identifier, varremos keys
 // conhecidas em qualquer profundidade.
 
@@ -213,7 +213,7 @@ export async function createPixCharge(
   // pelos 422 retornados):
   // - ip, customer.externaRef (nome com typo no servidor), customer.cpf,
   //   customer.phone e customer.address.* são todos obrigatórios.
-  // - pix.expiresInDays apesar do nome é validado como `date` no servidor —
+  // - pix.expiresInDays apesar do nome é validado como `date` no servidor,
   //   manda como ISO YYYY-MM-DD pra passar.
   // - Endereço não temos no cadastro do cliente; uso placeholders válidos.
   //   Se for um problema de compliance, ampliamos o cadastro depois.
@@ -289,7 +289,7 @@ export async function createPixCharge(
 }
 
 // Consulta o status de uma cobrança Pix. Tenta múltiplos endpoints
-// porque a doc oficial é ambígua sobre o caminho exato — o primeiro 2xx
+// porque a doc oficial é ambígua sobre o caminho exato, o primeiro 2xx
 // vence. Usa Bearer auth (mesma do cash-in).
 //
 // Retorna o status já classificado (PENDING/APPROVED/REJECTED) e o
@@ -369,7 +369,7 @@ export function classifyStatus(
 
 // Extrai identifier + status de qualquer payload (webhook ou response
 // do getStatus). O SyncPay devolve `idTransaction` + `status_transaction`,
-// mas outros gateways usam variantes — walker recursivo cobre todos.
+// mas outros gateways usam variantes, walker recursivo cobre todos.
 export function extractStatusInfo(raw: unknown): {
   identifier: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";

@@ -1,4 +1,4 @@
-# QuéOta Skin — Sorteios de skins de Counter-Strike 2
+# QuéOta Skin, Sorteios de skins de Counter-Strike 2
 
 Plataforma de sorteios (rifas) nichada em skins de CS2: facas, luvas e
 coberturas lendárias, com pagamento por PIX e entrega por oferta de troca
@@ -34,7 +34,7 @@ O que diferencia o QuéOta Skin de uma plataforma de rifa genérica.
 Cada `Prize` carrega os metadados do item: nome, **raridade** (as 8 faixas
 do CS2, com as cores oficiais da Valve), **desgaste** (FN/MW/FT/WW/BS),
 **float**, StatTrak™, Souvenir, valor de mercado, coleção e link de
-inspeção no jogo. Todos os campos são opcionais — um prêmio que não é skin
+inspeção no jogo. Todos os campos são opcionais, um prêmio que não é skin
 (saldo, periférico) usa só a descrição e renderiza num card neutro.
 
 Cadastro em **Admin → Sorteios → Editar → Prêmios**. Ao digitar o float, o
@@ -45,7 +45,7 @@ oferece a correção em um clique.
 
 `headlineSkin()` elege o prêmio de **maior raridade** como o destaque da
 campanha. Num kit com faca, luvas e AK, quem abre a página é a luva
-Extraordinária — e a moldura do bloco assume a cor dourada dela.
+Extraordinária, e a moldura do bloco assume a cor dourada dela.
 
 ### Entrega na Steam
 
@@ -83,7 +83,7 @@ próximo nível está perto e porque campanhas exclusivas dependem dele.
 ### A escada
 
 **Níveis 0 a 21**, como na Gamers Club, agrupados em sete faixas nomeadas
-com o vocabulário das patentes do competitivo do CS — Prata, Prata Elite,
+com o vocabulário das patentes do competitivo do CS, Prata, Prata Elite,
 Nova de Ouro, Mestre Guardião, Águia Lendária, Supremo e Global Elite.
 
 A curva é quadrática (`XP_STEP * L * (L+1) / 2`): o começo é rápido e o topo
@@ -97,7 +97,7 @@ A curva é quadrática (`XP_STEP * L * (L+1) / 2`): o começo é rápido e o top
 | 21 | 23.100 | R$ 2.310 |
 
 **Acima do 21**, quatro patentes de prestígio na ordem da carreira de um
-profissional — primeiro você assina com uma org, depois vira lenda de Major,
+profissional, primeiro você assina com uma org, depois vira lenda de Major,
 depois levanta o troféu e, no fim, entra pra história:
 
 | Patente | XP | Equivale a |
@@ -107,7 +107,7 @@ depois levanta o troféu e, no fim, entra pra história:
 | Campeão de Major | 150.000 | R$ 15.000 |
 | GOAT | 300.000 | R$ 30.000 |
 
-Toda a escada sai de `src/lib/rank.ts` — mudar limiares, ordem ou nomes é
+Toda a escada sai de `src/lib/rank.ts`, mudar limiares, ordem ou nomes é
 mexer só naquele arquivo.
 
 ### Como o XP é creditado
@@ -116,7 +116,7 @@ mexer só naquele arquivo.
 `Tenant.xpPerBrl`). Centavos são truncados: R$ 19,90 rende os mesmos 190 XP
 que R$ 19,00.
 
-O XP **não expira e não é gasto** — o nível é permanente. Um rank que cai
+O XP **não expira e não é gasto**, o nível é permanente. Um rank que cai
 puniria quem parou de comprar, que é o oposto do objetivo.
 
 ### Integridade
@@ -137,14 +137,14 @@ Consultar antes é seguro porque já estamos dentro do lock. O índice único
 `(userId, reason, reservationId)` fica como rede de segurança.
 
 `src/server/services/xp.integration.test.ts` cobre exatamente esses casos
-contra um Postgres real — inclusive dez créditos concorrentes e a mesma
+contra um Postgres real, inclusive dez créditos concorrentes e a mesma
 reserva creditada cinco vezes em paralelo. Ele só roda contra banco local.
 
 ### O ranking é interno
 
 A lista de quem mais pontuou vive **só no painel** (`/admin/ranking`), nunca
 no site público. Uma vitrine de quem gasta mais é convite a engenharia
-social — e o operador precisa de telefone, gasto e última compra ao lado do
+social, e o operador precisa de telefone, gasto e última compra ao lado do
 XP, o que num site aberto seria vazamento.
 
 O participante continua vendo **o próprio** progresso em `/minha-conta`:
@@ -155,17 +155,17 @@ posição relativa nem quem está acima dele.
 
 `Raffle.minLevel` (1–21) restringe a campanha a quem alcançou aquele nível;
 quem está em patente de prestígio passa em qualquer exigência. É o que dá
-consequência ao rank — sem isso ele seria só um selo.
+consequência ao rank, sem isso ele seria só um selo.
 
 O bloqueio é decidido **no servidor**, em `createReservationAction`. A página
 pública apenas mostra o aviso, e ele é escrito para motivar: *"Faltam 1.500
-XP — cerca de R$ 150 em outras campanhas para liberar esta."*
+XP, cerca de R$ 150 em outras campanhas para liberar esta."*
 
 ### Linguagem visual
 
 **A silhueta do selo sobe junto com a faixa.** Losango na Prata, pentágono
 na Prata Elite, hexágono na Nova de Ouro, heptágono no Mestre Guardião,
-octógono na Águia Lendária, decágono no Supremo — e o Global Elite fecha a
+octógono na Águia Lendária, decágono no Supremo, e o Global Elite fecha a
 escada com o mesmo decágono, mas com um anel externo destacado. O prestígio
 vira roseta com brilho, claramente fora da escala.
 
@@ -178,10 +178,10 @@ o mesmo polígono percorrido com recuos diferentes vira anel, corpo e miolo,
 sem empilhar máscaras. `notch` puxa os vértices ímpares para dentro e
 transforma o polígono em roseta.
 
-Supremo e Global Elite têm a mesma contagem de lados de propósito — passar de
+Supremo e Global Elite têm a mesma contagem de lados de propósito, passar de
 10 para 12 lados seria indistinguível numa lista; o anel é que separa os dois.
 
-Cada componente tem **uma cor só**, a da faixa — e a paleta é dessaturada de
+Cada componente tem **uma cor só**, a da faixa, e a paleta é dessaturada de
 propósito. Uma lista de ranking com sete cores neon vira ruído; puxada para o
 sóbrio, ela informa sem gritar.
 
@@ -190,7 +190,7 @@ borda colorida em volta. Números sempre em `JetBrains Mono` com `tabular-nums`,
 para as colunas não dançarem entre linhas.
 
 O ranking **não tem barra de progresso**: numa lista, uma barra "até o próximo
-nível" mente para o olho — o GOAT apareceria cheio e o Campeão de Major quase
+nível" mente para o olho, o GOAT apareceria cheio e o Campeão de Major quase
 vazio logo abaixo dele. Lá o que ordena é XP e posição, então é isso que a
 linha mostra. A barra fica no perfil, onde significa algo.
 
@@ -217,12 +217,12 @@ linha mostra. A barra fica no perfil, onde significa algo.
 
 ## Pré-requisitos
 
-- **Node.js 20.19+ ou 22+** (atualmente Node 20.18.1 está instalado — recomendo atualizar)
+- **Node.js 20.19+ ou 22+** (atualmente Node 20.18.1 está instalado, recomendo atualizar)
 - npm 10+
 - Conta no [Supabase](https://supabase.com) com um projeto criado
 - (Opcional para Fase 1) Contas em: Mercado Pago, Resend, Upstash, Inngest
 
-## Setup local — passo a passo
+## Setup local, passo a passo
 
 ### 1. Clone e instale dependências
 
@@ -242,11 +242,11 @@ cp .env.example .env
 
 Mínimo necessário pra rodar a Fase 1:
 
-- `DATABASE_URL` — string com pooler do Supabase (porta 6543)
-- `DIRECT_URL` — string sem pooler (porta 5432), usada pelo Prisma para migrations
-- `AUTH_SECRET` — gere com `openssl rand -base64 32` ou `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
-- `AUTH_URL` — em dev: `http://localhost:3000`
-- `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` — credenciais do admin criado pelo seed
+- `DATABASE_URL`, string com pooler do Supabase (porta 6543)
+- `DIRECT_URL`, string sem pooler (porta 5432), usada pelo Prisma para migrations
+- `AUTH_SECRET`, gere com `openssl rand -base64 32` ou `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+- `AUTH_URL`, em dev: `http://localhost:3000`
+- `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`, credenciais do admin criado pelo seed
 
 Encontre as strings do Supabase em **Project Settings → Database → Connection string**.
 
@@ -358,12 +358,12 @@ prisma/
 ### Modelo de Tickets "Lazy"
 A tabela `Ticket` **não** recebe uma linha por número quando a rifa é criada. Numa rifa de 1 milhão de números, isso seria absurdo. Em vez disso, só inserimos uma linha quando o número é reservado/pago. A ausência de linha = número AVAILABLE.
 
-O `@@unique([raffleId, number])` é o que garante que dois usuários simultâneos não consigam reservar o mesmo número — o segundo INSERT falha com erro de constraint, a transação rolla, e o sistema avisa o usuário.
+O `@@unique([raffleId, number])` é o que garante que dois usuários simultâneos não consigam reservar o mesmo número, o segundo INSERT falha com erro de constraint, a transação rolla, e o sistema avisa o usuário.
 
 ### Auth com 2 arquivos (edge-safe + Node)
 O middleware do Next.js roda em edge runtime, onde Prisma e bcrypt não funcionam. Por isso a config do NextAuth é dividida:
-- `auth.config.ts` — só callbacks e rotas, sem Prisma. Usado pelo middleware.
-- `auth.ts` — config completa com adapter Prisma e provider Credentials. Usado pelas Server Actions.
+- `auth.config.ts`, só callbacks e rotas, sem Prisma. Usado pelo middleware.
+- `auth.ts`, config completa com adapter Prisma e provider Credentials. Usado pelas Server Actions.
 
 ### Server Actions vs API Routes
 - **Server Actions** para tudo que vem de formulários do app (login, registro, criação de rifa, reserva).
@@ -377,7 +377,7 @@ CPF é armazenado somente como 11 dígitos (sem ponto/traço). A formatação fi
 
 ## Fases do projeto
 
-- **Fase 1 (MVP — atual)**: auth + admin de rifas (aba Geral) + público + reserva sem pagamento + expiração via cron.
+- **Fase 1 (MVP, atual)**: auth + admin de rifas (aba Geral) + público + reserva sem pagamento + expiração via cron.
 - **Fase 2**: Mercado Pago (Checkout Pro + Pix) + webhooks + PDF de comprovante + email transacional (Resend) + upload de imagens (Supabase Storage) + aba Imagens no admin.
 - **Fase 3**: Sorteio baseado em Loteria Federal + sorteio próprio com semente verificável + página de resultados.
 - **Fase 4**: Afiliados + comissões + promoções/combos + links UTM/desconto.
@@ -402,9 +402,9 @@ A aplicação é compatível com Vercel. Para deployar:
 1. Conecte o repo no Vercel.
 2. Configure as envs (todas do `.env.example`) em **Project Settings → Environment Variables**.
 3. O Vercel detecta Next.js automaticamente.
-4. Em **Functions**, garanta que `CRON_SECRET` esteja setado — o Vercel Cron usa pra autenticar.
+4. Em **Functions**, garanta que `CRON_SECRET` esteja setado, o Vercel Cron usa pra autenticar.
 5. O `vercel.json` declara o cron a cada 5 min para expirar reservas.
 
 ## Licença
 
-Privada — uso interno.
+Privada, uso interno.

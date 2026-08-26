@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Selo de raridade pintado com a cor oficial da Valve. A cor entra por
- * `style` porque é dado do banco — não dá pra mapear em classe do Tailwind
+ * `style` porque é dado do banco, não dá pra mapear em classe do Tailwind
  * sem gerar as 8 variantes na mão.
  */
 export function RarityBadge({
@@ -36,7 +36,7 @@ export function RarityBadge({
   );
 }
 
-/** Sigla do desgaste (FN, MW, FT…) — compacta o suficiente para o card. */
+/** Sigla do desgaste (FN, MW, FT…), compacta o suficiente para o card. */
 export function WearBadge({ wear, className }: { wear: SkinWear; className?: string }) {
   return (
     <span

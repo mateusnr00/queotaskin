@@ -7,7 +7,7 @@
 //  - Pede um router.refresh() pra reconciliar com o estado do servidor
 //    (a reserva vira EXPIRED quando o cron passar ou no próximo acesso à rifa)
 //
-// O `expiresAt` chega como ISO string serializada do Server Component —
+// O `expiresAt` chega como ISO string serializada do Server Component,
 // nunca passar Date direto via props (não é serializável).
 
 import { useEffect, useState } from "react";

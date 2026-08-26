@@ -1,7 +1,7 @@
 // URL absoluta pro painel admin do tenant atual.
 //
-// Em produção (multi-tenant), o admin de cada tenant fica em "admin.<host>"
-// — `sorteios.vip` → `admin.sorteios.vip`, `dominio-do-andre.com` →
+// Em produção (multi-tenant), o admin de cada tenant fica em "admin.<host>":
+// `sorteios.vip` vira `admin.sorteios.vip`, `dominio-do-andre.com` vira
 // `admin.dominio-do-andre.com`. Em dev/preview tudo vive no mesmo host,
 // então retornamos só "/admin" relativo.
 

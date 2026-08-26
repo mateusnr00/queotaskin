@@ -24,7 +24,7 @@ const SIZES = {
 // Os desenhos vêm em viewBox 200x200; o tamanho em tela é só escala.
 const VIEW = 200;
 
-/** Um dígito ocupa mais espaço que dois — 21 não pode transbordar a borda. */
+/** Um dígito ocupa mais espaço que dois, 21 não pode transbordar a borda. */
 function tamanhoDaFonte(numeral: string): number {
   return numeral.length > 1 ? 74 : 82;
 }
@@ -32,8 +32,8 @@ function tamanhoDaFonte(numeral: string): number {
 /**
  * Selo do rank.
  *
- * A silhueta sobe em quatro degraus — hexágono, losango, heptágono e
- * octógono — e a cor percorre roxo, azul, verde, amarelo e vermelho até o
+ * A silhueta sobe em quatro degraus, hexágono, losango, heptágono e
+ * octógono, e a cor percorre roxo, azul, verde, amarelo e vermelho até o
  * arco-íris do nível 21. Dá para ler a faixa de alguém pela forma, de longe,
  * sem depender de distinguir matiz. Os desenhos vivem em lib/rank-badges.
  */
@@ -57,7 +57,7 @@ export function RankBadge({
 
   // IDs precisam ser únicos por selo. Numa lista de ranking há dezenas na
   // mesma página, e IDs repetidos fazem todos herdarem o gradiente do
-  // primeiro — o SVG resolve a referência pelo documento inteiro.
+  // primeiro, o SVG resolve a referência pelo documento inteiro.
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
 
   const moldura = (conteudo: React.ReactNode) => (
@@ -73,7 +73,7 @@ export function RankBadge({
     </svg>
   );
 
-  // Patente tem desenho próprio — texto escrito, coroa, brilho — que não cabe
+  // Patente tem desenho próprio, texto escrito, coroa, brilho, que não cabe
   // na tabela dos níveis.
   if (resolved.prestige) {
     return moldura(<PrestigeBadge chave={resolved.prestige.key} uid={uid} />);

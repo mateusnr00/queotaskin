@@ -3,7 +3,7 @@
 // Server action do link de troca da Steam.
 //
 // É o único dado do participante que a plataforma precisa para entregar o
-// prêmio. Guardamos junto o SteamID64 derivado do link — serve pra conferir
+// prêmio. Guardamos junto o SteamID64 derivado do link, serve pra conferir
 // que o ganhador não trocou de conta entre a compra e o sorteio.
 
 import { revalidatePath } from "next/cache";

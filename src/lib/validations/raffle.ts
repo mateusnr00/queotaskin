@@ -24,7 +24,7 @@ export const requiredFieldsSchema = z.object({
   birthDate: z.boolean().default(false),
 });
 
-// Schema da rifa — combina os campos das abas Geral E Títulos do form admin.
+// Schema da rifa, combina os campos das abas Geral E Títulos do form admin.
 // O server action recebe tudo junto e particiona em raffle.create/update.
 export const raffleGeneralSchema = z.object({
   // Geral
@@ -135,7 +135,7 @@ export const raffleGeneralSchema = z.object({
 });
 export type RaffleGeneralInput = z.infer<typeof raffleGeneralSchema>;
 
-// Reserva pública — apenas nome é obrigatório no schema base.
+// Reserva pública, apenas nome é obrigatório no schema base.
 // O ADMIN decide quais campos cobrar via raffle.requiredFields.
 // A UI deve render só os campos pedidos; este schema aceita os demais como opcionais.
 export const createReservationSchema = z.object({

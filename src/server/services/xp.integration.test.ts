@@ -2,7 +2,7 @@
 //
 // A lógica pura da curva está em src/lib/rank.test.ts. Aqui testamos o que só
 // aparece com banco de verdade: idempotência do índice único e a corrida de
-// dois pagamentos simultâneos do mesmo usuário — o bug que o advisory lock
+// dois pagamentos simultâneos do mesmo usuário, o bug que o advisory lock
 // existe para fechar.
 //
 // Pulado quando não há DATABASE_URL apontando para um Postgres acessível.

@@ -13,7 +13,7 @@ import { formatBRL } from "@/lib/format";
  * `showSkinSpecs`.
  *
  * Compacta de propósito: a versão anterior era uma tabela de seis células que
- * empurrava o botão de compra para baixo da dobra no celular — de onde vem a
+ * empurrava o botão de compra para baixo da dobra no celular, de onde vem a
  * maior parte do tráfego. Aqui os dados viram uma linha de chips que quebra
  * naturalmente, e só aparecem os campos preenchidos.
  */

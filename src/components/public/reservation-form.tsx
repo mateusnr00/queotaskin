@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { NumberGrid } from "./number-grid";
 
 // Shape esperada de raffle.requiredFields (JSON com 6 toggles).
-// `name` e `cpf` continuam aqui só por compat — na prática são ignorados,
+// `name` e `cpf` continuam aqui só por compat, na prática são ignorados,
 // pois identidade vem SEMPRE da conta logada.
 export interface RequiredFields {
   name: boolean;
@@ -39,7 +39,7 @@ export interface RequiredFields {
 
 // Schema dinâmico: nome/telefone/CPF vêm da sessão (todos garantidos pelo
 // cadastro). CPF e telefone só aparecem aqui como fallback pra contas
-// legadas criadas antes desses campos virarem obrigatórios — depois da
+// legadas criadas antes desses campos virarem obrigatórios, depois da
 // primeira reserva, o action salva no usuário pra não pedir de novo. Os
 // outros campos secundários (e-mail/nome social/data) seguem o toggle do
 // admin.
@@ -126,7 +126,7 @@ export function ReservationForm({
   // Estado, não ref: o React Compiler barra ler ref durante o render, e
   // onSubmit é entregue a form.handleSubmit() ali mesmo. Guardar em estado
   // também basta, porque a leitura só acontece depois que a pessoa conclui o
-  // cadastro — vários renders adiante.
+  // cadastro, vários renders adiante.
   const [valoresPendentes, setValoresPendentes] = useState<Values | null>(null);
   const isLoggedIn = currentUser !== null;
 
@@ -189,7 +189,7 @@ export function ReservationForm({
     }
 
     // Sem conta, a escolha fica guardada e o cadastro aparece por cima. A
-    // reserva continua sozinha assim que a sessão existir — a pessoa não
+    // reserva continua sozinha assim que a sessão existir, a pessoa não
     // volta para uma tela vazia nem refaz a seleção.
     if (!isLoggedIn) {
       setValoresPendentes(values);
@@ -281,7 +281,7 @@ export function ReservationForm({
         />
 
         {/* Confirmação enxuta: o stepper logo acima já mostra o número, então
-            aqui basta uma linha — no celular cada bloco alto empurra o botão
+            aqui basta uma linha, no celular cada bloco alto empurra o botão
             para fora da tela. */}
         <p className="text-center text-xs text-muted-foreground">
           <strong className="tabular-nums text-foreground">{effectiveQty}</strong>{" "}
@@ -344,7 +344,7 @@ function QuantityPicker({
 }) {
   // Descarta card que não soma nada e card maior que o teto de compra, que
   // seria sempre aparado. O piso mínimo não filtra mais: com o clique
-  // somando, um card de +2 continua útil numa campanha de mínimo 10 — são
+  // somando, um card de +2 continua útil numa campanha de mínimo 10, são
   // cinco cliques, não um card inválido.
   const cards = selectionCards.filter(
     (q) => q > 0 && (!maxPurchase || q <= maxPurchase)
@@ -367,7 +367,7 @@ function QuantityPicker({
                 key={`${q}-${idx}`}
                 type="button"
                 // Soma ao contador em vez de substituí-lo. O rótulo diz
-                // "+10", então dois cliques têm de dar 20 — trocar o valor
+                // "+10", então dois cliques têm de dar 20, trocar o valor
                 // fazia o segundo clique não mudar nada, contradizendo o
                 // próprio rótulo.
                 onClick={() => onChange(quantity + q)}
@@ -518,7 +518,7 @@ function AccountSummary({
   );
 }
 
-// Campos extras — nome/CPF/telefone vêm da sessão. CPF e telefone só
+// Campos extras, nome/CPF/telefone vêm da sessão. CPF e telefone só
 // aparecem aqui pra contas legadas que ainda não têm; e-mail/nome
 // social/data seguem os toggles do admin.
 function ParticipantExtras({

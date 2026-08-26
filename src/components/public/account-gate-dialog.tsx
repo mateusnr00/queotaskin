@@ -8,7 +8,7 @@
 // escolha que tinha feito.
 //
 // Agora o seletor aparece para todo mundo e a conta só é pedida no momento
-// em que ela passa a ser necessária — ao confirmar a reserva. A escolha de
+// em que ela passa a ser necessária, ao confirmar a reserva. A escolha de
 // números fica guardada em memória e a reserva segue sozinha assim que o
 // login entra, sem recarregar a página nem perder o que foi selecionado.
 
@@ -53,7 +53,7 @@ export function AccountGateDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Quantos números a pessoa escolheu — lembra do que está em jogo. */
+  /** Quantos números a pessoa escolheu, lembra do que está em jogo. */
   quantidade: number;
   /** Valor formatado da compra. */
   total: string;
@@ -99,8 +99,8 @@ export function AccountGateDialog({
           className="text-center text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
         >
           {modo === "criar"
-            ? "Já tenho conta — quero entrar"
-            : "Ainda não tenho conta — quero criar"}
+            ? "Já tenho conta, quero entrar"
+            : "Ainda não tenho conta, quero criar"}
         </button>
       </DialogContent>
     </Dialog>

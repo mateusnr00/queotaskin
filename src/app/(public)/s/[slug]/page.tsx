@@ -51,7 +51,7 @@ export async function generateMetadata({
   // recebe no WhatsApp vê a skin, não um retângulo cinza.
   //
   // A logo entra como reserva porque o Next SUBSTITUI o openGraph do layout
-  // raiz em vez de mesclar — sem isto, campanha sem imagem perderia também a
+  // raiz em vez de mesclar, sem isto, campanha sem imagem perderia também a
   // imagem do site e o link voltaria a chegar sem nada.
   const marca = await getBrand();
   const imagem = raffle.images[0]?.url ?? marca.logoUrl ?? undefined;
@@ -114,13 +114,13 @@ export default async function PublicRaffleDetailPage({
   // Limpa reservas dessa rifa que já passaram do expiresAt antes de
   // contar tickets vendidos / takenNumbers. Sem isso, números cuja
   // reserva expirou ficariam "presos" até alguém disparar nova reserva
-  // ou o cron rodar — efeito que o usuário vê como "demora pra voltar".
+  // ou o cron rodar, efeito que o usuário vê como "demora pra voltar".
   // Custo: 1 query indexada que retorna imediatamente se não tem nada
   // pra expirar.
   await expireForRaffle(raffle.id);
 
   // Estas quatro não dependem uma da outra: em série, cada uma paga a
-  // latência de rede até o banco. Em paralelo, paga-se uma vez só — o que
+  // latência de rede até o banco. Em paralelo, paga-se uma vez só, o que
   // pesa quando a função e o Postgres estão em regiões diferentes.
   const [currentUser, soldCount, takenTickets, rankSettings] = await Promise.all([
     session?.user?.id
@@ -158,7 +158,7 @@ export default async function PublicRaffleDetailPage({
   const shareUrl = await raffleUrl(raffle.slug);
 
   // Ganhador do sorteio principal: se o admin registrou, busca o dono
-  // do título pra exibir no card. Não bloqueia — se ninguém comprou esse
+  // do título pra exibir no card. Não bloqueia, se ninguém comprou esse
   // número (edge case), mostra só o número.
   let winnerParticipant: string | null = null;
   if (raffle.winnerTicketNumber != null) {
@@ -189,7 +189,7 @@ export default async function PublicRaffleDetailPage({
 
   // Campanha exclusiva por nível: precisa do XP do visitante para saber se
   // libera o formulário. A decisão real é do servidor, em
-  // createReservationAction — aqui é só apresentação.
+  // createReservationAction, aqui é só apresentação.
   const viewerXp =
     raffle.minLevel != null && session?.user?.id
       ? await getUserXp(session.user.id, tenant.id)
@@ -245,7 +245,7 @@ export default async function PublicRaffleDetailPage({
     // entre o preço e o seletor de números, e era preciso rolar três telas
     // para achar o botão. Nas referências do mercado (Skins Lendárias, CS2
     // Pro, MM Skins) os cards de quantidade aparecem na primeira dobra, sem
-    // exceção — é a decisão que a página existe para provocar.
+    // exceção, é a decisão que a página existe para provocar.
     <div className="mx-auto w-full max-w-md px-4 py-5 md:max-w-2xl md:py-10">
       {/* ---------- imagem + título ---------- */}
       <div className="space-y-4 md:space-y-5">
@@ -294,7 +294,7 @@ export default async function PublicRaffleDetailPage({
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Título não foi comprado — sem ganhador registrado.
+                Título não foi comprado, sem ganhador registrado.
               </p>
             )}
             {raffle.winnerDrawnAt && (
@@ -351,7 +351,7 @@ export default async function PublicRaffleDetailPage({
             </p>
           ) : remaining <= 0 ? (
             // Sem esse ramo, o formulário aparecia normalmente e a reserva só
-            // falhava no submit — com uma mensagem genérica de erro, que faz
+            // falhava no submit, com uma mensagem genérica de erro, que faz
             // parecer defeito e não campanha esgotada.
             <div className="py-8 text-center">
               <p className="text-sm font-semibold">Todos os números foram vendidos</p>
@@ -389,7 +389,7 @@ export default async function PublicRaffleDetailPage({
       {/* ---------- conteúdo longo ---------- */}
       {/* Tudo que ajuda a decidir, mas não precisa vir antes do botão. */}
       <div className="mt-5 space-y-4 md:mt-8 md:space-y-5">
-        {/* Ficha da skin principal — o prêmio de maior raridade da
+        {/* Ficha da skin principal: o prêmio de maior raridade da
             campanha. Opcional por campanha (Admin → Prêmios). */}
         {raffle.showSkinSpecs && headlinePrize && (
           <SkinHero
@@ -465,7 +465,7 @@ export default async function PublicRaffleDetailPage({
 // Barra de progresso enxuta.
 //
 // A versão anterior era um card à parte: rótulo "Progresso da venda", barra
-// de 36px e as contagens embaixo — quatro linhas para dizer "37% vendido".
+// de 36px e as contagens embaixo, quatro linhas para dizer "37% vendido".
 // Nas três referências do mercado a barra é uma faixa fina logo abaixo da
 // imagem, com a porcentagem dentro dela. Encolher isso devolve espaço da
 // primeira dobra para o que de fato converte: preço e seletor de números.

@@ -1,19 +1,19 @@
-// Config completa do Auth.js v5 — usa Prisma (Node runtime only).
+// Config completa do Auth.js v5, usa Prisma (Node runtime only).
 // Re-exporta `auth`, `signIn`, `signOut` e `handlers` que o app usa em todo lugar.
 //
 // São DOIS caminhos de entrada, para dois públicos:
 //
-// 1. "credentials" — participante, sem senha, por nome completo + CPF.
+// 1. "credentials", participante, sem senha, por nome completo + CPF.
 //    É o fluxo do site público: pedir senha na hora de comprar derrubaria
 //    conversão, e a conta só guarda os próprios títulos.
 //
-// 2. "admin-password" — quem opera o painel, por e-mail + senha com bcrypt.
+// 2. "admin-password", quem opera o painel, por e-mail + senha com bcrypt.
 //    A conta de admin vê CPF, telefone e pagamento de todos os clientes, e
 //    nome + celular do dono são informação pública demais para proteger
 //    isso. Só existe no host do painel.
 //
 // Quem opera o painel também compra: o dono entra no próprio site como
-// cliente qualquer. Por isso o caminho 1 aceita conta de painel — mas SÓ no
+// cliente qualquer. Por isso o caminho 1 aceita conta de painel, mas SÓ no
 // host público. No host do painel ele é recusado, senão a senha seria
 // decorativa: bastaria postar neste endpoint com nome + CPF e sair com uma
 // sessão de administrador.
@@ -24,7 +24,7 @@
 //
 // As duas sessões não se misturam. O cookie do Auth.js é gravado para o host
 // exato, então entrar como cliente em queotaskin.com não dá acesso nenhum em
-// admin.queotaskin.com — lá continua valendo e-mail e senha.
+// admin.queotaskin.com, lá continua valendo e-mail e senha.
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -36,7 +36,7 @@ import { authConfig } from "@/auth.config";
 import { loginSchema, adminLoginSchema } from "@/lib/validations/auth";
 import { isAdminHost } from "@/lib/host";
 
-// "  João  da  Silva " → "joão da silva" — usado pra comparar nomes
+// "  João  da  Silva " → "joão da silva", usado pra comparar nomes
 // digitados pelo usuário sem se importar com maiúsculas ou espaços
 // extras. Acentos são preservados (joão ≠ joao) pra não dar falso-positivo.
 function normalizeName(name: string): string {
@@ -63,7 +63,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         if (!user) return null;
 
-        // CPF bate — agora confere o nome (case-insensitive).
+        // CPF bate, agora confere o nome (case-insensitive).
         if (normalizeName(user.name) !== normalizeName(parsed.data.name)) {
           return null;
         }

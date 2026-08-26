@@ -1,7 +1,7 @@
 // URL pública de um sorteio. Sempre path-based:
 //   https://<host-público-do-tenant>/s/<slug>
 //
-// Em multi-tenant, o host depende do tenant — sorteio do Mateus é
+// Em multi-tenant, o host depende do tenant, sorteio do Mateus é
 // https://sorteios.vip/s/<slug>, sorteio do André é
 // https://dominio-do-andre.com/s/<slug>. Por isso resolvemos o host
 // atual via headers() em vez de usar NEXT_PUBLIC_APP_URL.

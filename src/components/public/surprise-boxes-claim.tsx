@@ -87,7 +87,7 @@ export function SurpriseBoxesClaim({
     const targets = boxes.filter((b) => b.status === "UNOPENED");
     if (targets.length === 0) return;
     startAllTransition(async () => {
-      // Serializa as aberturas — evita disparar N requests paralelas que
+      // Serializa as aberturas, evita disparar N requests paralelas que
       // brigariam pelo mesmo pool de prêmios.
       for (const b of targets) {
         const result = await openSurpriseBoxAction({

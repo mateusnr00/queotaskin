@@ -13,7 +13,7 @@ interface NumberGridProps {
 }
 
 // Grade responsiva: 5 colunas no mobile, 10 colunas no desktop.
-// Sem toggle manual — o layout se adapta sozinho ao tamanho da tela.
+// Sem toggle manual, o layout se adapta sozinho ao tamanho da tela.
 export function NumberGrid({
   totalNumbers,
   takenNumbers,

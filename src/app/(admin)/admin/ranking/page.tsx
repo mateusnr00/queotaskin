@@ -25,7 +25,7 @@ export const metadata: Metadata = { title: "Ranking" };
 export const dynamic = "force-dynamic";
 
 // Ranking de XP dos participantes. Fica só aqui, no painel: uma lista
-// pública de quem mais gasta é convite a engenharia social — e o operador
+// pública de quem mais gasta é convite a engenharia social, e o operador
 // precisa dos dados de contato junto, o que num site público seria vazamento.
 export default async function AdminRankingPage() {
   const session = await getAdminOrThrow();
@@ -113,7 +113,7 @@ export default async function AdminRankingPage() {
                         {row.name}
                       </Link>
                       <span className="font-mono text-xs text-muted-foreground">
-                        {row.phone ? formatPhone(row.phone) : "—"}
+                        {row.phone ? formatPhone(row.phone) : "-"}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -132,7 +132,7 @@ export default async function AdminRankingPage() {
                       {row.paidReservations}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {row.lastPurchaseAt ? formatDate(row.lastPurchaseAt) : "—"}
+                      {row.lastPurchaseAt ? formatDate(row.lastPurchaseAt) : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       {/* O contato fica aqui e só aqui: é a lista de quem
@@ -148,7 +148,7 @@ export default async function AdminRankingPage() {
                           <MessageCircle className="h-4 w-4" />
                         </a>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </TableCell>
                   </TableRow>

@@ -3,7 +3,7 @@
 // Configurações de identidade e tema POR TENANT. Cada admin edita só o
 // próprio tenant (resolvido pelo host atual via getActiveTenantIdForAdmin).
 // Antes essas configs viviam num `SiteSettings` singleton global, o que
-// causava sobrescrita entre tenants — agora elas residem em colunas do
+// causava sobrescrita entre tenants, agora elas residem em colunas do
 // `Tenant`.
 
 import { revalidatePath } from "next/cache";
@@ -30,7 +30,7 @@ const themeSchema = z.object({
 });
 
 // Schema pras configurações gerais do site (identidade + personalização da
-// home). Tudo opcional — atualiza só o que veio.
+// home). Tudo opcional, atualiza só o que veio.
 const siteSettingsSchema = z.object({
   companyName: z.string().min(1, "Nome obrigatório").max(120).optional(),
   // Como a logo se encaixa no cabeçalho. Só quem envia a imagem sabe se ela
@@ -53,7 +53,7 @@ const siteSettingsSchema = z.object({
   homeCampaignsTitle: z.string().max(60).optional(),
   homeCampaignsCaption: z.string().max(120).optional(),
   showWinnersOnHome: z.boolean().optional(),
-  // URL da imagem mostrada na tela "Pagamento confirmado" (LEGADO — agora
+  // URL da imagem mostrada na tela "Pagamento confirmado" (LEGADO, agora
   // vive em Tenant.paidImageUrl via /configuracoes/mensagens). Aceito aqui
   // só por compat se o admin form antigo ainda mandar esse campo.
   thankYouImageUrl: z
@@ -69,7 +69,7 @@ const siteSettingsSchema = z.object({
       "URL inválida"
     )
     .transform((v) => (v ? v : null)),
-  // Aba "Campanha / Compra" — config per-tenant.
+  // Aba "Campanha / Compra", config per-tenant.
   loginMode: z.enum(["phone", "cpf"]).optional(),
   numbersNomenclature: z
     .enum(["titulos", "numeros", "bilhetes", "numeros_sorte"])
@@ -85,7 +85,7 @@ const siteSettingsSchema = z.object({
     .int()
     .refine((v) => [16, 18, 21].includes(v), "Idade inválida")
     .optional(),
-  // Aba "Experiência do Usuário" — config global per-tenant.
+  // Aba "Experiência do Usuário", config global per-tenant.
   affiliateCookieHours: z.coerce
     .number()
     .int()
@@ -196,9 +196,9 @@ export async function updateSiteAction(
       return { ok: true, data: undefined };
     }
 
-    // `companyName` historicamente era o nome de exibição do site —
+    // `companyName` historicamente era o nome de exibição do site,
     // agora ele mapeia direto pro Tenant.name (não há duplicação).
-    // `thankYouImageUrl` mapeia pro Tenant.paidImageUrl (LEGADO — o
+    // `thankYouImageUrl` mapeia pro Tenant.paidImageUrl (LEGADO, o
     // form novo usa /configuracoes/mensagens que escreve direto lá).
     const update: Record<string, unknown> = {};
     if (data.companyName !== undefined) update.name = data.companyName;
@@ -287,7 +287,7 @@ export async function updateSiteAction(
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3 MB (Sorteamos usa 3.1 MB)
 // Qualquer image/* serve. Lista fixa rejeitava AVIF, HEIC e arquivos que o
-// navegador entrega sem file.type — daí a checagem também pela extensão.
+// navegador entrega sem file.type, daí a checagem também pela extensão.
 const LOGO_EXT =
   /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
@@ -331,7 +331,7 @@ export async function uploadLogoAction(
     if (file.size > MAX_LOGO_BYTES) {
       return {
         ok: false,
-        error: "Imagem grande demais para enviar — tente uma menor",
+        error: "Imagem grande demais para enviar. Tente uma menor",
       };
     }
 
@@ -363,7 +363,7 @@ export async function uploadLogoAction(
   }
 }
 
-// Define o logo via URL externa — caminho manual quando o upload do
+// Define o logo via URL externa, caminho manual quando o upload do
 // Supabase tá quebrado ou o admin já tem o arquivo hospedado em outro
 // host (postimg, imgur, etc). URL gravada como veio; só apaga o arquivo
 // anterior do Supabase se for um path nosso.

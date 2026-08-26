@@ -2,7 +2,7 @@
 //
 // O proxy decide o roteamento por host e a tela de login decide qual
 // formulário mostrar. Se cada um carregasse a própria definição, bastaria
-// mudar uma para o painel passar a exibir o formulário sem senha — falha
+// mudar uma para o painel passar a exibir o formulário sem senha, falha
 // silenciosa e do lado errado. Por isso a regra vive aqui e é importada
 // pelos dois.
 //
@@ -44,8 +44,8 @@ export function hostAdminDoPublico(publicHost: string): string {
  *
  * `request.nextUrl` carrega o host que o servidor acha que tem, e ele nem
  * sempre é o do navegador: atrás de um proxy sai "localhost:3000", e o
- * usuário é mandado para uma origem que não existe. O cabeçalho Host — e o
- * x-forwarded-proto, quando presente — descrevem a requisição de verdade.
+ * usuário é mandado para uma origem que não existe. O cabeçalho Host, e o
+ * x-forwarded-proto, quando presente, descrevem a requisição de verdade.
  */
 export function urlDaRequisicao(
   request: { nextUrl: URL; headers: Headers },

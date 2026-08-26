@@ -5,7 +5,7 @@ import { getCurrentTenant } from "@/lib/tenant";
 
 // Identidade visual do tenant, num lugar só.
 //
-// Antes cada tela que mostrava a marca fazia a própria consulta — e a maioria
+// Antes cada tela que mostrava a marca fazia a própria consulta, e a maioria
 // simplesmente não mostrava, caindo num ícone genérico de ticket. O resultado
 // é que a logo aparecia só no cabeçalho público, e o painel, o login e os
 // links compartilhados ficavam sem identidade nenhuma.
