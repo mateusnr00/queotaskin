@@ -16,6 +16,10 @@ import {
   getProviderForRaffle,
   type PaymentProviderClient,
 } from "@/server/services/payment-provider";
+import {
+  estaBloqueado,
+  registrarFalha,
+} from "@/server/services/login-throttle";
 
 export interface PixData {
   pixCode: string;
@@ -49,11 +53,6 @@ function buildWebhookUrl(provider: PaymentProviderClient): string | null {
   )}`;
 }
 
-// Throttle in-memory por reserva: bloqueia chamadas seguidas ao gateway
-// pra mesma reservation_id em menos de THROTTLE_MS. Per-instance no
-// serverless, mas suficiente pra cortar 95% do slam acidental.
-const lastAttemptByReservation = new Map<string, number>();
-const THROTTLE_MS = 8_000;
 
 export async function ensurePixForReservation(
   reservationId: string,
@@ -142,16 +141,18 @@ export async function ensurePixForReservation(
     };
   }
 
-  const last = lastAttemptByReservation.get(reservation.id) ?? 0;
-  const wait = THROTTLE_MS - (Date.now() - last);
-  if (wait > 0) {
+  // Freio de geração de Pix por reserva, no store compartilhado (Postgres).
+  // O Map in-memory anterior era por-instância no serverless: requisições em
+  // instâncias diferentes furavam o limite e batiam no gateway sem contenção.
+  const chavePixgen = `pixgen:${reservation.id}`;
+  if ((await estaBloqueado([chavePixgen])).bloqueado) {
     return {
       ok: false,
-      error: `Aguarde ${Math.ceil(wait / 1000)}s antes de tentar novamente.`,
+      error: "Aguarde alguns segundos antes de gerar o Pix de novo.",
       code: "GATEWAY_ERROR",
     };
   }
-  lastAttemptByReservation.set(reservation.id, Date.now());
+  await registrarFalha([chavePixgen]);
 
   const client = {
     name: reservation.participantName,

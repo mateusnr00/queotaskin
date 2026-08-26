@@ -12,7 +12,16 @@ export const authConfig = {
   pages: {
     signIn: "/login",
   },
-  session: { strategy: "jwt" },
+  // Sessão de 30 dias: o participante loga uma vez e permanece por um mês
+  // sem precisar reentrar (produto pediu login longo). updateAge de 1 dia faz
+  // o token ser renovado no máximo uma vez por dia enquanto ativo.
+  // Obs.: vale também para contas de painel; se um dia quiser uma janela mais
+  // curta para admin, dá pra encurtar por role no callback de sessão.
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 dias
+    updateAge: 24 * 60 * 60, // 1 dia
+  },
   callbacks: {
     // Roda em TODA request graças ao middleware, decide se a URL pode passar.
     // Aqui o middleware roda em edge runtime (sem Prisma), então só conferimos

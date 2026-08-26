@@ -229,22 +229,29 @@ export async function setRaffleCoverAction(
     if (!parsed.success) return { ok: false, error: "Dados inválidos" };
     await assertRaffleInActiveTenant(parsed.data.raffleId, session.user);
 
-    await prisma.$transaction([
-      prisma.raffleImage.updateMany({
+    await prisma.$transaction(async (tx) => {
+      await tx.raffleImage.updateMany({
         where: { raffleId: parsed.data.raffleId },
         data: { isCover: false },
-      }),
-      prisma.raffleImage.update({
-        where: { id: parsed.data.imageId },
+      });
+      // Amarra o imageId ao raffle: um id de imagem de OUTRO tenant casa 0
+      // linhas e a transação inteira reverte, então não dá para marcar capa
+      // alheia (IDOR) nem deixar a própria campanha sem capa.
+      const { count } = await tx.raffleImage.updateMany({
+        where: { id: parsed.data.imageId, raffleId: parsed.data.raffleId },
         data: { isCover: true },
-      }),
-    ]);
+      });
+      if (count === 0) throw new Error("IMAGEM_FORA_DO_SORTEIO");
+    });
 
     revalidatePath(`/admin/sorteios/${parsed.data.raffleId}/editar`);
     revalidatePath("/admin/sorteios");
     revalidatePath("/sorteios");
     return { ok: true, data: undefined };
   } catch (err) {
+    if (err instanceof Error && err.message === "IMAGEM_FORA_DO_SORTEIO") {
+      return { ok: false, error: "Imagem não pertence a esse sorteio" };
+    }
     console.error("[setRaffleCoverAction]", err);
     return { ok: false, error: "Erro ao definir capa" };
   }

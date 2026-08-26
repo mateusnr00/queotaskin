@@ -49,6 +49,17 @@ export async function uploadRaffleImage(
     );
   }
 
+  // SVG é imagem, mas carrega conteúdo ativo (<script>, onload). Servido do
+  // bucket como image/svg+xml, executaria se aberto direto numa aba. A arte de
+  // capa/skin não precisa de SVG, então recusamos aqui, no ponto único por
+  // onde todo upload passa.
+  if (
+    file.type.toLowerCase() === "image/svg+xml" ||
+    file.name.toLowerCase().endsWith(".svg")
+  ) {
+    throw new Error("Imagens SVG não são aceitas. Envie PNG, JPG ou WebP.");
+  }
+
   const ext = guessExtension(file);
   const path = `raffles/${raffleId}/${nanoid(10)}.${ext}`;
 
