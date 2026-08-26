@@ -106,6 +106,13 @@ export async function getAdminOrThrow() {
   if (!fresh || (fresh.role !== "ADMIN" && fresh.role !== "SUPER_ADMIN")) {
     throw new ForbiddenError();
   }
+  // Senha temporária tranca também as server actions, não só as páginas
+  // (requireAdmin faz o redirect). Sem isto, um admin com senha temporária
+  // invoca actions direto e opera sem nunca rotacionar a senha entregue por
+  // fora, esvaziando o reset.
+  if (fresh.mustChangePassword) {
+    throw new ForbiddenError();
+  }
   return {
     ...session,
     user: {

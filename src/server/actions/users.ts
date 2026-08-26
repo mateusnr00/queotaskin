@@ -101,6 +101,24 @@ export async function updateUserAction(
       return { ok: false, error: "Usuário não pertence a esse tenant" };
     }
 
+    // Isolamento de identidade: name/cpf/phone vivem no User GLOBAL, visto por
+    // todos os tenants. Permitir reescrevê-los porque "tem 1 reserva aqui"
+    // deixa um ADMIN de A mudar o CPF de um cliente cujo painel de origem é B
+    // e depois logar como ele no site público (login é global por CPF), um
+    // takeover cruzando a fronteira de tenant. Então só edita identidade quem
+    // é membro real deste tenant (ou conta sem dono), ou o SUPER_ADMIN.
+    const podeEditarIdentidade =
+      session.user.role === "SUPER_ADMIN" ||
+      target.tenantId === tenantId ||
+      target.tenantId === null;
+    if (!podeEditarIdentidade) {
+      return {
+        ok: false,
+        error:
+          "Este cliente pertence a outro painel. Aqui você pode vê-lo, mas a edição dos dados é feita lá.",
+      };
+    }
+
     // Admin muda papel, inclusive promovendo outro admin: sem isso, quem é
     // promovido não consegue montar a própria equipe e "admin" vira um papel
     // pela metade, que depende do dono para cada cadastro.

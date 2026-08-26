@@ -19,6 +19,7 @@
 // - Se pool vazio (todos claimed ou todos locked), caixa vira
 //   OPENED_EMPTY ("não foi dessa vez!").
 
+import { randomInt } from "node:crypto";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -220,7 +221,9 @@ async function drawPrize(
 
   // Roll 0-100. Prêmios PERCENT ocupam faixas cumulativas; se o roll cai
   // numa faixa, ganhou esse prêmio. Caso contrário, cai pro pool RANDOM.
-  const roll = Math.random() * 100;
+  // randomInt (CSPRNG) no lugar de Math.random: o sorteio distribui prêmios de
+  // valor real, então não pode usar PRNG enviesável. 0.00 a 99.99.
+  const roll = randomInt(0, 10000) / 100;
   let cumulative = 0;
   // Shuffle pra evitar viés de ordem de cadastro entre PERCENT iguais.
   const shuffledPercent = shuffle(percent);
@@ -233,7 +236,7 @@ async function drawPrize(
 
   // Nenhum PERCENT casou, picks uniforme entre os RANDOM disponíveis.
   if (random.length > 0) {
-    const pick = random[Math.floor(Math.random() * random.length)]!;
+    const pick = random[randomInt(random.length)]!;
     return { id: pick.id };
   }
 
@@ -244,7 +247,7 @@ async function drawPrize(
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(i + 1);
     [a[i], a[j]] = [a[j]!, a[i]!];
   }
   return a;

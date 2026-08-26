@@ -18,8 +18,17 @@ export function isAdminHost(host: string): boolean {
 /**
  * Hosts de desenvolvimento e preview, onde o split não se aplica: ali tudo
  * roda no mesmo endereço e separar quebraria o fluxo de teste.
+ *
+ * "Dev" NUNCA é inferido só do Host, que o cliente controla. Em produção na
+ * Vercel o alias <projeto>.vercel.app é alcançável, e tratá-lo como dev
+ * desligaria o split de host, o host-binding da escrita de painel e a recusa
+ * de login admin sem senha, abrindo o painel do tenant principal a quem só
+ * tem nome+CPF. VERCEL_ENV vem do servidor (não spoofável): em produção
+ * nenhum host é "dev", os domínios reais resolvem por TenantHost e o alias
+ * .vercel.app simplesmente não resolve. Preview e local seguem com host único.
  */
 export function isHostDeDesenvolvimento(host: string): boolean {
+  if (process.env.VERCEL_ENV === "production") return false;
   const h = host.toLowerCase();
   return (
     h.endsWith(".vercel.app") ||
