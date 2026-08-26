@@ -6,10 +6,10 @@
 // redução no navegador: sem ela, um render em PNG de vários MB não passaria
 // pelo limite do corpo da Server Action.
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Camera, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Camera, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import {
   atualizarSkinAction,
@@ -57,10 +57,33 @@ const VAZIA: Omit<SkinDoCatalogo, "id"> = {
   skinInspectUrl: null,
 };
 
+/** "AK-47 | Redline (FT)" e "ak47 redline ft" precisam casar. */
+function normalizar(texto: string) {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
   const router = useRouter();
   const [editando, setEditando] = useState<SkinDoCatalogo | "nova" | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [busca, setBusca] = useState("");
+
+  const encontradas = useMemo(() => {
+    const termo = normalizar(busca);
+    if (!termo) return skins;
+    // Todas as palavras precisam aparecer, em qualquer ordem: "redline ak"
+    // acha a AK-47 Redline sem exigir que o nome comece assim.
+    const palavras = termo.split(" ");
+    return skins.filter((s) => {
+      const alvo = normalizar(s.name);
+      return palavras.every((p) => alvo.includes(p));
+    });
+  }, [skins, busca]);
 
   function remover(skin: SkinDoCatalogo) {
     if (!confirm(`Remover "${skin.name}" do catálogo?`)) return;
@@ -90,8 +113,28 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button type="button" onClick={() => setEditando("nova")}>
+      {/* Busca e cadastro na mesma linha. A busca some com o catálogo vazio:
+          filtrar o nada só ocuparia espaço e sugeriria que existe algo
+          escondido atrás do campo. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {skins.length > 0 && (
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder={`Buscar entre ${skins.length} skin${
+                skins.length > 1 ? "s" : ""
+              }`}
+              className="pl-8"
+            />
+          </div>
+        )}
+        <Button
+          type="button"
+          onClick={() => setEditando("nova")}
+          className="sm:w-auto"
+        >
           <Plus className="mr-1.5 h-4 w-4" />
           Cadastrar skin
         </Button>
@@ -106,19 +149,34 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
             lista ao criar a campanha, e a ficha e a foto vão junto.
           </p>
         </Card>
+      ) : encontradas.length === 0 ? (
+        <Card className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            Nenhuma skin com esse nome.
+          </p>
+        </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {skins.map((skin) => (
-            <Card key={skin.id} className="overflow-hidden p-0">
-              <div
-                className="relative flex h-32 items-center justify-center bg-muted/40"
+        /* Uma linha por skin, e a linha cabe numa altura só. A grade de
+           cartões gastava 250px por skin; empilhar os dados em duas linhas
+           dentro da linha da lista ainda gastava 80px e deixava a página do
+           mesmo tamanho. Nome à esquerda, ficha à direita, tudo no mesmo
+           eixo: 48px por skin, e o que sobra de tela é o que faz a lista
+           ser navegável. */
+        <Card className="divide-y overflow-hidden p-0">
+          {encontradas.map((skin) => (
+            <div
+              key={skin.id}
+              className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-muted/40"
+            >
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted/50"
                 style={
                   skin.skinRarity
                     ? {
                         backgroundImage: `radial-gradient(circle at 50% 120%, ${rarityColor(
                           skin.skinRarity,
                           0.35
-                        )}, transparent 70%)`,
+                        )}, transparent 75%)`,
                       }
                     : undefined
                 }
@@ -127,71 +185,73 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={skin.imageUrl}
-                    alt={skin.name}
-                    className="h-full w-full object-contain p-3"
+                    alt=""
+                    className="h-full w-full object-contain p-1"
                   />
                 ) : (
-                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                    sem foto
+                  <span className="text-[9px] uppercase text-muted-foreground">
+                    s/ foto
+                  </span>
+                )}
+              </span>
+
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                {skin.name}
+              </p>
+
+              {/* A ficha some no celular: nome e ações é o que se usa para
+                  achar e editar, e espremer os quatro dados numa tela
+                  estreita cortaria justamente o nome. */}
+              <div className="hidden shrink-0 items-center gap-2 text-[10px] sm:flex">
+                {skin.skinStatTrak && (
+                  <span className="font-semibold text-orange-500">StatTrak</span>
+                )}
+                {skin.skinWear && (
+                  <span className="text-muted-foreground">
+                    {WEAR_LABEL[skin.skinWear]}
+                  </span>
+                )}
+                {skin.skinValueBrl != null && (
+                  <span className="w-20 text-right tabular-nums text-muted-foreground">
+                    {formatBRL(skin.skinValueBrl)}
+                  </span>
+                )}
+                {skin.skinRarity && (
+                  <span
+                    className="w-24 rounded-full px-1.5 py-0.5 text-center font-semibold uppercase tracking-wider text-white"
+                    style={{ backgroundColor: rarityColor(skin.skinRarity) }}
+                  >
+                    {RARITY_LABEL[skin.skinRarity]}
                   </span>
                 )}
               </div>
 
-              <div className="space-y-2 p-4">
-                <p className="text-sm font-semibold leading-tight">{skin.name}</p>
-                <div className="flex flex-wrap gap-1.5 text-[10px]">
-                  {skin.skinRarity && (
-                    <span
-                      className="rounded-full px-2 py-0.5 font-semibold uppercase tracking-wider text-white"
-                      style={{ backgroundColor: rarityColor(skin.skinRarity) }}
-                    >
-                      {RARITY_LABEL[skin.skinRarity]}
-                    </span>
-                  )}
-                  {skin.skinWear && (
-                    <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
-                      {WEAR_LABEL[skin.skinWear]}
-                    </span>
-                  )}
-                  {skin.skinStatTrak && (
-                    <span className="rounded-full bg-orange-500/20 px-2 py-0.5 font-semibold text-orange-500">
-                      StatTrak
-                    </span>
-                  )}
-                  {skin.skinValueBrl != null && (
-                    <span className="rounded-full bg-muted px-2 py-0.5 font-medium tabular-nums text-muted-foreground">
-                      {formatBRL(skin.skinValueBrl)}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex gap-1 pt-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setEditando(skin)}
-                  >
-                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                    Editar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remover(skin)}
-                    disabled={isPending}
-                    aria-label="Remover"
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditando(skin)}
+                aria-label={`Editar ${skin.name}`}
+                title="Editar"
+                className="h-8 w-8 shrink-0"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => remover(skin)}
+                disabled={isPending}
+                aria-label={`Remover ${skin.name}`}
+                title="Remover"
+                className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   );

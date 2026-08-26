@@ -46,8 +46,8 @@ export default async function NewRafflePage() {
                 Novo sorteio
               </h1>
               <p className="text-sm text-muted-foreground">
-                Preencha os dados gerais. Imagens, prêmios e promoções são
-                adicionados depois que o sorteio for salvo pela primeira vez.
+                Preencha o título e siga para a aba que quiser. O sorteio é
+                criado sozinho quando você abre Imagens, Prêmios ou Pagamento.
               </p>
             </div>
           </div>
