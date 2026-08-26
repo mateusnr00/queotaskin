@@ -12,6 +12,7 @@ import { PrizesSection } from "@/components/public/prizes-section";
 import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
+import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
 import { meetsMinLevel } from "@/lib/rank";
@@ -276,13 +277,9 @@ export default async function PublicRaffleDetailPage({
         />
 
         <div className="space-y-1.5">
-          <span className="selo-pulsa inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
-            {statusDaCampanha(
-              soldCount,
-              raffle.totalNumbers,
-              statusConfig
-            )}
-          </span>
+          <SeloDeStatus
+            texto={statusDaCampanha(soldCount, raffle.totalNumbers, statusConfig)}
+          />
           <h1 className="text-xl font-bold leading-tight tracking-tight md:text-3xl">
             {raffle.title}
           </h1>

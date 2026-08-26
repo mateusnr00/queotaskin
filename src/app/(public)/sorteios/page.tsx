@@ -5,6 +5,7 @@ import { TicketCheck } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { statusDaCampanha } from "@/lib/campanha-status";
+import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 import { formatBRL } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
@@ -108,13 +109,13 @@ export default async function PublicRafflesListPage() {
                           ? r.freeLabel || "Grátis"
                           : formatBRL(Number(r.pricePerNumber))}
                       </span>
-                      <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
-                        {statusDaCampanha(
+                      <SeloDeStatus
+                        texto={statusDaCampanha(
                           vendidosPorRifa.get(r.id) ?? 0,
                           r.totalNumbers,
                           statusConfig
                         )}
-                      </span>
+                      />
                     </div>
                   </div>
                 </div>

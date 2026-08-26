@@ -7,6 +7,7 @@ import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 import type { SkinRarity } from "@prisma/client";
 
 import { RaffleCover } from "@/components/public/raffle-cover";
+import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { formatBRL, formatDate } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
@@ -321,7 +322,7 @@ function FeaturedRaffleCard({
           priority
         />
         <div className="absolute top-3 left-3">
-          <StatusBadge text={statusBadge} />
+          <SeloDeStatus texto={statusBadge} />
         </div>
       </div>
 
@@ -409,18 +410,10 @@ function CompactRaffleCard({
           >
             {priceLabel(raffle)}
           </span>
-          <StatusBadge text={statusBadge} />
+          <SeloDeStatus texto={statusBadge} />
         </div>
       </div>
     </Link>
-  );
-}
-
-function StatusBadge({ text }: { text: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
-      {text}
-    </span>
   );
 }
 
