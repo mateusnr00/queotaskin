@@ -13,7 +13,14 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { headers } from "next/headers";
+
 import { auth, signIn, signOut } from "@/auth";
+import {
+  chavesDoLogin,
+  estaBloqueado,
+  ipDaRequisicao,
+} from "@/server/services/login-throttle";
 import bcrypt from "bcryptjs";
 import {
   registerSchema,
@@ -96,6 +103,19 @@ export async function loginAction(
     };
   }
 
+  const freio = await estaBloqueado(
+    chavesDoLogin(ipDaRequisicao(await headers()), parsed.data.cpf)
+  );
+  if (freio.bloqueado) {
+    // Dizer que está bloqueado é melhor do que repetir "não encontrado": sem
+    // isso a pessoa que errou a digitação fica tentando sem entender por que
+    // o login parou de funcionar. Quem ataca já sabe que errou dez vezes.
+    return {
+      ok: false,
+      error: `Muitas tentativas. Espere ${Math.ceil(freio.segundos / 60)} minuto(s) e tente de novo.`,
+    };
+  }
+
   try {
     await signIn("credentials", {
       name: parsed.data.name,
@@ -115,6 +135,16 @@ export async function adminLoginAction(raw: unknown): Promise<ActionResult> {
   const parsed = adminLoginSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "E-mail ou senha inválidos" };
+  }
+
+  const freio = await estaBloqueado(
+    chavesDoLogin(ipDaRequisicao(await headers()), parsed.data.email.toLowerCase())
+  );
+  if (freio.bloqueado) {
+    return {
+      ok: false,
+      error: `Muitas tentativas. Espere ${Math.ceil(freio.segundos / 60)} minuto(s) e tente de novo.`,
+    };
   }
 
   try {

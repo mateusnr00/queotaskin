@@ -565,6 +565,34 @@ model RaffleImage {
 /// raridade, desgaste, float, coleção e valor, e reenviar a mesma imagem. O
 /// catálogo guarda essa ficha junto da foto: criar sorteio vira escolher da
 /// lista, e os dados chegam iguais toda vez.
+/// Tentativas de login falhas, para frear varredura de contas.
+///
+/// O login do site é por nome + CPF, sem senha. Sem freio, quem tem uma lista
+/// de CPFs vazados pode varrer o site testando combinações até acertar, e
+/// nada no caminho reclamaria.
+///
+/// Guardar em banco, e não em memória, é o que faz funcionar aqui: cada
+/// requisição pode cair numa instância diferente do servidor, e um contador
+/// em memória seria zerado a cada troca.
+model LoginAttempt {
+  /// O que está sendo freado: "ip:203.0.113.4" ou "cpf:00000000000".
+  chave String @id
+
+  /// Falhas seguidas dentro da janela atual.
+  falhas Int @default(0)
+
+  /// Começo da janela. Passada a janela, a contagem recomeça.
+  desde DateTime @default(now())
+
+  /// Preenchido e no futuro: o login é recusado antes de consultar
+  /// qualquer conta.
+  bloqueadoAte DateTime?
+
+  atualizadoEm DateTime @updatedAt
+
+  @@index([bloqueadoAte])
+}
+
 model SkinTemplate {
   id       String @id @default(cuid())
   tenantId String

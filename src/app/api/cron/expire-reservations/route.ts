@@ -1,13 +1,17 @@
 // Endpoint chamado periodicamente para expirar reservas pendentes.
 //
-// Como será chamado em produção (escolha uma):
-//   1. Vercel Cron (vercel.json), chama esse endpoint a cada N minutos.
-//   2. Inngest, quando a conta estiver configurada, mover a lógica para
-//      uma função Inngest. Esse endpoint pode permanecer como fallback.
+// Roda a cada 5 minutos pelo Vercel Cron (agendado em vercel.json). O tempo
+// padrão de reserva é 15 minutos, então o número volta para a venda em no
+// máximo 20.
 //
-// Segurança: o endpoint exige um header `Authorization: Bearer <secret>`
-// que bate com CRON_SECRET no .env. Em produção, Vercel Cron envia esse
-// header automaticamente quando CRON_SECRET está nas envs do projeto.
+// Antes não havia agendamento nenhum, e a reserva só expirava quando alguém
+// abria aquela campanha. Campanha sem visita ficava com número preso, e
+// número preso é venda que não acontece.
+//
+// Segurança: exige `Authorization: Bearer <CRON_SECRET>`, que o Vercel Cron
+// envia sozinho quando a variável existe no projeto. Em produção o segredo é
+// obrigatório: sem ele o endpoint ficaria aberto, e qualquer um poderia
+// disparar a expiração à vontade.
 
 import { NextRequest, NextResponse } from "next/server";
 
@@ -17,8 +21,17 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
 
-  // Em dev, permite chamada sem secret se o secret não estiver configurado.
-  if (secret && auth !== `Bearer ${secret}`) {
+  if (!secret) {
+    // Fora de produção segue sem segredo, que é o que permite testar o
+    // endpoint localmente. Em produção, recusa: um endpoint de manutenção
+    // aberto é convite a chamada de fora.
+    if (process.env.VERCEL_ENV === "production") {
+      console.error(
+        "[cron expire-reservations] CRON_SECRET não configurada em produção."
+      );
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+  } else if (auth !== `Bearer ${secret}`) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

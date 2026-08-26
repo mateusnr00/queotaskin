@@ -10,6 +10,8 @@
 
 import { prisma } from "@/lib/db";
 import { awardXpForReservation } from "@/server/services/xp";
+import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
+import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import {
   getProviderForRaffle,
   type PaymentProviderClient,
@@ -265,10 +267,27 @@ export async function pollPaymentStatusIfPending(
           data: { status: "PAID", paidAt: new Date() },
         }),
       ]);
-      // Credita o XP do rank. Precisa acontecer aqui também: quando o
-      // webhook não chega e é o poller que confirma o pagamento, este é o
-      // único caminho que marca a reserva como paga.
-      await awardXpForReservation(reservationId);
+      // Tudo o que o webhook faz depois de confirmar precisa acontecer aqui
+      // também. Quando o webhook não chega, este é o único caminho que marca
+      // a reserva como paga, e sem isto a pessoa pagava, recebia os números e
+      // o XP, e nunca recebia título premiado nem caixa surpresa. Em silêncio:
+      // nada falhava, o prêmio simplesmente não vinha.
+      //
+      // Cada entrega vai com catch próprio, como no webhook: o pagamento já
+      // está confirmado neste ponto, e derrubar a função por causa de um
+      // prêmio deixaria os outros sem entregar também.
+      await awardXpForReservation(reservationId).catch((err) =>
+        console.error("[pollPaymentStatusIfPending] awardXp falhou:", err)
+      );
+      await autoAwardTicketsForReservation(reservationId).catch((err) =>
+        console.error("[pollPaymentStatusIfPending] autoAwardTickets falhou:", err)
+      );
+      await autoGenerateSurpriseBoxesForReservation(reservationId).catch((err) =>
+        console.error(
+          "[pollPaymentStatusIfPending] autoGenerateSurpriseBoxes falhou:",
+          err
+        )
+      );
     } else if (resolved === "REJECTED") {
       await prisma.payment.update({
         where: { id: paymentId },
