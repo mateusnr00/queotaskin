@@ -10,6 +10,7 @@ import { PaymentPoller } from "@/components/public/payment-poller";
 import { PixPayment } from "@/components/public/pix-payment";
 import { PixError } from "@/components/public/pix-error";
 import { PaidCelebration } from "@/components/public/paid-celebration";
+import { XpGanho } from "@/components/public/xp-ganho";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
 import { CheckPaymentButton } from "@/components/public/check-payment-button";
@@ -136,6 +137,9 @@ export default async function ReservationReceiptPage({
       paidDescription: true,
       paidButtonLabel: true,
       paidImageUrl: true,
+      // Para o bloco de XP na tela de pago.
+      rankEnabled: true,
+      xpPerBrl: true,
       expiredTitle: true,
       expiredDescription: true,
       expiredButtonLabel: true,
@@ -145,6 +149,38 @@ export default async function ReservationReceiptPage({
 
   // ── Estado pago: tela comemorativa + caixas surpresas (se houver).
   if (reservation.status === "PAID") {
+    // Quanto a conta andou com esta compra.
+    //
+    // O ganho sai dos lançamentos desta reserva, não de uma conta feita
+    // aqui: quem credita é awardXpForReservation, e recalcular o valor nesta
+    // tela criaria uma segunda regra que pode divergir da que gravou.
+    //
+    // Somar em vez de pegar um lançamento: a mesma reserva rende XP por
+    // motivos diferentes (a compra, e bônus quando houver), e mostrar só um
+    // deles daria um número menor do que a pessoa realmente ganhou.
+    const rankLigado = tenantMessages?.rankEnabled ?? true;
+    const xp =
+      rankLigado && reservation.userId
+        ? await Promise.all([
+            prisma.xpEntry.aggregate({
+              where: { reservationId: reservation.id },
+              _sum: { amount: true },
+            }),
+            prisma.userProgress.findUnique({
+              where: {
+                userId_tenantId: {
+                  userId: reservation.userId,
+                  tenantId: tenant.id,
+                },
+              },
+              select: { xp: true },
+            }),
+          ]).then(([lancamentos, progresso]) => ({
+            ganho: lancamentos._sum.amount ?? 0,
+            total: progresso?.xp ?? 0,
+          }))
+        : null;
+
     const boxes = reservation.surpriseBoxes.map((b) => ({
       id: b.id,
       status: b.status as "UNOPENED" | "OPENED_PRIZE" | "OPENED_EMPTY",
@@ -165,7 +201,15 @@ export default async function ReservationReceiptPage({
           customDescription={tenantMessages?.paidDescription}
           customButtonLabel={tenantMessages?.paidButtonLabel}
           customImageUrl={tenantMessages?.paidImageUrl}
-        />
+        >
+          {xp && (
+            <XpGanho
+              ganho={xp.ganho}
+              total={xp.total}
+              xpPerBrl={tenantMessages?.xpPerBrl ?? 10}
+            />
+          )}
+        </PaidCelebration>
         {boxes.length > 0 && (
           <SurpriseBoxesClaim
             reservationId={reservation.id}

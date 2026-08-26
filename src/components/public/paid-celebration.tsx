@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 // Tela exibida quando o pagamento Pix é confirmado. Visual celebratório
 // com check verde, mensagem de boa sorte e CTAs pra próxima ação.
 //
@@ -26,6 +27,8 @@ interface Props {
   customDescription?: string | null;
   customButtonLabel?: string | null;
   customImageUrl?: string | null;
+  /** Renderizado entre o comprovante e os botões. */
+  children?: ReactNode;
 }
 
 export function PaidCelebration({
@@ -39,6 +42,7 @@ export function PaidCelebration({
   customDescription,
   customButtonLabel,
   customImageUrl,
+  children,
 }: Props) {
   const title = (customTitle?.trim() || DEFAULT_TITLE);
   const description = (customDescription?.trim() || DEFAULT_DESCRIPTION);
@@ -128,6 +132,12 @@ export function PaidCelebration({
           </div>
         )}
       </div>
+
+      {/* Espaço para o que vier entre o comprovante e os botões, hoje o
+          bloco de XP. Fica aqui e não depois dos botões porque quem clica em
+          "Ver mais campanhas" sai da página, e nunca veria o que estivesse
+          embaixo deles. */}
+      {children}
 
       <div className="grid grid-cols-2 gap-3">
         <Link
