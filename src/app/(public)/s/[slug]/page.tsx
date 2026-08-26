@@ -21,6 +21,7 @@ import {
   AwardedTicketsSection,
   type PublicAwardedTicket,
 } from "@/components/public/awarded-tickets-section";
+import { SurpriseBoxesSection } from "@/components/public/surprise-boxes-section";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { raffleUrl } from "@/lib/raffle-url";
 import { getCurrentTenant } from "@/lib/tenant";
@@ -107,6 +108,22 @@ export default async function PublicRaffleDetailPage({
         images: { orderBy: { order: "asc" } },
         prizes: { orderBy: { position: "asc" } },
         awardedTickets: { orderBy: { number: "asc" } },
+        // Prêmios das caixas surpresa, com quem levou cada um. O nome vem
+        // pela caixa que reivindicou o prêmio, então prêmio ainda não aberto
+        // simplesmente não tem caixa e aparece como disponível.
+        surpriseBoxPrizes: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            prize: true,
+            claimedAt: true,
+            claimedByBox: {
+              select: {
+                reservation: { select: { participantName: true } },
+              },
+            },
+          },
+        },
       },
     }),
     auth(),
@@ -238,6 +255,31 @@ export default async function PublicRaffleDetailPage({
       participantName: participantByNumber.get(a.number) ?? null,
     })
   );
+  // ── Caixas surpresas na página pública ──
+  //
+  // A ordem RANDOM não pode ser sorteada a cada render: a página é servidor,
+  // e reembaralhar faria a lista trocar de posição a cada visita e a cada
+  // atualização, o que parece defeito. O embaralhamento sai do id do prêmio,
+  // então é estável para o mesmo conjunto e ainda assim não segue o cadastro.
+  const caixasPublicas = (() => {
+    if (!raffle.surpriseBoxEnabled) return [];
+    const itens = raffle.surpriseBoxPrizes.map((p) => ({
+      id: p.id,
+      premio: p.prize,
+      // Sem "exibir ganhadores" ligado, o prêmio ainda aparece, mas sem
+      // nome: quem decide comprar quer ver o que já saiu, e isso não exige
+      // expor quem levou.
+      ganhador: raffle.surpriseBoxExibirGanhadores
+        ? p.claimedByBox?.reservation.participantName ?? null
+        : null,
+      aberto: Boolean(p.claimedAt),
+    }));
+
+    if (raffle.surpriseBoxDisplayOrder === "DESC") return itens.reverse();
+    if (raffle.surpriseBoxDisplayOrder === "ASC") return itens;
+    return [...itens].sort((a, b) => a.id.localeCompare(b.id));
+  })();
+
   const awardedViewMode: "list" | "modal" =
     raffle.awardedTicketsViewMode === "modal" ? "modal" : "list";
 
@@ -463,6 +505,8 @@ export default async function PublicRaffleDetailPage({
             viewMode={awardedViewMode}
           />
         )}
+
+        <SurpriseBoxesSection caixas={caixasPublicas} />
 
   {raffle.showShareButtons && (
           <div className="space-y-2">
