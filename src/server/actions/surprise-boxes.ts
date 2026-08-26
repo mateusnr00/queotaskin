@@ -23,6 +23,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { getCurrentTenant } from "@/lib/tenant";
+import { sessionMayAccessOwnedResource } from "@/lib/auth-helpers";
 import type { ActionResult } from "@/server/actions/auth";
 
 const MAX_DRAW_RETRIES = 3;
@@ -66,7 +67,11 @@ export async function openSurpriseBoxAction(
         prizeId: true,
         prize: { select: { id: true, title: true, prize: true } },
         reservation: {
-          select: { status: true, raffle: { select: { tenantId: true } } },
+          select: {
+            status: true,
+            userId: true,
+            raffle: { select: { tenantId: true } },
+          },
         },
       },
     });
@@ -75,6 +80,11 @@ export async function openSurpriseBoxAction(
       return { ok: false, error: "Caixa não pertence a essa reserva" };
     }
     if (box.reservation.raffle.tenantId !== tenant.id) {
+      return { ok: false, error: "Caixa não encontrada" };
+    }
+    // Isolamento: logado só abre a própria caixa (admin também); deslogado
+    // passa pelo link (cuid), a credencial do comprovante.
+    if (!(await sessionMayAccessOwnedResource(box.reservation.userId))) {
       return { ok: false, error: "Caixa não encontrada" };
     }
     if (box.reservation.status !== "PAID") {

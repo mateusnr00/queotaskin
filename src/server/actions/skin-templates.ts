@@ -55,7 +55,19 @@ const skinSchema = z.object({
   skinSouvenir: z.coerce.boolean().default(false),
   skinValueBrl: vazioViraNulo(z.coerce.number().min(0).max(9_999_999)),
   skinCollection: vazioViraNulo(z.string().trim().max(140)),
-  skinInspectUrl: vazioViraNulo(z.string().trim().max(2048)),
+  // Allow-list de protocolo: o link de inspeção vira um href público
+  // (skin-card.tsx). .url() aceitaria javascript:… (URL válida), então a
+  // checagem é pelo esquema http/https, não por .url().
+  skinInspectUrl: vazioViraNulo(
+    z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (v) => v.startsWith("http://") || v.startsWith("https://"),
+        "O link de inspeção deve começar com http:// ou https://"
+      )
+  ),
 });
 
 export type SkinTemplateInput = z.input<typeof skinSchema>;
@@ -168,7 +180,11 @@ export async function uploadFotoDaSkinAction(
   formData: FormData
 ): Promise<ActionResult<{ url: string }>> {
   try {
-    await getAdminOrThrow();
+    const session = await getAdminOrThrow();
+    // Escopo de tenant + host-binding do painel: sem isto, qualquer admin de
+    // qualquer tenant subia arquivo pelo host público. getActiveTenantIdForAdmin
+    // recusa quando o host não é o do painel.
+    await getActiveTenantIdForAdmin(session.user);
 
     if (!isStorageConfigured()) {
       return {

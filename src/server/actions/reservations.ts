@@ -26,7 +26,10 @@ import {
 import { onlyDigits, isValidCpf } from "@/lib/cpf";
 import { DomainError, ReservationConflictError } from "@/lib/errors";
 import { getCurrentTenant, assertRaffleInActiveTenant } from "@/lib/tenant";
-import { getAdminOrThrow } from "@/lib/auth-helpers";
+import {
+  getAdminOrThrow,
+  sessionMayAccessOwnedResource,
+} from "@/lib/auth-helpers";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { awardXpForReservation, getUserXp } from "@/server/services/xp";
@@ -317,9 +320,14 @@ export async function retryPixForReservationAction(
   if (!tenant) return { ok: false, error: "Host inválido" };
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    select: { raffle: { select: { tenantId: true } } },
+    select: { userId: true, raffle: { select: { tenantId: true } } },
   });
   if (!reservation || reservation.raffle.tenantId !== tenant.id) {
+    return { ok: false, error: "Reserva não encontrada" };
+  }
+  // Isolamento: logado só refaz o Pix da própria reserva (admin também);
+  // deslogado passa pelo link (cuid), que é a credencial do comprovante.
+  if (!(await sessionMayAccessOwnedResource(reservation.userId))) {
     return { ok: false, error: "Reserva não encontrada" };
   }
 
@@ -351,12 +359,18 @@ export async function checkPaymentStatusAction(
     where: { id: reservationId },
     select: {
       id: true,
+      userId: true,
       status: true,
       payment: { select: { id: true, externalId: true } },
       raffle: { select: { tenantId: true } },
     },
   });
   if (!reservation || reservation.raffle.tenantId !== tenant.id) {
+    return { ok: false, error: "Reserva não encontrada" };
+  }
+  // Isolamento: logado só consulta a própria reserva (admin também);
+  // deslogado passa pelo link (cuid), a credencial do comprovante.
+  if (!(await sessionMayAccessOwnedResource(reservation.userId))) {
     return { ok: false, error: "Reserva não encontrada" };
   }
   if (reservation.status === "PAID") {

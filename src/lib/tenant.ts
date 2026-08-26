@@ -114,6 +114,16 @@ export async function getActiveTenantIdForAdmin(admin: {
     throw new NotFoundError("Tenant não encontrado pra esse host.");
   }
 
+  // Operação de painel exige o HOST do painel. No host público a sessão por
+  // nome+CPF reconhece o admin (para comprar e, no futuro, o botão de print
+  // da campanha), mas não autoriza escrita de painel: senão a senha do
+  // painel seria decorativa: bastaria nome+CPF, que são semipúblicos no
+  // Brasil, para reescrever config, pagamento e usuários. Dev/preview roda
+  // tudo num host só, então a exigência não se aplica ali.
+  if (!isHostDeDesenvolvimento(tenant.host) && tenant.hostKind !== "ADMIN") {
+    throw new ForbiddenError();
+  }
+
   if (admin.role === "SUPER_ADMIN") {
     return tenant.id;
   }
