@@ -2,8 +2,12 @@
 //
 // Ao contrário dos níveis, que se distinguem por número, aqui a patente é
 // escrita no próprio selo — e cada uma tem estrutura própria: Pro Player e
-// Legend usam octógono de três camadas com traços nos cantos; o GOAT herda a
+// MVP usam octógono de três camadas com traços nos cantos; o GOAT herda a
 // borda arco-íris e ganha coroa.
+//
+// Os três nomes são curtos de propósito. O selo aparece a 26px na lista de
+// clientes, e ali palavra comprida vira borrão: "PRO", "MVP" e "GOAT" ainda
+// se leem, "LEGEND" não se lia.
 //
 // Todos os IDs de gradiente e filtro entram por parâmetro. Numa lista de
 // ranking há vários selos na mesma página, e o SVG resolve url(#id) pelo
@@ -58,14 +62,14 @@ const DESIGNS: Partial<Record<PrestigeKey, DesignDePatente>> = {
       corBaixo: "#1677FF",
     },
   },
-  LEGEND: {
+  MVP: {
     fundo: ["#2A173A", "#160D20", "#08050D"],
     borda: ["#E678FF", "#B735E8", "#7A19C5", "#3D0A74"],
     bordaInterna: ["#F2B5FF", "#B34DDB", "#7040A0"],
     texto: ["#FFFFFF", "#E7DDF0", "#A58EB4"],
-    rotulo: "LEGEND",
-    tamanhoDoTexto: 36,
-    espacamento: -1,
+    rotulo: "MVP",
+    tamanhoDoTexto: 57,
+    espacamento: -2,
     tracos: {
       cima: ["M61 52 L75 38", "M139 52 L125 38"],
       baixo: ["M61 148 L75 162", "M139 148 L125 162"],

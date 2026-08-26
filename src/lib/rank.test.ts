@@ -89,8 +89,8 @@ describe("prestigeFromXp", () => {
   });
 
   it("sobe pela escada de patentes na ordem certa", () => {
-    expect(prestigeFromXp(80_000)?.key).toBe("LEGEND");
-    expect(prestigeFromXp(150_000)?.key).toBe("LEGEND");
+    expect(prestigeFromXp(80_000)?.key).toBe("MVP");
+    expect(prestigeFromXp(150_000)?.key).toBe("MVP");
     expect(prestigeFromXp(300_000)?.key).toBe("GOAT");
     expect(prestigeFromXp(9_000_000)?.key).toBe("GOAT");
   });
@@ -123,7 +123,7 @@ describe("rankFromXp", () => {
     expect(rankFromXp(0).numeral).toBe("00");
     // Patente não usa mais numeral romano: o selo traz o nome desenhado.
     expect(rankFromXp(300_000).numeral).toBe("GOAT");
-    expect(rankFromXp(80_000).numeral).toBe("Legend");
+    expect(rankFromXp(80_000).numeral).toBe("MVP");
   });
 
   it("nomeia a faixa com o vocabulário das patentes do CS", () => {
@@ -156,7 +156,7 @@ describe("rankProgress", () => {
   it("dentro do prestígio aponta a patente seguinte", () => {
     const p = rankProgress(40_000);
     expect(p.rank.label).toBe("Pro Player");
-    expect(p.nextLabel).toBe("Legend");
+    expect(p.nextLabel).toBe("MVP");
     expect(p.xpToNext).toBe(40_000);
   });
 

@@ -37,7 +37,7 @@ export function levelFromXp(xp: number): number {
 
 // ---------------------------------------------------------------- prestígio
 
-export type PrestigeKey = "PRO_PLAYER" | "LEGEND" | "GOAT";
+export type PrestigeKey = "PRO_PLAYER" | "MVP" | "GOAT";
 
 export interface PrestigeRank {
   key: PrestigeKey;
@@ -52,9 +52,8 @@ export interface PrestigeRank {
  * Patentes acima do nível 21, em ordem crescente de prestígio.
  *
  * A ordem segue a carreira real: primeiro você vira profissional, depois
- * chega a Major Legend (top 8 de um Major), depois levanta o troféu e, no
- * fim, entra pra história. Reordenar é só mexer aqui — a UI e os cálculos
- * derivam tudo desta lista.
+ * é eleito o melhor da partida e, no fim, entra pra história. Reordenar é só
+ * mexer aqui — a UI e os cálculos derivam tudo desta lista.
  */
 export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
   {
@@ -65,11 +64,11 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     description: "Assinou com uma organização.",
   },
   {
-    key: "LEGEND",
-    label: "Legend",
+    key: "MVP",
+    label: "MVP",
     xp: 80_000,
     color: "#7c6cf0",
-    description: "Status de lenda no Major.",
+    description: "Melhor jogador da partida.",
   },
   {
     key: "GOAT",
