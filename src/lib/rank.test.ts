@@ -138,9 +138,9 @@ describe("rankFromXp", () => {
   });
 
   it("mostra o nível nos selos comuns e o nome nas patentes", () => {
-    // Dois dígitos mantêm a coluna de selos alinhada na lista de ranking.
+    // Um dígito nos níveis de 0 a 9, como nos desenhos entregues.
     expect(rankFromXp(47_000).numeral).toBe("10");
-    expect(rankFromXp(0).numeral).toBe("00");
+    expect(rankFromXp(0).numeral).toBe("0");
     // Patente não usa mais numeral romano: o selo traz o nome desenhado.
     expect(rankFromXp(500_000).numeral).toBe("GOAT");
     expect(rankFromXp(350_000).numeral).toBe("MVP");

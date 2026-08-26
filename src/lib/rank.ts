@@ -198,8 +198,9 @@ export function rankFromXp(xp: number): Rank {
     prestige: null,
     label: `Nível ${level}`,
     tierName: tier.name,
-    // Dois dígitos deixam a coluna de selos alinhada na lista de ranking.
-    numeral: String(level).padStart(2, "0"),
+    // Um dígito só, como nos desenhos: o selo é o mesmo do "0" ao "9", e o
+    // zero à esquerda encolhia a fonte de 82 para 74 sem ganhar nada.
+    numeral: String(level),
     color: tier.color,
     xp: total,
   };
