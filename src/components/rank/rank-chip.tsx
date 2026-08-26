@@ -38,14 +38,33 @@ export function RankChip({
         href="/minha-conta"
         title={`${rank.label} · ${xp.toLocaleString("pt-BR")} XP`}
         aria-label={`Seu rank: ${rank.label}`}
-        className="flex items-center gap-1.5 rounded-full border border-[#232730] bg-[#141619] py-1 pr-2.5 pl-1 transition-colors active:bg-[#181b1f]"
+        className="relative flex items-center gap-2 overflow-hidden rounded-lg border border-[#232730] bg-[#141619] py-1.5 pr-2.5 pl-2 transition-colors active:bg-[#181b1f]"
       >
-        <RankBadge rank={rank} size="xs" />
         <span
-          className="font-mono text-[10px] leading-none font-bold tracking-[0.06em] whitespace-nowrap"
-          style={{ color: rank.color }}
-        >
-          {patente}
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[2px]"
+          style={{ backgroundColor: rank.color }}
+        />
+
+        <RankBadge rank={rank} size="sm" className="relative" />
+
+        <span className="relative flex flex-col gap-1">
+          <span
+            className="font-mono text-[10px] leading-none font-bold tracking-[0.06em] whitespace-nowrap"
+            style={{ color: rank.color }}
+          >
+            {patente}
+          </span>
+          {/* Quanto falta em XP não vai escrito: a barra já diz o quanto
+              falta, e o número exigiria espaço que o cabeçalho do celular
+              não tem. O texto do label serve a leitor de tela, não à tela. */}
+          <RankMeter
+            percent={progress.percent}
+            color={rank.color}
+            height={3}
+            className="w-20"
+            label={progress.nextLabel ?? "Patente máxima"}
+          />
         </span>
       </Link>
     );
