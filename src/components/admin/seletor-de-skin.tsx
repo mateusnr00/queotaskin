@@ -22,7 +22,7 @@ import { useMemo, useState } from "react";
 import { Boxes, Plus, Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import { RARITY_LABEL, WEAR_LABEL, rarityColor } from "@/lib/cs2";
+import { PROPORCAO_DA_SKIN, RARITY_LABEL, WEAR_LABEL, rarityColor } from "@/lib/cs2";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -63,13 +63,14 @@ function fichaEmTexto(skin: SkinDoCatalogo) {
   );
 }
 
-function Miniatura({ skin, tamanho }: { skin: SkinDoCatalogo; tamanho: number }) {
+/** `altura` em px; a largura vem da proporção do quadro, não de um quadrado. */
+function Miniatura({ skin, altura }: { skin: SkinDoCatalogo; altura: number }) {
   return (
     <span
       className="flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/60"
       style={{
-        height: tamanho,
-        width: tamanho,
+        height: altura,
+        aspectRatio: PROPORCAO_DA_SKIN,
         ...(skin.skinRarity
           ? {
               backgroundImage: `radial-gradient(circle at 50% 120%, ${rarityColor(
@@ -82,11 +83,7 @@ function Miniatura({ skin, tamanho }: { skin: SkinDoCatalogo; tamanho: number })
     >
       {skin.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={skin.imageUrl}
-          alt=""
-          className="h-full w-full object-contain p-1"
-        />
+        <img src={skin.imageUrl} alt="" className="h-full w-full object-contain" />
       ) : (
         <span className="text-[9px] uppercase text-muted-foreground">s/ foto</span>
       )}
@@ -149,7 +146,7 @@ export function SeletorDeSkin({
     return (
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="flex items-center gap-3">
-          <Miniatura skin={skinEscolhida} tamanho={44} />
+          <Miniatura skin={skinEscolhida} altura={40} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
               {skinEscolhida.name}
@@ -241,7 +238,7 @@ export function SeletorDeSkin({
                     i > 0 && "border-t"
                   )}
                 >
-                  <Miniatura skin={skin} tamanho={34} />
+                  <Miniatura skin={skin} altura={32} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold">
                       {skin.name}

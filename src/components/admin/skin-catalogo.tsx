@@ -18,7 +18,13 @@ import {
   uploadFotoDaSkinAction,
 } from "@/server/actions/skin-templates";
 import { normalizeImage } from "@/lib/image-normalize";
-import { RARITY_LABEL, WEAR_LABEL, rarityColor } from "@/lib/cs2";
+import {
+  PROPORCAO_DA_SKIN,
+  QUADRO_DA_SKIN,
+  RARITY_LABEL,
+  WEAR_LABEL,
+  rarityColor,
+} from "@/lib/cs2";
 import { formatBRL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -169,24 +175,25 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
               className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-muted/40"
             >
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted/50"
-                style={
-                  skin.skinRarity
+                className="flex h-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted/50"
+                style={{
+                  aspectRatio: PROPORCAO_DA_SKIN,
+                  ...(skin.skinRarity
                     ? {
                         backgroundImage: `radial-gradient(circle at 50% 120%, ${rarityColor(
                           skin.skinRarity,
                           0.35
                         )}, transparent 75%)`,
                       }
-                    : undefined
-                }
+                    : {}),
+                }}
               >
                 {skin.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={skin.imageUrl}
                     alt=""
-                    className="h-full w-full object-contain p-1"
+                    className="h-full w-full object-contain"
                   />
                 ) : (
                   <span className="text-[9px] uppercase text-muted-foreground">
@@ -288,7 +295,11 @@ function FormularioSkin({
   async function enviarFoto(original: File) {
     setEnviandoFoto(true);
     try {
-      const { file } = await normalizeImage(original);
+      // Sai daqui já no quadro padrão, então o que está no banco tem
+      // sempre a mesma proporção e as telas não precisam adivinhar.
+      const { file } = await normalizeImage(original, {
+        quadro: QUADRO_DA_SKIN,
+      });
       const fd = new FormData();
       fd.append("file", file);
       let r;
@@ -366,19 +377,27 @@ function FormularioSkin({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={enviandoFoto || isPending}
+          // A caixa tem a proporção do quadro, então o que aparece aqui é o
+          // que foi gravado, sem faixa vazia em cima e embaixo sugerindo que
+          // a foto ficou menor do que ficou.
+          style={{ aspectRatio: PROPORCAO_DA_SKIN }}
           className={cn(
-            "relative h-32 w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors sm:w-44",
+            "relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors sm:w-56",
             dados.imageUrl
               ? "border-transparent bg-muted/30 ring-1 ring-border"
               : "border-border hover:border-primary"
           )}
         >
           {dados.imageUrl ? (
+            // Sem recuo: a moldura tem a proporção do quadro, então arte
+            // feita no tamanho padrão encosta nas quatro bordas. Um p-2 aqui
+            // deixaria uma faixa permanente sugerindo que a foto ficou menor
+            // do que o quadro.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={dados.imageUrl}
               alt="Foto da skin"
-              className="h-full w-full object-contain p-2"
+              className="h-full w-full object-contain"
             />
           ) : (
             <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">

@@ -18,6 +18,52 @@ const TARGET_BYTES = 1_200_000;
 // qualidade. Um PNG pequeno de logo sai intacto por aqui.
 const PASSTHROUGH_BYTES = 400_000;
 
+export interface NormalizeOptions {
+  /**
+   * Desenha a imagem centralizada num quadro exato deste tamanho, em vez de
+   * apenas encolher mantendo a proporção original.
+   *
+   * É o que faz miniatura e capa terem todas o mesmo formato: sem o quadro,
+   * cada foto enviada chega com a proporção que o autor escolheu, e a lista
+   * do catálogo vira um mosaico de imagens tortas, umas achatadas e outras
+   * espremidas.
+   *
+   * O que sobra fica transparente, não preto: a moldura tem cor de fundo
+   * própria e um preenchimento opaco criaria uma tarja visível em volta da
+   * skin.
+   */
+  quadro?: { largura: number; altura: number };
+}
+
+/**
+ * Onde desenhar uma imagem de `origem` dentro de `quadro`, cabendo inteira e
+ * centralizada.
+ *
+ * Separada do desenho porque é a única parte com risco de erro: canvas não
+ * reclama de coordenada errada, ele desenha torto e o defeito só aparece
+ * olhando a imagem. Assim dá para provar a conta sem navegador.
+ */
+export function encaixarNoQuadro(
+  origem: { largura: number; altura: number },
+  quadro: { largura: number; altura: number }
+): { x: number; y: number; largura: number; altura: number } {
+  if (origem.largura <= 0 || origem.altura <= 0) {
+    return { x: 0, y: 0, largura: quadro.largura, altura: quadro.altura };
+  }
+  const escala = Math.min(
+    quadro.largura / origem.largura,
+    quadro.altura / origem.altura
+  );
+  const largura = Math.round(origem.largura * escala);
+  const altura = Math.round(origem.altura * escala);
+  return {
+    x: Math.round((quadro.largura - largura) / 2),
+    y: Math.round((quadro.altura - altura) / 2),
+    largura,
+    altura,
+  };
+}
+
 export interface NormalizeResult {
   file: File;
   /** false = o arquivo original foi mantido como veio. */
@@ -90,18 +136,26 @@ function renamed(file: File, blob: Blob, ext: string): File {
  * arquivo original, quem valida de verdade é o servidor, e é melhor tentar
  * enviar do que barrar aqui.
  */
-export async function normalizeImage(file: File): Promise<NormalizeResult> {
+export async function normalizeImage(
+  file: File,
+  { quadro }: NormalizeOptions = {}
+): Promise<NormalizeResult> {
   const originalBytes = file.size;
   const keep = (): NormalizeResult => ({ file, normalized: false, originalBytes });
 
   if (!file.type.startsWith("image/") && !/\.[a-z0-9]+$/i.test(file.name)) {
     return keep();
   }
-  // GIF animado perderia o movimento no canvas (só o primeiro quadro sai).
-  // Se já cabe no envio, deixa passar inteiro.
-  if (file.type === "image/gif" && originalBytes <= TARGET_BYTES) return keep();
-  if (originalBytes <= PASSTHROUGH_BYTES && file.type !== "image/svg+xml") {
-    return keep();
+  // Com quadro pedido, os atalhos abaixo não valem: um arquivo pequeno já
+  // caberia no envio, mas continuaria com a proporção errada, que é
+  // justamente o que o quadro existe para resolver.
+  if (!quadro) {
+    // GIF animado perderia o movimento no canvas (só o primeiro quadro sai).
+    // Se já cabe no envio, deixa passar inteiro.
+    if (file.type === "image/gif" && originalBytes <= TARGET_BYTES) return keep();
+    if (originalBytes <= PASSTHROUGH_BYTES && file.type !== "image/svg+xml") {
+      return keep();
+    }
   }
 
   let decoded: Decoded;
@@ -112,14 +166,41 @@ export async function normalizeImage(file: File): Promise<NormalizeResult> {
   }
 
   try {
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(decoded.width, decoded.height));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(decoded.width * scale));
-    canvas.height = Math.max(1, Math.round(decoded.height * scale));
+    if (quadro) {
+      canvas.width = quadro.largura;
+      canvas.height = quadro.altura;
+    } else {
+      const scale = Math.min(
+        1,
+        MAX_DIMENSION / Math.max(decoded.width, decoded.height)
+      );
+      canvas.width = Math.max(1, Math.round(decoded.width * scale));
+      canvas.height = Math.max(1, Math.round(decoded.height * scale));
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return keep();
-    ctx.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+
+    if (quadro) {
+      // Cabe inteira e centralizada, sem cortar. Preencher o quadro cortando
+      // as bordas pareceria melhor numa miniatura e destruiria a arte numa
+      // imagem que já vem com moldura e texto, que é o caso das artes de
+      // sorteio.
+      const dentro = encaixarNoQuadro(
+        { largura: decoded.width, altura: decoded.height },
+        { largura: canvas.width, altura: canvas.height }
+      );
+      ctx.drawImage(
+        decoded.source,
+        dentro.x,
+        dentro.y,
+        dentro.largura,
+        dentro.altura
+      );
+    } else {
+      ctx.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+    }
 
     // WebP preserva transparência, que render de skin costuma ter. Se o
     // navegador não encodar WebP, toBlob devolve PNG e o JPEG entra como
