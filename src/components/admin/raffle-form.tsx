@@ -252,9 +252,35 @@ export function RaffleForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<string>(abaInicial || "geral");
-  // Aba que o usuario pediu antes do sorteio existir. Guardada para que o
-  // redirecionamento pos-criacao caia nela, em vez de voltar para Geral.
-  const destinoAposCriar = useRef<string | null>(null);
+  // Trava de reentrada da criação. Quatro cliques seguidos em abas
+  // diferentes disparariam quatro criações; sobreviveria só a primeira, e o
+  // usuário levaria três erros sem entender o motivo.
+  //
+  // Ref e não estado porque os cliques chegam antes de qualquer
+  // re-renderização: um estado ainda estaria falso no segundo clique. Só é
+  // lida dentro de aoTrocarDeAba, que é manipulador de evento.
+  const criacaoEmVoo = useRef(false);
+  // Quem manda na URL: enquanto o admin não escrever nela, ela acompanha o
+  // título. Depois que ele escreve, para de mexer, senão a próxima letra
+  // digitada no título apagaria o que ele acabou de compor.
+  //
+  // Estado e não ref: acompanharTitulo é montada durante a renderização (vai
+  // como prop para o seletor de skin), e ler ref por esse caminho é
+  // justamente o que o compilador do React proíbe.
+  const [urlEscritaAMao, setUrlEscritaAMao] = useState(false);
+
+  /**
+   * Deriva a URL do título.
+   *
+   * Existe como função e não como trecho dentro do onChange do campo porque
+   * o título tem duas origens: o que se digita e a skin escolhida do
+   * catálogo, que entra por setValue e não passa por onChange nenhum. Era
+   * por isso que escolher a skin preenchia o título e deixava a URL vazia.
+   */
+  function acompanharTitulo(titulo: string) {
+    if (mode.kind !== "create" || urlEscritaAMao) return;
+    form.setValue("slug", toSlug(titulo), { shouldDirty: true });
+  }
   const isEdit = mode.kind === "edit";
   const raffleId = mode.kind === "edit" ? mode.id : "";
   // Skin escolhida do catálogo. Só existe na criação: depois, prêmio e capa
@@ -305,17 +331,32 @@ export function RaffleForm({
       return;
     }
 
-    // Trava de reentrada. Quatro cliques seguidos em abas diferentes
-    // disparariam quatro criacoes; sobreviveria so a primeira, porque o slug
-    // e unico por tenant, e o usuario levaria tres erros de slug repetido
-    // sem entender o motivo. Enquanto uma criacao esta em voo, as outras
-    // abas simplesmente esperam.
-    if (destinoAposCriar.current) return;
-    destinoAposCriar.current = destino;
-    await form.handleSubmit(onSubmit)();
+    // Enquanto uma criação está em voo, as outras abas esperam.
+    if (criacaoEmVoo.current) return;
+    criacaoEmVoo.current = true;
+    // Quem trava destrava: a ref não entra em salvar(), senão ela viajaria
+    // junto com onSubmit até o handleSubmit, que roda na renderização.
+    salvar(form.getValues(), destino, () => {
+      criacaoEmVoo.current = false;
+    });
   }
 
+  /** Botão "Criar sorteio" / "Salvar alterações": fica onde está. */
   function onSubmit(values: RaffleGeneralInput) {
+    salvar(values, null);
+  }
+
+  /**
+   * Destino e tratamento de falha chegam por parâmetro, nunca de ref lida
+   * aqui dentro: esta função é entregue ao handleSubmit durante a
+   * renderização, e ler ref por esse caminho é o que o compilador do React
+   * proíbe. Quem tem ref para mexer manda a função que mexe nela.
+   */
+  function salvar(
+    values: RaffleGeneralInput,
+    abaDeDestino: string | null,
+    aoFalhar?: () => void
+  ) {
     if (values.isFree) values.pricePerNumber = 0;
 
     startTransition(async () => {
@@ -325,7 +366,7 @@ export function RaffleForm({
           : await updateRaffleAction({ id: mode.id, data: values });
 
       if (!result.ok) {
-        destinoAposCriar.current = null;
+        aoFalhar?.();
         toast.error(result.error);
         if (result.fieldErrors?.slug) {
           form.setError("slug", { message: result.fieldErrors.slug[0] });
@@ -336,11 +377,9 @@ export function RaffleForm({
         mode.kind === "create" ? "Sorteio criado" : "Sorteio salvo"
       );
       if (mode.kind === "create") {
-        const aba = destinoAposCriar.current;
-        destinoAposCriar.current = null;
         router.push(
           `/admin/sorteios/${result.data.id}/editar${
-            aba ? `?aba=${aba}` : ""
+            abaDeDestino ? `?aba=${abaDeDestino}` : ""
           }`
         );
       } else {
@@ -395,9 +434,10 @@ export function RaffleForm({
                   skins={skins}
                   escolhida={skinEscolhida}
                   aoEscolher={setSkinEscolhida}
-                  aoPreencherTitulo={(nome) =>
-                    form.setValue("title", nome, { shouldDirty: true })
-                  }
+                  aoPreencherTitulo={(nome) => {
+                    form.setValue("title", nome, { shouldDirty: true });
+                    acompanharTitulo(nome);
+                  }}
                 />
               )}
 
@@ -413,17 +453,7 @@ export function RaffleForm({
                         placeholder="Ex: Rifa do iPhone 16"
                         onChange={(e) => {
                           field.onChange(e);
-                          // No modo CREATE, gera o slug automaticamente
-                          // enquanto digita (se o usuário não mexeu ainda).
-                          if (mode.kind === "create") {
-                            const current = form.getValues("slug");
-                            const generatedFromOld = toSlug(
-                              form.formState.defaultValues?.title ?? ""
-                            );
-                            if (!current || current === generatedFromOld) {
-                              form.setValue("slug", toSlug(e.target.value));
-                            }
-                          }
+                          acompanharTitulo(e.target.value);
                         }}
                       />
                     </FormControl>
@@ -445,6 +475,9 @@ export function RaffleForm({
                         placeholder="ex: rifa-iphone-16"
                         autoComplete="off"
                         onChange={(e) => {
+                          // A partir daqui a URL é dele, o título não mexe
+                          // mais nela.
+                          setUrlEscritaAMao(true);
                           const v = e.target.value
                             .toLowerCase()
                             .replace(/[^a-z0-9-]/g, "");
@@ -453,7 +486,9 @@ export function RaffleForm({
                       />
                     </FormControl>
                     <FormDescription>
-                      Essa é a URL que corresponderá ao sorteio.
+                      {mode.kind === "create"
+                        ? "Sai do título sozinha. Se já existir sorteio com essa URL, um número entra no fim."
+                        : "Essa é a URL que corresponderá ao sorteio."}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

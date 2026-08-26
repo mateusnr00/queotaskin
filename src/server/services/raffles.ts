@@ -7,27 +7,53 @@ import { toSlug } from "@/lib/slug";
 
 const shortId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 6);
 
-// Garante slug único dentro do tenant: gera a partir do título; em colisão
-// adiciona sufixo curto. Tenta no máximo 5 vezes, basta para evitar loop
-// infinito.
+/**
+ * Primeiro slug livre a partir de `base`, dentro do tenant.
+ *
+ * Em colisão numera em sequência: `ak-47-redline`, depois `ak-47-redline1`,
+ * `ak-47-redline2`. A versão anterior colava um sufixo aleatório de seis
+ * letras, o que resolvia a unicidade e produzia URL impronunciável, do tipo
+ * `ak-47-redline-q7x2mk`, justamente no link que vai para o WhatsApp.
+ *
+ * Busca os ocupados de uma vez em lugar de bater no banco a cada tentativa:
+ * com uma skin que já teve dez campanhas, seriam dez idas ao banco só para
+ * descobrir o número da vez.
+ */
+export async function garantirSlugLivre(
+  base: string,
+  tenantId: string
+): Promise<string> {
+  const raiz = base || shortId();
+
+  const tomados = new Set(
+    (
+      await prisma.raffle.findMany({
+        where: { tenantId, slug: { startsWith: raiz } },
+        select: { slug: true },
+      })
+    ).map((r) => r.slug)
+  );
+
+  if (!tomados.has(raiz)) return raiz;
+
+  // Existem no máximo `tomados.size` slugs ocupados com essa raiz, então
+  // entre raiz1 e raiz(size+1) sobra pelo menos um livre. O laço termina.
+  for (let n = 1; n <= tomados.size + 1; n++) {
+    const candidato = `${raiz}${n}`;
+    if (!tomados.has(candidato)) return candidato;
+  }
+
+  // Inalcançável pela contagem acima, mas devolver algo único é melhor do
+  // que devolver undefined se a conta um dia mudar.
+  return `${raiz}-${shortId()}`;
+}
+
+/** Slug livre a partir do título da campanha. */
 export async function generateUniqueSlug(
   title: string,
   tenantId: string
 ): Promise<string> {
-  const base = toSlug(title);
-  const fallback = base || shortId();
-
-  let candidate = fallback;
-  for (let i = 0; i < 5; i++) {
-    const existing = await prisma.raffle.findUnique({
-      where: { tenantId_slug: { tenantId, slug: candidate } },
-      select: { id: true },
-    });
-    if (!existing) return candidate;
-    candidate = `${fallback}-${shortId()}`;
-  }
-  // Improvável chegar aqui; usa só o sufixo.
-  return `${fallback}-${shortId()}-${shortId()}`;
+  return garantirSlugLivre(toSlug(title), tenantId);
 }
 
 // Sorteia N números aleatórios disponíveis em uma rifa.

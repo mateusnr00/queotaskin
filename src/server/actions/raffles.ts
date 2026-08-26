@@ -13,7 +13,8 @@ import {
   pathFromPublicUrl,
 } from "@/lib/storage";
 import { raffleGeneralSchema } from "@/lib/validations/raffle";
-import { generateUniqueSlug } from "@/server/services/raffles";
+import { garantirSlugLivre } from "@/server/services/raffles";
+import { toSlug } from "@/lib/slug";
 import type { ActionResult } from "@/server/actions/auth";
 
 const updateInputSchema = z.object({
@@ -51,12 +52,16 @@ export async function createRaffleAction(
       };
     }
 
-    // Se admin forneceu um slug, usa esse (após validar unicidade);
-    // senão gera a partir do título. Unicidade é por tenant.
+    // A URL sai do que o admin escreveu, ou do título quando ele não mexeu.
+    // Nos dois casos passa pelo mesmo resolvedor: sortear a mesma skin de
+    // novo é rotina aqui, e recusar a criação por causa da URL repetida
+    // obrigaria a inventar nome diferente para a mesma skin. Numera sozinho
+    // e segue.
     const { slug: providedSlug, ...rest } = parsed.data;
-    const slug = providedSlug
-      ? providedSlug
-      : await generateUniqueSlug(parsed.data.title, tenantId);
+    const slug = await garantirSlugLivre(
+      toSlug(providedSlug || parsed.data.title),
+      tenantId
+    );
 
     // Busca antes de abrir a transação: id de outro tenant simplesmente não
     // encontra, e aí o sorteio nasce sem prêmio em vez de nascer com o de
