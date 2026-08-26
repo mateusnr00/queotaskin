@@ -11,6 +11,7 @@ import {
   TIERS,
   tierForLevel,
   xpForLevel,
+  XP_POR_NIVEL,
   xpForPurchase,
 } from "@/lib/rank";
 import {
@@ -54,11 +55,27 @@ describe("xpForLevel / levelFromXp", () => {
     expect(levelFromXp(0)).toBe(0);
   });
 
-  it("segue a curva quadrática documentada", () => {
-    expect(xpForLevel(1)).toBe(100); // R$ 10
-    expect(xpForLevel(5)).toBe(1500); // R$ 150
-    expect(xpForLevel(10)).toBe(5500); // R$ 550
-    expect(xpForLevel(21)).toBe(23100); // R$ 2.310
+  it("segue a tabela definida, em XP", () => {
+    expect(xpForLevel(1)).toBe(1_000); // R$ 100
+    expect(xpForLevel(5)).toBe(12_000); // R$ 1.200
+    expect(xpForLevel(10)).toBe(47_000); // R$ 4.700
+    expect(xpForLevel(21)).toBe(300_000); // R$ 30.000
+  });
+
+  it("a tabela cobre 0 a 21 e sempre sobe", () => {
+    expect(XP_POR_NIVEL).toHaveLength(MAX_LEVEL + 1);
+    for (let n = 1; n <= MAX_LEVEL; n++) {
+      expect(XP_POR_NIVEL[n]!, `nível ${n}`).toBeGreaterThan(XP_POR_NIVEL[n - 1]!);
+    }
+  });
+
+  it("cada degrau custa mais que o anterior — a escada não afrouxa", () => {
+    let anterior = XP_POR_NIVEL[1]! - XP_POR_NIVEL[0]!;
+    for (let n = 2; n <= MAX_LEVEL; n++) {
+      const degrau = XP_POR_NIVEL[n]! - XP_POR_NIVEL[n - 1]!;
+      expect(degrau, `degrau até o nível ${n}`).toBeGreaterThanOrEqual(anterior);
+      anterior = degrau;
+    }
   });
 
   it("é o inverso exato de xpForLevel em todos os níveis", () => {
@@ -83,15 +100,18 @@ describe("xpForLevel / levelFromXp", () => {
 });
 
 describe("prestigeFromXp", () => {
-  it("só entra em prestígio a partir do limiar da patente", () => {
-    expect(prestigeFromXp(39_999)).toBeNull();
-    expect(prestigeFromXp(40_000)?.key).toBe("PRO_PLAYER");
+  it("só entra em prestígio depois do topo dos níveis", () => {
+    // O nível 21 custa 300 mil; a primeira patente vem depois disso.
+    expect(prestigeFromXp(xpForLevel(MAX_LEVEL))).toBeNull();
+    expect(prestigeFromXp(349_999)).toBeNull();
+    expect(prestigeFromXp(350_000)?.key).toBe("MVP");
   });
 
   it("sobe pela escada de patentes na ordem certa", () => {
-    expect(prestigeFromXp(80_000)?.key).toBe("MVP");
-    expect(prestigeFromXp(150_000)?.key).toBe("MVP");
-    expect(prestigeFromXp(300_000)?.key).toBe("GOAT");
+    expect(prestigeFromXp(350_000)?.key).toBe("MVP"); // R$ 35.000
+    expect(prestigeFromXp(425_000)?.key).toBe("PRO_PLAYER"); // R$ 42.500
+    expect(prestigeFromXp(499_999)?.key).toBe("PRO_PLAYER");
+    expect(prestigeFromXp(500_000)?.key).toBe("GOAT"); // R$ 50.000
     expect(prestigeFromXp(9_000_000)?.key).toBe("GOAT");
   });
 
@@ -104,14 +124,14 @@ describe("prestigeFromXp", () => {
 
 describe("rankFromXp", () => {
   it("rotula níveis numéricos", () => {
-    const rank = rankFromXp(5500);
+    const rank = rankFromXp(47_000); // R$ 4.700 = nível 10
     expect(rank.level).toBe(10);
     expect(rank.label).toBe("Nível 10");
     expect(rank.prestige).toBeNull();
   });
 
   it("no prestígio, o rótulo vira a patente e o nível fica em 21", () => {
-    const rank = rankFromXp(300_000);
+    const rank = rankFromXp(500_000); // R$ 50.000
     expect(rank.label).toBe("GOAT");
     expect(rank.level).toBe(MAX_LEVEL);
     expect(rank.prestige?.key).toBe("GOAT");
@@ -119,11 +139,11 @@ describe("rankFromXp", () => {
 
   it("mostra o nível nos selos comuns e o nome nas patentes", () => {
     // Dois dígitos mantêm a coluna de selos alinhada na lista de ranking.
-    expect(rankFromXp(5500).numeral).toBe("10");
+    expect(rankFromXp(47_000).numeral).toBe("10");
     expect(rankFromXp(0).numeral).toBe("00");
     // Patente não usa mais numeral romano: o selo traz o nome desenhado.
-    expect(rankFromXp(300_000).numeral).toBe("GOAT");
-    expect(rankFromXp(80_000).numeral).toBe("MVP");
+    expect(rankFromXp(500_000).numeral).toBe("GOAT");
+    expect(rankFromXp(350_000).numeral).toBe("MVP");
   });
 
   it("nomeia a faixa com o vocabulário das patentes do CS", () => {
@@ -132,36 +152,36 @@ describe("rankFromXp", () => {
     expect(rankFromXp(xpForLevel(14)).tierName).toBe("Águia Lendária");
     expect(rankFromXp(xpForLevel(21)).tierName).toBe("Global Elite");
     // No prestígio, a faixa é a própria patente.
-    expect(rankFromXp(300_000).tierName).toBe("GOAT");
+    expect(rankFromXp(500_000).tierName).toBe("GOAT");
   });
 });
 
 describe("rankProgress", () => {
   it("aponta o próximo nível e quanto falta em reais", () => {
-    // Nível 1 alcançado com 100 XP; nível 2 exige 300.
-    const p = rankProgress(200);
+    // Nível 1 custa 1.000 XP (R$ 100); o nível 2 exige 2.500 (R$ 250).
+    const p = rankProgress(1_750);
     expect(p.rank.level).toBe(1);
     expect(p.nextLabel).toBe("Nível 2");
-    expect(p.xpToNext).toBe(100);
-    expect(p.brlToNext).toBe(10);
+    expect(p.xpToNext).toBe(750);
+    expect(p.brlToNext).toBe(75);
     expect(p.percent).toBe(50);
   });
 
   it("no nível 21 o próximo degrau é a primeira patente", () => {
     const p = rankProgress(xpForLevel(MAX_LEVEL));
-    expect(p.nextLabel).toBe("Pro Player");
+    expect(p.nextLabel).toBe("MVP");
     expect(p.atMax).toBe(false);
   });
 
   it("dentro do prestígio aponta a patente seguinte", () => {
-    const p = rankProgress(40_000);
-    expect(p.rank.label).toBe("Pro Player");
-    expect(p.nextLabel).toBe("MVP");
-    expect(p.xpToNext).toBe(40_000);
+    const p = rankProgress(350_000); // MVP
+    expect(p.rank.label).toBe("MVP");
+    expect(p.nextLabel).toBe("Pro Player");
+    expect(p.xpToNext).toBe(75_000); // 425.000 − 350.000
   });
 
   it("GOAT é o teto: sem próximo degrau e 100%", () => {
-    const p = rankProgress(300_000);
+    const p = rankProgress(500_000);
     expect(p.atMax).toBe(true);
     expect(p.nextLabel).toBeNull();
     expect(p.percent).toBe(100);
@@ -175,9 +195,11 @@ describe("rankProgress", () => {
   });
 
   it("converte o que falta usando o xpPerBrl do tenant", () => {
+    // O nível 1 custa 1.000 XP. Na régua padrão são R$ 100; a 50 XP por
+    // real, os mesmos 1.000 XP saem por R$ 20.
     const p = rankProgress(0, 50);
-    expect(p.xpToNext).toBe(100);
-    expect(p.brlToNext).toBe(2);
+    expect(p.xpToNext).toBe(1_000);
+    expect(p.brlToNext).toBe(20);
   });
 });
 

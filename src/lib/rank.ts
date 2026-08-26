@@ -1,7 +1,7 @@
 // Sistema de rank do QuéOta Skin.
 //
 // A progressão copia a escada que o público brasileiro de CS já conhece: os
-// níveis 0–21 da Gamers Club e, acima do 21, quatro patentes de prestígio
+// níveis 0–21 da Gamers Club e, acima do 21, três patentes de prestígio
 // tiradas da carreira de um jogador profissional.
 //
 // XP só entra por compra paga (10 XP por real, ajustável por tenant). XP não
@@ -14,25 +14,55 @@ export const XP_PER_BRL_DEFAULT = 10;
 export const MAX_LEVEL = 21;
 
 /**
- * XP acumulado necessário para ALCANÇAR o nível L.
+ * XP acumulado para ALCANÇAR cada nível. O índice é o próprio nível.
  *
- * Curva quadrática: `XP_STEP * L * (L + 1) / 2`. Cada nível custa um pouco
- * mais que o anterior, então o começo é rápido (nível 1 com R$ 10) e o topo
- * é um objetivo de longo prazo (nível 21 com R$ 2.310 acumulados).
+ * Tabela, não fórmula. Uma curva fechada obriga a escada a caber na equação;
+ * aqui os degraus foram escolhidos um a um, e o começo é de propósito bem
+ * mais barato que o topo — nível 1 sai por R$ 100 e o 21 pede R$ 30 mil
+ * acumulados.
+ *
+ * Os valores estão em XP. A tabela foi definida em reais na régua padrão de
+ * XP_PER_BRL_DEFAULT (10 XP por real): a coluna em reais ao lado só vale
+ * enquanto o tenant não mudar essa régua em Admin → Ranking.
  */
-const XP_STEP = 100;
+export const XP_POR_NIVEL: readonly number[] = [
+  0, //          nível 0  — R$ 0
+  1_000, //      nível 1  — R$ 100
+  2_500, //      nível 2  — R$ 250
+  5_000, //      nível 3  — R$ 500
+  8_000, //      nível 4  — R$ 800
+  12_000, //     nível 5  — R$ 1.200
+  17_000, //     nível 6  — R$ 1.700
+  23_000, //     nível 7  — R$ 2.300
+  30_000, //     nível 8  — R$ 3.000
+  38_000, //     nível 9  — R$ 3.800
+  47_000, //     nível 10 — R$ 4.700
+  57_000, //     nível 11 — R$ 5.700
+  70_000, //     nível 12 — R$ 7.000
+  85_000, //     nível 13 — R$ 8.500
+  100_000, //    nível 14 — R$ 10.000
+  120_000, //    nível 15 — R$ 12.000
+  145_000, //    nível 16 — R$ 14.500
+  170_000, //    nível 17 — R$ 17.000
+  200_000, //    nível 18 — R$ 20.000
+  230_000, //    nível 19 — R$ 23.000
+  260_000, //    nível 20 — R$ 26.000
+  300_000, //    nível 21 — R$ 30.000
+];
 
 export function xpForLevel(level: number): number {
   const L = Math.max(0, Math.min(MAX_LEVEL, Math.floor(level)));
-  return (XP_STEP * L * (L + 1)) / 2;
+  return XP_POR_NIVEL[L]!;
 }
 
 /** Nível (0–21) correspondente a um total de XP. */
 export function levelFromXp(xp: number): number {
   if (xp <= 0) return 0;
-  // Inverso de xpForLevel: resolve XP_STEP * L * (L+1) / 2 = xp.
-  const L = Math.floor((-1 + Math.sqrt(1 + (8 * xp) / XP_STEP)) / 2);
-  return Math.max(0, Math.min(MAX_LEVEL, L));
+  // Varre de cima para baixo: o nível é o maior degrau já pago por inteiro.
+  for (let L = MAX_LEVEL; L >= 0; L--) {
+    if (xp >= XP_POR_NIVEL[L]!) return L;
+  }
+  return 0;
 }
 
 // ---------------------------------------------------------------- prestígio
@@ -51,29 +81,29 @@ export interface PrestigeRank {
 /**
  * Patentes acima do nível 21, em ordem crescente de prestígio.
  *
- * A ordem segue a carreira real: primeiro você vira profissional, depois
- * é eleito o melhor da partida e, no fim, entra pra história. Reordenar é só
- * mexer aqui — a UI e os cálculos derivam tudo desta lista.
+ * A lista precisa ficar em ordem crescente de XP: prestigeFromXp percorre de
+ * ponta a ponta e guarda a última alcançada. Reordenar é só mexer aqui — a UI
+ * e os cálculos derivam tudo desta lista.
  */
 export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
   {
-    key: "PRO_PLAYER",
-    label: "Pro Player",
-    xp: 40_000,
-    color: "#3fc9d6",
-    description: "Assinou com uma organização.",
-  },
-  {
     key: "MVP",
     label: "MVP",
-    xp: 80_000,
+    xp: 350_000, // R$ 35.000
     color: "#7c6cf0",
     description: "Melhor jogador da partida.",
   },
   {
+    key: "PRO_PLAYER",
+    label: "Pro Player",
+    xp: 425_000, // R$ 42.500
+    color: "#3fc9d6",
+    description: "Assinou com uma organização.",
+  },
+  {
     key: "GOAT",
     label: "GOAT",
-    xp: 300_000,
+    xp: 500_000, // R$ 50.000
     color: "#f2d059",
     description: "O maior de todos os tempos.",
   },
