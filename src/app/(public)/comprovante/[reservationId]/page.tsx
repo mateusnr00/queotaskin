@@ -51,7 +51,10 @@ const reservationInclude = {
     select: {
       id: true,
       status: true,
-      prize: { select: { title: true, prize: true } },
+      // Só o nome do item. O agrupador do painel ("Skins
+      // Lendárias" e afins) é organização interna, não vai para a tela
+      // de quem comprou.
+      prize: { select: { prize: true } },
     },
     orderBy: { createdAt: "asc" as const },
   },
@@ -184,9 +187,7 @@ export default async function ReservationReceiptPage({
     const boxes = reservation.surpriseBoxes.map((b) => ({
       id: b.id,
       status: b.status as "UNOPENED" | "OPENED_PRIZE" | "OPENED_EMPTY",
-      prize: b.prize
-        ? { title: b.prize.title, prize: b.prize.prize }
-        : null,
+      prize: b.prize ? { prize: b.prize.prize } : null,
     }));
     return (
       <div className="container mx-auto max-w-2xl px-4 py-12 space-y-6">

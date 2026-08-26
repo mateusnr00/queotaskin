@@ -7,7 +7,7 @@
 // Cada caixa não-aberta tem botão "Abrir" individual. Se a rifa permite
 // "Abrir Todas", aparece também um botão pra abrir todas de uma vez.
 // Caixas já abertas viram o resultado:
-//   - OPENED_PRIZE: faixa laranja com a descrição do prêmio
+//   - OPENED_PRIZE: faixa laranja com o nome do item
 //   - OPENED_EMPTY: card apagado, "Não foi dessa vez"
 //
 // Segurança: a server action openSurpriseBoxAction é a única fonte de
@@ -32,7 +32,7 @@ import { Badge } from "@/components/ui/badge";
 export interface SurpriseBoxClaimItem {
   id: string;
   status: "UNOPENED" | "OPENED_PRIZE" | "OPENED_EMPTY";
-  prize: { title: string; prize: string } | null;
+  prize: { prize: string } | null;
 }
 
 interface Props {
@@ -138,9 +138,7 @@ export function SurpriseBoxesClaim({
           ? {
               ...b,
               status: data.status,
-              prize: data.prize
-                ? { title: data.prize.title, prize: data.prize.prize }
-                : null,
+              prize: data.prize ? { prize: data.prize.prize } : null,
             }
           : b
       )
@@ -319,10 +317,16 @@ function BoxRow({
           <CaixaSurpresaArte aberta tamanho={40} />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-bold leading-tight truncate">
-            {box.prize.title || "Caixa Surpresa"}
+          <p className="text-[10px] font-semibold uppercase tracking-wider leading-tight text-white/80">
+            Você ganhou
           </p>
-          <p className="text-xs leading-tight truncate">{box.prize.prize}</p>
+          {/* Quebra em duas linhas em vez de cortar. O nome do item agora é
+              a única coisa escrita na linha, e "AK-47 | Redline (Testa…"
+              esconde justamente o desgaste, que é o que muda o valor da
+              skin. */}
+          <p className="line-clamp-2 text-sm font-bold leading-tight">
+            {box.prize.prize}
+          </p>
         </div>
       </div>
       <Badge className="bg-white/95 text-amber-700 hover:bg-white tabular-nums text-[10px]">
