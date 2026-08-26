@@ -337,14 +337,10 @@ export default async function PublicRaffleDetailPage({
       {/* Fixa na coluna da direita no desktop; no celular é só o bloco
           seguinte, logo abaixo do título. */}
       <div className="mt-5 space-y-3 md:mt-6 md:space-y-4">
-        {raffle.showProgressBar && (
-          <SalesProgressBar
-            percent={Math.min(100, Math.max(0, soldPercent))}
-            soldCount={soldCount}
-            remaining={remaining}
-          />
-        )}
-
+        {/* Preço antes da barra: é o que decide a compra, e a barra é
+            contexto para essa decisão. Com a barra em cima, quem abre a
+            página lê primeiro quanto já foi vendido e só depois descobre o
+            valor, que é a informação que ele veio buscar. */}
         {raffle.isFree ? (
           <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-4 text-center">
             <span className="text-xl font-extrabold uppercase tracking-tight text-primary sm:text-2xl">
@@ -360,6 +356,14 @@ export default async function PublicRaffleDetailPage({
               {formatBRL(Number(raffle.pricePerNumber))}
             </span>
           </div>
+        )}
+
+        {raffle.showProgressBar && (
+          <SalesProgressBar
+            percent={Math.min(100, Math.max(0, soldPercent))}
+            soldCount={soldCount}
+            remaining={remaining}
+          />
         )}
 
         <div className="rounded-xl border bg-card p-4 md:rounded-2xl md:p-5">
