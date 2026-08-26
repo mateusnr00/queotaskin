@@ -21,6 +21,7 @@ import {
   openSurpriseBoxAction,
   type OpenedBoxResult,
 } from "@/server/actions/surprise-boxes";
+import { CaixaSurpresaArte } from "@/components/public/caixa-surpresa-arte";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -107,9 +108,12 @@ export function SurpriseBoxesClaim({
 
   return (
     <div className="rounded-2xl border bg-card p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-base font-semibold">
-          <Gift className="h-5 w-5 text-amber-500" />
+      {/* Título em texto corrido, e não numa flex row. Como flex, cada
+          pedaço virava um item e a frase quebrava em "Você tem / 3 / caixas
+          para / abrir!" na largura do celular. O ícone saiu junto: a arte da
+          caixa aparece logo abaixo, uma vez por caixa. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-base font-semibold">
           Você tem{" "}
           <span className="text-amber-600 dark:text-amber-400">
             {unopenedCount}
@@ -122,7 +126,7 @@ export function SurpriseBoxesClaim({
             size="sm"
             onClick={openAll}
             disabled={allPending || openingId !== null}
-            className="bg-amber-500 hover:bg-amber-600 text-white"
+            className="ml-auto bg-amber-500 hover:bg-amber-600 text-white"
           >
             {allPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
             Abrir todas
@@ -172,12 +176,14 @@ function BoxRow({
   if (box.status === "UNOPENED") {
     return (
       <div className="rounded-xl border bg-muted/30 p-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Gift className="h-5 w-5 shrink-0 text-amber-500" />
+        <div className="flex items-center gap-3 min-w-0">
+          {/* A arte no lugar do ícone: aqui a caixa não é um marcador ao lado
+              de um texto, é o objeto que a pessoa está prestes a abrir. */}
+          <CaixaSurpresaArte tamanho={56} />
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">Caixa Surpresa</p>
             <p className="text-xs text-muted-foreground">
-              Toque em Abrir pra revelar o prêmio
+              Abra pra revelar o prêmio
             </p>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { Gift } from "lucide-react";
 
+import { CaixaSurpresaArte } from "@/components/public/caixa-surpresa-arte";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -35,13 +36,21 @@ export function SurpriseBoxesCombos({
 
   return (
     <section className="space-y-3 rounded-2xl border bg-card p-4 md:p-5">
-      <h2 className="flex items-center gap-2 text-base font-bold">
-        <Gift className="h-4 w-4 text-primary" />
-        Caixas surpresas
-        <span className="text-xs font-normal text-muted-foreground">
-          {acumulativo ? "os degraus somam" : "vale o maior degrau"}
-        </span>
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        {/* Título e regra empilhados, não na mesma linha: com a arte ocupando
+            80px à direita, "vale o maior degrau" quebrava no meio na largura
+            do celular. */}
+        <div className="min-w-0">
+          <h2 className="text-base font-bold">Caixas surpresas</h2>
+          <p className="text-xs text-muted-foreground">
+            {acumulativo ? "os degraus somam" : "vale o maior degrau"}
+          </p>
+        </div>
+        {/* A caixa em si, e não só a palavra. Quem chega na campanha sem
+            saber o que é uma caixa surpresa entende pela figura antes de ler
+            os degraus. */}
+        <CaixaSurpresaArte tamanho={80} className="-my-2" />
+      </div>
 
       <ul className="space-y-2">
         {combos.map((c) => (
