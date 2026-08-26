@@ -36,6 +36,7 @@ import { authConfig } from "@/auth.config";
 import { loginSchema, adminLoginSchema } from "@/lib/validations/auth";
 import { isAdminHost } from "@/lib/host";
 import {
+  chaveDeConta,
   chavesDoLogin,
   estaBloqueado,
   ipDaRequisicao,
@@ -94,7 +95,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (isAdminHost(host)) return null;
         }
 
-        await limparFalhas(chaves);
+        // Só a chave da conta: apagar a chave `ip:` compartilhada num acerto
+        // zeraria o freio de varredura por IP de todos os outros.
+        await limparFalhas([chaveDeConta(parsed.data.cpf)]);
 
         return {
           id: user.id,
@@ -145,7 +148,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        await limparFalhas(chaves);
+        // Só a chave da conta (ver comentário no provider acima).
+        await limparFalhas([chaveDeConta(parsed.data.email.toLowerCase())]);
 
         return {
           id: user.id,

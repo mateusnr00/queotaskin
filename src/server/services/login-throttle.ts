@@ -27,6 +27,12 @@ import { prisma } from "@/lib/db";
 const LIMITE_POR_CHAVE: Record<string, number> = {
   ip: 40,
   cpf: 10,
+  // Rate-limit de abuso de recurso (custo de gateway, trava de estoque),
+  // sobre a mesma tabela e janela do freio de login.
+  reserva: 8, // reservas criadas por usuário na janela
+  registro: 15, // cadastros por IP na janela
+  poll: 30, // consultas forçadas de status por reserva na janela
+  pixgen: 6, // gerações de Pix por reserva na janela
 };
 const LIMITE_PADRAO = 10;
 
@@ -55,16 +61,41 @@ const LIVRE: ResultadoDoFreio = { bloqueado: false, segundos: 0 };
  */
 export function chavesDoLogin(ip: string | null, identificador: string) {
   // O prefixo não é enfeite: é ele que escolhe o limite em limiteDe().
-  const chaves = [`cpf:${identificador}`];
+  const chaves = [chaveDeConta(identificador)];
   if (ip) chaves.unshift(`ip:${ip}`);
   return chaves;
 }
 
+/**
+ * Só a chave da CONTA (identificador), sem a chave de IP compartilhada.
+ *
+ * No sucesso do login limpamos só esta: apagar a chave `ip:` (compartilhada
+ * por todos atrás do mesmo endereço) num acerto zeraria o freio de varredura
+ * por IP de todo mundo. Ver auth.ts.
+ */
+export function chaveDeConta(identificador: string): string {
+  return `cpf:${identificador}`;
+}
+
 /** Extrai o IP de quem chamou, atrás do proxy da Vercel. */
 export function ipDaRequisicao(headers: Headers): string | null {
+  // x-real-ip é setado pela borda da Vercel com o IP de quem realmente
+  // conecta, e o cliente não o sobrescreve. Preferi-lo evita que um
+  // X-Forwarded-For forjado à esquerda (valor fornecido pelo cliente) vire
+  // uma chave de IP nova a cada request, furando o freio. Sem x-real-ip
+  // (fora da Vercel) caímos no ÚLTIMO item do XFF, o que o proxy mais próximo
+  // acrescentou, não o primeiro que o cliente injeta.
+  const real = headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const encaminhado = headers.get("x-forwarded-for");
-  if (encaminhado) return encaminhado.split(",")[0]!.trim() || null;
-  return headers.get("x-real-ip")?.trim() || null;
+  if (encaminhado) {
+    const partes = encaminhado
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    return partes.length ? partes[partes.length - 1]! : null;
+  }
+  return null;
 }
 
 /**

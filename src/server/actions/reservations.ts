@@ -27,6 +27,10 @@ import { onlyDigits, isValidCpf } from "@/lib/cpf";
 import { DomainError, ReservationConflictError } from "@/lib/errors";
 import { getCurrentTenant, assertRaffleInActiveTenant } from "@/lib/tenant";
 import {
+  estaBloqueado,
+  registrarFalha,
+} from "@/server/services/login-throttle";
+import {
   getAdminOrThrow,
   sessionMayAccessOwnedResource,
 } from "@/lib/auth-helpers";
@@ -140,6 +144,29 @@ export async function createReservationAction(
   if (raffle.status !== "ACTIVE") {
     return { ok: false, error: "Rifa não está disponível" };
   }
+
+  // Anti-abuso: teto de reservas PENDENTES por usuário nesta campanha (senão
+  // um loop reserva o estoque inteiro sem pagar e o segura até expirar) e
+  // freio por janela (cada reserva com valor gera uma cobrança no gateway).
+  const PENDENTES_MAX = 5;
+  const pendentes = await prisma.reservation.count({
+    where: { userId: user.id, raffleId: raffle.id, status: "PENDING" },
+  });
+  if (pendentes >= PENDENTES_MAX) {
+    return {
+      ok: false,
+      error:
+        "Você tem reservas aguardando pagamento nesta campanha. Pague ou espere expirar antes de reservar mais.",
+    };
+  }
+  const chaveReserva = `reserva:${user.id}`;
+  if ((await estaBloqueado([chaveReserva])).bloqueado) {
+    return {
+      ok: false,
+      error: "Muitas reservas seguidas. Espere um pouco e tente de novo.",
+    };
+  }
+  await registrarFalha([chaveReserva]);
 
   // Campanha exclusiva: exige nível mínimo. Checado aqui no servidor porque
   // a página pública só esconde o formulário, esconder botão não é
@@ -379,6 +406,14 @@ export async function checkPaymentStatusAction(
   if (!reservation.payment?.externalId) {
     return { ok: false, error: "Sem cobrança Pix vinculada" };
   }
+
+  // Freio: force:true ignora o throttle interno de poll, então sem um limite
+  // aqui o botão "Já paguei" em loop martela o gateway.
+  const chavePoll = `poll:${reservationId}`;
+  if ((await estaBloqueado([chavePoll])).bloqueado) {
+    return { ok: false, error: "Aguarde um instante antes de checar de novo." };
+  }
+  await registrarFalha([chavePoll]);
 
   const polled = await pollPaymentStatusIfPending(
     reservation.payment.id,

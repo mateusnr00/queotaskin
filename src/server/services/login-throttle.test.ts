@@ -37,15 +37,19 @@ describe("limiteDe", () => {
 });
 
 describe("ipDaRequisicao", () => {
-  it("pega o primeiro da cadeia, que é o cliente", () => {
-    const h = new Headers({ "x-forwarded-for": "203.0.113.7, 70.41.3.18" });
-    expect(ipDaRequisicao(h)).toBe("203.0.113.7");
+  it("prefere x-real-ip (setado pela Vercel), que o cliente não forja", () => {
+    // Mesmo com um X-Forwarded-For à esquerda controlado pelo cliente, o
+    // valor confiável vence.
+    const h = new Headers({
+      "x-forwarded-for": "1.2.3.4, 70.41.3.18",
+      "x-real-ip": "203.0.113.9",
+    });
+    expect(ipDaRequisicao(h)).toBe("203.0.113.9");
   });
 
-  it("cai para x-real-ip quando não há cadeia", () => {
-    expect(ipDaRequisicao(new Headers({ "x-real-ip": "203.0.113.9" }))).toBe(
-      "203.0.113.9"
-    );
+  it("sem x-real-ip, pega o ULTIMO do XFF (proxy mais proximo), nao o primeiro forjavel", () => {
+    const h = new Headers({ "x-forwarded-for": "203.0.113.7, 70.41.3.18" });
+    expect(ipDaRequisicao(h)).toBe("70.41.3.18");
   });
 
   it("sem cabeçalho nenhum devolve nulo em vez de inventar chave", () => {
