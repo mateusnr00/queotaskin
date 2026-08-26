@@ -94,6 +94,8 @@ export async function listCustomers(
      * base inteira; a tela usa o padrão.
      */
     pageSize?: number;
+    /** Restringe a papéis. A tela de Usuários usa para achar a equipe. */
+    roles?: Role[];
   } = {},
 ) {
   const { sort = "spent" } = opts;
@@ -119,6 +121,7 @@ export async function listCustomers(
       ...(cpf ? [{ cpf: { contains: cpf } }] : []),
       ...(email ? [{ email: { contains: email, mode: "insensitive" as const } }] : []),
       ...(telefone ? [{ phone: { contains: telefone } }] : []),
+      ...(opts.roles?.length ? [{ role: { in: opts.roles } }] : []),
     ],
   };
 

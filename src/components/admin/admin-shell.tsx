@@ -21,6 +21,7 @@ import {
   ShoppingBag,
   TicketCheck,
   Trophy,
+  UserCog,
   Users2,
   Wallet,
   X,
@@ -39,6 +40,9 @@ const NAV_GERAL = [
   { href: "/admin/reservas", label: "Reservas", icon: ShoppingBag },
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/clientes", label: "Clientes", icon: Users2 },
+  // Separado de Clientes porque aquela lista ordena por gasto, e quem é
+  // da equipe quase nunca compra: procurar um admin lá é procurar no fim.
+  { href: "/admin/usuarios", label: "Usuários", icon: UserCog },
   { href: "/admin/ranking", label: "Ranking", icon: Trophy },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
 ] as const;

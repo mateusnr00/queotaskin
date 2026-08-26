@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Pencil } from "lucide-react";
 
 import { RankBadge } from "@/components/rank/rank-badge";
 import { TableCell, TableRow } from "@/components/ui/table";
@@ -86,19 +86,33 @@ export function CustomerRow({
       </TableCell>
 
       <TableCell className="text-right">
-        {zap ? (
-          <a
-            href={zap}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={`Conversar com ${customer.name} no WhatsApp`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10"
+        {/* Editar precisa de botão próprio. O nome já era link, mas nada na
+            tela dizia isso, e quem precisava trocar o telefone de alguém não
+            tinha como descobrir por onde. */}
+        <div className="flex items-center justify-end gap-1">
+          {zap ? (
+            <a
+              href={zap}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Conversar com ${customer.name} no WhatsApp`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </a>
+          ) : (
+            <span className="inline-flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
+              -
+            </span>
+          )}
+          <Link
+            href={`/admin/usuarios/${customer.id}/editar`}
+            title={`Editar ${customer.name}`}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <MessageCircle className="h-4 w-4" />
-          </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">-</span>
-        )}
+            <Pencil className="h-4 w-4" />
+          </Link>
+        </div>
       </TableCell>
     </TableRow>
   );
