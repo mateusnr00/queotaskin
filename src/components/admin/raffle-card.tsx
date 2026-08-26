@@ -5,11 +5,14 @@
 // Todos os toggles são client-side (server action via useTransition + toast).
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Copy,
+  CopyPlus,
   ExternalLink,
+  Loader2,
   Pencil,
   ShoppingCart,
   Star,
@@ -20,6 +23,7 @@ import {
   updateRaffleHighlightAction,
   updateRaffleStatusAction,
 } from "@/server/actions/raffles";
+import { duplicarSorteioAction } from "@/server/actions/raffle-duplicate";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -62,9 +66,28 @@ export function RaffleCard({
   raffle: RaffleCardData;
   publicUrl: string;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [highlight, setHighlight] = useState(raffle.showOnHome);
   const [status, setStatus] = useState(raffle.status);
+  const [duplicando, setDuplicando] = useState(false);
+
+  async function duplicar() {
+    setDuplicando(true);
+    try {
+      const resultado = await duplicarSorteioAction(raffle.id);
+      if (!resultado.ok) {
+        toast.error(resultado.error);
+        return;
+      }
+      toast.success("Sorteio duplicado. A cópia entrou como rascunho.");
+      // Abre a cópia direto na edição: quem duplica quer mexer nela, e ela
+      // está fora do ar até ser publicada.
+      router.push(`/admin/sorteios/${resultado.data.id}/editar`);
+    } finally {
+      setDuplicando(false);
+    }
+  }
   const soldPct = Math.min(
     100,
     raffle.totalNumbers > 0
@@ -193,6 +216,18 @@ export function RaffleCard({
             <Pencil className="h-4 w-4" />
           </IconLink>
 
+          <IconAction
+            label="Duplicar sorteio"
+            onClick={duplicar}
+            disabled={duplicando}
+          >
+            {duplicando ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CopyPlus className="h-4 w-4" />
+            )}
+          </IconAction>
+
           <IconLink
             href={publicUrl}
             label="Visualizar página"
@@ -223,11 +258,13 @@ function IconAction({
   label,
   onClick,
   active,
+  disabled,
   children,
 }: {
   label: string;
   onClick: () => void;
   active?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -236,6 +273,7 @@ function IconAction({
       variant="ghost"
       size="icon"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
       className={cn(

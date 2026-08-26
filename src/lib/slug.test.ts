@@ -17,6 +17,24 @@ describe("toSlug", () => {
 });
 
 describe("toSlugWithSuffix", () => {
+  it("tira a barra do nome da skin em vez de traduzir para 'ou'", () => {
+    // O slugify traduz simbolo para palavra, e no locale pt o "|" vira "ou".
+    // Como toda skin de CS2 tem a barra, sem tratamento a campanha nasceria
+    // em /s/awp-ou-dragon-lore.
+    expect(toSlug("AWP | Dragon Lore")).toBe("awp-dragon-lore");
+  });
+
+  it("descarta a estrela de item raro e o simbolo de marca", () => {
+    expect(toSlug("★ Karambit | Doppler")).toBe("karambit-doppler");
+    expect(toSlug("StatTrak™ M4A1-S | Printstream")).toBe(
+      "stattrak-m4a1-s-printstream"
+    );
+  });
+
+  it("nao deixa hifen sobrando nas pontas", () => {
+    expect(toSlug("  ★ AWP | Dragon Lore  ")).toBe("awp-dragon-lore");
+  });
+
   it("adiciona sufixo", () => {
     expect(toSlugWithSuffix("Minha Rifa", "AbC123")).toBe(
       "minha-rifa-abc123"

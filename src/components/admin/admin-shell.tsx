@@ -11,16 +11,17 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   BarChart3,
+  Boxes,
   LayoutDashboard,
-  MessageSquare,
   Menu,
+  MessageSquare,
+  PackageCheck,
   Palette,
   Settings,
   ShoppingBag,
-  PackageCheck,
-  Users2,
-  Trophy,
   TicketCheck,
+  Trophy,
+  Users2,
   Wallet,
   X,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import type { Marca } from "@/lib/brand";
 const NAV_GERAL = [
   { href: "/admin", label: "Início", icon: LayoutDashboard },
   { href: "/admin/sorteios", label: "Sorteios", icon: TicketCheck },
+  { href: "/admin/skins", label: "Catálogo de skins", icon: Boxes },
   { href: "/admin/reservas", label: "Reservas", icon: ShoppingBag },
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/clientes", label: "Clientes", icon: Users2 },

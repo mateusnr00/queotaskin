@@ -8,7 +8,6 @@ import {
   prestigeFromXp,
   rankFromXp,
   rankProgress,
-  TIERS,
   tierForLevel,
   xpForLevel,
   XP_POR_NIVEL,

@@ -32,7 +32,11 @@ const highlightUpdateSchema = z.object({
 });
 
 export async function createRaffleAction(
-  raw: unknown
+  raw: unknown,
+  // Skin do catálogo escolhida na criação. Vira o primeiro prêmio e a capa
+  // no mesmo passo: sem isso, a pessoa criaria o sorteio e depois teria de
+  // redigitar a ficha na aba Prêmios e reenviar a mesma foto na aba Imagens.
+  skinTemplateId?: string
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   try {
     const session = await getAdminOrThrow();
@@ -54,15 +58,59 @@ export async function createRaffleAction(
       ? providedSlug
       : await generateUniqueSlug(parsed.data.title, tenantId);
 
+    // Busca antes de abrir a transação: id de outro tenant simplesmente não
+    // encontra, e aí o sorteio nasce sem prêmio em vez de nascer com o de
+    // outra pessoa.
+    const skin = skinTemplateId
+      ? await prisma.skinTemplate.findFirst({
+          where: { id: skinTemplateId, tenantId },
+        })
+      : null;
+
     try {
-      const raffle = await prisma.raffle.create({
-        data: {
-          ...rest,
-          slug,
-          createdById: session.user.id,
-          tenantId,
-        },
-        select: { id: true, slug: true },
+      const raffle = await prisma.$transaction(async (tx) => {
+        const criado = await tx.raffle.create({
+          data: {
+            ...rest,
+            slug,
+            createdById: session.user.id,
+            tenantId,
+          },
+          select: { id: true, slug: true },
+        });
+
+        if (skin) {
+          await tx.prize.create({
+            data: {
+              raffleId: criado.id,
+              position: 1,
+              description: skin.name,
+              imageUrl: skin.imageUrl,
+              skinName: skin.name,
+              skinRarity: skin.skinRarity,
+              skinWear: skin.skinWear,
+              skinFloat: skin.skinFloat,
+              skinStatTrak: skin.skinStatTrak,
+              skinSouvenir: skin.skinSouvenir,
+              skinValueBrl: skin.skinValueBrl,
+              skinCollection: skin.skinCollection,
+              skinInspectUrl: skin.skinInspectUrl,
+            },
+          });
+
+          if (skin.imageUrl) {
+            await tx.raffleImage.create({
+              data: {
+                raffleId: criado.id,
+                url: skin.imageUrl,
+                isCover: true,
+                order: 0,
+              },
+            });
+          }
+        }
+
+        return criado;
       });
 
       revalidatePath("/admin/sorteios");

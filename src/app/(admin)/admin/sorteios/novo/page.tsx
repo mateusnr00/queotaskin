@@ -3,10 +3,28 @@ import type { Metadata } from "next";
 import { ArrowLeft, Sparkles } from "lucide-react";
 
 import { RaffleForm } from "@/components/admin/raffle-form";
+import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth-helpers";
+import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 
 export const metadata: Metadata = { title: "Novo sorteio" };
 
-export default function NewRafflePage() {
+export default async function NewRafflePage() {
+  const session = await requireAdmin();
+  const tenantId = await getActiveTenantIdForAdmin(session.user);
+  const skins = await prisma.skinTemplate.findMany({
+    where: { tenantId },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      imageUrl: true,
+      skinRarity: true,
+      skinWear: true,
+      skinValueBrl: true,
+    },
+  });
+
   return (
     <div className="space-y-6">
       <div className="space-y-3">
@@ -35,7 +53,13 @@ export default function NewRafflePage() {
           </div>
         </div>
       </div>
-      <RaffleForm mode={{ kind: "create" }} />
+      <RaffleForm
+        mode={{ kind: "create" }}
+        skins={skins.map((sk) => ({
+          ...sk,
+          skinValueBrl: sk.skinValueBrl ? Number(sk.skinValueBrl) : null,
+        }))}
+      />
     </div>
   );
 }

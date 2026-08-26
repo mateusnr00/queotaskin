@@ -29,6 +29,10 @@ import {
 } from "lucide-react";
 
 import { RaffleImagesTab, type RaffleImageItem } from "@/components/admin/raffle-images-tab";
+import {
+  SeletorDeSkin,
+  type SkinDoCatalogo,
+} from "@/components/admin/seletor-de-skin";
 import { RaffleDangerZone } from "@/components/admin/raffle-danger-zone";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { RafflePrizesTab } from "@/components/admin/raffle-prizes-tab";
@@ -84,6 +88,8 @@ interface RaffleFormProps {
   mode: Mode;
   /** Título atual, a exclusão pede que ele seja digitado para confirmar. */
   raffleTitle?: string;
+  /** Catálogo de skins do tenant. Só usado na criação. */
+  skins?: SkinDoCatalogo[];
   defaultValues?: Partial<RaffleGeneralInput>;
   // Dados de conteúdo das abas, só preenchidos no modo edit.
   initialImages?: RaffleImageItem[];
@@ -201,6 +207,7 @@ const CATEGORIES = [
 export function RaffleForm({
   mode,
   raffleTitle = "",
+  skins = [],
   defaultValues,
   initialImages = [],
   initialPrizes = [],
@@ -240,6 +247,9 @@ export function RaffleForm({
   const [activeTab, setActiveTab] = useState<string>("geral");
   const isEdit = mode.kind === "edit";
   const raffleId = mode.kind === "edit" ? mode.id : "";
+  // Skin escolhida do catálogo. Só existe na criação: depois, prêmio e capa
+  // passam a ser editados nas próprias abas.
+  const [skinEscolhida, setSkinEscolhida] = useState<string | null>(null);
 
   const form = useForm<RaffleGeneralInput>({
     resolver: zodResolver(
@@ -257,7 +267,7 @@ export function RaffleForm({
     startTransition(async () => {
       const result =
         mode.kind === "create"
-          ? await createRaffleAction(values)
+          ? await createRaffleAction(values, skinEscolhida ?? undefined)
           : await updateRaffleAction({ id: mode.id, data: values });
 
       if (!result.ok) {
@@ -332,6 +342,17 @@ export function RaffleForm({
               → Início vendas → Data sorteio → 3 switches → Campos req. */}
           <TabsContent value="geral">
             <Card className="p-5 md:p-6 space-y-5">
+              {!isEdit && (
+                <SeletorDeSkin
+                  skins={skins}
+                  escolhida={skinEscolhida}
+                  aoEscolher={setSkinEscolhida}
+                  aoPreencherTitulo={(nome) =>
+                    form.setValue("title", nome, { shouldDirty: true })
+                  }
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name="title"

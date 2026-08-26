@@ -319,8 +319,9 @@ model Tenant {
   xpEntries XpEntry[]
   progress  UserProgress[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  skinTemplates SkinTemplate[]
 }
 
 // Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts
@@ -543,6 +544,44 @@ model RaffleImage {
 
 /// Raridade da skin no CS2. As cores oficiais de cada faixa ficam em
 /// `src/lib/cs2.ts` e colorem a borda do card na interface.
+/// Skin cadastrada uma vez e reaproveitada em vários sorteios.
+///
+/// Sem isto, abrir campanha da mesma faca duas vezes significa redigitar
+/// raridade, desgaste, float, coleção e valor, e reenviar a mesma imagem. O
+/// catálogo guarda essa ficha junto da foto: criar sorteio vira escolher da
+/// lista, e os dados chegam iguais toda vez.
+model SkinTemplate {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Nome completo, como aparece no jogo: "AWP | Dragon Lore".
+  name String
+
+  /// Foto da skin. Opcional porque a ficha já vale sozinha, mas é ela que
+  /// dispensa reenviar a mesma imagem a cada campanha.
+  imageUrl String?
+
+  /// Ficha técnica, espelhando os campos de Prize. Todos opcionais: dá para
+  /// cadastrar só o nome e completar depois.
+  skinRarity     SkinRarity?
+  skinWear       SkinWear?
+  skinFloat      Float?
+  skinStatTrak   Boolean     @default(false)
+  skinSouvenir   Boolean     @default(false)
+  skinValueBrl   Decimal?    @db.Decimal(10, 2)
+  skinCollection String?
+  skinInspectUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Nome único por tenant: cadastrar a mesma skin duas vezes só cria dúvida
+  /// na hora de escolher.
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
 enum SkinRarity {
   CONSUMER
   INDUSTRIAL
