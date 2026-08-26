@@ -75,6 +75,59 @@ console.log("[build] destino do banco:");
 console.log(`[build]   ${descreve("DATABASE_URL")}`);
 console.log(`[build]   ${descreve("DIRECT_URL")}`);
 
+// O host direto do Supabase, db.<ref>.supabase.co, só publica registro AAAA:
+// resolve em IPv6 e não tem IPv4 nenhum. As máquinas de build da Vercel são
+// IPv4, então de lá esse host é inalcançável, e o Prisma responde P1001,
+// "can't reach database server", que se parece com banco fora do ar e não
+// com host errado. Já custou um build inteiro perseguindo a hipótese errada.
+//
+// Não é hipotético nem raro: acontece toda vez que alguém troca a senha do
+// banco e cola a connection string que o Supabase mostra em destaque, que é
+// a direta. O pooler resolve em IPv4 e é o que funciona daqui.
+//
+// Barrar antes de tentar conectar troca uma mensagem enganosa por uma que
+// diz o que fazer.
+const HOST_DIRETO = /^db\.([a-z0-9]+)\.supabase\.co$/;
+
+function hostDiretoEm(nome) {
+  const bruto = process.env[nome];
+  if (!bruto) return null;
+  let u;
+  try {
+    u = new URL(bruto);
+  } catch {
+    return null;
+  }
+  const casou = u.hostname.match(HOST_DIRETO);
+  return casou ? { nome, ref: casou[1], host: u.hostname } : null;
+}
+
+const comHostDireto = ["DATABASE_URL", "DIRECT_URL"]
+  .map(hostDiretoEm)
+  .filter(Boolean);
+
+if (comHostDireto.length > 0) {
+  const quais = comHostDireto.map((c) => c.nome).join(" e ");
+  const ref = comHostDireto[0].ref;
+  console.error(
+    `\n[build] ${quais} aponta(m) para ${comHostDireto[0].host}, que é a\n` +
+      "[build] conexão DIRETA do Supabase. Ela só existe em IPv6, e as máquinas\n" +
+      "[build] de build da Vercel são IPv4: daqui esse host é inalcançável, e o\n" +
+      "[build] erro que aparece (P1001) parece banco fora do ar, mas é o host.\n" +
+      "\n[build] Use o pooler, que atende em IPv4. No Supabase, em\n" +
+      "[build] Project Settings -> Database -> Connection string, pegue:\n" +
+      "\n[build]   DATABASE_URL  aba Transaction pooler, porta 6543\n" +
+      "[build]   DIRECT_URL    aba Session pooler, porta 5432\n" +
+      "\n[build] Os dois ficam assim, com a REGIÃO do seu projeto no host e o\n" +
+      `[build] usuário no formato postgres.${ref}:\n` +
+      `\n[build]   postgresql://postgres.${ref}:SENHA@aws-0-REGIAO.pooler.supabase.com:6543/postgres?pgbouncer=true\n` +
+      `[build]   postgresql://postgres.${ref}:SENHA@aws-0-REGIAO.pooler.supabase.com:5432/postgres\n` +
+      "\n[build] Trocar a senha do banco NÃO exige trocar o host. Se você acabou\n" +
+      "[build] de resetar a senha, troque só a senha nas strings do pooler.\n"
+  );
+  process.exit(1);
+}
+
 run("prisma migrate deploy", ["prisma", "migrate", "deploy"]);
 
 // Seed de dados iniciais. Fica atrás de uma flag porque popular o banco não

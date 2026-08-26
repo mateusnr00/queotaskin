@@ -32,8 +32,18 @@ DIRECT_URL="postgresql://postgres.<PROJECT_REF>:<SENHA>@aws-<N>-us-east-1.pooler
 O prefixo `aws-<N>` varia por projeto (`aws-0`, `aws-1`...). Copie o host
 exato do painel; o resto do formato é este.
 
-> O host direto (`db.<ref>.supabase.co`) resolve **só em IPv6**. Se o ambiente
-> de build não tiver IPv6, use o pooler nas duas variáveis, como acima.
+> **Nunca use o host direto** (`db.<ref>.supabase.co`) aqui. Ele resolve só em
+> IPv6 e as máquinas de build da Vercel são IPv4, então de lá ele é
+> inalcançável. O erro que aparece é `P1001: Can't reach database server`, que
+> parece banco fora do ar e é host errado.
+>
+> A armadilha é o **Reset database password**: a tela mostra a connection
+> string direta em destaque, e colá-la por cima quebra o build. Trocar a senha
+> não muda o host. Troque só a senha nas strings do pooler.
+>
+> O build barra esse host antes de tentar conectar (`scripts/migrate-deploy.mjs`)
+> e imprime o que corrigir, então o engano custa um build e não uma
+> investigação.
 
 ## 2. Variáveis na Vercel
 
