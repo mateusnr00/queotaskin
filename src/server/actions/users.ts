@@ -163,6 +163,14 @@ export async function updateUserAction(
           !target.tenantId
             ? { tenantId }
             : {}),
+          // Senha é coisa de painel. Quem sai de um papel de painel perde a
+          // credencial junto: o hash ficaria dormindo no banco e uma
+          // repromoção futura devolveria o acesso com a senha antiga, que a
+          // pessoa afastada continua tendo guardada. O login já recusa papel
+          // que não abre painel (auth.ts), isto tira a chave de circulação.
+          ...(abrePainel(finalRole)
+            ? {}
+            : { passwordHash: null, mustChangePassword: false }),
         },
       });
     } catch (err) {
@@ -278,12 +286,30 @@ export async function gerarSenhaDePainelAction(
 ): Promise<ActionResult<{ senhaTemporaria: string }>> {
   try {
     const session = await getAdminOrThrow();
+    // Amarra a ação ao painel. getActiveTenantIdForAdmin recusa a chamada
+    // vinda do host público e devolve o tenant em que este admin opera; era
+    // a única escrita de usuários que não passava por ela.
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
 
     const alvo = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, email: true },
+      select: { id: true, role: true, email: true, tenantId: true },
     });
     if (!alvo) return { ok: false, error: "Usuário não encontrado" };
+
+    // A senha nova aparece na tela de quem pediu. Sem conferir o painel de
+    // origem, um ADMIN que descubra o id de um admin de outro tenant reseta a
+    // senha dele e entra no painel alheio com o que acabou de ler.
+    //
+    // Vem antes das outras checagens de propósito: responder "não é conta de
+    // painel" ou "sem e-mail" para um id de fora já contaria algo sobre uma
+    // conta que este admin não deveria nem saber que existe.
+    if (session.user.role !== "SUPER_ADMIN" && alvo.tenantId !== tenantId) {
+      return {
+        ok: false,
+        error: "Esta conta é de outro painel. O acesso dela é gerado lá.",
+      };
+    }
 
     if (!abrePainel(alvo.role)) {
       return {
