@@ -34,6 +34,19 @@ describe("diferencas", () => {
     const d = diferencas({ email: null }, { email: "" });
     expect(d.depois).toEqual({ email: "" });
   });
+
+  it("chave apagada aparece como null, senão a remoção some do histórico", () => {
+    const d = diferencas({ a: 1, b: 2 }, { a: 1 });
+    expect(d.antes).toEqual({ b: 2 });
+    expect(d.depois).toEqual({ b: null });
+  });
+
+  it("mesmo conteúdo em instâncias diferentes não conta como mudança", () => {
+    // Campo Json do Prisma volta como objeto novo a cada leitura. Comparar
+    // por referência marcaria mudança em campo que ninguém tocou.
+    const d = diferencas({ cfg: { x: 1 } }, { cfg: { x: 1 } });
+    expect(d.depois).toEqual({});
+  });
 });
 
 describe("mascararCpf", () => {
@@ -75,9 +88,38 @@ describe("sanitizarDetalhes", () => {
     });
   });
 
-  it("não entra em recursão infinita com objeto que aponta para si mesmo", () => {
+  it("CPF que chega como número também sai mascarado", () => {
+    const limpo = sanitizarDetalhes({ cpf: 11144477735 }) as Record<string, unknown>;
+    expect(limpo.cpf).toBe("***.***.777-35");
+  });
+
+  it("campo cpf com valor ilegível sai omitido, não cru", () => {
+    const limpo = sanitizarDetalhes({ cpf: { estranho: true } }) as Record<string, unknown>;
+    expect(limpo.cpf).toBe(OMITIDO);
+  });
+
+  it("o link de troca da Steam fica de fora: o token viaja no valor", () => {
+    const limpo = sanitizarDetalhes({
+      steamTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=1&token=SEGREDO",
+    }) as Record<string, unknown>;
+    expect(limpo.steamTradeUrl).toBe(OMITIDO);
+  });
+
+  it("objeto reusado em dois ramos não vira omitido no segundo", () => {
+    const compartilhado = { info: "valor legitimo" };
+    const limpo = sanitizarDetalhes({
+      ramoA: compartilhado,
+      ramoB: compartilhado,
+    }) as Record<string, unknown>;
+    expect(limpo.ramoA).toEqual({ info: "valor legitimo" });
+    expect(limpo.ramoB).toEqual({ info: "valor legitimo" });
+  });
+
+  it("ciclo vira omitido no ponto que volta, sem laço infinito", () => {
     const raso: Record<string, unknown> = { a: 1 };
     raso.eu = raso;
-    expect(() => sanitizarDetalhes(raso)).not.toThrow();
+    const limpo = sanitizarDetalhes(raso) as Record<string, unknown>;
+    expect(limpo.a).toBe(1);
+    expect(limpo.eu).toBe(OMITIDO);
   });
 });

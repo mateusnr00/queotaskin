@@ -31,6 +31,12 @@ const SEGREDOS = [
   "apikey",
   "credential",
   "authorization",
+  // O link de troca da Steam carrega o token no próprio valor
+  // (...&token=...), e nenhum radical acima casa com o nome do campo. A
+  // detecção por nome não enxerga segredo dentro de string, então aqui o
+  // campo inteiro fica de fora. É a limitação conhecida deste método: nome
+  // inocente com segredo embutido no valor passa, e só revisão pega.
+  "tradeurl",
 ];
 
 const CAMPOS_DE_CPF = ["cpf"];
@@ -59,6 +65,27 @@ export function mascararCpf(valor: string): string {
 }
 
 /**
+ * Dois valores são diferentes?
+ *
+ * Object.is sozinho compara objeto por REFERÊNCIA, e campo Json do Prisma
+ * volta como instância nova a cada leitura: sem o desvio abaixo, todo
+ * salvamento marcaria "mudou" num campo que ninguém tocou.
+ */
+function mudou(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return false;
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    try {
+      return JSON.stringify(a) !== JSON.stringify(b);
+    } catch {
+      // Ciclo ou valor que não serializa: assume que mudou. Errar para o
+      // lado de registrar demais é melhor que perder a mudança.
+      return true;
+    }
+  }
+  return true;
+}
+
+/**
  * O que mudou entre dois retratos do mesmo registro.
  *
  * Devolve os dois lados só das chaves que diferem. Gravar o registro inteiro
@@ -72,10 +99,16 @@ export function diferencas(
   const a: Record<string, unknown> = {};
   const d: Record<string, unknown> = {};
 
-  for (const chave of Object.keys(depois)) {
-    if (Object.is(antes[chave], depois[chave])) continue;
-    a[chave] = antes[chave];
-    d[chave] = depois[chave];
+  // A UNIÃO das chaves dos dois lados. Percorrer só `depois` perdia a chave
+  // APAGADA, que é justamente a mudança que mais interessa registrar.
+  const chaves = new Set([...Object.keys(antes), ...Object.keys(depois)]);
+
+  for (const chave of chaves) {
+    if (!mudou(antes[chave], depois[chave])) continue;
+    // Ausência vira null explícito: undefined some no JSON.stringify que o
+    // Prisma faz ao gravar Json, e a remoção ficaria invisível de novo.
+    a[chave] = chave in antes ? antes[chave] : null;
+    d[chave] = chave in depois ? depois[chave] : null;
   }
 
   return { antes: a, depois: d };
@@ -85,28 +118,46 @@ export function diferencas(
 export function sanitizarDetalhes(
   valor: unknown,
   profundidade = 0,
-  vistos: WeakSet<object> = new WeakSet()
+  ancestrais: WeakSet<object> = new WeakSet()
 ): unknown {
   if (profundidade > PROFUNDIDADE_MAXIMA) return OMITIDO;
   if (valor === null || typeof valor !== "object") return valor;
-  if (vistos.has(valor as object)) return OMITIDO;
-  vistos.add(valor as object);
 
-  if (Array.isArray(valor)) {
-    return valor.map((item) => sanitizarDetalhes(item, profundidade + 1, vistos));
-  }
+  // Só os ANCESTRAIS do caminho atual entram, e saem na volta. Guardar tudo
+  // o que já foi visto trataria reuso legítimo, o mesmo objeto pendurado em
+  // dois ramos, como se fosse ciclo: o segundo ramo viraria [omitido], e a
+  // auditoria perderia dado por causa de uma proteção que não era para ele.
+  if (ancestrais.has(valor as object)) return OMITIDO;
+  ancestrais.add(valor as object);
 
-  const saida: Record<string, unknown> = {};
-  for (const [chave, item] of Object.entries(valor as Record<string, unknown>)) {
-    if (ehSegredo(chave)) {
-      saida[chave] = OMITIDO;
-      continue;
+  try {
+    if (Array.isArray(valor)) {
+      return valor.map((item) =>
+        sanitizarDetalhes(item, profundidade + 1, ancestrais)
+      );
     }
-    if (ehCpf(chave) && typeof item === "string") {
-      saida[chave] = mascararCpf(item);
-      continue;
+
+    const saida: Record<string, unknown> = {};
+    for (const [chave, item] of Object.entries(valor as Record<string, unknown>)) {
+      if (ehSegredo(chave)) {
+        saida[chave] = OMITIDO;
+        continue;
+      }
+      if (ehCpf(chave)) {
+        // Sem checar se é texto antes: um CPF que chegue como número cairia
+        // no caminho comum e sairia inteiro. Campo chamado cpf com valor que
+        // não é texto nem número é coisa que não se sabe ler, e o que não se
+        // sabe ler não se grava.
+        saida[chave] =
+          typeof item === "string" || typeof item === "number"
+            ? mascararCpf(String(item))
+            : OMITIDO;
+        continue;
+      }
+      saida[chave] = sanitizarDetalhes(item, profundidade + 1, ancestrais);
     }
-    saida[chave] = sanitizarDetalhes(item, profundidade + 1, vistos);
+    return saida;
+  } finally {
+    ancestrais.delete(valor as object);
   }
-  return saida;
 }
