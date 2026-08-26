@@ -45,10 +45,14 @@ export const DESIGN_POR_NIVEL: Record<number, DesignDeNivel> = {
   21: { forma: "octogono",  borda: ["#FF1744", "#FF006E", "#FFC400"], miolo: ["#351B29", "#1B1018"], arcoIris: true },
 };
 
-// Nível 0 não veio no conjunto — é o estado de quem acabou de criar conta e
-// ainda não gastou nada. Repete o desenho do nível 1 em vez de inventar uma
-// cor fora da escala: a diferença que importa ali é o número.
-export const DESIGN_NIVEL_ZERO: DesignDeNivel = DESIGN_POR_NIVEL[1]!;
+// Nível 0: quem criou conta e ainda não gastou nada. Cinza, fora da escala
+// cromática que vai do roxo ao vermelho — o selo diz "você ainda não entrou
+// na escada", e a primeira compra já muda a cor.
+export const DESIGN_NIVEL_ZERO: DesignDeNivel = {
+  forma: "hexagono",
+  borda: ["#A8A8B0", "#6B6B73", "#3A3A40"],
+  miolo: ["#626269", "#242429"],
+};
 
 // Contornos em viewBox 200x200. Externo é a borda; interno é o miolo.
 export const CONTORNOS: Record<
