@@ -9,6 +9,10 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { RaffleComprasView } from "@/components/admin/raffle-compras-view";
 import { raffleUrl } from "@/lib/raffle-url";
+import {
+  contarOcupados,
+  contarVendidos,
+} from "@/server/services/vendidos";
 
 export const metadata: Metadata = { title: "Lista de Compras" };
 
@@ -90,6 +94,7 @@ export default async function ComprasPage({
     paidAgg,
     pendingAgg,
     soldTickets,
+    ocupados,
     totalRows,
     reservations,
   ] = await Promise.all([
@@ -117,7 +122,10 @@ export default async function ComprasPage({
       where: { raffleId: raffle.id, status: "PENDING" },
       _sum: { totalAmount: true },
     }),
-    prisma.ticket.count({ where: { raffleId: raffle.id } }),
+    // Vendidos para o percentual, ocupados para "Livres": um número em
+    // reserva aberta não é venda, mas também não está livre.
+    contarVendidos(raffle.id),
+    contarOcupados(raffle.id),
     prisma.reservation.count({ where: listWhere }),
     prisma.reservation.findMany({
       where: listWhere,
@@ -139,7 +147,7 @@ export default async function ComprasPage({
     raffle.totalNumbers > 0
       ? Math.round((soldTickets / raffle.totalNumbers) * 10000) / 100
       : 0;
-  const livres = Math.max(0, raffle.totalNumbers - soldTickets);
+  const livres = Math.max(0, raffle.totalNumbers - ocupados);
 
   const status =
     raffle.status === "ACTIVE"

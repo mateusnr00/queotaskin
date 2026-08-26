@@ -10,6 +10,7 @@ import { RafflesFilters } from "@/components/admin/raffles-filters";
 import { raffleUrl } from "@/lib/raffle-url";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { contarVendidosPorRifa } from "@/server/services/vendidos";
 
 export const metadata: Metadata = { title: "Sorteios" };
 
@@ -85,19 +86,10 @@ export default async function AdminRafflesListPage({
     }),
   ]);
 
-  // Conta tickets PAGOS por rifa pra calcular % de compras.
-  const raffleIds = raffles.map((r) => r.id);
-  const ticketCounts =
-    raffleIds.length === 0
-      ? []
-      : await prisma.ticket.groupBy({
-          by: ["raffleId"],
-          where: { raffleId: { in: raffleIds }, status: "PAID" },
-          _count: { _all: true },
-        });
-  const paidByRaffle = new Map<string, number>(
-    ticketCounts.map((t) => [t.raffleId, t._count._all])
-  );
+  // Vendidos por rifa pra calcular % de compras. Contava só PAID e deixava
+  // AWARDED de fora, então um título premiado sumia da conta no instante em
+  // que era contemplado.
+  const paidByRaffle = await contarVendidosPorRifa(raffles.map((r) => r.id));
 
   // Pré-resolve as URLs públicas em paralelo (raffleUrl agora é async pra
   // captar o host do tenant).

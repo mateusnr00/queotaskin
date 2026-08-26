@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { statusDaCampanha } from "@/lib/campanha-status";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
+import { contarVendidosPorRifa } from "@/server/services/vendidos";
 import { formatBRL } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
@@ -33,17 +34,12 @@ export default async function PublicRafflesListPage() {
 
   // Vendidos por campanha, numa consulta só: o selo automático precisa saber
   // quanto já saiu, e uma consulta por card seria uma por linha da lista.
-  const [vendidos, statusConfig] = await Promise.all([
-    prisma.ticket.groupBy({
-      by: ["raffleId"],
-      where: { raffleId: { in: raffles.map((r) => r.id) } },
-      _count: { _all: true },
-    }),
+  // Contava todo ticket, inclusive o de reserva não paga, e por isso o mesmo
+  // sorteio mostrava percentual diferente aqui e na home.
+  const [vendidosPorRifa, statusConfig] = await Promise.all([
+    contarVendidosPorRifa(raffles.map((r) => r.id)),
     getConfiguracaoDeStatus(),
   ]);
-  const vendidosPorRifa = new Map(
-    vendidos.map((v) => [v.raffleId, v._count._all])
-  );
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
