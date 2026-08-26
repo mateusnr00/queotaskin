@@ -11,6 +11,7 @@ import {
 } from "@/components/cs2/rarity-badge";
 import { formatBRL } from "@/lib/format";
 import {
+  PROPORCAO_DA_SKIN,
   WEAR_LABEL,
   fullSkinName,
   formatFloat,
@@ -68,25 +69,29 @@ export function SkinCard({
       }
     >
       <div className="flex gap-3 p-3">
+        {/* A moldura tem a proporção do quadro da arte, não uma medida
+            escolhida à mão. Era h-20 w-24, ou seja 1,2 contra os 1,333 da
+            arte, e a diferença aparecia como faixa nas laterais da foto. */}
         <div
-          className="relative h-20 w-24 shrink-0 overflow-hidden rounded-lg bg-muted"
-          style={
-            isSkin && prize.skinRarity
+          className="relative h-20 shrink-0 overflow-hidden rounded-lg bg-muted"
+          style={{
+            aspectRatio: PROPORCAO_DA_SKIN,
+            ...(isSkin && prize.skinRarity
               ? {
                   backgroundImage: `radial-gradient(circle at 50% 120%, ${rarityColor(
                     prize.skinRarity,
                     0.35,
                   )}, transparent 70%)`,
                 }
-              : undefined
-          }
+              : {}),
+          }}
         >
           {prize.imageUrl ? (
             <Image
               src={prize.imageUrl}
               alt={fullSkinName(prize)}
               fill
-              sizes="96px"
+              sizes="107px"
               unoptimized={!podeOtimizar(prize.imageUrl)}
               className="object-contain"
             />

@@ -294,7 +294,12 @@ export function ReservationForm({
             pagar?" bem na hora de confirmar. */}
         <Button
           type="submit"
-          className="h-13 w-full flex-col gap-0 text-base font-semibold leading-tight"
+          // O pulso para quando não há o que enviar: anel chamando atenção
+          // para um botão desabilitado convida ao clique que não funciona.
+          className={cn(
+            "h-13 w-full flex-col gap-0 text-base font-semibold leading-tight",
+            !isPending && effectiveQty > 0 && "cta-pulsa"
+          )}
           disabled={isPending || effectiveQty === 0}
         >
           {isPending ? (
@@ -378,6 +383,15 @@ function QuantityPicker({
                     : "border-border hover:border-primary/40 active:border-primary"
                 )}
               >
+                {/* A luz sai escalonada por card, meio segundo entre um e o
+                    seguinte: os seis brilhando juntos viram um flash da
+                    grade inteira, e em sequência lê-se como uma passada. */}
+                <span
+                  aria-hidden
+                  className="brilho-do-card"
+                  style={{ ["--atraso-do-brilho" as string]: `${idx * 0.5}s` }}
+                />
+
                 {popular && (
                   <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white whitespace-nowrap">
                     Mais popular

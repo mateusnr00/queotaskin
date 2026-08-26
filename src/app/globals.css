@@ -129,3 +129,86 @@
     @apply font-sans;
   }
 }
+/* Chamadas de atenção da página de sorteio.
+ *
+ * Duas animações, ambas de baixa amplitude de propósito: o objetivo é o olho
+ * perceber movimento sem que a página pareça piscando. Botão que pulsa forte
+ * some da leitura por saturação, e o oposto do que se queria acontece.
+ */
+
+/* Pulso do botão de compra: anel que cresce e some, sem mexer no botão.
+ * Animar o próprio botão deslocaria o que está em volta a cada ciclo e daria
+ * sensação de página tremendo. */
+@keyframes pulso-cta {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px color-mix(in oklch, var(--primary) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
+  }
+}
+
+.cta-pulsa {
+  animation: pulso-cta 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Luz atravessando o card. A faixa é branca com opacidade baixa e passa
+ * inclinada, como reflexo em vidro. O intervalo é longo (7s) porque seis
+ * cards piscando a cada segundo viram ruído, não destaque. */
+@keyframes brilho-card {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(350%) skewX(-20deg);
+  }
+}
+
+/* Camada própria em vez de ::after no card.
+ *
+ * A faixa precisa de overflow:hidden para não vazar, e o card tem o selo
+ * "MAIS POPULAR" posicionado FORA dele, acima da borda. Recortar no próprio
+ * card cortaria esse selo pela metade. Aqui o recorte fica nesta camada, que
+ * ocupa só a área interna, e o selo continua inteiro. */
+.brilho-do-card {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  /* Sem isso a camada fica por cima e engole o clique no card, que é o único
+     motivo de ele existir. */
+  pointer-events: none;
+}
+
+.brilho-do-card::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inline-size: 45%;
+  inset-inline-start: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.07) 45%,
+    rgb(255 255 255 / 0.14) 50%,
+    rgb(255 255 255 / 0.07) 55%,
+    transparent 100%
+  );
+  animation: brilho-card 7s ease-in-out infinite;
+  animation-delay: var(--atraso-do-brilho, 0s);
+}
+
+/* Quem pediu menos movimento no sistema não recebe nenhum. Não é detalhe de
+ * acessibilidade distante: movimento repetido em laço causa desconforto real
+ * em quem tem sensibilidade vestibular, e aqui ele é enfeite. */
+@media (prefers-reduced-motion: reduce) {
+  .cta-pulsa {
+    animation: none;
+  }
+  .brilho-do-card {
+    display: none;
+  }
+}
