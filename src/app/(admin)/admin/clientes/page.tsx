@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import {
   ChevronRight,
+  Download,
   Repeat,
   TrendingUp,
   UserPlus,
@@ -96,15 +97,30 @@ export default async function AdminClientesPage({
             <span>Clientes</span>
           </nav>
         </div>
-        {/* A criação mora aqui porque é desta lista que a necessidade nasce:
-            alguém liga pedindo cadastro, ou entra gente nova na equipe. */}
-        <Link
-          href="/admin/usuarios/novo"
-          className={buttonVariants({ variant: "default" })}
-        >
-          <UserPlus className="mr-1.5 h-4 w-4" />
-          Nova conta
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {/* Os filtros da tela vão junto: filtrar e exportar entrega
+              exatamente o que está à vista, e não uma lista diferente da que
+              a pessoa acabou de montar. */}
+          <Link
+            href={`/admin/clientes/exportar?${new URLSearchParams(
+              Object.entries(filtros).filter(([, v]) => v)
+            ).toString()}`}
+            prefetch={false}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            Exportar CSV
+          </Link>
+          {/* A criação mora aqui porque é desta lista que a necessidade
+              nasce: alguém liga pedindo cadastro, ou entra gente nova. */}
+          <Link
+            href="/admin/usuarios/novo"
+            className={buttonVariants({ variant: "default" })}
+          >
+            <UserPlus className="mr-1.5 h-4 w-4" />
+            Nova conta
+          </Link>
+        </div>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

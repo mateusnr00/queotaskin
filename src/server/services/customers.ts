@@ -31,12 +31,51 @@ export interface CustomerTotals {
 
 const PAGE_SIZE = 25;
 
+const ORDENADORES: Record<CustomerSort, (a: Customer, b: Customer) => number> = {
+  spent: (a, b) => b.spent - a.spent,
+  purchases: (a, b) => b.purchases - a.purchases,
+  name: (a, b) => a.name.localeCompare(b.name, "pt-BR"),
+  recent: (a, b) =>
+    (b.lastPurchaseAt?.getTime() ?? 0) - (a.lastPurchaseAt?.getTime() ?? 0),
+};
+
+/**
+ * Ordena no lugar e devolve a mesma lista.
+ *
+ * Quem nunca gastou vai para o fim, em qualquer ordenação. A lista passou a
+ * incluir quem só criou conta, e sem essa regra um cadastro novo apareceria
+ * na frente de comprador antigo ao ordenar por nome, empurrando para a
+ * segunda página justamente quem sustenta a operação.
+ *
+ * Entre dois que não gastaram, o mais recente primeiro: ali o que interessa
+ * é quem acabou de chegar e ainda dá para abordar.
+ *
+ * Separada de listCustomers porque é regra com empate e caso de borda, e
+ * testá-la dentro da consulta exigiria banco de pé no CI.
+ */
+export function ordenarClientes(
+  customers: Customer[],
+  sort: CustomerSort,
+): Customer[] {
+  return customers.sort((a, b) => {
+    const aGastou = a.spent > 0;
+    const bGastou = b.spent > 0;
+    if (aGastou !== bGastou) return aGastou ? -1 : 1;
+    if (!aGastou) return b.createdAt.getTime() - a.createdAt.getTime();
+    return ORDENADORES[sort](a, b);
+  });
+}
+
 /**
  * Painel de clientes de um tenant.
  *
- * "Cliente" aqui é quem já pagou pelo menos uma reserva, não todo usuário
- * cadastrado. Quem só criou conta aparece em Usuários; aqui é a lista de
- * quem sustenta a operação.
+ * "Cliente" aqui é todo mundo ligado ao tenant: quem já pagou e também quem
+ * só criou conta. O segundo grupo é o cliente em potencial, e escondê-lo
+ * tirava do painel justamente a lista de quem dá para ir atrás.
+ *
+ * Quem nunca gastou aparece sempre depois de quem gastou, em qualquer
+ * ordenação, para que cadastro novo não empurre comprador antigo para a
+ * página seguinte.
  *
  * Tudo sai de agregações: buscar reserva por usuário num laço daria uma
  * query por linha da tabela.
@@ -50,6 +89,11 @@ export async function listCustomers(
     telefone?: string;
     sort?: CustomerSort;
     page?: number;
+    /**
+     * Quantos por página. A exportação passa um número grande para levar a
+     * base inteira; a tela usa o padrão.
+     */
+    pageSize?: number;
   } = {},
 ) {
   const { sort = "spent" } = opts;
@@ -161,21 +205,15 @@ export async function listCustomers(
     };
   });
 
-  const ordenadores: Record<CustomerSort, (a: Customer, b: Customer) => number> = {
-    spent: (a, b) => b.spent - a.spent,
-    purchases: (a, b) => b.purchases - a.purchases,
-    name: (a, b) => a.name.localeCompare(b.name, "pt-BR"),
-    recent: (a, b) =>
-      (b.lastPurchaseAt?.getTime() ?? 0) - (a.lastPurchaseAt?.getTime() ?? 0),
-  };
-  customers.sort(ordenadores[sort]);
+  ordenarClientes(customers, sort);
 
+  const tamanho = Math.max(1, opts.pageSize ?? PAGE_SIZE);
   const total = customers.length;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const inicio = (Math.min(page, pages) - 1) * PAGE_SIZE;
+  const pages = Math.max(1, Math.ceil(total / tamanho));
+  const inicio = (Math.min(page, pages) - 1) * tamanho;
 
   return {
-    customers: customers.slice(inicio, inicio + PAGE_SIZE),
+    customers: customers.slice(inicio, inicio + tamanho),
     total,
     pages,
     page: Math.min(page, pages),

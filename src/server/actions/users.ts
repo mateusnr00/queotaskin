@@ -212,9 +212,15 @@ export async function criarUsuarioAction(
           cpf: cpf || null,
           phone: phone || null,
           role,
-          // ADMIN e AFFILIATE pertencem a um tenant; PARTICIPANT e
-          // SUPER_ADMIN são globais, ver o comentário no schema.
-          ...(role === "ADMIN" || role === "AFFILIATE" ? { tenantId } : {}),
+          // Conta criada no painel é deste tenant, seja qual for o papel:
+          // foi este painel que a cadastrou. Sem isso um cliente cadastrado à
+          // mão não apareceria na lista de Clientes até a primeira compra,
+          // que é justamente o cadastro que alguém acabou de fazer olhando
+          // para a tela.
+          //
+          // SUPER_ADMIN fica de fora: ele é dono da plataforma, não membro de
+          // um tenant, e amarrá-lo a um limitaria o alcance dele.
+          ...(role === "SUPER_ADMIN" ? {} : { tenantId }),
           ...(senhaTemporaria
             ? {
                 passwordHash: await bcrypt.hash(senhaTemporaria, 12),

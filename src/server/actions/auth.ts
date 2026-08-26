@@ -13,6 +13,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { getCurrentTenant } from "@/lib/tenant";
 import { headers } from "next/headers";
 
 import { auth, signIn, signOut } from "@/auth";
@@ -49,6 +50,19 @@ export async function registerAction(
 
   const { name, cpf, phone } = parsed.data;
 
+  // Onde a pessoa se cadastrou.
+  //
+  // Sem isso a conta nasce solta e não aparece em Clientes até a primeira
+  // compra, porque a lista acha o cliente por vínculo com o tenant ou por
+  // reserva, e quem acabou de se cadastrar não tem nenhum dos dois. Quem
+  // criou conta e não comprou é exatamente o cliente que o painel precisa
+  // enxergar para ir atrás.
+  //
+  // Não muda o que o schema diz: PARTICIPANT continua global, podendo
+  // comprar em qualquer tenant, porque a lista também casa por reserva. Isto
+  // aqui só registra a porta de entrada.
+  const tenant = await getCurrentTenant();
+
   try {
     const user = await prisma.user.create({
       data: {
@@ -56,6 +70,7 @@ export async function registerAction(
         cpf,
         phone,
         role: "PARTICIPANT",
+        tenantId: tenant?.id ?? null,
       },
       select: { id: true },
     });
