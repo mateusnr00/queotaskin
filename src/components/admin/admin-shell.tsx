@@ -18,7 +18,6 @@ import {
   PackageCheck,
   Palette,
   Settings,
-  ShoppingBag,
   TicketCheck,
   Trophy,
   UserCog,
@@ -37,7 +36,10 @@ const NAV_GERAL = [
   { href: "/admin", label: "Início", icon: LayoutDashboard },
   { href: "/admin/sorteios", label: "Sorteios", icon: TicketCheck },
   { href: "/admin/skins", label: "Catálogo de skins", icon: Boxes },
-  { href: "/admin/reservas", label: "Reservas", icon: ShoppingBag },
+  // "Reservas" saiu daqui. Era uma lista global de todas as reservas de
+  // todas as campanhas, e cada campanha ja tem a propria em Sorteios >
+  // Compras, com abas, busca, marcar paga e WhatsApp. Duas telas para o
+  // mesmo dado obrigam a lembrar por qual delas se chega no que se quer.
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/clientes", label: "Clientes", icon: Users2 },
   // Separado de Clientes porque aquela lista ordena por gasto, e quem é

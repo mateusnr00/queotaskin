@@ -508,7 +508,7 @@ export async function markReservationPaidAction(
     // Credita o XP do rank também na confirmação manual pelo painel.
     await awardXpForReservation(reservation.id);
 
-    revalidatePath("/admin/reservas");
+
     revalidatePath(`/comprovante/${reservationId}`);
     return {
       ok: true,

@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Lista de Compras" };
 
 const PAGE_SIZE = 5;
 
-type TabKey = "all" | "paid" | "pending" | "expired" | "affiliates";
+type TabKey = "all" | "paid" | "pending" | "expired" | "cancelled" | "affiliates";
 
 export default async function ComprasPage({
   params,
@@ -52,6 +52,7 @@ export default async function ComprasPage({
     if (tab === "paid") return { status: "PAID" };
     if (tab === "pending") return { status: "PENDING" };
     if (tab === "expired") return { status: "EXPIRED" };
+    if (tab === "cancelled") return { status: "CANCELLED" };
     if (tab === "affiliates") return { affiliateId: { not: null } };
     return {};
   })();
@@ -83,6 +84,7 @@ export default async function ComprasPage({
     countPaid,
     countPending,
     countExpired,
+    countCancelled,
     countAffiliates,
     paidAgg,
     pendingAgg,
@@ -99,6 +101,9 @@ export default async function ComprasPage({
     }),
     prisma.reservation.count({
       where: { raffleId: raffle.id, status: "EXPIRED" },
+    }),
+    prisma.reservation.count({
+      where: { raffleId: raffle.id, status: "CANCELLED" },
     }),
     prisma.reservation.count({
       where: { raffleId: raffle.id, affiliateId: { not: null } },
@@ -190,6 +195,7 @@ export default async function ComprasPage({
           paid: countPaid,
           pending: countPending,
           expired: countExpired,
+          cancelled: countCancelled,
           affiliates: countAffiliates,
         }}
         reservations={reservations.map((r) => ({

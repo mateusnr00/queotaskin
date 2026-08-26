@@ -108,6 +108,7 @@ interface Counts {
   paid: number;
   pending: number;
   expired: number;
+  cancelled: number;
   affiliates: number;
 }
 
@@ -126,7 +127,7 @@ interface ReservationRow {
 }
 
 interface Filters {
-  tab: "all" | "paid" | "pending" | "expired" | "affiliates";
+  tab: "all" | "paid" | "pending" | "expired" | "cancelled" | "affiliates";
   q: string;
   ticket: string;
   page: number;
@@ -180,6 +181,9 @@ const TABS: { key: Filters["tab"]; label: string; dotClass: string }[] = [
   { key: "paid", label: "Pagos", dotClass: "bg-emerald-500" },
   { key: "pending", label: "Reservado", dotClass: "bg-amber-400" },
   { key: "expired", label: "Expirados", dotClass: "bg-rose-400" },
+  // Herdada da tela global de Reservas, que saiu. Sem ela, cancelada seria
+  // o único estado sem lugar para ser visto.
+  { key: "cancelled", label: "Cancelados", dotClass: "bg-zinc-400" },
   { key: "affiliates", label: "Afiliados", dotClass: "bg-violet-400" },
 ];
 
