@@ -43,6 +43,7 @@ import {
   limparFalhas,
   registrarFalha,
 } from "@/server/services/login-throttle";
+import { registrarLog } from "@/server/services/activity-log";
 
 // "  João  da  Silva " → "joão da silva", usado pra comparar nomes
 // digitados pelo usuário sem se importar com maiúsculas ou espaços
@@ -141,15 +142,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user || !user.passwordHash || !senhaConfere) {
           await registrarFalha(chaves);
+          // Ator informado à mão: não existe sessão numa entrada recusada, e
+          // o e-mail digitado é tudo o que se sabe de quem tentou.
+          await registrarLog({
+            acao: "painel.login_recusado",
+            tenantId: user?.tenantId ?? null,
+            origem: "PAINEL",
+            ator: { nome: parsed.data.email.toLowerCase() },
+            detalhes: { motivo: user ? "senha incorreta" : "conta inexistente" },
+          });
           return null;
         }
         if (!PAPEIS_DE_PAINEL.has(user.role)) {
           await registrarFalha(chaves);
+          // Ator informado à mão: não existe sessão numa entrada recusada, e
+          // o e-mail digitado é tudo o que se sabe de quem tentou.
+          await registrarLog({
+            acao: "painel.login_recusado",
+            tenantId: user?.tenantId ?? null,
+            origem: "PAINEL",
+            ator: { nome: parsed.data.email.toLowerCase() },
+            detalhes: { motivo: "papel sem acesso ao painel" },
+          });
           return null;
         }
 
         // Só a chave da conta (ver comentário no provider acima).
         await limparFalhas([chaveDeConta(parsed.data.email.toLowerCase())]);
+
+        // Ator informado à mão pelo mesmo motivo das recusas acima: dentro
+        // do authorize a sessão ainda não existe, é ele quem está criando.
+        await registrarLog({
+          acao: "painel.login",
+          tenantId: user.tenantId,
+          origem: "PAINEL",
+          ator: { nome: user.name },
+          detalhes: { papel: user.role },
+        });
 
         return {
           id: user.id,
