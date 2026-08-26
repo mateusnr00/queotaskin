@@ -2,6 +2,8 @@ import Link from "next/link";
 import { TicketCheck, Trophy } from "lucide-react";
 
 import { prisma } from "@/lib/db";
+import { statusDaCampanha } from "@/lib/campanha-status";
+import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 import type { SkinRarity } from "@prisma/client";
 
 import { RaffleCover } from "@/components/public/raffle-cover";
@@ -83,6 +85,7 @@ export default async function HomePage() {
     _count: { _all: true },
   });
   const vendidosPorRifa = new Map(vendidos.map((v) => [v.raffleId, v._count._all]));
+  const statusConfig = await getConfiguracaoDeStatus();
 
   const awarded = showWinners
     ? await prisma.awardedTicket.findMany({
@@ -160,6 +163,12 @@ export default async function HomePage() {
               <FeaturedRaffleCard
                 raffle={featured}
                 sold={vendidosPorRifa.get(featured.id) ?? 0}
+                statusBadge={statusDaCampanha(
+                  vendidosPorRifa.get(featured.id) ?? 0,
+                  featured.totalNumbers,
+                  featured.statusText,
+                  statusConfig
+                )}
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 {rest.map((r) => (
@@ -167,6 +176,12 @@ export default async function HomePage() {
                     key={r.id}
                     raffle={r}
                     sold={vendidosPorRifa.get(r.id) ?? 0}
+                    statusBadge={statusDaCampanha(
+                      vendidosPorRifa.get(r.id) ?? 0,
+                      r.totalNumbers,
+                      r.statusText,
+                      statusConfig
+                    )}
                   />
                 ))}
               </div>
@@ -288,9 +303,11 @@ function SalesBar({ sold, total }: { sold: number; total: number }) {
 function FeaturedRaffleCard({
   raffle,
   sold,
+  statusBadge,
 }: {
   raffle: RaffleCardData;
   sold: number;
+  statusBadge: string;
 }) {
   const prize = raffle.prizes[0];
   return (
@@ -308,7 +325,7 @@ function FeaturedRaffleCard({
           priority
         />
         <div className="absolute top-3 left-3">
-          <StatusBadge text={raffle.statusText ?? "Adquira já!"} />
+          <StatusBadge text={statusBadge} />
         </div>
       </div>
 
@@ -355,8 +372,10 @@ function FeaturedRaffleCard({
 function CompactRaffleCard({
   raffle,
   sold,
+  statusBadge,
 }: {
   raffle: RaffleCardData;
+  statusBadge: string;
   sold: number;
 }) {
   const prize = raffle.prizes[0];
@@ -394,7 +413,7 @@ function CompactRaffleCard({
           >
             {priceLabel(raffle)}
           </span>
-          <StatusBadge text={raffle.statusText ?? "Adquira já!"} />
+          <StatusBadge text={statusBadge} />
         </div>
       </div>
     </Link>

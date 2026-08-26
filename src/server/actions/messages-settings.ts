@@ -31,6 +31,14 @@ const messagesSchema = z.object({
   expiredDescription: z.string().max(500).optional().default(""),
   expiredButtonLabel: z.string().max(60).optional().default(""),
   expiredImageUrl: urlOrEmpty,
+  // Selo automático do card, por faixa de vendas.
+  halfwayText: z.string().max(60).optional().default(""),
+  almostGoneText: z.string().max(60).optional().default(""),
+  soldOutText: z.string().max(60).optional().default(""),
+  // 1 a 99: em 0 o selo entraria com a campanha vazia, e em 100 nunca
+  // entraria, porque ali quem manda é o de esgotado.
+  halfwayPercent: z.coerce.number().int().min(1).max(99).default(50),
+  almostGonePercent: z.coerce.number().int().min(1).max(99).default(80),
 });
 
 export type MessagesSettingsInput = z.input<typeof messagesSchema>;
@@ -65,6 +73,14 @@ export async function updateMessagesSettingsAction(
       expiredDescription: norm(d.expiredDescription),
       expiredButtonLabel: norm(d.expiredButtonLabel),
       expiredImageUrl: norm(d.expiredImageUrl),
+      halfwayText: norm(d.halfwayText),
+      almostGoneText: norm(d.almostGoneText),
+      soldOutText: norm(d.soldOutText),
+      // O menor não pode passar do maior: com 80 e 50 invertidos, a faixa de
+      // "perto do fim" nunca seria alcançada e o selo pularia direto para
+      // esgotado.
+      halfwayPercent: Math.min(d.halfwayPercent, d.almostGonePercent),
+      almostGonePercent: Math.max(d.halfwayPercent, d.almostGonePercent),
     },
   });
 

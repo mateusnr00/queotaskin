@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { TicketCheck } from "lucide-react";
 
 import { prisma } from "@/lib/db";
+import { statusDaCampanha } from "@/lib/campanha-status";
+import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 import { formatBRL } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
@@ -27,6 +29,20 @@ export default async function PublicRafflesListPage() {
     orderBy: [{ showOnHome: "desc" }, { createdAt: "desc" }],
     include: { images: { where: { isCover: true }, take: 1 } },
   });
+
+  // Vendidos por campanha, numa consulta só: o selo automático precisa saber
+  // quanto já saiu, e uma consulta por card seria uma por linha da lista.
+  const [vendidos, statusConfig] = await Promise.all([
+    prisma.ticket.groupBy({
+      by: ["raffleId"],
+      where: { raffleId: { in: raffles.map((r) => r.id) } },
+      _count: { _all: true },
+    }),
+    getConfiguracaoDeStatus(),
+  ]);
+  const vendidosPorRifa = new Map(
+    vendidos.map((v) => [v.raffleId, v._count._all])
+  );
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
@@ -93,7 +109,12 @@ export default async function PublicRafflesListPage() {
                           : formatBRL(Number(r.pricePerNumber))}
                       </span>
                       <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
-                        {r.statusText ?? "Adquira já!"}
+                        {statusDaCampanha(
+                          vendidosPorRifa.get(r.id) ?? 0,
+                          r.totalNumbers,
+                          r.statusText,
+                          statusConfig
+                        )}
                       </span>
                     </div>
                   </div>

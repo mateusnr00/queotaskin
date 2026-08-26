@@ -227,10 +227,25 @@ model Tenant {
   // Customização das páginas finais (pagamento confirmado / reserva
   // expirada). Quando NULL, renderiza o texto padrão hardcoded. Cada
   // tenant configura no admin em /configuracoes/mensagens.
-  paidTitle          String?
-  paidDescription    String? @db.Text
-  paidButtonLabel    String?
-  paidImageUrl       String?
+  paidTitle         String?
+  paidDescription   String? @db.Text
+  paidButtonLabel   String?
+  paidImageUrl      String?
+  // Selo automático do card da campanha, por faixa de vendas.
+  //
+  // Antes o selo era digitado por campanha e ficava congelado: "Adquira já"
+  // continuava lá com 95% vendido, e uma campanha esgotada seguia chamando
+  // para comprar número que não existia mais. Agora a urgência acompanha a
+  // venda sozinha.
+  //
+  // Texto nulo cai no padrão em lib/campanha-status.ts.
+  halfwayText       String?
+  almostGoneText    String?
+  soldOutText       String?
+  /// A partir de quantos por cento cada selo entra.
+  halfwayPercent    Int     @default(50)
+  almostGonePercent Int     @default(80)
+
   expiredTitle       String?
   expiredDescription String? @db.Text
   expiredButtonLabel String?

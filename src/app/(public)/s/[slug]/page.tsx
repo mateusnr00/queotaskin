@@ -24,6 +24,8 @@ import { formatBRL, formatDateTime } from "@/lib/format";
 import { raffleUrl } from "@/lib/raffle-url";
 import { getCurrentTenant } from "@/lib/tenant";
 import { getBrand } from "@/lib/brand";
+import { statusDaCampanha } from "@/lib/campanha-status";
+import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 
 export async function generateMetadata({
   params,
@@ -153,6 +155,7 @@ export default async function PublicRaffleDetailPage({
   const takenNumbers = takenTickets.map((t) => t.number);
 
   const isActive = raffle.status === "ACTIVE";
+  const statusConfig = await getConfiguracaoDeStatus();
   const soldPercent = Math.round((soldCount / raffle.totalNumbers) * 100);
   const remaining = raffle.totalNumbers - soldCount;
   const shareUrl = await raffleUrl(raffle.slug);
@@ -264,7 +267,12 @@ export default async function PublicRaffleDetailPage({
 
         <div className="space-y-1.5">
           <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
-            {raffle.statusText ?? "Adquira já"}
+            {statusDaCampanha(
+              soldCount,
+              raffle.totalNumbers,
+              raffle.statusText,
+              statusConfig
+            )}
           </span>
           <h1 className="text-xl font-bold leading-tight tracking-tight md:text-3xl">
             {raffle.title}

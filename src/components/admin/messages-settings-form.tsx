@@ -35,6 +35,12 @@ const schema = z.object({
   expiredDescription: z.string().max(500).optional().default(""),
   expiredButtonLabel: z.string().max(60).optional().default(""),
   expiredImageUrl: z.string().max(2048).optional().default(""),
+  // Selo automático do card, por faixa de vendas.
+  halfwayText: z.string().max(60).optional().default(""),
+  almostGoneText: z.string().max(60).optional().default(""),
+  soldOutText: z.string().max(60).optional().default(""),
+  halfwayPercent: z.coerce.number().int().min(1).max(99),
+  almostGonePercent: z.coerce.number().int().min(1).max(99),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -265,6 +271,94 @@ export function MessagesSettingsForm({ initial }: Props) {
               />
             </div>
           )}
+        </Card>
+
+        <Card className="space-y-4 p-5">
+          <div>
+            <h2 className="text-base font-semibold">Selo da campanha</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              O texto laranja no canto do card muda sozinho conforme a venda
+              avança. Enquanto nenhuma faixa é atingida, vale o que você
+              escreveu em Status na própria campanha.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
+            <FormField
+              control={form.control}
+              name="halfwayText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Passou da metade</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Mais da metade vendida" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="halfwayPercent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>A partir de %</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={1} max={99} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
+            <FormField
+              control={form.control}
+              name="almostGoneText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Perto do fim</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Últimos números!" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="almostGonePercent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>A partir de %</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={1} max={99} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="soldOutText"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Esgotada</FormLabel>
+                <FormControl>
+                  <Input placeholder="Aguardando sorteio" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Entra quando não sobra número nenhum, e vence qualquer outro
+                  texto. Campanha esgotada não pode seguir chamando para
+                  comprar.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </Card>
 
         {serverError && (
