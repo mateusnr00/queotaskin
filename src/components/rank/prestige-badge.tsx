@@ -23,14 +23,6 @@ const OCTOGONO = {
   centro: "69,25 131,25 175,69 175,131 131,175 69,175 25,131 25,69",
 };
 
-/** Traços decorativos nos quatro cantos, o par de cima usa o tom claro. */
-interface Tracos {
-  cima: [string, string];
-  baixo: [string, string];
-  corCima: string;
-  corBaixo: string;
-}
-
 interface DesignDePatente {
   /** Miolo em degradê radial, do topo iluminado para a base escura. */
   fundo: [string, string, string];
@@ -43,7 +35,6 @@ interface DesignDePatente {
   rotulo: string;
   tamanhoDoTexto: number;
   espacamento: number;
-  tracos: Tracos;
 }
 
 const DESIGNS: Partial<Record<PrestigeKey, DesignDePatente>> = {
@@ -55,12 +46,6 @@ const DESIGNS: Partial<Record<PrestigeKey, DesignDePatente>> = {
     rotulo: "PRO",
     tamanhoDoTexto: 55,
     espacamento: -2,
-    tracos: {
-      cima: ["M56 54 L72 38", "M144 54 L128 38"],
-      baixo: ["M56 146 L72 162", "M144 146 L128 162"],
-      corCima: "#42DFFF",
-      corBaixo: "#1677FF",
-    },
   },
   MVP: {
     fundo: ["#2A173A", "#160D20", "#08050D"],
@@ -70,12 +55,6 @@ const DESIGNS: Partial<Record<PrestigeKey, DesignDePatente>> = {
     rotulo: "MVP",
     tamanhoDoTexto: 57,
     espacamento: -2,
-    tracos: {
-      cima: ["M61 52 L75 38", "M139 52 L125 38"],
-      baixo: ["M61 148 L75 162", "M139 148 L125 162"],
-      corCima: "#E98CFF",
-      corBaixo: "#7B38C7",
-    },
   },
 };
 
@@ -93,10 +72,6 @@ const ARCO_IRIS_GOAT: string[][] = [
 
 const GOAT_FUNDO: [string, string, string] = ["#301B36", "#17101D", "#08070A"];
 const GOAT_OURO = ["#FFF4A8", "#FFD54A", "#E6A817", "#9A6505"];
-
-/** Coroa sobre o texto: cinco pontas, o que separa o GOAT das demais. */
-const COROA =
-  "M72 72 L82 60 L94 70 L100 55 L106 70 L118 60 L128 72 L124 84 L76 84 Z";
 
 function paradas(cores: string[]) {
   return cores.map((cor, i) => (
@@ -143,37 +118,21 @@ export function PrestigeBadge({
               {paradas(ARCO_IRIS_GOAT[i]!)}
             </linearGradient>
           ))}
-          <filter
-            id={`${uid}-brilho`}
-            x="-40%"
-            y="-40%"
-            width="180%"
-            height="180%"
-          >
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
         </defs>
 
-        <g filter={`url(#${uid}-brilho)`}>
-          {LADOS_DO_OCTOGONO.map((lado, i) => (
-            <polygon key={i} points={lado.pontos} fill={`url(#${uid}-arco${i})`} />
-          ))}
-        </g>
+        {LADOS_DO_OCTOGONO.map((lado, i) => (
+          <polygon key={i} points={lado.pontos} fill={`url(#${uid}-arco${i})`} />
+        ))}
 
         <polygon points={OCTOGONO.centro} fill={`url(#${uid}-fundo)`} />
-        <path d={COROA} fill={`url(#${uid}-ouro)`} />
         <text
           x="100"
-          y="118"
+          y="104"
           textAnchor="middle"
           dominantBaseline="middle"
           fill={`url(#${uid}-ouro)`}
           fontFamily="Arial, Helvetica, sans-serif"
-          fontSize="43"
+          fontSize="48"
           fontWeight="900"
           letterSpacing="-2"
         >
@@ -203,50 +162,14 @@ export function PrestigeBadge({
         <linearGradient id={`${uid}-texto`} x1="0" y1="0" x2="0" y2="1">
           {paradas(d.texto)}
         </linearGradient>
-        <filter
-          id={`${uid}-brilho`}
-          x="-40%"
-          y="-40%"
-          width="180%"
-          height="180%"
-        >
-          <feGaussianBlur stdDeviation="2.8" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
       </defs>
 
-      <polygon
-        points={OCTOGONO.externo}
-        fill={`url(#${uid}-borda)`}
-        filter={`url(#${uid}-brilho)`}
-      />
+      <polygon points={OCTOGONO.externo} fill={`url(#${uid}-borda)`} />
       <polygon
         points={OCTOGONO.bordaInterna}
         fill={`url(#${uid}-bordaInterna)`}
       />
       <polygon points={OCTOGONO.centro} fill={`url(#${uid}-fundo)`} />
-
-      {d.tracos.cima.map((traco, i) => (
-        <path
-          key={`c${i}`}
-          d={traco}
-          stroke={d.tracos.corCima}
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-      ))}
-      {d.tracos.baixo.map((traco, i) => (
-        <path
-          key={`b${i}`}
-          d={traco}
-          stroke={d.tracos.corBaixo}
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-      ))}
 
       <text
         x="100"

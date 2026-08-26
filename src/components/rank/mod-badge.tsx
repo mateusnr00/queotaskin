@@ -6,8 +6,10 @@
 // nível nem em nenhuma patente. De relance dá para saber que aquele selo não
 // se compra.
 //
-// A forma é o mesmo octógono das patentes, para o selo sentar do mesmo jeito
-// ao lado do nome numa lista onde os dois aparecem.
+// A forma é o mesmo octógono das patentes, e a palavra ocupa o centro do
+// mesmo jeito que PRO, MVP e GOAT: numa lista onde eles se alternam, forma
+// diferente faria um parecer maior que o outro, e a cor sozinha já basta
+// para separar cargo de degrau comprado.
 //
 // Todos os IDs de gradiente e filtro entram por parâmetro, como nos outros
 // selos: o SVG resolve url(#id) pelo documento inteiro, e numa lista com
@@ -90,34 +92,16 @@ export function ModBadge({
       />
       <polygon points={OCTOGONO.centro} fill={`url(#${uid}-fundo)`} />
 
-      {/* Escudo com o visto: a leitura funciona mesmo quando o selo está
-          pequeno demais para a palavra MOD se distinguir. */}
-      <path
-        d="M100 45 L119 52 V67 C119 79 111 87 100 92 C89 87 81 79 81 67 V52 Z"
-        fill="none"
-        stroke="#58FFD0"
-        strokeWidth="4"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M91 67 L98 74 L110 60"
-        fill="none"
-        stroke="#FFFFFF"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
       <text
         x="100"
-        y="125"
+        y="104"
         textAnchor="middle"
         dominantBaseline="middle"
         fill={`url(#${uid}-texto)`}
         fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="48"
+        fontSize="57"
         fontWeight="900"
-        letterSpacing="-1"
+        letterSpacing="-2"
       >
         MOD
       </text>
