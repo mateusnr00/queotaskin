@@ -252,9 +252,13 @@ export default async function PublicRaffleDetailPage({
     <div className="mx-auto w-full max-w-md px-4 py-5 md:max-w-2xl md:py-10">
       {/* ---------- imagem + título ---------- */}
       <div className="space-y-4 md:space-y-5">
-        {/* No celular a imagem sangra até as bordas, como nas três
-            referências: a moldura arredondada com margem lateral encolhia
-            a imagem justamente onde ela precisa vender. */}
+        {/* No celular a arte fica a 8px de cada borda, com moldura
+            arredondada em volta.
+            
+            O container da página dá 16px de recuo, então a imagem estende
+            8px para cada lado (-mx-2) e o que sobra até a tela são os 8px
+            pedidos. Escrever "8px" direto aqui daria 8px a partir do
+            conteúdo, ou seja, 24px da tela. */}
         <RaffleCover
           url={raffle.images[0]?.url ?? null}
           title={raffle.title}
@@ -265,8 +269,9 @@ export default async function PublicRaffleDetailPage({
           // aqui: com 16/9 e recorte, a arte perdia a logo no topo e o nome
           // do desgaste embaixo, que é metade do que ela comunica.
           style={{ aspectRatio: PROPORCAO_DA_SKIN }}
-          className="-mx-4 w-[calc(100%+2rem)] md:mx-0 md:w-full md:rounded-2xl"
-          sizes="(min-width: 768px) 640px, 100vw"
+          className="-mx-2 w-[calc(100%+1rem)] rounded-2xl border md:mx-0 md:w-full"
+          // A largura no celular deixou de ser a tela inteira: 16px a menos.
+          sizes="(min-width: 768px) 640px, calc(100vw - 16px)"
           priority
         />
 
