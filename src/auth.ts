@@ -12,8 +12,19 @@
 //    nome + celular do dono são informação pública demais para proteger
 //    isso. Só existe no host do painel.
 //
-// Contas ADMIN e SUPER_ADMIN NÃO entram pelo caminho 1. Sem esse bloqueio a
-// senha seria decorativa: bastaria voltar ao formulário do site público.
+// Quem opera o painel também compra: o dono entra no próprio site como
+// cliente qualquer. Por isso o caminho 1 aceita conta de painel — mas SÓ no
+// host público. No host do painel ele é recusado, senão a senha seria
+// decorativa: bastaria postar neste endpoint com nome + CPF e sair com uma
+// sessão de administrador.
+//
+// A checagem lê o Host da requisição de verdade, não um campo enviado junto
+// das credenciais: o corpo do pedido é controlado por quem chama, o cabeçalho
+// da conexão não.
+//
+// As duas sessões não se misturam. O cookie do Auth.js é gravado para o host
+// exato, então entrar como cliente em queotaskin.com não dá acesso nenhum em
+// admin.queotaskin.com — lá continua valendo e-mail e senha.
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -23,6 +34,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/auth.config";
 import { loginSchema, adminLoginSchema } from "@/lib/validations/auth";
+import { isAdminHost } from "@/lib/host";
 
 // "  João  da  Silva " → "joão da silva" — usado pra comparar nomes
 // digitados pelo usuário sem se importar com maiúsculas ou espaços
@@ -42,7 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         name: { label: "Nome completo", type: "text" },
         cpf: { label: "CPF", type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
@@ -56,9 +68,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        // Quem opera o painel entra só com senha. Deixar passar aqui
-        // anularia a proteção: nome e celular do dono são públicos.
-        if (PAPEIS_DE_PAINEL.has(user.role)) return null;
+        // No host do painel, conta de painel entra só com senha.
+        if (PAPEIS_DE_PAINEL.has(user.role)) {
+          const host = request?.headers?.get("host") ?? "";
+          if (isAdminHost(host)) return null;
+        }
 
         return {
           id: user.id,

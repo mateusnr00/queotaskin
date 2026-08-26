@@ -122,6 +122,10 @@ export async function updateUserAction(
     }
 
     revalidatePath("/admin/usuarios");
+    // Clientes é a lista onde essa edição costuma começar (alguém trocou de
+    // número e pediu para atualizar); sem isto ela continuaria mostrando o
+    // dado antigo depois de salvar.
+    revalidatePath("/admin/clientes");
     revalidatePath(`/admin/usuarios/${id}/editar`);
 
     return { ok: true, data: { id } };
