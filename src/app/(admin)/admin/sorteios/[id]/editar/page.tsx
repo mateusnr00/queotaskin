@@ -21,14 +21,33 @@ type RaffleFormRequiredFields = {
   birthDate: boolean;
 };
 
+// Abas validas na URL. Sem a lista, um ?aba= qualquer abriria o formulario
+// numa aba inexistente e o conteudo sairia em branco.
+const ABAS = [
+  "geral",
+  "titulos",
+  "imagens",
+  "premios",
+  "premiados",
+  "pagamento",
+  "promocoes",
+  "excluir",
+];
+
 export default async function EditRafflePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ aba?: string }>;
 }) {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const { id } = await params;
+  const { aba } = await searchParams;
+  // Vem de quem acabou de criar o sorteio clicando numa aba que precisava
+  // dele existindo. Continua de onde parou em vez de cair em Geral.
+  const abaInicial = aba && ABAS.includes(aba) ? aba : undefined;
 
   const raffle = await prisma.raffle.findUnique({
     where: { id },
@@ -169,6 +188,7 @@ export default async function EditRafflePage({
 
       <RaffleForm
         mode={{ kind: "edit", id: raffle.id }}
+        abaInicial={abaInicial}
         raffleTitle={raffle.title}
         initialImages={raffle.images.map((img) => ({
           id: img.id,

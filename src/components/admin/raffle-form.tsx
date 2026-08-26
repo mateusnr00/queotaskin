@@ -10,7 +10,7 @@
 // Suporte, Capitalizadora, Restrições.
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -86,6 +86,12 @@ interface PromotionData {
 
 interface RaffleFormProps {
   mode: Mode;
+  /**
+   * Aba aberta ao montar. A criacao usa isso para continuar de onde o
+   * usuario estava: ele clica em "Imagens" antes do sorteio existir, o
+   * formulario cria e redireciona para ca ja nessa aba.
+   */
+  abaInicial?: string;
   /** Título atual, a exclusão pede que ele seja digitado para confirmar. */
   raffleTitle?: string;
   /** Catálogo de skins do tenant. Só usado na criação. */
@@ -206,6 +212,7 @@ const CATEGORIES = [
 
 export function RaffleForm({
   mode,
+  abaInicial,
   raffleTitle = "",
   skins = [],
   defaultValues,
@@ -244,7 +251,10 @@ export function RaffleForm({
 }: RaffleFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<string>("geral");
+  const [activeTab, setActiveTab] = useState<string>(abaInicial || "geral");
+  // Aba que o usuario pediu antes do sorteio existir. Guardada para que o
+  // redirecionamento pos-criacao caia nela, em vez de voltar para Geral.
+  const destinoAposCriar = useRef<string | null>(null);
   const isEdit = mode.kind === "edit";
   const raffleId = mode.kind === "edit" ? mode.id : "";
   // Skin escolhida do catálogo. Só existe na criação: depois, prêmio e capa
@@ -261,6 +271,50 @@ export function RaffleForm({
   const isFree = form.watch("isFree");
   const hasFee = form.watch("hasFee");
 
+  // Abas cujo conteudo e salvo por action propria, com o id do sorteio.
+  // Antes do sorteio existir elas nao tinham como funcionar, e o formulario
+  // pedia "salve primeiro". Agora salvar deixou de ser tarefa do usuario:
+  // clicar na aba cria o sorteio e continua nela.
+  const ABAS_QUE_PRECISAM_DO_SORTEIO = [
+    "imagens",
+    "premios",
+    "premiados",
+    "pagamento",
+    "promocoes",
+  ];
+
+  async function aoTrocarDeAba(destino: string) {
+    if (!destino) return;
+
+    const precisaExistir =
+      !isEdit && ABAS_QUE_PRECISAM_DO_SORTEIO.includes(destino);
+    if (!precisaExistir) {
+      setActiveTab(destino);
+      return;
+    }
+
+    // Criar exige os obrigatorios de Geral. Sem eles nao da para salvar, e
+    // mandar o usuario para a aba pedida so esconderia o motivo: ele veria
+    // uma aba vazia sem saber que faltou preencher titulo ou quantidade.
+    const valido = await form.trigger();
+    if (!valido) {
+      setActiveTab("geral");
+      toast.error(
+        "Preencha os campos obrigatórios em Geral para continuar."
+      );
+      return;
+    }
+
+    // Trava de reentrada. Quatro cliques seguidos em abas diferentes
+    // disparariam quatro criacoes; sobreviveria so a primeira, porque o slug
+    // e unico por tenant, e o usuario levaria tres erros de slug repetido
+    // sem entender o motivo. Enquanto uma criacao esta em voo, as outras
+    // abas simplesmente esperam.
+    if (destinoAposCriar.current) return;
+    destinoAposCriar.current = destino;
+    await form.handleSubmit(onSubmit)();
+  }
+
   function onSubmit(values: RaffleGeneralInput) {
     if (values.isFree) values.pricePerNumber = 0;
 
@@ -271,6 +325,7 @@ export function RaffleForm({
           : await updateRaffleAction({ id: mode.id, data: values });
 
       if (!result.ok) {
+        destinoAposCriar.current = null;
         toast.error(result.error);
         if (result.fieldErrors?.slug) {
           form.setError("slug", { message: result.fieldErrors.slug[0] });
@@ -281,7 +336,13 @@ export function RaffleForm({
         mode.kind === "create" ? "Sorteio criado" : "Sorteio salvo"
       );
       if (mode.kind === "create") {
-        router.push(`/admin/sorteios/${result.data.id}/editar`);
+        const aba = destinoAposCriar.current;
+        destinoAposCriar.current = null;
+        router.push(
+          `/admin/sorteios/${result.data.id}/editar${
+            aba ? `?aba=${aba}` : ""
+          }`
+        );
       } else {
         router.refresh();
       }
@@ -293,37 +354,24 @@ export function RaffleForm({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Tabs
           value={activeTab}
-          onValueChange={(v) => v && setActiveTab(v)}
+          onValueChange={(v) => {
+            void aoTrocarDeAba(v);
+          }}
           className="gap-5"
         >
           <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
             <TabsList className="inline-flex h-auto w-auto min-w-full md:min-w-0 flex-nowrap items-center gap-1 rounded-2xl bg-muted/60 p-1.5 shadow-sm">
               <TabIcon value="geral" icon={Settings} label="Geral" />
               <TabIcon value="titulos" icon={Ticket} label="Títulos" />
-              <TabIcon
-                value="imagens"
-                icon={Camera}
-                label="Imagens"
-                disabled={!isEdit}
-              />
-              <TabIcon
-                value="premios"
-                icon={Trophy}
-                label="Prêmios"
-                disabled={!isEdit}
-              />
+              <TabIcon value="imagens" icon={Camera} label="Imagens" />
+              <TabIcon value="premios" icon={Trophy} label="Prêmios" />
               <TabIcon
                 value="premiados"
                 icon={Award}
                 label="Títulos Premiados"
               />
               <TabIcon value="pagamento" icon={CreditCard} label="Pagamento" />
-              <TabIcon
-                value="promocoes"
-                icon={TagsIcon}
-                label="Promoções"
-                disabled={!isEdit}
-              />
+              <TabIcon value="promocoes" icon={TagsIcon} label="Promoções" />
               {/* Última da fila e só na edição: não há o que excluir num
                   sorteio que ainda não existe. */}
               <TabIcon
@@ -1142,7 +1190,7 @@ export function RaffleForm({
                 initialImages={initialImages}
               />
             ) : (
-              <SaveFirstHint label="Salve o sorteio primeiro para enviar imagens." />
+              <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />
             )}
           </TabsContent>
 
@@ -1155,7 +1203,7 @@ export function RaffleForm({
                 initialConfig={initialPrizesConfig}
               />
             ) : (
-              <SaveFirstHint label="Salve o sorteio primeiro para cadastrar prêmios." />
+              <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />
             )}
           </TabsContent>
 
@@ -1173,7 +1221,7 @@ export function RaffleForm({
                 initialConfig={initialAwardedConfig}
               />
             ) : (
-              <SaveFirstHint label="Salve o sorteio primeiro para cadastrar títulos premiados." />
+              <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />
             )}
           </TabsContent>
 
@@ -1187,7 +1235,7 @@ export function RaffleForm({
                 configuredProviders={configuredProviders}
               />
             ) : (
-              <SaveFirstHint label="Salve o sorteio primeiro para escolher o gateway de pagamento." />
+              <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />
             )}
           </TabsContent>
 
@@ -1201,7 +1249,7 @@ export function RaffleForm({
                 initialConfig={initialPromotionsConfig}
               />
             ) : (
-              <SaveFirstHint label="Salve o sorteio primeiro para criar promoções." />
+              <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />
             )}
           </TabsContent>
 
