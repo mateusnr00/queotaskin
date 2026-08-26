@@ -4,12 +4,14 @@ import { cn } from "@/lib/utils";
 
 // A arte da caixa surpresa.
 //
-// Substitui o ícone de presente do lucide onde a caixa é o objeto em si: a
-// caixa fechada que a pessoa vai abrir no comprovante, e a vitrine dos
-// degraus na campanha. O ícone genérico continua nos marcadores pequenos,
-// dentro de título e de contador, porque esta arte é um render 3D com laço,
-// fecho e desgaste na tinta: abaixo de uns 40px vira borrão colorido e fica
-// pior que o traço simples do ícone.
+// Substitui o ícone de presente do lucide onde a caixa aparece: a caixa
+// fechada que a pessoa vai abrir no comprovante, e o contador de caixas de
+// cada degrau na campanha.
+//
+// Ela aguenta tamanho pequeno melhor do que um render 3D costuma aguentar,
+// porque o que identifica a caixa é a cor, engradado laranja com laço
+// vermelho, e cor sobrevive à redução. O que se perde a 28px é o fecho e o
+// desgaste da tinta, que ninguém procura num contador.
 //
 // alt vazio de propósito. Em todo lugar onde ela aparece existe o texto
 // "Caixa Surpresa" ao lado, e um alt repetiria a mesma palavra para quem usa

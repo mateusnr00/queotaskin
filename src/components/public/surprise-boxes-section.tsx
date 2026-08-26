@@ -12,8 +12,9 @@
 // já tem dono.
 
 import { useState } from "react";
-import { ChevronDown, Gift, Trophy } from "lucide-react";
+import { ChevronDown, Trophy } from "lucide-react";
 
+import { CaixaSurpresaArte } from "@/components/public/caixa-surpresa-arte";
 import { cn } from "@/lib/utils";
 
 const VISIVEIS_FECHADO = 5;
@@ -40,7 +41,10 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
     <section className="space-y-3 rounded-2xl border bg-card p-4 md:p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-base font-bold">
-          <Gift className="h-4 w-4 text-primary" />
+          {/* Mesma arte do contador dos degraus, e não o presente genérico:
+              são a mesma caixa, e desenho diferente para a mesma coisa faz
+              parecer que são duas. */}
+          <CaixaSurpresaArte tamanho={28} />
           Caixas surpresas
           <span className="text-xs font-normal text-muted-foreground">
             ganhadores
