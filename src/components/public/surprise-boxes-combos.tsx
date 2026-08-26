@@ -6,13 +6,25 @@ import { cn } from "@/lib/utils";
 //
 // Os degraus já existiam no painel e eram usados para CRIAR as caixas
 // depois do pagamento, mas nunca apareciam no site. Quem estava decidindo
-// quantos números comprar não tinha como saber que 25 rendem mais caixa por
+// quantos números comprar não tinha como saber que 30 rendem mais caixa por
 // título do que 10, que é a razão de o degrau existir.
 //
-// O texto muda com o modo, e isso não é detalhe de escrita. Sem acumular, o
-// sistema aplica só o MAIOR degrau alcançado, então dizer "a cada 10
-// títulos" prometeria duas caixas a quem compra 20 e entregaria uma.
-// Acumulando, os degraus somam e a promessa é outra.
+// A regra do modo, "a cada" contra "a partir de", fica colada no número de
+// títulos de cada degrau, e não numa legenda no cabeçalho. Isso não é
+// economia de texto: sem acumular, o sistema aplica só o MAIOR degrau
+// alcançado, então "a cada 10 títulos" prometeria duas caixas a quem compra
+// 20 e entregaria uma. A regra precisa estar onde o número está.
+//
+// Vira grade a partir de sm. Em linha corrida no desktop sobravam
+// oitocentos pixels de vazio no meio de cada degrau, com o número de um
+// lado e a caixa do outro, e era daí que vinha a maior parte da sensação de
+// página pobre. Em grade os três ficam lado a lado e dá para comparar de
+// relance, que é o que a pessoa quer fazer ali.
+//
+// A ordem dentro do card também mudou. Antes o degrau começava pelo que
+// custa, "a partir de 30 títulos", e terminava no que ganha. Agora abre
+// pelo que ganha: "5 caixas" é o motivo de o bloco existir, o resto é
+// condição.
 
 export interface ComboPublico {
   titulos: number;
@@ -34,59 +46,57 @@ export function SurpriseBoxesCombos({
 
   return (
     <section className="space-y-3 rounded-2xl border bg-card p-4 md:p-5">
-      <div className="min-w-0">
-        <h2 className="text-base font-bold">Caixas surpresas</h2>
-        <p className="text-xs text-muted-foreground">
-          {acumulativo ? "os degraus somam" : "vale o maior degrau"}
-        </p>
-      </div>
+      <h2 className="text-base font-bold">Caixas surpresas</h2>
 
-      <ul className="space-y-2">
-        {combos.map((c) => (
+      <ul
+        className={cn(
+          "grid gap-2",
+          combos.length === 2 && "sm:grid-cols-2",
+          combos.length >= 3 && "sm:grid-cols-3"
+        )}
+      >
+        {combos.map((c, i) => (
           <li
             key={c.titulos}
             className={cn(
-              "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5",
+              "flex items-center gap-3 rounded-xl border px-3 py-2.5",
+              // No celular a linha fica deitada, senão três degraus viram
+              // uma tela inteira de rolagem. Da grade em diante ela levanta
+              // e centraliza, que é o que preenche a coluna.
+              "sm:flex-col sm:justify-center sm:gap-1.5 sm:py-4 sm:text-center",
               c.destaque
-                ? "border-primary/60 bg-primary/10"
+                ? "contorno-pulsa border-primary/60 bg-primary/10"
                 : "border-border bg-muted/30"
             )}
           >
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {acumulativo ? "A cada" : "A partir de"}
+            <CaixaSurpresaArte
+              tamanho={44}
+              className="caixa-balanca"
+              // Escalonado para os três não balançarem em bloco: junto vira
+              // tique nervoso da página, defasado vira onda.
+              style={{ animationDelay: `${i * 520}ms` }}
+            />
+
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <p className="text-lg font-extrabold leading-tight text-primary">
+                {c.caixas.toLocaleString("pt-BR")}{" "}
+                {c.caixas === 1 ? "caixa" : "caixas"}
               </p>
-              <p className="text-base font-extrabold leading-tight">
-                {c.titulos.toLocaleString("pt-BR")}{" "}
-                {c.titulos === 1 ? "título" : "títulos"}
-              </p>
-              <p className="text-xs tabular-nums text-muted-foreground">
-                {formatBRL(precoPorNumero * c.titulos)}
+              <p className="text-xs leading-tight text-muted-foreground">
+                {acumulativo ? "a cada" : "a partir de"}{" "}
+                <span className="font-semibold text-foreground">
+                  {c.titulos.toLocaleString("pt-BR")}{" "}
+                  {c.titulos === 1 ? "título" : "títulos"}
+                </span>
               </p>
             </div>
 
-            <div className="shrink-0 text-right">
-              <p className="flex items-center justify-end gap-1.5 text-base font-extrabold leading-tight text-primary">
-                {c.caixas.toLocaleString("pt-BR")}{" "}
-                {c.caixas === 1 ? "caixa" : "caixas"}
-                {/* A arte no lugar do ícone genérico. Aqui ela é pequena, mas
-                    a silhueta aguenta: engradado laranja com laço vermelho se
-                    reconhece pela cor antes da forma. */}
-                <CaixaSurpresaArte tamanho={28} />
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {c.caixas === 1 ? "1 chance" : `${c.caixas} chances`} de
-                contemplação
-              </p>
-            </div>
+            <p className="shrink-0 text-sm font-bold tabular-nums sm:mt-0.5 sm:text-base">
+              {formatBRL(precoPorNumero * c.titulos)}
+            </p>
           </li>
         ))}
       </ul>
-
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        As caixas ficam disponíveis para abrir logo depois do pagamento
-        confirmado, no seu comprovante.
-      </p>
     </section>
   );
 }

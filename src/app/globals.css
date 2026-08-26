@@ -131,57 +131,96 @@
 }
 /* Chamadas de atenção da página de sorteio.
  *
- * Duas animações, ambas de baixa amplitude de propósito: o objetivo é o olho
- * perceber movimento sem que a página pareça piscando. Botão que pulsa forte
- * some da leitura por saturação, e o oposto do que se queria acontece.
+ * Todas de baixa amplitude de propósito: o objetivo é o olho perceber
+ * movimento sem que a página pareça piscando. Botão que pulsa forte some da
+ * leitura por saturação, e o oposto do que se queria acontece.
  */
 
-/* Pulso do botão de compra: anel que cresce e some, sem mexer no botão.
- * Animar o próprio botão deslocaria o que está em volta a cada ciclo e daria
- * sensação de página tremendo. */
-@keyframes pulso-cta {
+/* O anel que pulsa, num keyframe só.
+ *
+ * Três lugares usam exatamente o mesmo efeito com cor e alcance diferentes:
+ * o botão de compra, o card mais popular e o degrau em destaque das caixas
+ * surpresas. Eram três keyframes iguais copiados, e o terceiro nasceu de um
+ * copiar-colar dos outros dois. Agora cor e alcance entram por variável, e
+ * a regra do anel existe uma vez.
+ *
+ * É anel e não escala ou borda de propósito: box-shadow fica fora do fluxo,
+ * então nada em volta se desloca a cada ciclo. Animar o próprio elemento
+ * daria sensação de página tremendo.
+ */
+@keyframes pulso-de-contorno {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 55%, transparent);
+    box-shadow: 0 0 0 0
+      color-mix(in oklch, var(--cor-do-pulso) var(--forca-do-pulso), transparent);
   }
   70% {
-    box-shadow: 0 0 0 10px color-mix(in oklch, var(--primary) 0%, transparent);
+    box-shadow: 0 0 0 var(--alcance-do-pulso)
+      color-mix(in oklch, var(--cor-do-pulso) 0%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--cor-do-pulso) 0%, transparent);
   }
 }
 
+/* Botão de compra: o mais forte dos três, porque é o alvo do clique. */
 .cta-pulsa {
-  animation: pulso-cta 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --cor-do-pulso: var(--primary);
+  --forca-do-pulso: 55%;
+  --alcance-do-pulso: 10px;
+  animation: pulso-de-contorno 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Pulso do card mais popular.
+/* Card mais popular da grade de quantidade.
  *
  * Antes aqui passava uma faixa de luz atravessando o card. Saiu: o card já
  * carrega o selo "MAIS POPULAR", a borda âmbar e o fundo âmbar, então a
- * faixa era a quarta coisa dizendo a mesma coisa, e o conjunto virava
- * informação demais no lugar de destaque.
+ * faixa era a quarta coisa dizendo a mesma coisa.
  *
- * O anel não desloca nada, ao contrário de animar escala ou borda: box-shadow
- * fica fora do fluxo, então os cards vizinhos não se mexem a cada ciclo.
+ * O anel para em 5px porque a grade tem 8px de espaço entre cards: passar
+ * disso encostaria no vizinho e o destaque viraria bagunça. */
+.card-popular-pulsa {
+  --cor-do-pulso: var(--color-amber-500);
+  --forca-do-pulso: 45%;
+  --alcance-do-pulso: 5px;
+  animation: pulso-de-contorno 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Degrau em destaque das caixas surpresas. Mesma ideia, e 6px porque a
+ * grade dos degraus tem 8px de folga. */
+.contorno-pulsa {
+  --cor-do-pulso: var(--primary);
+  --forca-do-pulso: 50%;
+  --alcance-do-pulso: 6px;
+  animation: pulso-de-contorno 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* A caixinha dos degraus balançando.
  *
- * Amplitude baixa de propósito. O anel para em 5px porque a grade tem 8px de
- * espaço entre cards: passar disso encostaria no vizinho e o destaque
- * viraria bagunça. */
-@keyframes pulso-popular {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-amber-500) 45%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 5px color-mix(in oklch, var(--color-amber-500) 0%, transparent);
-  }
+ * Fica parada quase o ciclo inteiro e balança no fim. Balanço contínuo em
+ * três caixas ao mesmo tempo vira ruído de fundo e o olho aprende a ignorar;
+ * parada que se mexe de vez em quando é o que chama. */
+@keyframes caixa-balanca {
+  0%,
+  62%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-amber-500) 0%, transparent);
+    transform: rotate(0deg);
+  }
+  68% {
+    transform: rotate(-9deg);
+  }
+  76% {
+    transform: rotate(8deg);
+  }
+  84% {
+    transform: rotate(-5deg);
+  }
+  92% {
+    transform: rotate(3deg);
   }
 }
 
-.card-popular-pulsa {
-  animation: pulso-popular 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.caixa-balanca {
+  animation: caixa-balanca 3.4s ease-in-out infinite;
 }
 
 /* Pulso do selo de status ("Adquira já!", "Últimos números!").
@@ -358,6 +397,8 @@
   .cta-pulsa,
   .selo-pulsa,
   .card-popular-pulsa,
+  .contorno-pulsa,
+  .caixa-balanca,
   .caixa-abrindo,
   .tampa-fecha,
   .tampa-abre {

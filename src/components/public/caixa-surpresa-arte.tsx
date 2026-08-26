@@ -29,11 +29,14 @@ export function CaixaSurpresaArte({
   tamanho = 64,
   aberta = false,
   className,
+  style,
 }: {
   /** Largura em pixels. A altura sai da proporção da arte. */
   tamanho?: number;
   aberta?: boolean;
   className?: string;
+  /** Para escalonar o balanço de várias caixas por animationDelay. */
+  style?: React.CSSProperties;
 }) {
   const arte = aberta ? ARTES.aberta : ARTES.fechada;
   return (
@@ -44,6 +47,7 @@ export function CaixaSurpresaArte({
       width={tamanho}
       height={Math.round((tamanho * arte.altura) / arte.largura)}
       className={cn("shrink-0 select-none", className)}
+      style={style}
     />
   );
 }
