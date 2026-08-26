@@ -16,7 +16,8 @@ import {
 import {
   CONTORNOS,
   DESIGN_POR_NIVEL,
-  SEGMENTOS_ARCO_IRIS,
+  ARCO_IRIS_NIVEL_21,
+  LADOS_DO_OCTOGONO,
   type FormaDoSelo,
 } from "@/lib/rank-badges";
 
@@ -89,7 +90,7 @@ describe("prestigeFromXp", () => {
 
   it("sobe pela escada de patentes na ordem certa", () => {
     expect(prestigeFromXp(80_000)?.key).toBe("LEGEND");
-    expect(prestigeFromXp(150_000)?.key).toBe("MAJOR_CHAMPION");
+    expect(prestigeFromXp(150_000)?.key).toBe("LEGEND");
     expect(prestigeFromXp(300_000)?.key).toBe("GOAT");
     expect(prestigeFromXp(9_000_000)?.key).toBe("GOAT");
   });
@@ -116,12 +117,13 @@ describe("rankFromXp", () => {
     expect(rank.prestige?.key).toBe("GOAT");
   });
 
-  it("usa numeral romano no selo das patentes e o nível nos demais", () => {
-    expect(rankFromXp(150_000).numeral).toBe("III");
-    expect(rankFromXp(300_000).numeral).toBe("IV");
+  it("mostra o nível nos selos comuns e o nome nas patentes", () => {
     // Dois dígitos mantêm a coluna de selos alinhada na lista de ranking.
     expect(rankFromXp(5500).numeral).toBe("10");
     expect(rankFromXp(0).numeral).toBe("00");
+    // Patente não usa mais numeral romano: o selo traz o nome desenhado.
+    expect(rankFromXp(300_000).numeral).toBe("GOAT");
+    expect(rankFromXp(80_000).numeral).toBe("Legend");
   });
 
   it("nomeia a faixa com o vocabulário das patentes do CS", () => {
@@ -254,9 +256,10 @@ describe("desenho dos selos", () => {
   });
 
   it("o arco-íris fecha a volta: a última cor emenda na primeira", () => {
-    expect(SEGMENTOS_ARCO_IRIS).toHaveLength(8);
-    const primeira = SEGMENTOS_ARCO_IRIS[0]!.cores[0];
-    const ultima = SEGMENTOS_ARCO_IRIS.at(-1)!.cores.at(-1);
+    expect(LADOS_DO_OCTOGONO).toHaveLength(8);
+    expect(ARCO_IRIS_NIVEL_21).toHaveLength(LADOS_DO_OCTOGONO.length);
+    const primeira = ARCO_IRIS_NIVEL_21[0]![0];
+    const ultima = ARCO_IRIS_NIVEL_21.at(-1)!.at(-1);
     expect(ultima).toBe(primeira);
   });
 

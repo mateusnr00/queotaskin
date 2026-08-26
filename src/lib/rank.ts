@@ -37,7 +37,7 @@ export function levelFromXp(xp: number): number {
 
 // ---------------------------------------------------------------- prestígio
 
-export type PrestigeKey = "PRO_PLAYER" | "LEGEND" | "MAJOR_CHAMPION" | "GOAT";
+export type PrestigeKey = "PRO_PLAYER" | "LEGEND" | "GOAT";
 
 export interface PrestigeRank {
   key: PrestigeKey;
@@ -45,8 +45,6 @@ export interface PrestigeRank {
   /** XP acumulado para alcançar a patente. */
   xp: number;
   color: string;
-  /** Numeral exibido no selo. As patentes usam romano; os níveis, o número. */
-  numeral: string;
   description: string;
 }
 
@@ -64,7 +62,6 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     label: "Pro Player",
     xp: 40_000,
     color: "#3fc9d6",
-    numeral: "I",
     description: "Assinou com uma organização.",
   },
   {
@@ -72,23 +69,13 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     label: "Legend",
     xp: 80_000,
     color: "#7c6cf0",
-    numeral: "II",
     description: "Status de lenda no Major.",
-  },
-  {
-    key: "MAJOR_CHAMPION",
-    label: "Campeão de Major",
-    xp: 150_000,
-    color: "#e05a4a",
-    numeral: "III",
-    description: "Levantou o troféu.",
   },
   {
     key: "GOAT",
     label: "GOAT",
     xp: 300_000,
     color: "#f2d059",
-    numeral: "IV",
     description: "O maior de todos os tempos.",
   },
 ] as const;
@@ -169,7 +156,7 @@ export function rankFromXp(xp: number): Rank {
       prestige,
       label: prestige.label,
       tierName: prestige.label,
-      numeral: prestige.numeral,
+      numeral: prestige.label,
       color: prestige.color,
       xp: total,
     };

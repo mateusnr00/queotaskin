@@ -4,12 +4,14 @@ import { useId } from "react";
 
 import { rankFromXp, type Rank } from "@/lib/rank";
 import {
+  ARCO_IRIS_NIVEL_21,
   CONTORNOS,
   DESIGN_NIVEL_ZERO,
   DESIGN_POR_NIVEL,
-  SEGMENTOS_ARCO_IRIS,
+  LADOS_DO_OCTOGONO,
   type DesignDeNivel,
 } from "@/lib/rank-badges";
+import { PrestigeBadge } from "@/components/rank/prestige-badge";
 import { cn } from "@/lib/utils";
 
 const SIZES = {
@@ -57,10 +59,8 @@ export function RankBadge({
   // mesma página, e IDs repetidos fazem todos herdarem o gradiente do
   // primeiro — o SVG resolve a referência pelo documento inteiro.
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const design = designoDoRank(resolved);
-  const contorno = CONTORNOS[design.forma];
 
-  return (
+  const moldura = (conteudo: React.ReactNode) => (
     <svg
       viewBox={`0 0 ${VIEW} ${VIEW}`}
       width={px}
@@ -69,6 +69,21 @@ export function RankBadge({
       aria-label={resolved.label}
       className={cn("shrink-0", muted && "opacity-40 saturate-50", className)}
     >
+      {conteudo}
+    </svg>
+  );
+
+  // Patente tem desenho próprio — texto escrito, coroa, brilho — que não cabe
+  // na tabela dos níveis.
+  if (resolved.prestige) {
+    return moldura(<PrestigeBadge chave={resolved.prestige.key} uid={uid} />);
+  }
+
+  const design = designoDoRank(resolved);
+  const contorno = CONTORNOS[design.forma];
+
+  return moldura(
+    <>
       <defs>
         <linearGradient id={`${uid}-borda`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={design.borda[0]} />
@@ -80,31 +95,34 @@ export function RankBadge({
           <stop offset="100%" stopColor={design.miolo[1]} />
         </linearGradient>
         {design.arcoIris &&
-          SEGMENTOS_ARCO_IRIS.map((seg, i) => (
-            <linearGradient
-              key={i}
-              id={`${uid}-arco${i}`}
-              x1={seg.de[0]}
-              y1={seg.de[1]}
-              x2={seg.para[0]}
-              y2={seg.para[1]}
-            >
-              {seg.cores.map((cor, j) => (
-                <stop
-                  key={j}
-                  offset={`${(j / (seg.cores.length - 1)) * 100}%`}
-                  stopColor={cor}
-                />
-              ))}
-            </linearGradient>
-          ))}
+          LADOS_DO_OCTOGONO.map((lado, i) => {
+            const cores = ARCO_IRIS_NIVEL_21[i]!;
+            return (
+              <linearGradient
+                key={i}
+                id={`${uid}-arco${i}`}
+                x1={lado.de[0]}
+                y1={lado.de[1]}
+                x2={lado.para[0]}
+                y2={lado.para[1]}
+              >
+                {cores.map((cor, j) => (
+                  <stop
+                    key={j}
+                    offset={`${(j / (cores.length - 1)) * 100}%`}
+                    stopColor={cor}
+                  />
+                ))}
+              </linearGradient>
+            );
+          })}
       </defs>
 
       {design.arcoIris ? (
         // Cada lado do octógono ganha o próprio degradê; juntos fecham a
         // volta do arco-íris.
-        SEGMENTOS_ARCO_IRIS.map((seg, i) => (
-          <polygon key={i} points={seg.pontos} fill={`url(#${uid}-arco${i})`} />
+        LADOS_DO_OCTOGONO.map((lado, i) => (
+          <polygon key={i} points={lado.pontos} fill={`url(#${uid}-arco${i})`} />
         ))
       ) : design.forma === "losango" ? (
         <rect
@@ -146,27 +164,12 @@ export function RankBadge({
       >
         {resolved.numeral}
       </text>
-    </svg>
+    </>
   );
 }
 
-/**
- * Desenho que corresponde ao rank.
- *
- * As patentes de prestígio ficam acima do nível 21 e não vieram no conjunto
- * de desenhos. Em vez de inventar uma silhueta nova, herdam o octógono com
- * borda de arco-íris — que já é o topo visível da escada — e trocam o miolo
- * pela cor da própria patente, o que as distingue entre si.
- */
+/** Desenho do nível. Patente não passa por aqui: tem componente próprio. */
 function designoDoRank(rank: Rank): DesignDeNivel {
-  if (rank.prestige) {
-    return {
-      forma: "octogono",
-      borda: DESIGN_POR_NIVEL[21]!.borda,
-      miolo: [rank.prestige.color, "#15111c"],
-      arcoIris: true,
-    };
-  }
   if (rank.level <= 0) return DESIGN_NIVEL_ZERO;
   return DESIGN_POR_NIVEL[Math.min(21, rank.level)] ?? DESIGN_NIVEL_ZERO;
 }

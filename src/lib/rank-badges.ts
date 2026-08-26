@@ -75,21 +75,35 @@ export const CONTORNOS: Record<
 };
 
 /**
- * Borda do nível 21: oito faixas, uma por lado do octógono, cada uma com o
- * próprio degradê. Juntas fecham a volta do arco-íris.
+ * Os oito lados do octógono, cada um com a direção do próprio degradê.
+ *
+ * A geometria vem separada das cores porque duas peças a usam: a borda
+ * arco-íris do nível 21 e a do selo do GOAT. Repetir os polígonos nas duas
+ * seria convidá-las a sair de sincronia na primeira correção.
  */
-export const SEGMENTOS_ARCO_IRIS: {
+export const LADOS_DO_OCTOGONO: {
   pontos: string;
   de: [number, number];
   para: [number, number];
-  cores: string[];
 }[] = [
-  { pontos: "61,5 139,5 133,27 67,27",       de: [0, 0], para: [1, 0], cores: ["#FF1744", "#E600A9"] },
-  { pontos: "139,5 195,61 173,67 133,27",    de: [0, 0], para: [1, 1], cores: ["#E600A9", "#FF006E"] },
-  { pontos: "195,61 195,139 173,133 173,67", de: [0, 0], para: [0, 1], cores: ["#FF006E", "#FF3D00"] },
-  { pontos: "195,139 139,195 133,173 173,133", de: [1, 0], para: [0, 1], cores: ["#FF3D00", "#FFC400"] },
-  { pontos: "139,195 61,195 67,173 133,173", de: [1, 0], para: [0, 0], cores: ["#FFC400", "#64E6B3"] },
-  { pontos: "61,195 5,139 27,133 67,173",    de: [1, 1], para: [0, 0], cores: ["#64E6B3", "#24C9E8"] },
-  { pontos: "5,139 5,61 27,67 27,133",       de: [0, 1], para: [0, 0], cores: ["#24C9E8", "#69D4C5"] },
-  { pontos: "5,61 61,5 67,27 27,67",         de: [0, 1], para: [1, 0], cores: ["#69D4C5", "#FFB51B", "#FF1744"] },
+  { pontos: "61,5 139,5 133,27 67,27",         de: [0, 0], para: [1, 0] },
+  { pontos: "139,5 195,61 173,67 133,27",      de: [0, 0], para: [1, 1] },
+  { pontos: "195,61 195,139 173,133 173,67",   de: [0, 0], para: [0, 1] },
+  { pontos: "195,139 139,195 133,173 173,133", de: [1, 0], para: [0, 1] },
+  { pontos: "139,195 61,195 67,173 133,173",   de: [1, 0], para: [0, 0] },
+  { pontos: "61,195 5,139 27,133 67,173",      de: [1, 1], para: [0, 0] },
+  { pontos: "5,139 5,61 27,67 27,133",         de: [0, 1], para: [0, 0] },
+  { pontos: "5,61 61,5 67,27 27,67",           de: [0, 1], para: [1, 0] },
+];
+
+/** Paleta do nível 21, um degradê por lado, fechando a volta. */
+export const ARCO_IRIS_NIVEL_21: string[][] = [
+  ["#FF1744", "#E600A9"],
+  ["#E600A9", "#FF006E"],
+  ["#FF006E", "#FF3D00"],
+  ["#FF3D00", "#FFC400"],
+  ["#FFC400", "#64E6B3"],
+  ["#64E6B3", "#24C9E8"],
+  ["#24C9E8", "#69D4C5"],
+  ["#69D4C5", "#FFB51B", "#FF1744"],
 ];
