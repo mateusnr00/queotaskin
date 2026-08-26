@@ -156,8 +156,11 @@
 }
 
 /* Luz atravessando o card. A faixa é branca com opacidade baixa e passa
- * inclinada, como reflexo em vidro. O intervalo é longo (7s) porque seis
- * cards piscando a cada segundo viram ruído, não destaque. */
+ * inclinada, como reflexo em vidro.
+ *
+ * Só o card marcado como mais popular a recebe. Nos seis ela virava agitação
+ * de fundo e nenhum se destacava, que é o oposto do que ela existe para
+ * fazer. Com um só, o intervalo pode cair para 5s sem virar ruído. */
 @keyframes brilho-card {
   0% {
     transform: translateX(-150%) skewX(-20deg);
@@ -197,15 +200,35 @@
     rgb(255 255 255 / 0.07) 55%,
     transparent 100%
   );
-  animation: brilho-card 7s ease-in-out infinite;
-  animation-delay: var(--atraso-do-brilho, 0s);
+  animation: brilho-card 5s ease-in-out infinite;
+}
+
+/* Pulso do selo de status ("Adquira já!", "Últimos números!").
+ *
+ * Aqui a variação é de opacidade, e não o anel do botão: o selo é pequeno e
+ * fica colado no título, então um anel crescendo em volta encostaria no
+ * texto. Não some de todo, para de 0,45 para baixo o selo sumir de vez a
+ * cada ciclo e a leitura ficar intermitente. */
+@keyframes pulso-selo {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.selo-pulsa {
+  animation: pulso-selo 2s ease-in-out infinite;
 }
 
 /* Quem pediu menos movimento no sistema não recebe nenhum. Não é detalhe de
  * acessibilidade distante: movimento repetido em laço causa desconforto real
  * em quem tem sensibilidade vestibular, e aqui ele é enfeite. */
 @media (prefers-reduced-motion: reduce) {
-  .cta-pulsa {
+  .cta-pulsa,
+  .selo-pulsa {
     animation: none;
   }
   .brilho-do-card {

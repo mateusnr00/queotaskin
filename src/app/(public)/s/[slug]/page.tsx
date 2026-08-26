@@ -276,7 +276,7 @@ export default async function PublicRaffleDetailPage({
         />
 
         <div className="space-y-1.5">
-          <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+          <span className="selo-pulsa inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
             {statusDaCampanha(
               soldCount,
               raffle.totalNumbers,

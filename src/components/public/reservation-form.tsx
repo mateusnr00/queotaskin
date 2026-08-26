@@ -383,14 +383,11 @@ function QuantityPicker({
                     : "border-border hover:border-primary/40 active:border-primary"
                 )}
               >
-                {/* A luz sai escalonada por card, meio segundo entre um e o
-                    seguinte: os seis brilhando juntos viram um flash da
-                    grade inteira, e em sequência lê-se como uma passada. */}
-                <span
-                  aria-hidden
-                  className="brilho-do-card"
-                  style={{ ["--atraso-do-brilho" as string]: `${idx * 0.5}s` }}
-                />
+                {/* Só no card popular. Nos seis a luz virava agitação de
+                    fundo e nenhum se destacava, que é o oposto do que ela
+                    existe para fazer. Em um só, ela aponta para a escolha
+                    que o admin marcou. */}
+                {popular && <span aria-hidden className="brilho-do-card" />}
 
                 {popular && (
                   <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white whitespace-nowrap">
