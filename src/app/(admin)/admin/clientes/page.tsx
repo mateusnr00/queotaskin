@@ -4,16 +4,18 @@ import {
   ChevronRight,
   Repeat,
   TrendingUp,
+  UserPlus,
   Users,
   Wallet,
 } from "lucide-react";
 
-import { getAdminOrThrow } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { listCustomers, type CustomerSort } from "@/server/services/customers";
 import { StatCard } from "@/components/admin/customers/stat-card";
 import { CustomersFilters } from "@/components/admin/customers/customers-filters";
 import { CustomerRow } from "@/components/admin/customers/customer-row";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -43,7 +45,7 @@ export default async function AdminClientesPage({
     page?: string;
   }>;
 }) {
-  const session = await getAdminOrThrow();
+  const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const sp = await searchParams;
 
@@ -81,15 +83,28 @@ export default async function AdminClientesPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Clientes</h1>
-        <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Link href="/admin" className="hover:text-foreground">
-            Admin
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span>Clientes</span>
-        </nav>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+            Clientes
+          </h1>
+          <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Link href="/admin" className="hover:text-foreground">
+              Admin
+            </Link>
+            <ChevronRight className="h-3 w-3" />
+            <span>Clientes</span>
+          </nav>
+        </div>
+        {/* A criação mora aqui porque é desta lista que a necessidade nasce:
+            alguém liga pedindo cadastro, ou entra gente nova na equipe. */}
+        <Link
+          href="/admin/usuarios/novo"
+          className={buttonVariants({ variant: "default" })}
+        >
+          <UserPlus className="mr-1.5 h-4 w-4" />
+          Nova conta
+        </Link>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

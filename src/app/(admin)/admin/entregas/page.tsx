@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { AlertTriangle, ExternalLink, PackageCheck } from "lucide-react";
 
-import { getAdminOrThrow } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { listDeliveries } from "@/server/services/deliveries";
 import { SkinCard } from "@/components/cs2/skin-card";
@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Entregas" };
 // Fila operacional pós-sorteio: quem ganhou, o que ganhou e para onde
 // enviar. É a tela que o admin abre com a Steam aberta do lado.
 export default async function AdminDeliveriesPage() {
-  const session = await getAdminOrThrow();
+  const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const deliveries = await listDeliveries(tenantId);
 

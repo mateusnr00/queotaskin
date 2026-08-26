@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ChevronRight, MessageCircle } from "lucide-react";
 
-import { getAdminOrThrow } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { prisma } from "@/lib/db";
 import { leaderboard } from "@/server/services/xp";
@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 // pública de quem mais gasta é convite a engenharia social, e o operador
 // precisa dos dados de contato junto, o que num site público seria vazamento.
 export default async function AdminRankingPage() {
-  const session = await getAdminOrThrow();
+  const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
 
   const [rows, settings] = await Promise.all([

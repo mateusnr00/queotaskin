@@ -97,6 +97,15 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 // nome+celular não terão CPF; o admin pode preencher se quiser.
 export const userEditSchema = z.object({
   id: z.string().cuid(),
+  // Editável porque é o login do painel: promover alguém a admin sem poder
+  // dar o e-mail deixaria a conta com o papel certo e sem como entrar.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((v) => v === "" || z.string().email().safeParse(v).success, {
+      message: "E-mail inválido",
+    }),
   name: z
     .string()
     .min(2, "Nome muito curto")
@@ -119,3 +128,58 @@ export const userEditSchema = z.object({
   role: z.enum(["SUPER_ADMIN", "ADMIN", "AFFILIATE", "PARTICIPANT"]),
 });
 export type UserEditInput = z.infer<typeof userEditSchema>;
+
+// Criação de conta pelo painel.
+//
+// O e-mail só é exigido quando o papel dá acesso ao painel, porque é ele que
+// serve de login lá. Cliente entra por nome + CPF e não precisa de e-mail
+// nenhum; exigir de todo mundo criaria campo obrigatório inventado para a
+// maior parte dos cadastros.
+export const userCreateSchema = z
+  .object({
+    name: z
+      .string()
+      .min(2, "Nome muito curto")
+      .max(120, "Nome muito longo")
+      .trim(),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .refine((v) => v === "" || z.string().email().safeParse(v).success, {
+        message: "E-mail inválido",
+      }),
+    cpf: z
+      .string()
+      .transform(onlyDigits)
+      .refine((v) => v === "" || isValidCpf(v), "CPF inválido"),
+    phone: z
+      .string()
+      .transform(onlyDigits)
+      .refine(
+        (v) => v === "" || (v.length >= 10 && v.length <= 11),
+        "Telefone inválido (DDD + número)"
+      ),
+    role: z.enum(["SUPER_ADMIN", "ADMIN", "AFFILIATE", "PARTICIPANT"]),
+  })
+  .superRefine((dados, ctx) => {
+    const daPainel = dados.role === "ADMIN" || dados.role === "SUPER_ADMIN";
+    if (daPainel && !dados.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: "Admin entra no painel por e-mail e senha, então ele é obrigatório",
+      });
+    }
+    // Cliente que não tem CPF não consegue entrar: o login público é nome +
+    // CPF. Criar a conta assim mesmo produziria um cadastro que parece certo
+    // e nunca deixa a pessoa entrar.
+    if (dados.role === "PARTICIPANT" && !dados.cpf) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["cpf"],
+        message: "Cliente entra por nome e CPF, então o CPF é obrigatório",
+      });
+    }
+  });
+export type UserCreateInput = z.infer<typeof userCreateSchema>;

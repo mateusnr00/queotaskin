@@ -29,6 +29,7 @@ export default async function EditUserPage({
       phone: true,
       role: true,
       email: true,
+      passwordHash: true,
       tenantId: true,
       createdAt: true,
       _count: { select: { reservations: true } },
@@ -73,9 +74,12 @@ export default async function EditUserPage({
 
       <UserEditForm
         isSelf={isSelf}
+        souDono={session.user.role === "SUPER_ADMIN"}
+        temSenha={Boolean(user.passwordHash)}
         defaultValues={{
           id: user.id,
           name: user.name,
+          email: user.email ?? "",
           cpf: user.cpf ?? "",
           phone: user.phone ?? "",
           role: user.role,
