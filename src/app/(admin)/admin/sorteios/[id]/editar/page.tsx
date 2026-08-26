@@ -9,6 +9,7 @@ import { RaffleStatusActions } from "@/components/admin/raffle-status-actions";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { toPrizeDraft } from "@/lib/prize-mapper";
+import { raffleUrl } from "@/lib/raffle-url";
 
 export const metadata: Metadata = { title: "Editar sorteio" };
 
@@ -61,6 +62,8 @@ export default async function EditRafflePage({
   if (!raffle) notFound();
   // Bloqueia cross-tenant: admin de outro tenant não pode editar essa rifa.
   if (raffle.tenantId !== tenantId) notFound();
+
+  const urlPublica = await raffleUrl(raffle.slug);
 
   // Estado do gateway no tenant, usado pela aba Pagamento pra mostrar
   // qual é o "padrão do site" e se as credenciais de cada provider já
@@ -164,8 +167,12 @@ export default async function EditRafflePage({
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight truncate">
                   {raffle.title}
                 </h1>
+                {/* URL absoluta do host público, não caminho relativo.
+                    Este painel roda em admin.<domínio>, e ali /s/... não é
+                    página pública: o link caía de volta no admin em vez de
+                    abrir a campanha. */}
                 <Link
-                  href={`/s/${raffle.slug}`}
+                  href={urlPublica}
                   target="_blank"
                   className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >

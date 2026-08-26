@@ -81,6 +81,8 @@ import { formatCpf, formatPhone } from "@/lib/cpf";
 interface RaffleSummary {
   id: string;
   slug: string;
+  /** URL absoluta da página pública, resolvida no servidor. */
+  urlPublica: string;
   title: string;
   shortDescription: string | null;
   status: string;
@@ -342,7 +344,9 @@ function RaffleHeaderCard({
         </HeaderActionButton>
         <HeaderActionButton
           label="Visualizar página"
-          href={`/s/${raffle.slug}`}
+          // Absoluta: este painel roda em admin.<domínio>, e ali um /s/...
+          // relativo cai de volta no admin em vez de abrir a campanha.
+          href={raffle.urlPublica}
           external
         >
           <ExternalLink className="h-4 w-4" />

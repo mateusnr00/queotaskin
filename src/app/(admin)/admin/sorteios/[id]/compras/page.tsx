@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { RaffleComprasView } from "@/components/admin/raffle-compras-view";
+import { raffleUrl } from "@/lib/raffle-url";
 
 export const metadata: Metadata = { title: "Lista de Compras" };
 
@@ -170,6 +171,9 @@ export default async function ComprasPage({
         raffle={{
           id: raffle.id,
           slug: raffle.slug,
+          // Resolvida no servidor: a view é componente de cliente e não tem
+          // como saber o host público sozinha.
+          urlPublica: await raffleUrl(raffle.slug),
           title: raffle.title,
           shortDescription: raffle.shortDescription,
           status,
