@@ -132,3 +132,26 @@ export async function getSuperAdminOrThrow() {
     },
   };
 }
+
+// Isolamento entre usuários para recursos endereçados por link
+// (capability-URL, ex.: comprovante e caixa surpresa, alcançados por um cuid
+// não-adivinhável):
+//
+// - COM sessão: o usuário logado só acessa o que é dele; admin também passa.
+//   Impede que um usuário logado abra o recurso de OUTRO com um id alheio.
+// - SEM sessão: o próprio link é a credencial (quem tem o cuid acessa): é o
+//   modelo do comprovante compartilhável, então não exigimos conta.
+//
+// O role aqui vem da sessão, não do banco: é decisão de LEITURA/posse, não
+// operação privilegiada de painel. As escritas de painel são host-bound e
+// releem o role fresco em getAdminOrThrow/getActiveTenantIdForAdmin.
+export async function sessionMayAccessOwnedResource(
+  ownerUserId: string | null | undefined
+): Promise<boolean> {
+  const session = await auth();
+  const uid = session?.user?.id;
+  if (!uid) return true; // deslogado: capability-URL
+  if (ownerUserId && uid === ownerUserId) return true;
+  const role = session.user.role;
+  return role === "ADMIN" || role === "SUPER_ADMIN";
+}

@@ -22,6 +22,7 @@ import { expireReservationIfDue } from "@/server/services/reservations";
 import { formatBRL } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
 import { getCurrentTenant } from "@/lib/tenant";
+import { sessionMayAccessOwnedResource } from "@/lib/auth-helpers";
 
 export const metadata: Metadata = { title: "Comprovante de reserva" };
 
@@ -80,6 +81,10 @@ export default async function ReservationReceiptPage({
   // Bloqueia acesso cross-tenant: o comprovante só aparece no domínio do
   // tenant onde a reserva foi feita.
   if (reservation.raffle.tenantId !== tenant.id) notFound();
+  // Isolamento entre usuários: quem está logado só vê o próprio comprovante
+  // (admin também). Sem sessão, o link (cuid não-adivinhável) é a credencial:
+  // é o comprovante compartilhável por quem recebeu o link.
+  if (!(await sessionMayAccessOwnedResource(reservation.userId))) notFound();
 
   // Auto-cura: reservas grátis (total 0) que ficaram presas em PENDING
   // antes da correção de fluxo. Promove pra PAID na hora, não tem o que

@@ -149,7 +149,8 @@ export function SkinCard({
             {prize.skinCollection && <span>{prize.skinCollection}</span>}
           </div>
 
-          {prize.skinInspectUrl && (
+          {prize.skinInspectUrl &&
+            /^https?:\/\//i.test(prize.skinInspectUrl) && (
             <a
               href={prize.skinInspectUrl}
               target="_blank"

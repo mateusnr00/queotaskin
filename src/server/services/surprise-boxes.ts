@@ -58,19 +58,32 @@ export async function autoGenerateSurpriseBoxesForReservation(
     ? eligible.reduce((sum, c) => sum + c.boxCount, 0)
     : Math.max(...eligible.map((c) => c.boxCount));
 
-  // Idempotência: já existem N caixas pra essa reserva, só cria a diferença.
-  const existing = await prisma.surpriseBox.count({
-    where: { reservationId },
-  });
-  const toCreate = expected - existing;
-  if (toCreate <= 0) return 0;
+  // Idempotência sob concorrência: dois webhooks APPROVED (ou dois polls
+  // com force:true) para a mesma reserva podem ler existing=0 ao mesmo tempo
+  // e ambos criar o combo inteiro, dobrando os prêmios sem pagamento a mais.
+  // Advisory lock por reserva serializa o par count→createMany, o mesmo
+  // padrão do crédito de XP (xp.ts). A transação garante o lock por toda a
+  // janela; ele é liberado ao fim dela.
+  const raffleId = reservation.raffleId;
+  return prisma.$transaction(async (tx) => {
+    // Forma de dois argumentos (int,int), igual ao lock de XP em xp.ts: casa
+    // com a sobrecarga sem cast. O primeiro argumento é um namespace fixo
+    // ('surprise_box') pra não colidir com locks de outras features.
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext('surprise_box'), hashtext(${reservationId}))
+    `;
 
-  await prisma.surpriseBox.createMany({
-    data: Array.from({ length: toCreate }, () => ({
-      raffleId: reservation.raffleId,
-      reservationId,
-    })),
-  });
+    const existing = await tx.surpriseBox.count({ where: { reservationId } });
+    const toCreate = expected - existing;
+    if (toCreate <= 0) return 0;
 
-  return toCreate;
+    await tx.surpriseBox.createMany({
+      data: Array.from({ length: toCreate }, () => ({
+        raffleId,
+        reservationId,
+      })),
+    });
+
+    return toCreate;
+  });
 }

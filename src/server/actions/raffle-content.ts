@@ -329,7 +329,19 @@ const prizesSchema = z.object({
           .nullable()
           .default(null),
         skinCollection: z.string().max(160).optional().default(""),
-        skinInspectUrl: z.string().max(2048).optional().default(""),
+        // Allow-list de protocolo, igual a imageUrl/ebookUrl acima: este valor
+        // vira um href na página pública da campanha (skin-card.tsx), e sem a
+        // checagem um javascript:… gravado pelo painel executaria no visitante
+        // que clica em "Inspecionar no jogo" (stored XSS).
+        skinInspectUrl: z
+          .string()
+          .max(2048)
+          .optional()
+          .default("")
+          .refine(
+            (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
+            "O link de inspeção deve começar com http:// ou https://"
+          ),
       })
     )
     .max(10, "Máximo de 10 prêmios"),
