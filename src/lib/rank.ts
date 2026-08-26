@@ -47,8 +47,6 @@ export interface PrestigeRank {
   color: string;
   /** Numeral exibido no selo. As patentes usam romano; os níveis, o número. */
   numeral: string;
-  /** Escala da fonte sobre o lado do selo. */
-  fontScale: number;
   description: string;
 }
 
@@ -67,7 +65,6 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     xp: 40_000,
     color: "#3fc9d6",
     numeral: "I",
-    fontScale: 0.36,
     description: "Assinou com uma organização.",
   },
   {
@@ -76,7 +73,6 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     xp: 80_000,
     color: "#7c6cf0",
     numeral: "II",
-    fontScale: 0.34,
     description: "Status de lenda no Major.",
   },
   {
@@ -85,7 +81,6 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     xp: 150_000,
     color: "#e05a4a",
     numeral: "III",
-    fontScale: 0.3,
     description: "Levantou o troféu.",
   },
   {
@@ -94,7 +89,6 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     xp: 300_000,
     color: "#f2d059",
     numeral: "IV",
-    fontScale: 0.32,
     description: "O maior de todos os tempos.",
   },
 ] as const;
@@ -107,16 +101,6 @@ export interface Tier {
   color: string;
   /** Primeiro nível da faixa. */
   from: number;
-  /**
-   * Lados do polígono do selo. Sobem junto com a faixa: losango, pentágono,
-   * hexágono... Assim o rank é legível pela silhueta, antes mesmo da cor —
-   * é o que faz o selo funcionar em 26px e para quem não distingue matizes.
-   */
-  sides: number;
-  /** Anel externo destacado. Só o topo da escada usa. */
-  doubleRing?: boolean;
-  /** Escala da fonte sobre o lado do selo — o losango come largura útil. */
-  fontScale: number;
 }
 
 /**
@@ -127,22 +111,13 @@ export interface Tier {
  * ruído; puxada para o sóbrio, ela informa sem gritar.
  */
 export const TIERS: readonly Tier[] = [
-  { from: 0, name: "Prata", color: "#7d8894", sides: 4, fontScale: 0.3 },
-  { from: 1, name: "Prata Elite", color: "#5b8fc7", sides: 5, fontScale: 0.38 },
-  { from: 4, name: "Nova de Ouro", color: "#6d7fd6", sides: 6, fontScale: 0.4 },
-  { from: 8, name: "Mestre Guardião", color: "#9a72d1", sides: 7, fontScale: 0.41 },
-  { from: 12, name: "Águia Lendária", color: "#c06ab8", sides: 8, fontScale: 0.42 },
-  { from: 16, name: "Supremo", color: "#d4694f", sides: 10, fontScale: 0.43 },
-  {
-    from: 20,
-    name: "Global Elite",
-    color: "#d8a53c",
-    sides: 10,
-    // Mesma contagem de lados do Supremo: o que separa os dois é o anel
-    // externo. Passar de 10 para 12 lados seria indistinguível em lista.
-    doubleRing: true,
-    fontScale: 0.4,
-  },
+  { from: 0, name: "Prata", color: "#7d8894" },
+  { from: 1, name: "Prata Elite", color: "#5b8fc7" },
+  { from: 4, name: "Nova de Ouro", color: "#6d7fd6" },
+  { from: 8, name: "Mestre Guardião", color: "#9a72d1" },
+  { from: 12, name: "Águia Lendária", color: "#c06ab8" },
+  { from: 16, name: "Supremo", color: "#d4694f" },
+  { from: 20, name: "Global Elite", color: "#d8a53c" },
 ] as const;
 
 export function tierForLevel(level: number): Tier {
@@ -173,19 +148,6 @@ export interface Rank {
   numeral: string;
   color: string;
   xp: number;
-  /** Geometria do selo, resolvida aqui para o componente só desenhar. */
-  shape: BadgeShape;
-}
-
-export interface BadgeShape {
-  sides: number;
-  fontScale: number;
-  doubleRing: boolean;
-  /**
-   * Raio das reentrâncias, de 0 a 1, que transforma o polígono em roseta.
-   * Zero = polígono liso. Só o prestígio usa, para ficar acima da escada.
-   */
-  notch: number;
 }
 
 /** Patente de prestígio mais alta alcançada com esse XP, ou null. */
@@ -210,12 +172,6 @@ export function rankFromXp(xp: number): Rank {
       numeral: prestige.numeral,
       color: prestige.color,
       xp: total,
-      shape: {
-        sides: 10,
-        fontScale: prestige.fontScale,
-        doubleRing: false,
-        notch: 0.8,
-      },
     };
   }
 
@@ -230,12 +186,6 @@ export function rankFromXp(xp: number): Rank {
     numeral: String(level).padStart(2, "0"),
     color: tier.color,
     xp: total,
-    shape: {
-      sides: tier.sides,
-      fontScale: tier.fontScale,
-      doubleRing: tier.doubleRing ?? false,
-      notch: 0,
-    },
   };
 }
 

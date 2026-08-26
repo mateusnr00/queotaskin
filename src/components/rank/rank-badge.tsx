@@ -1,29 +1,16 @@
-import { rankFromXp, type BadgeShape, type Rank } from "@/lib/rank";
+"use client";
+
+import { useId } from "react";
+
+import { rankFromXp, type Rank } from "@/lib/rank";
+import {
+  CONTORNOS,
+  DESIGN_NIVEL_ZERO,
+  DESIGN_POR_NIVEL,
+  SEGMENTOS_ARCO_IRIS,
+  type DesignDeNivel,
+} from "@/lib/rank-badges";
 import { cn } from "@/lib/utils";
-
-/**
- * Polígono regular (ou roseta) em coordenadas de `clip-path`.
- *
- * O primeiro vértice fica no topo — todos os selos apontam para cima, o que
- * dá o mesmo sentido de ascensão à escada inteira. `inset` encolhe o traçado
- * para dentro; é assim que o mesmo polígono vira anel, corpo e miolo sem
- * empilhar máscaras. `notch` puxa os vértices ímpares para dentro e
- * transforma o polígono numa roseta.
- */
-function polygon(sides: number, inset = 0, notch = 0): string {
-  const points: string[] = [];
-  const count = notch ? sides * 2 : sides;
-
-  for (let i = 0; i < count; i++) {
-    const radius = (notch && i % 2 ? notch : 1) * (0.5 - inset);
-    const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
-    const x = 50 + radius * 100 * Math.cos(angle);
-    const y = 50 + radius * 100 * Math.sin(angle);
-    points.push(`${x.toFixed(2)}% ${y.toFixed(2)}%`);
-  }
-
-  return `polygon(${points.join(",")})`;
-}
 
 const SIZES = {
   xs: 22,
@@ -32,19 +19,21 @@ const SIZES = {
   lg: 64,
 } as const;
 
-/** Espessura do anel colorido, proporcional ao lado do selo. */
-function ringWidth(size: number): number {
-  return size <= SIZES.sm ? 0.16 : 0.14;
+// Os desenhos vêm em viewBox 200x200; o tamanho em tela é só escala.
+const VIEW = 200;
+
+/** Um dígito ocupa mais espaço que dois — 21 não pode transbordar a borda. */
+function tamanhoDaFonte(numeral: string): number {
+  return numeral.length > 1 ? 74 : 82;
 }
 
 /**
  * Selo do rank.
  *
- * A silhueta sobe junto com a faixa — losango na Prata, pentágono na Prata
- * Elite, e assim por diante até o decágono com anel duplo do Global Elite.
- * O prestígio usa roseta com brilho, claramente acima da escada. Anel
- * colorido por fora, miolo escuro, número branco: a leitura funciona à
- * distância e não depende de distinguir matiz.
+ * A silhueta sobe em quatro degraus — hexágono, losango, heptágono e
+ * octógono — e a cor percorre roxo, azul, verde, amarelo e vermelho até o
+ * arco-íris do nível 21. Dá para ler a faixa de alguém pela forma, de longe,
+ * sem depender de distinguir matiz. Os desenhos vivem em lib/rank-badges.
  */
 export function RankBadge({
   xp,
@@ -63,84 +52,123 @@ export function RankBadge({
 }) {
   const resolved = rank ?? rankFromXp(xp ?? 0);
   const px = SIZES[size];
-  const { color } = resolved;
-  const shape = shapeForSize(resolved.shape, px);
-  const ring = ringWidth(px);
 
-  // Corpo começa depois do anel externo quando a faixa tem anel duplo.
-  const bodyInset = shape.doubleRing ? 0.1 : 0;
+  // IDs precisam ser únicos por selo. Numa lista de ranking há dezenas na
+  // mesma página, e IDs repetidos fazem todos herdarem o gradiente do
+  // primeiro — o SVG resolve a referência pelo documento inteiro.
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const design = designoDoRank(resolved);
+  const contorno = CONTORNOS[design.forma];
 
   return (
-    <span
-      className={cn(
-        "relative grid shrink-0 place-items-center",
-        muted && "opacity-40 saturate-50",
-        className,
-      )}
-      style={{ width: px, height: px }}
-      title={resolved.label}
+    <svg
+      viewBox={`0 0 ${VIEW} ${VIEW}`}
+      width={px}
+      height={px}
+      role="img"
+      aria-label={resolved.label}
+      className={cn("shrink-0", muted && "opacity-40 saturate-50", className)}
     >
-      {shape.doubleRing && (
-        <>
-          <span
-            aria-hidden
-            className="absolute inset-0"
-            style={{ clipPath: polygon(shape.sides, 0, shape.notch), background: color }}
-          />
-          <span
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              clipPath: polygon(shape.sides, 0.055, shape.notch),
-              background: "var(--background)",
-            }}
-          />
-        </>
+      <defs>
+        <linearGradient id={`${uid}-borda`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={design.borda[0]} />
+          <stop offset="50%" stopColor={design.borda[1]} />
+          <stop offset="100%" stopColor={design.borda[2]} />
+        </linearGradient>
+        <linearGradient id={`${uid}-miolo`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={design.miolo[0]} />
+          <stop offset="100%" stopColor={design.miolo[1]} />
+        </linearGradient>
+        {design.arcoIris &&
+          SEGMENTOS_ARCO_IRIS.map((seg, i) => (
+            <linearGradient
+              key={i}
+              id={`${uid}-arco${i}`}
+              x1={seg.de[0]}
+              y1={seg.de[1]}
+              x2={seg.para[0]}
+              y2={seg.para[1]}
+            >
+              {seg.cores.map((cor, j) => (
+                <stop
+                  key={j}
+                  offset={`${(j / (seg.cores.length - 1)) * 100}%`}
+                  stopColor={cor}
+                />
+              ))}
+            </linearGradient>
+          ))}
+      </defs>
+
+      {design.arcoIris ? (
+        // Cada lado do octógono ganha o próprio degradê; juntos fecham a
+        // volta do arco-íris.
+        SEGMENTOS_ARCO_IRIS.map((seg, i) => (
+          <polygon key={i} points={seg.pontos} fill={`url(#${uid}-arco${i})`} />
+        ))
+      ) : design.forma === "losango" ? (
+        <rect
+          x="31"
+          y="31"
+          width="138"
+          height="138"
+          rx="16"
+          fill={`url(#${uid}-borda)`}
+          transform="rotate(45 100 100)"
+        />
+      ) : (
+        <polygon points={contorno.externo} fill={`url(#${uid}-borda)`} />
       )}
 
-      <span
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          clipPath: polygon(shape.sides, bodyInset, shape.notch),
-          background: `linear-gradient(145deg, color-mix(in srgb, ${color} 78%, #fff), ${color} 46%, color-mix(in srgb, ${color} 72%, #000))`,
-          filter: shape.notch
-            ? `drop-shadow(0 0 ${Math.round(px * 0.14)}px color-mix(in srgb, ${color} 55%, transparent))`
-            : undefined,
-        }}
-      />
+      {design.forma === "losango" ? (
+        <rect
+          x="47"
+          y="47"
+          width="106"
+          height="106"
+          rx="6"
+          fill={`url(#${uid}-miolo)`}
+          transform="rotate(45 100 100)"
+        />
+      ) : (
+        <polygon points={contorno.interno} fill={`url(#${uid}-miolo)`} />
+      )}
 
-      <span
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          clipPath: polygon(shape.sides, bodyInset + ring, shape.notch),
-          background: `linear-gradient(160deg, color-mix(in srgb, ${color} 14%, #14161c), color-mix(in srgb, ${color} 5%, #0e1015))`,
-        }}
-      />
-
-      <span
-        className="relative leading-none font-extrabold text-white"
-        style={{
-          fontSize: px * shape.fontScale,
-          letterSpacing: "-0.05em",
-          textShadow: "0 1px 2px rgba(0,0,0,.55)",
-        }}
+      <text
+        x="100"
+        y="105"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#FFFFFF"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize={tamanhoDaFonte(resolved.numeral)}
+        fontWeight="800"
       >
         {resolved.numeral}
-      </span>
-    </span>
+      </text>
+    </svg>
   );
 }
 
 /**
- * Ajusta a geometria ao tamanho: a roseta de 10 pontas empasta abaixo de
- * ~30px, então nos selos pequenos ela perde duas pontas e ganha reentrância
- * mais funda para continuar legível.
+ * Desenho que corresponde ao rank.
+ *
+ * As patentes de prestígio ficam acima do nível 21 e não vieram no conjunto
+ * de desenhos. Em vez de inventar uma silhueta nova, herdam o octógono com
+ * borda de arco-íris — que já é o topo visível da escada — e trocam o miolo
+ * pela cor da própria patente, o que as distingue entre si.
  */
-function shapeForSize(shape: BadgeShape, px: number): BadgeShape {
-  if (!shape.notch || px > SIZES.sm) return shape;
-  return { ...shape, sides: 8, notch: 0.76 };
+function designoDoRank(rank: Rank): DesignDeNivel {
+  if (rank.prestige) {
+    return {
+      forma: "octogono",
+      borda: DESIGN_POR_NIVEL[21]!.borda,
+      miolo: [rank.prestige.color, "#15111c"],
+      arcoIris: true,
+    };
+  }
+  if (rank.level <= 0) return DESIGN_NIVEL_ZERO;
+  return DESIGN_POR_NIVEL[Math.min(21, rank.level)] ?? DESIGN_NIVEL_ZERO;
 }
 
 /** Barra fina de progresso, com o brilho tênue do acento na ponta. */

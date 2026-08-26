@@ -13,6 +13,12 @@ import {
   xpForLevel,
   xpForPurchase,
 } from "@/lib/rank";
+import {
+  CONTORNOS,
+  DESIGN_POR_NIVEL,
+  SEGMENTOS_ARCO_IRIS,
+  type FormaDoSelo,
+} from "@/lib/rank-badges";
 
 describe("xpForPurchase", () => {
   it("credita 10 XP por real", () => {
@@ -205,33 +211,59 @@ describe("tierForLevel", () => {
   });
 });
 
-describe("geometria do selo", () => {
-  it("a silhueta ganha lados conforme a faixa sobe", () => {
-    const sides = TIERS.map((t) => t.sides);
-    for (let i = 1; i < sides.length; i++) {
-      expect(sides[i]).toBeGreaterThanOrEqual(sides[i - 1]);
+describe("desenho dos selos", () => {
+  it("todo nível de 1 a 21 tem desenho", () => {
+    for (let n = 1; n <= MAX_LEVEL; n++) {
+      expect(DESIGN_POR_NIVEL[n], `nível ${n}`).toBeDefined();
     }
-    expect(sides[0]).toBe(4);
   });
 
-  it("Supremo e Global Elite se separam pelo anel, não pela contagem", () => {
-    const supremo = TIERS.find((t) => t.name === "Supremo")!;
-    const global = TIERS.find((t) => t.name === "Global Elite")!;
-    expect(global.sides).toBe(supremo.sides);
-    expect(global.doubleRing).toBe(true);
-    expect(supremo.doubleRing).toBeUndefined();
+  it("a silhueta sobe em quatro degraus, sem voltar atrás", () => {
+    const ordem: FormaDoSelo[] = [
+      "hexagono",
+      "losango",
+      "heptagono",
+      "octogono",
+    ];
+    let anterior = 0;
+    for (let n = 1; n <= MAX_LEVEL; n++) {
+      const atual = ordem.indexOf(DESIGN_POR_NIVEL[n]!.forma);
+      expect(atual, `nível ${n}`).toBeGreaterThanOrEqual(anterior);
+      anterior = atual;
+    }
+    // Começa no hexágono e termina no octógono.
+    expect(DESIGN_POR_NIVEL[1]!.forma).toBe("hexagono");
+    expect(DESIGN_POR_NIVEL[MAX_LEVEL]!.forma).toBe("octogono");
   });
 
-  it("níveis usam polígono liso e prestígio usa roseta", () => {
-    expect(rankFromXp(xpForLevel(10)).shape.notch).toBe(0);
-    expect(rankFromXp(300_000).shape.notch).toBeGreaterThan(0);
+  it("só o nível 21 usa arco-íris", () => {
+    for (let n = 1; n < MAX_LEVEL; n++) {
+      expect(DESIGN_POR_NIVEL[n]!.arcoIris, `nível ${n}`).toBeUndefined();
+    }
+    expect(DESIGN_POR_NIVEL[MAX_LEVEL]!.arcoIris).toBe(true);
   });
 
-  it("todo rank traz uma geometria desenhável", () => {
-    for (const xp of [0, 100, 5500, 23_100, 40_000, 300_000]) {
-      const { shape } = rankFromXp(xp);
-      expect(shape.sides).toBeGreaterThanOrEqual(3);
-      expect(shape.fontScale).toBeGreaterThan(0);
+  it("cada cor é um hexadecimal válido", () => {
+    const hex = /^#[0-9A-Fa-f]{6}$/;
+    for (let n = 1; n <= MAX_LEVEL; n++) {
+      const d = DESIGN_POR_NIVEL[n]!;
+      for (const cor of [...d.borda, ...d.miolo]) {
+        expect(cor, `nível ${n}`).toMatch(hex);
+      }
+    }
+  });
+
+  it("o arco-íris fecha a volta: a última cor emenda na primeira", () => {
+    expect(SEGMENTOS_ARCO_IRIS).toHaveLength(8);
+    const primeira = SEGMENTOS_ARCO_IRIS[0]!.cores[0];
+    const ultima = SEGMENTOS_ARCO_IRIS.at(-1)!.cores.at(-1);
+    expect(ultima).toBe(primeira);
+  });
+
+  it("toda forma com polígono tem contorno externo e interno", () => {
+    for (const forma of ["hexagono", "heptagono", "octogono"] as const) {
+      expect(CONTORNOS[forma].externo.length).toBeGreaterThan(0);
+      expect(CONTORNOS[forma].interno.length).toBeGreaterThan(0);
     }
   });
 });
