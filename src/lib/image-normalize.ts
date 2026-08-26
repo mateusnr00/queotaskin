@@ -205,7 +205,19 @@ export async function normalizeImage(
     // WebP preserva transparência, que render de skin costuma ter. Se o
     // navegador não encodar WebP, toBlob devolve PNG e o JPEG entra como
     // segunda tentativa.
-    for (const quality of [0.85, 0.7, 0.55]) {
+    //
+    // A escada começa alta quando há quadro pedido, porque ali a imagem é
+    // arte de campanha: fundo escuro com gradiente e brilho, onde compressão
+    // agressiva vira faixa visível. E custa pouco: medido num quadro
+    // 1774x1350 desse tipo, 0.85 dá 37 KB e 0.95 dá 66 KB, os dois muito
+    // abaixo do teto de envio. Trocar 29 KB por não ter banda no gradiente é
+    // barato.
+    //
+    // Vale lembrar que esta não é a única perda do caminho: o otimizador do
+    // next/image reencoda de novo na hora de servir, e é por isso que a capa
+    // pede quality={92} lá (ver next.config.ts).
+    const escada = quadro ? [0.95, 0.85, 0.7] : [0.85, 0.7, 0.55];
+    for (const quality of escada) {
       const blob = await toBlob(canvas, "image/webp", quality);
       if (blob && blob.type === "image/webp" && blob.size <= TARGET_BYTES) {
         return { file: renamed(file, blob, "webp"), normalized: true, originalBytes };

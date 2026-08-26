@@ -260,7 +260,11 @@ export default async function PublicRaffleDetailPage({
           title={raffle.title}
           skinName={headlinePrize?.skinName}
           rarity={headlinePrize?.skinRarity}
-          className="-mx-4 aspect-16/9 w-[calc(100%+2rem)] md:mx-0 md:w-full md:rounded-2xl"
+          ajuste="conter"
+          // A moldura tem a proporção do quadro padrão da skin (1774x1350).
+          // Com 16/9 e recorte, a arte perdia a logo no topo e o nome do
+          // desgaste embaixo, que é metade do que ela comunica.
+          className="-mx-4 aspect-[1774/1350] w-[calc(100%+2rem)] md:mx-0 md:w-full md:rounded-2xl"
           sizes="(min-width: 768px) 640px, 100vw"
           priority
         />

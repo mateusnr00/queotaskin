@@ -24,6 +24,17 @@ function padroesDeImagem() {
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: padroesDeImagem(),
+    // A capa da campanha é arte, não foto de catálogo: fundo escuro com
+    // gradiente e brilho, que é justamente onde compressão agressiva vira
+    // faixa visível. Ela pede 92.
+    //
+    // A lista precisa existir. No Next 16 o padrão de images.qualities passou
+    // a ser [75], e quality fora da lista não dá erro: é rebaixado para o
+    // valor mais próximo. Sem isso o quality={92} da capa viraria 75 em
+    // silêncio e o ajuste não faria nada.
+    //
+    // 75 fica porque é o padrão de todo o resto do site, onde ele serve bem.
+    qualities: [75, 92],
   },
   experimental: {
     serverActions: {

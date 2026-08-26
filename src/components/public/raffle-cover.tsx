@@ -31,6 +31,7 @@ export function RaffleCover({
   skinName,
   rarity,
   variant = "hero",
+  ajuste = "cobrir",
   className,
   sizes = "(min-width: 768px) 640px, 100vw",
   priority = false,
@@ -41,6 +42,13 @@ export function RaffleCover({
   rarity?: SkinRarity | null;
   /** "hero" mostra o nome completo; "thumb" só a sigla e o brilho. */
   variant?: "hero" | "thumb";
+  /**
+   * "cobrir" preenche a moldura cortando o que sobra, bom para card em
+   * grade, onde uniformidade vale mais que ver a arte inteira. "conter"
+   * mostra a arte toda, que é o certo na página do sorteio: ali a imagem é
+   * o produto, e cortar o topo come a logo e o nome da skin.
+   */
+  ajuste?: "cobrir" | "conter";
   className?: string;
   sizes?: string;
   priority?: boolean;
@@ -55,7 +63,8 @@ export function RaffleCover({
           sizes={sizes}
           priority={priority}
           unoptimized={!podeOtimizar(url)}
-          className="object-cover"
+          quality={92}
+          className={ajuste === "conter" ? "object-contain" : "object-cover"}
         />
       </div>
     );
