@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Public_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -140,6 +141,22 @@ export default async function RootLayout({
       )}
     >
       <head>
+        {/* react-grab: ferramenta de inspeção pessoal, ligada por variável de
+            ambiente em vez de só por NODE_ENV. Só o desenvolvimento não basta,
+            porque aqui somos dois: sem a variável, ligaria na máquina do outro
+            também, e ninguém pediu uma sobreposição extra em cima da tela.
+            REACT_GRAB=1 fica no .env de quem quiser, que é ignorado pelo git.
+
+            Sem NEXT_PUBLIC_ de propósito: isto é lido no servidor, e o prefixo
+            público assaria o valor no pacote do navegador sem necessidade. */}
+        {process.env.NODE_ENV === "development" &&
+          process.env.REACT_GRAB === "1" && (
+            <Script
+              src="//unpkg.com/react-grab/dist/index.global.js"
+              crossOrigin="anonymous"
+              strategy="beforeInteractive"
+            />
+          )}
         {/* Injeta as CSS vars do preset escolhido pelo admin. */}
         <style dangerouslySetInnerHTML={{ __html: css }} />
       </head>
