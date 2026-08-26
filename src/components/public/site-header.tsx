@@ -171,6 +171,20 @@ export async function SiteHeader() {
           )}
         </nav>
 
+        {/* Rank no celular. O nav inteiro é hidden md:flex, então sem isto o
+            cliente não vê o próprio nível no aparelho de onde vem a maior
+            parte do tráfego, e o espaço entre a logo e o menu fica vazio. */}
+        {rankChip && (
+          <div className="ml-auto mr-2 md:hidden">
+            <RankChip
+              name={session?.user?.name?.split(" ")[0] ?? "Você"}
+              xp={rankChip.xp}
+              xpPerBrl={rankChip.xpPerBrl}
+              compact
+            />
+          </div>
+        )}
+
         {/* Mobile drawer */}
         <PublicMobileMenu
           isLoggedIn={Boolean(session?.user)}

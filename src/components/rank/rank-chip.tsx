@@ -12,13 +12,44 @@ export function RankChip({
   name,
   xp,
   xpPerBrl,
+  compact = false,
 }: {
   name: string;
   xp: number;
   xpPerBrl: number;
+  /**
+   * Versão para o cabeçalho do celular: só selo e nível.
+   *
+   * Ali o espaço entre a logo e o menu não comporta nome e barra de
+   * progresso, e sem essa variante o rank simplesmente não apareceria no
+   * aparelho de onde vem a maior parte do tráfego.
+   */
+  compact?: boolean;
 }) {
   const progress = rankProgress(xp, xpPerBrl);
   const { rank } = progress;
+  const patente = rank.prestige
+    ? rank.prestige.label.toUpperCase()
+    : `NV.${rank.numeral}`;
+
+  if (compact) {
+    return (
+      <Link
+        href="/minha-conta"
+        title={`${rank.label} · ${xp.toLocaleString("pt-BR")} XP`}
+        aria-label={`Seu rank: ${rank.label}`}
+        className="flex items-center gap-1.5 rounded-full border border-[#232730] bg-[#141619] py-1 pr-2.5 pl-1 transition-colors active:bg-[#181b1f]"
+      >
+        <RankBadge rank={rank} size="xs" />
+        <span
+          className="font-mono text-[10px] leading-none font-bold tracking-[0.06em] whitespace-nowrap"
+          style={{ color: rank.color }}
+        >
+          {patente}
+        </span>
+      </Link>
+    );
+  }
 
   return (
     <Link
@@ -43,9 +74,7 @@ export function RankChip({
             className="font-mono text-[10px] leading-none font-bold tracking-[0.06em] whitespace-nowrap"
             style={{ color: rank.color }}
           >
-            {/* No prestígio o numeral romano sozinho não diz nada fora de
-                contexto, o nome da patente comunica melhor. */}
-            {rank.prestige ? rank.prestige.label.toUpperCase() : `NV.${rank.numeral}`}
+            {patente}
           </span>
         </span>
 
