@@ -14,8 +14,14 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-const { montarWhere, listarLogs, limparLogsAntigos, RETENCAO_DIAS } =
-  await import("./activity-log-query");
+const {
+  montarWhere,
+  listarLogs,
+  limparLogsAntigos,
+  RETENCAO_DIAS,
+  LOTE_DE_LIMPEZA,
+  LOTES_POR_EXECUCAO,
+} = await import("./activity-log-query");
 
 describe("montarWhere", () => {
   it("prende ao tenant quando ele vem preenchido", () => {
@@ -46,6 +52,26 @@ describe("montarWhere", () => {
     });
     expect(where.alvoTipo).toBe("Raffle");
     expect(where.alvoId).toBe("r1");
+  });
+
+  it("cursor e filtro de data convivem: um não anula o outro", () => {
+    // Chaves diferentes do mesmo where, que o Prisma combina com AND. Se um
+    // dia alguém mover o cursor para dentro de where.criadoEm, a página 2 de
+    // um período filtrado passa a ignorar o período, e este teste cai.
+    const quando = new Date("2026-08-26T12:00:00Z");
+    const de = new Date("2026-08-01T00:00:00Z");
+    const where = montarWhere({
+      tenantId: "t1",
+      de,
+      cursor: { criadoEm: quando, id: "log9" },
+    });
+
+    expect(where.criadoEm).toEqual({ gte: de });
+    expect(where.OR).toHaveLength(2);
+  });
+
+  it("string vazia no tenant não vira 've todos', que seria vazamento", () => {
+    expect(montarWhere({ tenantId: "" })).toEqual({ tenantId: "" });
   });
 });
 
@@ -117,5 +143,39 @@ describe("limparLogsAntigos", () => {
 
   it("a retenção é de um ano", () => {
     expect(RETENCAO_DIAS).toBe(365);
+  });
+
+  it("continua para o próximo lote enquanto o anterior vem cheio", async () => {
+    findFirst.mockResolvedValue({ criadoEm: new Date("2020-01-01") });
+    const cheio = Array.from({ length: LOTE_DE_LIMPEZA }, (_, i) => ({
+      id: `x${i}`,
+    }));
+    findMany
+      .mockResolvedValueOnce(cheio)
+      .mockResolvedValueOnce([{ id: "ultimo" }]);
+    deleteMany
+      .mockResolvedValueOnce({ count: LOTE_DE_LIMPEZA })
+      .mockResolvedValueOnce({ count: 1 });
+
+    const r = await limparLogsAntigos(new Date("2026-08-26"));
+
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(r.apagados).toBe(LOTE_DE_LIMPEZA + 1);
+  });
+
+  it("para no teto de lotes em vez de rodar para sempre", async () => {
+    // Sem o teto, um lote sempre cheio prenderia a rota de cron
+    // indefinidamente. O que sobrar fica para a execução seguinte.
+    findFirst.mockResolvedValue({ criadoEm: new Date("2020-01-01") });
+    const cheio = Array.from({ length: LOTE_DE_LIMPEZA }, (_, i) => ({
+      id: `x${i}`,
+    }));
+    findMany.mockResolvedValue(cheio);
+    deleteMany.mockResolvedValue({ count: LOTE_DE_LIMPEZA });
+
+    const r = await limparLogsAntigos(new Date("2026-08-26"));
+
+    expect(findMany).toHaveBeenCalledTimes(LOTES_POR_EXECUCAO);
+    expect(r.apagados).toBe(LOTE_DE_LIMPEZA * LOTES_POR_EXECUCAO);
   });
 });

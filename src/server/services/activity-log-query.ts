@@ -32,15 +32,20 @@ const LIMITE_PADRAO = 50;
 export const RETENCAO_DIAS = 365;
 
 /** Tamanho do lote da limpeza, para não segurar a rota de cron. */
-const LOTE_DE_LIMPEZA = 1000;
+export const LOTE_DE_LIMPEZA = 1000;
 
 /** Teto de lotes por execução, contra laço infinito se algo der errado. */
-const LOTES_POR_EXECUCAO = 20;
+export const LOTES_POR_EXECUCAO = 20;
 
 export function montarWhere(filtro: FiltroDeLogs): Prisma.ActivityLogWhereInput {
   const where: Prisma.ActivityLogWhereInput = {};
 
-  if (filtro.tenantId) where.tenantId = filtro.tenantId;
+  // Comparação com null, não checagem de verdade. tenantId é `string | null`
+  // e string vazia é `string` válido para o TypeScript: com `if (tenantId)`,
+  // um chamador que passasse "" cairia no caminho do SUPER_ADMIN e veria o
+  // histórico de todos os painéis. Assim, "" vira um filtro que não casa
+  // nada, e o erro falha fechado em vez de aberto.
+  if (filtro.tenantId !== null) where.tenantId = filtro.tenantId;
   if (filtro.acao) where.acao = filtro.acao;
   if (filtro.actorId) where.actorId = filtro.actorId;
   if (filtro.alvo) {
