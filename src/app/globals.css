@@ -215,9 +215,13 @@
  * JavaScript a cada fase: encadeado pelo CSS o navegador cuida do tempo, e
  * uma aba em segundo plano não deixa a caixa parada no meio do caminho.
  *
- * Os tempos aqui e os do componente precisam bater. Se mudar um, mude o
- * outro: DURACAO_DA_ABERTURA em surprise-boxes-claim.tsx é a soma destes
- * três trechos, e é ela que segura o resultado até o clarão cobrir a caixa.
+ * A sequência inteira: levanta (0-220), treme (220-900), a tampa abre
+ * (900-1140), estoura (1180-1360). O papel e o clarão saem em 1140 e o
+ * resultado entra em 1340, ambos vindos do componente.
+ *
+ * Os tempos aqui e os de surprise-boxes-claim.tsx precisam bater. Se mudar
+ * um, mude o outro: é DURACAO_DA_ABERTURA que segura o resultado até o
+ * clarão cobrir a caixa.
  */
 @keyframes caixa-levanta {
   from {
@@ -263,8 +267,40 @@
 .caixa-abrindo {
   animation:
     caixa-levanta 220ms ease-out forwards,
-    caixa-treme 380ms ease-in-out 220ms 2,
-    caixa-estoura 180ms ease-out 980ms both;
+    caixa-treme 340ms ease-in-out 220ms 2,
+    caixa-estoura 180ms ease-out 1180ms both;
+}
+
+/* A troca de arte no fim do tremor: a fechada some, a aberta entra com um
+ * salto. O salto existe para a tampa parecer que pulou, e não que a imagem
+ * foi trocada. */
+@keyframes tampa-fecha {
+  to {
+    opacity: 0;
+  }
+}
+
+.tampa-fecha {
+  animation: tampa-fecha 120ms ease-out 900ms both;
+}
+
+@keyframes tampa-abre {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.tampa-abre {
+  animation: tampa-abre 240ms cubic-bezier(0.34, 1.4, 0.64, 1) 900ms both;
 }
 
 /* O clarão é o que cumpre "tampar a caixa". Confete espalhado deixa vão
@@ -322,7 +358,9 @@
   .cta-pulsa,
   .selo-pulsa,
   .card-popular-pulsa,
-  .caixa-abrindo {
+  .caixa-abrindo,
+  .tampa-fecha,
+  .tampa-abre {
     animation: none;
   }
 

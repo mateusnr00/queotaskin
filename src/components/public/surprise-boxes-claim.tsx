@@ -15,17 +15,19 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Gift, Loader2, PackageOpen } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import {
   openSurpriseBoxAction,
   type OpenedBoxResult,
 } from "@/server/actions/surprise-boxes";
-import { CaixaSurpresaArte } from "@/components/public/caixa-surpresa-arte";
+import {
+  CaixaQueAbre,
+  CaixaSurpresaArte,
+} from "@/components/public/caixa-surpresa-arte";
 import { EstouroDeConfete } from "@/components/public/estouro-de-confete";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export interface SurpriseBoxClaimItem {
   id: string;
@@ -44,18 +46,19 @@ const INITIAL_VISIBLE = 5;
 const TAMANHO_DA_ARTE = 56;
 
 /**
- * Tempos da abertura, em ms. Precisam casar com a classe `.caixa-abrindo`
- * do globals.css, que encadeia levanta (220) + treme (380 x2) + estoura
- * (180) e fecha em 1160.
+ * Tempos da abertura, em ms. Precisam casar com as classes do globals.css,
+ * que encadeiam levanta (0-220), treme (220-900), a tampa abrindo
+ * (900-1140) e o estouro (1180-1360).
  *
- * ATRASO_DO_ESTOURO é quando o papel voa: no fim do tremor, junto com a
- * caixa sumindo. DURACAO_DA_ABERTURA é quando o resultado entra, e fica
- * depois do estouro de propósito. Trocar antes deixaria a troca à vista;
- * trocar muito depois mostraria a linha vazia entre uma coisa e outra.
+ * ATRASO_DO_ESTOURO é quando o papel voa: depois de a tampa abrir, não
+ * antes. Estourar com a caixa ainda fechada seria confete saindo de caixa
+ * lacrada. DURACAO_DA_ABERTURA é quando o resultado entra, e fica dentro da
+ * janela em que o clarão cobre tudo: trocar antes deixaria a troca à vista,
+ * trocar depois mostraria a linha vazia entre uma coisa e outra.
  */
-const ATRASO_DO_ESTOURO = 940;
-const DURACAO_DA_ABERTURA = 1120;
-const DURACAO_DO_CONFETE = 2000;
+const ATRASO_DO_ESTOURO = 1140;
+const DURACAO_DA_ABERTURA = 1340;
+const DURACAO_DO_CONFETE = 2200;
 
 function esperar(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -112,7 +115,7 @@ export function SurpriseBoxesClaim({
     }
 
     // O pedido sai junto com a animação, não depois dela. Encadeado, a
-    // pessoa esperaria a rede e mais 1,1s; em paralelo, a espera é o maior
+    // pessoa esperaria a rede e mais 1,3s; em paralelo, a espera é o maior
     // dos dois, e na prática o servidor responde antes do papel voar.
     const [result] = await Promise.all([
       openSurpriseBoxAction({ reservationId, boxId }),
@@ -151,8 +154,8 @@ export function SurpriseBoxesClaim({
     const targets = boxes.filter((b) => b.status === "UNOPENED");
     if (targets.length === 0) return;
     startAllTransition(async () => {
-      // Sem a animação por caixa aqui: vinte aberturas de 1,1s seriam vinte
-      // segundos de espera. Quem clica em "Abrir todas" está pedindo o
+      // Sem a animação por caixa aqui: vinte aberturas de 1,3s dariam meio
+      // minuto de espera. Quem clica em "Abrir todas" está pedindo o
       // resultado, não a cerimônia.
       //
       // Serializa as aberturas, evita disparar N requests paralelas que
@@ -257,10 +260,7 @@ function BoxRow({
         <div className="flex items-center gap-3 min-w-0">
           {/* A arte no lugar do ícone: aqui a caixa não é um marcador ao lado
               de um texto, é o objeto que a pessoa está prestes a abrir. */}
-          <CaixaSurpresaArte
-            tamanho={TAMANHO_DA_ARTE}
-            className={cn(abrindo && "caixa-abrindo")}
-          />
+          <CaixaQueAbre tamanho={TAMANHO_DA_ARTE} abrindo={abrindo} />
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">Caixa Surpresa</p>
             <p className="text-xs text-muted-foreground">
@@ -289,7 +289,10 @@ function BoxRow({
     return (
       <div className="rounded-xl border border-dashed bg-muted/20 p-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <PackageOpen className="h-6 w-6 shrink-0 text-muted-foreground" />
+          {/* A mesma caixa da linha fechada, agora aberta e sem nada
+              dentro. Apagada para o olho separar de longe a linha que
+              premiou da que não premiou, sem precisar ler. */}
+          <CaixaSurpresaArte aberta tamanho={44} className="opacity-45" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight">
               Não foi dessa vez
@@ -308,8 +311,13 @@ function BoxRow({
 
   return (
     <div className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 p-3 flex items-center justify-between gap-3 shadow-sm">
-      <div className="flex items-center gap-2 min-w-0 text-white">
-        <Gift className="h-5 w-5 shrink-0" />
+      <div className="flex items-center gap-2.5 min-w-0 text-white">
+        {/* Fundo escuro atrás da caixa. A arte é laranja e a faixa também,
+            e sem essa separação a caixa vira um borrão na faixa em vez de
+            se ler como caixa. */}
+        <span className="flex shrink-0 items-center justify-center rounded-lg bg-black/25 px-1.5 py-1">
+          <CaixaSurpresaArte aberta tamanho={40} />
+        </span>
         <div className="min-w-0">
           <p className="text-sm font-bold leading-tight truncate">
             {box.prize.title || "Caixa Surpresa"}
