@@ -264,6 +264,27 @@ export async function pollPaymentStatusIfPending(
   try {
     const res = await resolution.provider.getStatus(externalId);
     const resolved = res.status;
+
+    // Lido uma vez, antes de decidir qualquer coisa, e usado só para decidir
+    // SE o log abaixo é escrito (não guarda a transação, que já era assim
+    // antes desta task). O freio de polling logo acima é um Map em memória:
+    // em serverless cada instância tem o seu, então duas requisições que
+    // caem em instâncias diferentes furam o freio e chegam as duas aqui. Um
+    // polling que roda depois de o webhook já ter confirmado também cai
+    // neste ramo. Sem esta leitura, a mesma confirmação apareceria repetida
+    // no histórico.
+    //
+    // A leitura não fecha a corrida de verdade (ainda é ler e depois agir),
+    // mas colapsa o caso real, que é a repetição em sequência. Fechar de
+    // verdade exigiria trocar o update por updateMany com guarda de status,
+    // e mudar a semântica do caminho do dinheiro (update lança quando a
+    // linha não existe, updateMany não) só por causa de um campo de log não
+    // se paga.
+    const paymentAntesDoPoll = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { status: true },
+    });
+
     if (resolved === "APPROVED") {
       await prisma.$transaction([
         prisma.payment.update({
@@ -282,18 +303,15 @@ export async function pollPaymentStatusIfPending(
       // void, sem await: o gateway está esperando a resposta deste polling
       // (chamado tanto em background quanto pelo botão "Já paguei"), e a
       // escrita do log não pode somar latência a essa resposta.
-      // Este ramo só roda quando `resolved === "APPROVED"`, e os dois
-      // chamadores (checkPaymentStatusAction e a página do comprovante) só
-      // invocam pollPaymentStatusIfPending enquanto a reserva ainda está
-      // PENDING, então a mesma condição que evita confirmar duas vezes
-      // também evita registrar duas vezes.
-      void registrarLog({
-        acao: "pagamento.aprovado",
-        origem: "SISTEMA",
-        ator: { nome: "Consulta de status no gateway" },
-        alvo: { tipo: "Payment", id: paymentId },
-        detalhes: { reservaId: reservationId, caminho: "polling" },
-      });
+      if (paymentAntesDoPoll?.status !== "APPROVED") {
+        void registrarLog({
+          acao: "pagamento.aprovado",
+          origem: "SISTEMA",
+          ator: { nome: "Consulta de status no gateway" },
+          alvo: { tipo: "Payment", id: paymentId },
+          detalhes: { reservaId: reservationId, caminho: "polling" },
+        });
+      }
       // Tudo o que o webhook faz depois de confirmar precisa acontecer aqui
       // também. Quando o webhook não chega, este é o único caminho que marca
       // a reserva como paga, e sem isto a pessoa pagava, recebia os números e
@@ -321,13 +339,15 @@ export async function pollPaymentStatusIfPending(
         data: { status: "REJECTED" },
       });
       // void, sem await: mesmo raciocínio do ramo APPROVED acima.
-      void registrarLog({
-        acao: "pagamento.recusado",
-        origem: "SISTEMA",
-        ator: { nome: "Consulta de status no gateway" },
-        alvo: { tipo: "Payment", id: paymentId },
-        detalhes: { reservaId: reservationId, caminho: "polling" },
-      });
+      if (paymentAntesDoPoll?.status !== "REJECTED") {
+        void registrarLog({
+          acao: "pagamento.recusado",
+          origem: "SISTEMA",
+          ator: { nome: "Consulta de status no gateway" },
+          alvo: { tipo: "Payment", id: paymentId },
+          detalhes: { reservaId: reservationId, caminho: "polling" },
+        });
+      }
     }
     return resolved;
   } catch (err) {
