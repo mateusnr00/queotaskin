@@ -15,6 +15,7 @@ import {
 import { raffleGeneralSchema } from "@/lib/validations/raffle";
 import { garantirSlugLivre } from "@/server/services/raffles";
 import { toSlug } from "@/lib/slug";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 const updateInputSchema = z.object({
@@ -118,6 +119,13 @@ export async function createRaffleAction(
         return criado;
       });
 
+      await registrarLog({
+        acao: "sorteio.criado",
+        tenantId,
+        alvo: { tipo: "Raffle", id: raffle.id, rotulo: parsed.data.title },
+        detalhes: { slug: raffle.slug },
+      });
+
       revalidatePath("/admin/sorteios");
       revalidatePath("/sorteios");
       revalidatePath("/");
@@ -183,6 +191,12 @@ export async function updateRaffleAction(
         where: { id: parsed.data.id },
         data,
         select: { id: true, slug: true },
+      });
+
+      await registrarLog({
+        acao: "sorteio.editado",
+        tenantId,
+        alvo: { tipo: "Raffle", id: parsed.data.id, rotulo: parsed.data.data.title },
       });
 
       revalidatePath("/admin/sorteios");
@@ -267,6 +281,13 @@ export async function updateRaffleStatusAction(
       return { ok: false, error: "Sorteio não encontrado" };
     }
 
+    await registrarLog({
+      acao: "sorteio.status_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: parsed.data.id },
+      detalhes: { depois: { status: parsed.data.status } },
+    });
+
     revalidatePath("/admin/sorteios");
     revalidatePath("/sorteios");
     revalidatePath("/");
@@ -335,6 +356,14 @@ export async function deleteRaffleAction(
     }
 
     await prisma.raffle.delete({ where: { id: raffle.id } });
+
+    // O rótulo é congelado a partir do título de confirmação: depois do
+    // delete a linha não existe mais no banco para ser consultada de novo.
+    await registrarLog({
+      acao: "sorteio.excluido",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffle.id, rotulo: parsed.data.confirmTitle },
+    });
 
     revalidatePath("/admin/sorteios");
     revalidatePath(`/s/${raffle.slug}`);

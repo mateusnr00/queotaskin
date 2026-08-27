@@ -19,6 +19,7 @@ import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { generateUniqueSlug } from "@/server/services/raffles";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 /** Copia o objeto sem as chaves indicadas, preservando o tipo do resto. */
@@ -144,6 +145,13 @@ export async function duplicarSorteioAction(
       }
 
       return criada;
+    });
+
+    await registrarLog({
+      acao: "sorteio.duplicado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: nova.id, rotulo: titulo },
+      detalhes: { origem: { id: original.id, titulo: original.title } },
     });
 
     revalidatePath("/admin/sorteios");
