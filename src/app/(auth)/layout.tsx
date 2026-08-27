@@ -7,6 +7,7 @@ import { ProvasDoSite } from "@/components/auth/provas-do-site";
 import {
   FundoDoPainel,
   SkinDoPainel,
+  TEM_ARTE_DE_FUNDO,
   campanhaEmDestaque,
 } from "@/components/auth/vitrine-de-skins";
 import { getBrand } from "@/lib/brand";
@@ -60,11 +61,16 @@ export default async function AuthLayout({
       <div className="flex flex-1 flex-col lg:flex-row">
         {/* Painel da arte. Some no celular: ali ele empurraria o formulário
             para baixo da dobra, e o formulário é o motivo da tela existir. */}
-        <aside className="relative hidden overflow-hidden border-r lg:flex lg:w-1/2 lg:flex-col lg:justify-between">
+        <aside className="relative hidden overflow-hidden border-r bg-black lg:flex lg:w-1/2 lg:flex-col lg:justify-between">
           <FundoDoPainel />
 
+          {/* Com a arte no fundo, a skin da campanha sai daqui: seriam duas
+              vitrines empilhadas na mesma coluna, uma tapando a outra. Ela
+              continua no cartão, como ficha, que é onde decide compra. */}
           <div className="relative z-10 flex flex-1 items-center justify-center p-10 xl:p-14">
-            {destaque && <SkinDoPainel campanha={destaque} />}
+            {!TEM_ARTE_DE_FUNDO && destaque && (
+              <SkinDoPainel campanha={destaque} />
+            )}
           </div>
 
           <div className="relative z-10 space-y-5 p-8 xl:p-10">

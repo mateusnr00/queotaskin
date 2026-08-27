@@ -48,28 +48,36 @@ export function FaixaDeRaridade({ className }: { className?: string }) {
 /**
  * A arte de fundo do painel esquerdo.
  *
- * Enquanto não houver arquivo, o fundo é desenhado no CSS: brasa vermelha
- * baixa, grade fina e vinheta, que é o vocabulário das telas do jogo. Para
- * trocar pela arte, ponha o arquivo em public/ com este nome e vire a
- * constante abaixo. Fica explícito de propósito: apontar um <Image> para um
- * arquivo que talvez não exista trocaria o fundo por um retângulo quebrado
- * sem ninguém perceber até alguém abrir a tela.
+ * `contain` e não `cover`, e isso não é detalhe. A arte é deitada, 1565 por
+ * 1005, e a coluna é em pé: qualquer recorte que preenchesse a coluna
+ * cortaria as pontas das duas armas, e arma serrada ao meio é pior que arte
+ * pequena. Como os quatro cantos do arquivo são preto puro, sobre um painel
+ * preto a moldura vazia não se vê, e o efeito é o de sangrar até a borda.
+ *
+ * Sem o arquivo, o fundo é desenhado no CSS. O interruptor é explícito de
+ * propósito: apontar um <Image> para um arquivo que talvez não exista
+ * trocaria o painel por um retângulo quebrado, e ninguém perceberia até
+ * alguém abrir a tela.
  */
 const ARTE_DE_FUNDO = "/auth-fundo.webp";
-const TEM_ARTE_DE_FUNDO = false;
+export const TEM_ARTE_DE_FUNDO = true;
 
 export function FundoDoPainel() {
   return (
     <>
       {TEM_ARTE_DE_FUNDO ? (
+        // Sem priority de propósito. O painel é `hidden lg:flex`, e uma
+        // imagem prioritária seria pré-carregada mesmo escondida: todo
+        // visitante de celular pagaria 120KB por uma arte que não vê. Sem
+        // ele a carga é preguiçosa, e elemento com display:none nunca cruza
+        // a viewport, então no celular ela simplesmente não é buscada.
         <Image
           src={ARTE_DE_FUNDO}
           alt=""
           aria-hidden
           fill
-          priority
           sizes="(min-width: 1024px) 50vw, 100vw"
-          className="object-cover"
+          className="object-contain"
         />
       ) : (
         <>
@@ -99,7 +107,7 @@ export function FundoDoPainel() {
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(180deg, rgba(8,8,10,.35) 0%, transparent 30%, rgba(8,8,10,.85) 100%)",
+            "linear-gradient(180deg, rgba(0,0,0,.3) 0%, transparent 28%, rgba(0,0,0,.8) 100%)",
         }}
       />
     </>
