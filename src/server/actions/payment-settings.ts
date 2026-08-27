@@ -119,15 +119,19 @@ export async function updatePaymentSettingsAction(
     data: update,
   });
 
-  // Só os NOMES dos campos submetidos. O valor é credencial de gateway, e um
-  // log que guarda a credencial que ele deveria proteger vira outro alvo. A
-  // sanitização em registrarLog também barraria pelo nome da chave, mas não
-  // custa nada não mandar.
+  // Os NOMES dos campos, nunca os valores: são credenciais de gateway, e
+  // um log que guarda a credencial que deveria proteger vira outro alvo.
+  //
+  // "Enviados", não "alterados", e a diferença é honestidade: os
+  // .default() do Zod preenchem o que o formulário não mandou, então a
+  // lista é sempre o schema inteiro. Um diff de verdade também não
+  // resolveria, porque o valor guardado é cifrado e a cifra faz qualquer
+  // comparação acusar mudança em todo salvamento.
   await registrarLog({
     acao: "config.pagamento_alterada",
     tenantId,
     alvo: { tipo: "Tenant", id: tenantId },
-    detalhes: { camposAlterados: Object.keys(parsed.data) },
+    detalhes: { camposEnviados: Object.keys(parsed.data) },
   });
 
   revalidatePath("/admin/configuracoes/pagamentos");
