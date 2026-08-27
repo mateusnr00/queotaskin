@@ -6,6 +6,7 @@ import { ShieldCheck } from "lucide-react";
 import { LoginForm } from "@/components/forms/login-form";
 import { AdminLoginForm } from "@/components/forms/admin-login-form";
 import { isAdminHost } from "@/lib/host";
+import { CartaoDeAuth } from "@/components/auth/cartao-de-auth";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -28,7 +29,7 @@ export default async function LoginPage({
 
   if (noPainel) {
     return (
-      <div className="space-y-6">
+      <CartaoDeAuth>
         <div className="space-y-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -48,24 +49,26 @@ export default async function LoginPage({
           </span>
           .
         </p>
-      </div>
+      </CartaoDeAuth>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1.5">
-        <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
-        <p className="text-sm text-muted-foreground">
-          Informe seu nome completo e o CPF do cadastro. Sem senha.
-        </p>
-      </div>
-      <LoginForm />
+    <div className="space-y-4">
+      <CartaoDeAuth>
+        <div className="space-y-1.5">
+          <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Informe seu nome completo e o CPF do cadastro. Sem senha.
+          </p>
+        </div>
+        <LoginForm />
+      </CartaoDeAuth>
       <p className="text-center text-sm text-muted-foreground">
         Ainda não tem conta?{" "}
         <Link
           href={`/registro${redirectQS}`}
-          className="font-medium text-foreground hover:text-primary"
+          className="font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline"
         >
           Criar conta
         </Link>

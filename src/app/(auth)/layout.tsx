@@ -1,10 +1,30 @@
 import Link from "next/link";
-import { BrandMark } from "@/components/brand/brand-mark";
-import { getBrand } from "@/lib/brand";
+import { headers } from "next/headers";
 
-// Layout split inspirado no Sorteamos: ilustração/branding à esquerda em
-// gradiente, formulário à direita centralizado. No mobile o branding fica
-// em cima como banner compacto.
+import { BrandMark } from "@/components/brand/brand-mark";
+import { SiteHeader } from "@/components/public/site-header";
+import { ProvasDoSite } from "@/components/auth/provas-do-site";
+import {
+  FundoDoPainel,
+  SkinDoPainel,
+  campanhaEmDestaque,
+} from "@/components/auth/vitrine-de-skins";
+import { getBrand } from "@/lib/brand";
+import { getCurrentTenant } from "@/lib/tenant";
+import { isAdminHost } from "@/lib/host";
+
+// Telas de entrar, criar conta e trocar senha.
+//
+// Cabeçalho do site em cima e duas colunas embaixo: arte à esquerda,
+// formulário à direita. O cabeçalho é o mesmo componente do resto do site, e
+// não uma cópia: quem chega aqui por um link direto continua conseguindo ir
+// para as campanhas, e uma segunda barra desenhada à parte divergiria da
+// verdadeira na primeira mudança.
+//
+// No host do painel nada disso aparece. Quem entra ali é da equipe, não vai
+// comprar número, e listar campanha do site numa tela de acesso restrito só
+// daria informação a quem bate na porta.
+
 export default async function AuthLayout({
   children,
 }: {
@@ -14,51 +34,51 @@ export default async function AuthLayout({
   // ausente esta tela dizia "Rifa Online" para quem estava entrando no
   // QuéOta Skin, e num deploy multi-tenant diria o nome de um site só.
   const marca = await getBrand();
-  const appName = marca.name;
-  return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      {/* Painel de branding */}
-      <aside className="relative flex md:w-1/2 lg:w-2/5 md:min-h-screen overflow-hidden bg-gradient-to-br from-accent via-accent/60 to-background">
-        {/* Bolhas decorativas */}
-        <div
-          aria-hidden
-          className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-primary/30 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-primary/20 blur-3xl"
-        />
+  const host = (await headers()).get("host") ?? "";
+  const noPainel = isAdminHost(host);
+  const tenant = noPainel ? null : await getCurrentTenant();
+  const destaque = tenant ? await campanhaEmDestaque(tenant.id) : null;
+  const ano = new Date().getFullYear();
 
-        <div className="relative z-10 flex flex-1 flex-col justify-between p-8 md:p-12">
+  if (noPainel) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md space-y-6">
           <Link href="/" className="inline-flex">
-            <BrandMark
-              marca={marca}
-              alturaDaFaixa="h-9"
-              ladoDoEmblema="h-9 w-9"
-              larguraMaxima="max-w-[200px]"
-              classeDoNome="text-base"
-            />
+            <BrandMark marca={marca} alturaDaFaixa="h-9" ladoDoEmblema="h-9 w-9" />
           </Link>
+          {children}
+        </div>
+      </div>
+    );
+  }
 
-          <div className="hidden md:block space-y-3 pb-6 max-w-md">
-            <h1 className="text-3xl lg:text-4xl font-bold tracking-tight leading-tight">
-              Olá, bem-vindo
-              <br />
-              de volta ao{" "}
-              <span className="text-primary uppercase">{appName}</span>
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Sua plataforma de rifas online. Crie campanhas, gerencie reservas
-              e acompanhe as vendas em tempo real.
+  return (
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader />
+
+      <div className="flex flex-1 flex-col lg:flex-row">
+        {/* Painel da arte. Some no celular: ali ele empurraria o formulário
+            para baixo da dobra, e o formulário é o motivo da tela existir. */}
+        <aside className="relative hidden overflow-hidden border-r lg:flex lg:w-1/2 lg:flex-col lg:justify-between">
+          <FundoDoPainel />
+
+          <div className="relative z-10 flex flex-1 items-center justify-center p-10 xl:p-14">
+            {destaque && <SkinDoPainel campanha={destaque} />}
+          </div>
+
+          <div className="relative z-10 space-y-5 p-8 xl:p-10">
+            <ProvasDoSite />
+            <p className="border-t border-white/10 pt-4 text-[11px] text-white/35">
+              © {ano} {marca.name}. Todos os direitos reservados.
             </p>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {/* Painel do formulário */}
-      <main className="flex flex-1 items-center justify-center px-4 py-10 md:py-16">
-        <div className="w-full max-w-md">{children}</div>
-      </main>
+        <main className="flex flex-1 items-center justify-center px-4 py-10 md:py-14">
+          <div className="w-full max-w-lg">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
