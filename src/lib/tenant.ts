@@ -142,7 +142,7 @@ export async function getActiveTenantIdForAdmin(admin: {
 export async function assertRaffleInActiveTenant(
   raffleId: string,
   admin: { role: string; tenantId: string | null }
-): Promise<void> {
+): Promise<string> {
   const tenantId = await getActiveTenantIdForAdmin(admin);
   const raffle = await prisma.raffle.findUnique({
     where: { id: raffleId },
@@ -151,4 +151,8 @@ export async function assertRaffleInActiveTenant(
   if (!raffle || raffle.tenantId !== tenantId) {
     throw new ForbiddenError();
   }
+  // Devolve o tenant em vez de descartá-lo. Quem chama quase sempre precisa
+  // dele logo depois, e buscar de novo pagaria outra consulta e poria uma
+  // chamada que pode lançar no meio de um caminho que já deu certo.
+  return tenantId;
 }
