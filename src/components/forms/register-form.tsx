@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowRight, IdCard, Phone, User } from "lucide-react";
+import { ArrowRight, ChevronDown, IdCard, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
@@ -26,8 +26,8 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
+import { Bandeira } from "@/components/forms/bandeira";
 import { cn } from "@/lib/utils";
 
 /** Rótulo miúdo em caixa alta, como nos painéis do jogo. */
@@ -158,12 +158,12 @@ export function RegisterForm() {
             <FormItem>
               <FormLabel className={ROTULO}>Telefone</FormLabel>
               <FormControl>
-                <div className="flex gap-2">
-                  {/* Seletor do projeto, e não o <select> do sistema. O
-                      nativo abre uma lista pintada pelo sistema operacional,
-                      que num site escuro aparece como um retângulo branco de
-                      texto quase ilegível, e nenhum CSS alcança aquela
-                      lista. */}
+                {/* Um campo só, com o país dentro. Antes eram duas caixas
+                    lado a lado, e a do país comia 6,5rem da largura do
+                    telefone; aqui a moldura é comum e o divisor separa as
+                    duas partes, que é como o cadastro de telefone se parece
+                    em todo lugar. */}
+                <div className="flex h-12 items-center rounded-md border border-input shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
                   <Select
                     value={isoDoPais}
                     onValueChange={(v) => {
@@ -176,24 +176,16 @@ export function RegisterForm() {
                   >
                     <SelectTrigger
                       aria-label="País do telefone"
-                      className="h-12 w-[6.5rem] shrink-0"
+                      className="h-full w-auto shrink-0 gap-1 rounded-l-md rounded-r-none border-0 px-3 shadow-none focus-visible:ring-0 [&>svg:last-child]:hidden"
                     >
-                      <SelectValue
-                        labels={Object.fromEntries(
-                          PAISES.map((p) => [
-                            p.iso,
-                            p.ddi ? `${p.iso} +${p.ddi}` : p.iso,
-                          ])
-                        )}
-                      />
+                      <Bandeira iso={isoDoPais} />
+                      <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                     </SelectTrigger>
                     <SelectContent>
                       {PAISES.map((p) => (
                         <SelectItem key={p.iso} value={p.iso}>
-                          <span className="flex w-full items-center gap-2">
-                            <span className="w-7 shrink-0 text-[11px] font-bold text-muted-foreground">
-                              {p.iso}
-                            </span>
+                          <span className="flex w-full items-center gap-2.5">
+                            <Bandeira iso={p.iso} tamanho={18} />
                             <span className="flex-1">{p.nome}</span>
                             {p.ddi && (
                               <span className="tabular-nums text-muted-foreground">
@@ -206,28 +198,27 @@ export function RegisterForm() {
                     </SelectContent>
                   </Select>
 
-                  <div className="relative flex-1">
-                    <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder={formatarTelefone(
-                        "9".repeat(pais.digitos[1]),
-                        pais.iso
-                      )}
-                      className={cn(CAMPO, "tabular-nums")}
-                      value={field.value}
-                      onChange={(e) => {
-                        const digitos = e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, pais.digitos[1]);
-                        field.onChange(formatarTelefone(digitos, pais.iso));
-                      }}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
-                    />
-                  </div>
+                  <span aria-hidden className="h-6 w-px shrink-0 bg-border" />
+
+                  <Input
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder={formatarTelefone(
+                      "9".repeat(pais.digitos[1]),
+                      pais.iso
+                    )}
+                    className="h-full flex-1 border-0 bg-transparent px-3 tabular-nums shadow-none focus-visible:border-0 focus-visible:ring-0"
+                    value={field.value}
+                    onChange={(e) => {
+                      const digitos = e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, pais.digitos[1]);
+                      field.onChange(formatarTelefone(digitos, pais.iso));
+                    }}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
                 </div>
               </FormControl>
               <FormMessage />
