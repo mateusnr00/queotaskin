@@ -24,14 +24,25 @@
  * blocos soltos, cada um com seu espaçamento, e quem ia de uma para a outra
  * via a página inteira se remontar.
  */
+/**
+ * A borda em gradiente, exportada para o diálogo de criar conta na hora de
+ * reservar poder vestir o mesmo cartão. Fica aqui, e não copiada lá, porque
+ * duas cópias do mesmo desenho é como as duas telas de cadastro passaram a
+ * divergir da última vez.
+ */
+export const BORDA_DE_AUTH = {
+  background:
+    "linear-gradient(var(--card), var(--card)) padding-box, linear-gradient(150deg, rgba(239,68,68,.75), rgba(249,115,22,.35) 45%, rgba(239,68,68,.55)) border-box",
+} as const;
+
+/** O halo por fora, também compartilhado. */
+export const HALO_DE_AUTH = "shadow-[0_0_90px_-24px_rgba(239,68,68,0.55)]";
+
 export function CartaoDeAuth({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="rounded-3xl border border-transparent p-6 shadow-[0_0_90px_-24px_rgba(239,68,68,0.55)] md:p-8"
-      style={{
-        background:
-          "linear-gradient(var(--card), var(--card)) padding-box, linear-gradient(150deg, rgba(239,68,68,.75), rgba(249,115,22,.35) 45%, rgba(239,68,68,.55)) border-box",
-      }}
+      className={`rounded-3xl border border-transparent p-6 md:p-8 ${HALO_DE_AUTH}`}
+      style={BORDA_DE_AUTH}
     >
       {children}
     </div>

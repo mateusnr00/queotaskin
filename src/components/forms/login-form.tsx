@@ -5,11 +5,12 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { IdCard, User } from "lucide-react";
 
 import { loginAction } from "@/server/actions/auth";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
-import { Button } from "@/components/ui/button";
+import { BotaoDeGrade } from "@/components/forms/botao-de-grade";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -19,8 +20,19 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 
-export function LoginForm() {
+// Os mesmos de RegisterForm: entrar e criar conta são a mesma tela vista de
+// dois lados, e estavam desenhadas como se fossem produtos diferentes. A
+// diferença aparecia na troca dentro do diálogo de reservar, onde as duas
+// ficam a um clique uma da outra.
+/** Rótulo miúdo em caixa alta, como nos painéis do jogo. */
+const ROTULO = "text-[11px] font-semibold uppercase tracking-wider";
+/** Altura confortável para dedo: os campos são digitados no celular. */
+const CAMPO = "h-12 pl-11";
+
+/** Ver RegisterForm: `aoConcluir` troca a navegação por um aviso a quem chamou. */
+export function LoginForm({ aoConcluir }: { aoConcluir?: () => void } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // NextAuth v5 manda ?callbackUrl= quando bate numa rota protegida; nossas
@@ -45,6 +57,10 @@ export function LoginForm() {
         return;
       }
       toast.success("Login realizado");
+      if (aoConcluir) {
+        aoConcluir();
+        return;
+      }
       router.refresh();
       router.push(redirectTo);
     });
@@ -58,13 +74,20 @@ export function LoginForm() {
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nome completo</FormLabel>
+              <FormLabel className={ROTULO}>Nome completo</FormLabel>
               <FormControl>
-                <Input
-                  autoComplete="name"
-                  placeholder="Maria da Silva"
-                  {...field}
-                />
+                {/* Ícone dentro do campo, e não ao lado do rótulo: dentro ele
+                    marca onde o texto começa e some da leitura assim que a
+                    pessoa digita, que é o que se quer de um enfeite. */}
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoComplete="name"
+                    placeholder="Digite seu nome completo"
+                    className={CAMPO}
+                    {...field}
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -75,29 +98,41 @@ export function LoginForm() {
           name="cpf"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>CPF</FormLabel>
+              <FormLabel className={ROTULO}>CPF</FormLabel>
               <FormControl>
-                <Input
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="000.000.000-00"
-                  value={formatCpf(field.value ?? "")}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  ref={field.ref}
-                />
+                <div className="relative">
+                  <IdCard className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="000.000.000-00"
+                    className={cn(CAMPO, "tabular-nums")}
+                    value={formatCpf(field.value ?? "")}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+        {/* O erro do servidor como aviso emoldurado, e não como linha
+            vermelha solta: solta, ela se confundia com a mensagem de
+            validação de um campo e a pessoa procurava qual. */}
         {serverError && (
-          <p className="text-sm font-medium text-destructive">{serverError}</p>
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+          >
+            {serverError}
+          </p>
         )}
-        <Button type="submit" className="w-full" disabled={isPending}>
-          {isPending ? "Entrando..." : "Entrar"}
-        </Button>
+        <BotaoDeGrade disabled={isPending}>
+          {isPending ? "Entrando..." : "Entrar na conta"}
+        </BotaoDeGrade>
       </form>
     </Form>
   );

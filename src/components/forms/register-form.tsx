@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
 import { PAIS_PADRAO } from "@/lib/telefone";
 import { CampoDeTelefone } from "@/components/forms/campo-de-telefone";
+import { BotaoDeGrade } from "@/components/forms/botao-de-grade";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -29,7 +30,21 @@ const ROTULO = "text-[11px] font-semibold uppercase tracking-wider";
 /** Altura confortável para dedo: os três campos são digitados no celular. */
 const CAMPO = "h-12 pl-11";
 
-export function RegisterForm() {
+/**
+ * Quando `aoConcluir` vem, o formulário chama essa função depois de criar a
+ * conta e entrar, em vez de navegar. É o que permite ao diálogo que aparece
+ * na hora de reservar usar este mesmo formulário: lá a pessoa não pode sair
+ * da página, porque os números escolhidos vivem na memória da tela.
+ *
+ * O diálogo usar o formulário de verdade, e não uma cópia, é o conserto de
+ * raiz do defeito que deixou o botão sem fazer nada: eram dois formulários
+ * para o mesmo cadastro, e um deles ficou para trás quando o schema mudou.
+ */
+export function RegisterForm({
+  aoConcluir,
+}: {
+  aoConcluir?: () => void;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // NextAuth v5 manda ?callbackUrl= quando bate numa rota protegida; nossas
@@ -38,23 +53,6 @@ export function RegisterForm() {
     searchParams.get("redirect") ?? searchParams.get("callbackUrl") ?? "/";
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
-
-  // O verde do clique dura meio segundo, contado aqui e não por :active:
-  // :active acaba no instante em que a pessoa solta o botão, e o que se
-  // quer é que a confirmação do toque continue visível depois disso.
-  const [verde, setVerde] = useState(false);
-  const relogioDoVerde = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (relogioDoVerde.current) clearTimeout(relogioDoVerde.current);
-    };
-  }, []);
-
-  function piscarVerde() {
-    setVerde(true);
-    if (relogioDoVerde.current) clearTimeout(relogioDoVerde.current);
-    relogioDoVerde.current = setTimeout(() => setVerde(false), 500);
-  }
 
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -82,11 +80,22 @@ export function RegisterForm() {
         cpf: values.cpf,
       });
       if (!login.ok) {
+        // Dentro do diálogo não há para onde mandar: a pessoa está no meio
+        // de uma reserva. Vira aviso, e ela tenta entrar ali mesmo.
+        if (aoConcluir) {
+          setServerError("Conta criada, mas o login falhou. Tente entrar.");
+          toast.error("Conta criada, mas o login falhou. Tente entrar.");
+          return;
+        }
         toast.success("Conta criada. Faça login para continuar");
         router.push(`/login?redirect=${encodeURIComponent(redirectTo)}`);
         return;
       }
       toast.success("Conta criada com sucesso");
+      if (aoConcluir) {
+        aoConcluir();
+        return;
+      }
       router.refresh();
       router.push(redirectTo);
     });
@@ -168,28 +177,9 @@ export function RegisterForm() {
           </p>
         )}
 
-        {/* Botão fora do componente Button do projeto: as variantes dele
-            trazem fundo, borda e raio próprios, e o desenho de grade é
-            justamente ausência dos três, com as bordas só em cima e embaixo.
-            Sobrepor um no outro seria brigar por especificidade.
-
-            O tamanho da letra e o espaço entre elas ficam aqui, e não na
-            classe: no original são 1,5rem e 0,5rem, o que dá uns 470px só de
-            texto para "CRIAR MINHA CONTA" e não cabe no cartão. Cresce a
-            partir de sm, onde há largura. */}
-        <button
-          type="submit"
-          disabled={isPending}
-          // No apertar, e não no clique: onClick só dispara depois de soltar,
-          // e a resposta ao toque tem de começar no toque.
-          onPointerDown={piscarVerde}
-          className={cn(
-            "botao-de-grade w-full py-3.5 text-sm tracking-[0.2em] sm:text-base sm:tracking-[0.3em]",
-            verde && "esta-verde"
-          )}
-        >
+        <BotaoDeGrade disabled={isPending}>
           {isPending ? "Criando conta..." : "Criar minha conta"}
-        </button>
+        </BotaoDeGrade>
       </form>
     </Form>
   );
