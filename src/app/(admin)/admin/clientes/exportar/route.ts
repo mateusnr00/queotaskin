@@ -38,6 +38,11 @@ export async function GET(request: NextRequest) {
   const ordemPedida = q.get("sort") as CustomerSort | null;
 
   const { customers, total } = await listCustomers(tenantId, {
+    // A busca única entra aqui junto com os campos específicos. Sem esta
+    // linha o CSV sairia com a base inteira enquanto a tela mostra o
+    // resultado de uma busca, que é exatamente o contrário do que o botão
+    // promete: exportar o que está à vista.
+    busca: q.get("busca") ?? undefined,
     nome: q.get("nome") ?? undefined,
     cpf: q.get("cpf") ?? undefined,
     email: q.get("email") ?? undefined,
