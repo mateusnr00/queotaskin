@@ -20,24 +20,45 @@ export const metadata: Metadata = { title: "Registro de atividade" };
 //
 // SUPER_ADMIN vê todos, e é o único caso em que o filtro de tenant sai.
 
+// O Next entrega array quando o mesmo parâmetro vem repetido na URL. Fica
+// com o primeiro: é o que o formulário produz, e passar array adiante faria
+// o Prisma recusar a consulta e a página responder 500.
+function umValor(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+// O <input type="date"> manda "2026-08-26", e new Date() disso é meia-noite
+// em UTC: com o `lte` da consulta, "até 26/08" terminava ANTES do dia 26
+// começar, e um intervalo de um dia só devolvia nada. Montar com a hora
+// explícita faz o fim do dia ser o fim do dia. Mesmo tratamento que
+// /admin/relatorios já usa, e a data inválida vira undefined em vez de
+// chegar no Prisma e derrubar a página.
+function inicioDoDia(dia: string): Date | undefined {
+  const d = new Date(`${dia}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function fimDoDia(dia: string): Date | undefined {
+  const d = new Date(`${dia}T23:59:59.999`);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export default async function LogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    acao?: string;
-    ator?: string;
-    alvoTipo?: string;
-    alvoId?: string;
-    de?: string;
-    ate?: string;
-    cursor?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const sp = await searchParams;
 
   const souDono = session.user.role === "SUPER_ADMIN";
+
+  const acao = umValor(sp.acao);
+  const ator = umValor(sp.ator);
+  const de = umValor(sp.de);
+  const ate = umValor(sp.ate);
+  const cursorParam = umValor(sp.cursor);
 
   // Tipo de alvo conferido contra a lista fechada, não convertido na marra.
   // O valor vem da URL, e um cast aqui deixaria qualquer string virar filtro,
@@ -50,13 +71,17 @@ export default async function LogsPage({
     "SkinTemplate",
     "Tenant",
   ];
-  const tipoDeAlvo = TIPOS.find((t) => t === sp.alvoTipo);
+  const tipoDeAlvo = TIPOS.find((t) => t === umValor(sp.alvoTipo));
+
+  // Sem tipo válido não há recorte: descartar só o tipo e manter o alvoId na
+  // tela acenderia o aviso de recorte sobre uma lista que não está recortada.
+  const alvoId = tipoDeAlvo ? umValor(sp.alvoId) : undefined;
 
   // O cursor viaja na URL como "<iso>|<id>". Data sozinha pularia registros
   // do mesmo instante, por isso o id vai junto.
   const cursor = (() => {
-    if (!sp.cursor) return undefined;
-    const [iso, id] = sp.cursor.split("|");
+    if (!cursorParam) return undefined;
+    const [iso, id] = cursorParam.split("|");
     if (!iso || !id) return undefined;
     const criadoEm = new Date(iso);
     return Number.isNaN(criadoEm.getTime()) ? undefined : { criadoEm, id };
@@ -64,19 +89,21 @@ export default async function LogsPage({
 
   const { registros, proximo } = await listarLogs({
     tenantId: souDono ? null : tenantId,
-    acao: sp.acao || undefined,
-    actorId: sp.ator || undefined,
-    alvo:
-      tipoDeAlvo && sp.alvoId ? { tipo: tipoDeAlvo, id: sp.alvoId } : undefined,
-    de: sp.de ? new Date(sp.de) : undefined,
-    ate: sp.ate ? new Date(sp.ate) : undefined,
+    acao: acao || undefined,
+    actorId: ator || undefined,
+    alvo: tipoDeAlvo && alvoId ? { tipo: tipoDeAlvo, id: alvoId } : undefined,
+    de: de ? inicioDoDia(de) : undefined,
+    ate: ate ? fimDoDia(ate) : undefined,
     cursor,
   });
 
   const paramsBase = new URLSearchParams();
-  for (const [k, v] of Object.entries(sp)) {
-    if (v && k !== "cursor") paramsBase.set(k, v);
-  }
+  if (acao) paramsBase.set("acao", acao);
+  if (ator) paramsBase.set("ator", ator);
+  if (tipoDeAlvo) paramsBase.set("alvoTipo", tipoDeAlvo);
+  if (alvoId) paramsBase.set("alvoId", alvoId);
+  if (de) paramsBase.set("de", de);
+  if (ate) paramsBase.set("ate", ate);
 
   return (
     <div className="space-y-6">
@@ -100,7 +127,7 @@ export default async function LogsPage({
           Ação
           <select
             name="acao"
-            defaultValue={sp.acao ?? ""}
+            defaultValue={acao ?? ""}
             className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
           >
             <option value="">todas</option>
@@ -117,7 +144,7 @@ export default async function LogsPage({
           <input
             type="date"
             name="de"
-            defaultValue={sp.de ?? ""}
+            defaultValue={de ?? ""}
             className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
           />
         </label>
@@ -127,7 +154,7 @@ export default async function LogsPage({
           <input
             type="date"
             name="ate"
-            defaultValue={sp.ate ?? ""}
+            defaultValue={ate ?? ""}
             className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
           />
         </label>
@@ -135,15 +162,15 @@ export default async function LogsPage({
         {/* O filtro por pessoa entra pela URL, clicando no nome numa linha.
             Repetir aqui como campo de texto pediria um cuid decorado, então o
             que a tela oferece é o caminho de volta. */}
-        {sp.ator && <input type="hidden" name="ator" value={sp.ator} />}
-        {sp.alvoTipo && <input type="hidden" name="alvoTipo" value={sp.alvoTipo} />}
-        {sp.alvoId && <input type="hidden" name="alvoId" value={sp.alvoId} />}
+        {ator && <input type="hidden" name="ator" value={ator} />}
+        {tipoDeAlvo && <input type="hidden" name="alvoTipo" value={tipoDeAlvo} />}
+        {alvoId && <input type="hidden" name="alvoId" value={alvoId} />}
 
         <button className={buttonVariants({ variant: "outline", size: "sm" })}>
           Filtrar
         </button>
 
-        {(sp.ator || sp.alvoId) && (
+        {(ator || alvoId) && (
           <Link
             href="/admin/logs"
             className={buttonVariants({ variant: "ghost", size: "sm" })}

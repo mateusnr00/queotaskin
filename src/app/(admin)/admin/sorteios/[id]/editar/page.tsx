@@ -151,7 +151,7 @@ export default async function EditRafflePage({
           </Link>
           <Link
             href={`/admin/logs?alvoTipo=Raffle&alvoId=${raffle.id}`}
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             Ver histórico deste sorteio
           </Link>
