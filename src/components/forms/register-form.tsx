@@ -5,13 +5,12 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowRight, ChevronDown, IdCard, User } from "lucide-react";
+import { ChevronDown, IdCard, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
 import { PAISES, PAIS_PADRAO, formatarTelefone, paisPorIso } from "@/lib/telefone";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -244,16 +243,22 @@ export function RegisterForm() {
           </p>
         )}
 
-        <Button
+        {/* Botão fora do componente Button do projeto: as variantes dele
+            trazem fundo, borda e raio próprios, e o desenho de grade é
+            justamente ausência dos três, com as bordas só em cima e embaixo.
+            Sobrepor um no outro seria brigar por especificidade.
+
+            O tamanho da letra e o espaço entre elas ficam aqui, e não na
+            classe: no original são 1,5rem e 0,5rem, o que dá uns 470px só de
+            texto para "CRIAR MINHA CONTA" e não cabe no cartão. Cresce a
+            partir de sm, onde há largura. */}
+        <button
           type="submit"
           disabled={isPending}
-          className="group h-12 w-full text-sm font-bold uppercase tracking-wide"
+          className="botao-de-grade w-full py-3.5 text-sm tracking-[0.2em] sm:text-base sm:tracking-[0.3em]"
         >
           {isPending ? "Criando conta..." : "Criar minha conta"}
-          {!isPending && (
-            <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          )}
-        </Button>
+        </button>
       </form>
     </Form>
   );
