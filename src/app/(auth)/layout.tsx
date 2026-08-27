@@ -4,27 +4,24 @@ import { headers } from "next/headers";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { SiteHeader } from "@/components/public/site-header";
 import { ProvasDoSite } from "@/components/auth/provas-do-site";
-import {
-  FundoDoPainel,
-  SkinDoPainel,
-  TEM_ARTE_DE_FUNDO,
-  campanhaEmDestaque,
-} from "@/components/auth/vitrine-de-skins";
+import { FundoDaTela } from "@/components/auth/vitrine-de-skins";
 import { getBrand } from "@/lib/brand";
-import { getCurrentTenant } from "@/lib/tenant";
 import { isAdminHost } from "@/lib/host";
 
 // Telas de entrar, criar conta e trocar senha.
 //
-// Cabeçalho do site em cima e duas colunas embaixo: arte à esquerda,
-// formulário à direita. O cabeçalho é o mesmo componente do resto do site, e
-// não uma cópia: quem chega aqui por um link direto continua conseguindo ir
-// para as campanhas, e uma segunda barra desenhada à parte divergiria da
-// verdadeira na primeira mudança.
+// A arte cobre a página inteira e o conteúdo flutua por cima. Chegou aqui em
+// dois passos: antes era um gradiente vazio com um texto de painel de
+// administrador, depois virou arte só na metade esquerda, o que deixava uma
+// linha vertical no meio do monitor com preto liso do outro lado.
 //
-// No host do painel nada disso aparece. Quem entra ali é da equipe, não vai
-// comprar número, e listar campanha do site numa tela de acesso restrito só
-// daria informação a quem bate na porta.
+// O cabeçalho é o mesmo componente do resto do site, e não uma cópia: quem
+// chega por link direto continua conseguindo ir para as campanhas, e uma
+// segunda barra desenhada à parte divergiria da verdadeira na primeira
+// mudança.
+//
+// No host do painel nada disso aparece. Quem entra ali é da equipe, e a
+// tela de acesso restrito não precisa de vitrine.
 
 export default async function AuthLayout({
   children,
@@ -36,12 +33,9 @@ export default async function AuthLayout({
   // QuéOta Skin, e num deploy multi-tenant diria o nome de um site só.
   const marca = await getBrand();
   const host = (await headers()).get("host") ?? "";
-  const noPainel = isAdminHost(host);
-  const tenant = noPainel ? null : await getCurrentTenant();
-  const destaque = tenant ? await campanhaEmDestaque(tenant.id) : null;
   const ano = new Date().getFullYear();
 
-  if (noPainel) {
+  if (isAdminHost(host)) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
         <div className="w-full max-w-md space-y-6">
@@ -55,35 +49,31 @@ export default async function AuthLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <SiteHeader />
+    <div className="relative flex min-h-screen flex-col">
+      <FundoDaTela />
 
-      <div className="flex flex-1 flex-col lg:flex-row">
-        {/* Painel da arte. Some no celular: ali ele empurraria o formulário
-            para baixo da dobra, e o formulário é o motivo da tela existir. */}
-        <aside className="relative hidden overflow-hidden border-r bg-black lg:flex lg:w-1/2 lg:flex-col lg:justify-between">
-          <FundoDoPainel />
+      {/* Todo o conteúdo numa camada acima do fundo. Sem isto o fundo fixo,
+          que é irmão e vem depois no fluxo, ficaria por cima do formulário. */}
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <SiteHeader />
 
-          {/* Com a arte no fundo, a skin da campanha sai daqui: seriam duas
-              vitrines empilhadas na mesma coluna, uma tapando a outra. Ela
-              continua no cartão, como ficha, que é onde decide compra. */}
-          <div className="relative z-10 flex flex-1 items-center justify-center p-10 xl:p-14">
-            {!TEM_ARTE_DE_FUNDO && destaque && (
-              <SkinDoPainel campanha={destaque} />
-            )}
-          </div>
+        <div className="flex flex-1 flex-col lg:flex-row">
+          {/* A coluna da esquerda existe para dar respiro à arte e segurar as
+              provas no pé. Some no celular, onde a tela é estreita e ela
+              empurraria o formulário para baixo da dobra. */}
+          <aside className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-end lg:p-10 xl:p-12">
+            <div className="space-y-5">
+              <ProvasDoSite />
+              <p className="border-t border-white/10 pt-4 text-[11px] text-white/40">
+                © {ano} {marca.name}. Todos os direitos reservados.
+              </p>
+            </div>
+          </aside>
 
-          <div className="relative z-10 space-y-5 p-8 xl:p-10">
-            <ProvasDoSite />
-            <p className="border-t border-white/10 pt-4 text-[11px] text-white/35">
-              © {ano} {marca.name}. Todos os direitos reservados.
-            </p>
-          </div>
-        </aside>
-
-        <main className="flex flex-1 items-center justify-center px-4 py-10 md:py-14">
-          <div className="w-full max-w-lg">{children}</div>
-        </main>
+          <main className="flex flex-1 items-center justify-center px-4 py-10 md:py-14">
+            <div className="w-full max-w-lg">{children}</div>
+          </main>
+        </div>
       </div>
     </div>
   );

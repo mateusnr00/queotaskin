@@ -1,15 +1,6 @@
 import Image from "next/image";
 
-import { prisma } from "@/lib/db";
-import { RaffleCover } from "@/components/public/raffle-cover";
-import type { SkinWear } from "@prisma/client";
-
-import {
-  PROPORCAO_DA_SKIN,
-  RARITY_COLOR,
-  RARITY_ORDER,
-  headlineSkin,
-} from "@/lib/cs2";
+import { RARITY_COLOR } from "@/lib/cs2";
 
 // O visual das telas de entrar e criar conta.
 //
@@ -18,10 +9,9 @@ import {
 // acompanhe as vendas em tempo real" descreve o painel de quem vende, e quem
 // cria conta aqui é quem compra. A pessoa lia a promessa de outro produto.
 //
-// Agora o painel é a arte, e a campanha em disputa aparece como ficha dentro
-// do cartão do formulário: é a resposta para "o que eu ganho criando conta",
-// que é a pergunta da tela. Sai do banco, então acompanha o que está em
-// cartaz sem ninguém editar imagem.
+// Hoje a arte é o fundo da tela inteira, e não a metade esquerda: dividida
+// ao meio ela terminava numa linha vertical no centro do monitor, arte de um
+// lado e preto liso do outro, o que fazia a página parecer duas.
 
 /** Espectro das raridades do CS2, do azul ao dourado. */
 const ESPECTRO = [
@@ -46,51 +36,47 @@ export function FaixaDeRaridade({ className }: { className?: string }) {
 }
 
 /**
- * A arte de fundo do painel esquerdo.
+ * A arte de fundo das telas de conta, cobrindo a página inteira.
  *
- * `contain` e não `cover`, e isso não é detalhe. A arte é deitada, 1565 por
- * 1005, e a coluna é em pé: qualquer recorte que preenchesse a coluna
- * cortaria as pontas das duas armas, e arma serrada ao meio é pior que arte
- * pequena. Como os quatro cantos do arquivo são preto puro, sobre um painel
- * preto a moldura vazia não se vê, e o efeito é o de sangrar até a borda.
+ * `cover` aqui, e não `contain` como quando ela ocupava só uma coluna: em
+ * tela cheia a proporção da arte (1,56) é quase a da janela de um monitor
+ * comum, então o recorte tira alguns pixels das bordas em vez de serrar as
+ * armas ao meio, que era o risco de encaixá-la numa coluna em pé.
+ *
+ * `fixed` para o fundo não rolar junto com o conteúdo. No celular a tela
+ * passa da dobra, e fundo que acompanha a rolagem termina numa faixa preta
+ * no fim do caminho.
  *
  * Sem o arquivo, o fundo é desenhado no CSS. O interruptor é explícito de
  * propósito: apontar um <Image> para um arquivo que talvez não exista
- * trocaria o painel por um retângulo quebrado, e ninguém perceberia até
- * alguém abrir a tela.
+ * trocaria a tela por um retângulo quebrado, e ninguém perceberia até
+ * alguém abrir a página.
  */
 const ARTE_DE_FUNDO = "/auth-fundo.webp";
 export const TEM_ARTE_DE_FUNDO = true;
 
-export function FundoDoPainel() {
+export function FundoDaTela() {
   return (
-    <>
+    <div aria-hidden className="fixed inset-0 bg-black">
       {TEM_ARTE_DE_FUNDO ? (
-        // Sem priority de propósito. O painel é `hidden lg:flex`, e uma
-        // imagem prioritária seria pré-carregada mesmo escondida: todo
-        // visitante de celular pagaria 120KB por uma arte que não vê. Sem
-        // ele a carga é preguiçosa, e elemento com display:none nunca cruza
-        // a viewport, então no celular ela simplesmente não é buscada.
         <Image
           src={ARTE_DE_FUNDO}
           alt=""
-          aria-hidden
           fill
-          sizes="(min-width: 1024px) 50vw, 100vw"
-          className="object-contain"
+          priority
+          sizes="100vw"
+          className="object-cover object-center"
         />
       ) : (
         <>
           <div
-            aria-hidden
             className="absolute inset-0"
             style={{
               background:
-                "radial-gradient(70% 55% at 45% 45%, rgba(220,38,38,.34), transparent 70%), radial-gradient(50% 40% at 15% 12%, rgba(249,115,22,.20), transparent 72%), linear-gradient(180deg,#0d0b0d,#08080a)",
+                "radial-gradient(70% 55% at 30% 45%, rgba(220,38,38,.34), transparent 70%), radial-gradient(50% 40% at 12% 10%, rgba(249,115,22,.20), transparent 72%), linear-gradient(180deg,#0d0b0d,#08080a)",
             }}
           />
           <div
-            aria-hidden
             className="absolute inset-0 opacity-[0.05]"
             style={{
               backgroundImage:
@@ -100,115 +86,17 @@ export function FundoDoPainel() {
           />
         </>
       )}
-      {/* Vinheta. Segura o contraste do texto que fica no pé do painel, em
-          cima de arte que ninguém sabe quão clara vai ser. */}
+
+      {/* Véu. O conteúdo fica em cima da arte, e sem ele o texto branco do
+          rodapé cairia justo sobre a parte clara das armas. Escurece mais no
+          pé, que é onde o texto mora, e menos no meio, onde está o desenho
+          que se quer ver. */}
       <div
-        aria-hidden
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(180deg, rgba(0,0,0,.3) 0%, transparent 28%, rgba(0,0,0,.8) 100%)",
+            "linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,.2) 35%, rgba(0,0,0,.75) 100%)",
         }}
-      />
-    </>
-  );
-}
-
-export type CampanhaEmDestaque = {
-  slug: string;
-  titulo: string;
-  capa: string | null;
-  skin: string | null;
-  raridade: keyof typeof RARITY_COLOR | null;
-  desgaste: SkinWear | null;
-  preco: number;
-};
-
-/**
- * A campanha de maior raridade em disputa agora. É a mesma leitura que a
- * pessoa já tem dentro do jogo: vermelho vale mais que roxo, dourado é faca.
- */
-export async function campanhaEmDestaque(
-  tenantId: string
-): Promise<CampanhaEmDestaque | null> {
-  const campanhas = await prisma.raffle.findMany({
-    where: { tenantId, status: "ACTIVE", privacy: "PUBLIC" },
-    orderBy: [{ showOnHome: "desc" }, { createdAt: "desc" }],
-    take: 6,
-    select: {
-      title: true,
-      slug: true,
-      pricePerNumber: true,
-      images: { where: { isCover: true }, take: 1, select: { url: true } },
-      prizes: {
-        select: {
-          description: true,
-          skinName: true,
-          skinRarity: true,
-          skinWear: true,
-          skinFloat: true,
-          skinStatTrak: true,
-          skinSouvenir: true,
-        },
-      },
-    },
-  });
-
-  const lista = campanhas
-    .map((c) => {
-      const destaque = headlineSkin(c.prizes);
-      return {
-        slug: c.slug,
-        titulo: c.title,
-        capa: c.images[0]?.url ?? null,
-        skin: destaque?.skinName ?? null,
-        raridade: destaque?.skinRarity ?? null,
-        desgaste: destaque?.skinWear ?? null,
-        preco: Number(c.pricePerNumber),
-      };
-    })
-    .sort(
-      (a, b) =>
-        (b.raridade ? RARITY_ORDER[b.raridade] : -1) -
-        (a.raridade ? RARITY_ORDER[a.raridade] : -1)
-    );
-
-  return lista[0] ?? null;
-}
-
-/**
- * A skin em disputa, grande, no meio do painel.
- *
- * Sem capa cadastrada o RaffleCover cai no desenho de reserva, com o nome e
- * a raridade dentro da moldura, e é isso mesmo que se quer aqui: a
- * alternativa era o painel ficar vazio até alguém subir arte, e meia tela
- * preta é pior que a mesma skin aparecendo de dois jeitos em colunas
- * diferentes.
- */
-export function SkinDoPainel({ campanha }: { campanha: CampanhaEmDestaque }) {
-  const cor = campanha.raridade ? RARITY_COLOR[campanha.raridade] : null;
-
-  return (
-    <div className="relative mx-auto w-full max-w-lg">
-      {cor && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -inset-10 opacity-50 blur-3xl"
-          style={{
-            background: `radial-gradient(circle at 50% 55%, ${cor}, transparent 68%)`,
-          }}
-        />
-      )}
-      <RaffleCover
-        url={campanha.capa}
-        title={campanha.titulo}
-        skinName={campanha.skin}
-        rarity={campanha.raridade}
-        ajuste="conter"
-        priority
-        sizes="(min-width: 1024px) 512px, 90vw"
-        style={{ aspectRatio: PROPORCAO_DA_SKIN }}
-        className="relative w-full drop-shadow-2xl"
       />
     </div>
   );

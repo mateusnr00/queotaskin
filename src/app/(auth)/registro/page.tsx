@@ -3,9 +3,6 @@ import type { Metadata } from "next";
 
 import { RegisterForm } from "@/components/forms/register-form";
 import { CartaoDeAuth } from "@/components/auth/cartao-de-auth";
-import { FichaDaCampanha } from "@/components/auth/ficha-da-campanha";
-import { campanhaEmDestaque } from "@/components/auth/vitrine-de-skins";
-import { getCurrentTenant } from "@/lib/tenant";
 
 export const metadata: Metadata = { title: "Criar conta" };
 
@@ -19,17 +16,12 @@ export default async function RegisterPage({
     ? `?redirect=${encodeURIComponent(sp.redirect)}`
     : "";
 
-  const tenant = await getCurrentTenant();
-  const destaque = tenant ? await campanhaEmDestaque(tenant.id) : null;
-
   return (
     <CartaoDeAuth>
       <div className="space-y-5">
         <p className="text-center text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
           Você está quase lá!
         </p>
-
-        {destaque && <FichaDaCampanha campanha={destaque} />}
 
         <div className="space-y-1.5">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">

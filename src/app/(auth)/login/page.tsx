@@ -30,25 +30,27 @@ export default async function LoginPage({
   if (noPainel) {
     return (
       <CartaoDeAuth>
-        <div className="space-y-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Painel administrativo
-          </span>
-          <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
-          <p className="text-sm text-muted-foreground">
-            Acesso restrito à equipe. Use o e-mail e a senha da sua conta de
-            administrador.
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Painel administrativo
+            </span>
+            <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
+            <p className="text-sm text-muted-foreground">
+              Acesso restrito à equipe. Use o e-mail e a senha da sua conta de
+              administrador.
+            </p>
+          </div>
+          <AdminLoginForm />
+          <p className="text-center text-xs text-muted-foreground">
+            Vai comprar um número? O site fica em{" "}
+            <span className="font-medium text-foreground">
+              {host.replace(/^(admin|painel)\./i, "")}
+            </span>
+            .
           </p>
         </div>
-        <AdminLoginForm />
-        <p className="text-center text-xs text-muted-foreground">
-          Vai comprar um número? O site fica em{" "}
-          <span className="font-medium text-foreground">
-            {host.replace(/^(admin|painel)\./i, "")}
-          </span>
-          .
-        </p>
       </CartaoDeAuth>
     );
   }
@@ -56,13 +58,15 @@ export default async function LoginPage({
   return (
     <div className="space-y-4">
       <CartaoDeAuth>
-        <div className="space-y-1.5">
-          <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Informe seu nome completo e o CPF do cadastro. Sem senha.
-          </p>
+        <div className="space-y-5">
+          <div className="space-y-1.5">
+            <h2 className="text-2xl font-bold tracking-tight">Entrar</h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Informe seu nome completo e o CPF do cadastro. Sem senha.
+            </p>
+          </div>
+          <LoginForm />
         </div>
-        <LoginForm />
       </CartaoDeAuth>
       <p className="text-center text-sm text-muted-foreground">
         Ainda não tem conta?{" "}
