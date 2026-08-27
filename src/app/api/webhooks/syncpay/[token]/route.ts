@@ -152,7 +152,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     // !== "APPROVED")`: é a mesma guarda de idempotência que impede este
     // bloco de rodar de novo num reenvio do gateway. Fora dela, cada reenvio
     // do mesmo evento (a SyncPay reenvia por dias) apareceria como uma
-    // confirmação de pagamento nova na tela de histórico.
+    // confirmação de pagamento nova na tela de histórico. Vale para reenvio
+    // em série, que é como o gateway repete na prática; duas entregas
+    // verdadeiramente simultâneas leem o mesmo `payment.status` antes de
+    // qualquer escrita e passariam as duas, uma corrida que fechar exigiria
+    // transição atômica no update.
     // void, sem await: o gateway está esperando a resposta HTTP deste
     // webhook, e a escrita do log não pode atrasar essa resposta.
     void registrarLog({
@@ -182,7 +186,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     });
     // Mesma guarda do ramo APPROVED acima (`payment.status === "PENDING"`
     // neste else-if): reenvio do gateway pra um pagamento já recusado cai
-    // fora deste bloco e não duplica o registro.
+    // fora deste bloco e não duplica o registro. Mesma ressalva: vale para
+    // reenvio em série, não para duas entregas simultâneas lendo o mesmo
+    // status antes de qualquer uma escrever.
     void registrarLog({
       acao: "pagamento.recusado",
       tenantId: payment.reservation?.raffle.tenantId ?? null,

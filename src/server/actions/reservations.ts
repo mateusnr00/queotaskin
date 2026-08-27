@@ -493,8 +493,13 @@ export async function markReservationPaidAction(
       return { ok: false, error: "Reserva não encontrada" };
     }
 
-    // Cross-tenant guard.
-    await assertRaffleInActiveTenant(reservation.raffleId, session.user);
+    // Cross-tenant guard. Capturamos o retorno porque o log de confirmação
+    // logo abaixo precisa do tenantId, e assertRaffleInActiveTenant já o
+    // resolveu, buscar de novo pagaria outra consulta à toa.
+    const tenantId = await assertRaffleInActiveTenant(
+      reservation.raffleId,
+      session.user
+    );
 
     if (reservation.status === "PAID") {
       return { ok: true, data: {} };
@@ -566,6 +571,32 @@ export async function markReservationPaidAction(
           })),
         });
       }
+    });
+
+    // A confirmação manual é o único caminho de pagamento com gente por trás,
+    // e por isso é o que uma disputa procura primeiro: quem marcou como paga,
+    // e quando. Os outros dois caminhos (webhook e consulta de status) são
+    // máquina, e vão com origem SISTEMA; aqui existe sessão de admin, então
+    // origem fica PAINEL (padrão de registrarLog) e SEM ator informado à
+    // mão, é a sessão quem resolve.
+    //
+    // O alvo é a reserva, não o pagamento, porque reserva de rifa grátis não
+    // tem Payment nenhum e ainda assim pode ser marcada como paga aqui.
+    //
+    // await, não void: diferente dos outros pontos desta task, aqui não há
+    // gateway nem cliente esperando resposta na tela, é um admin clicando
+    // num botão do painel, então vale esperar a escrita (como nas tasks 6 a
+    // 9). A guarda de idempotência já existe mais acima (`if
+    // (reservation.status === "PAID") return`), uma segunda tentativa sai
+    // antes de chegar aqui, então não duplica o registro.
+    await registrarLog({
+      acao: "pagamento.aprovado",
+      tenantId,
+      alvo: { tipo: "Reservation", id: reservation.id },
+      detalhes: {
+        caminho: "manual",
+        pagamentoId: reservation.payment?.id ?? null,
+      },
     });
 
     // Auto-upgrade tickets pra AWARDED quando o número for um título premiado.

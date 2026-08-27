@@ -274,7 +274,7 @@ export async function pollPaymentStatusIfPending(
     const res = await resolution.provider.getStatus(externalId);
     const resolved = res.status;
 
-    // Lido uma vez, antes de decidir qualquer coisa, e usado só para decidir
+    // Lida uma vez, antes de decidir qualquer coisa, e usada só para decidir
     // SE o log abaixo é escrito (não guarda a transação, que já era assim
     // antes desta task). O freio de polling logo acima é um Map em memória:
     // em serverless cada instância tem o seu, então duas requisições que
@@ -289,10 +289,17 @@ export async function pollPaymentStatusIfPending(
     // e mudar a semântica do caminho do dinheiro (update lança quando a
     // linha não existe, updateMany não) só por causa de um campo de log não
     // se paga.
-    const paymentAntesDoPoll = await prisma.payment.findUnique({
-      where: { id: paymentId },
-      select: { status: true },
-    });
+    //
+    // Só quando há transição para registrar: no caso dominante o gateway
+    // responde PENDING, e aí esta leitura seria uma ida ao banco por
+    // consulta de status, sem nada para gravar no fim.
+    const paymentAntesDoPoll =
+      resolved === "APPROVED" || resolved === "REJECTED"
+        ? await prisma.payment.findUnique({
+            where: { id: paymentId },
+            select: { status: true },
+          })
+        : null;
 
     if (resolved === "APPROVED") {
       await prisma.$transaction([
@@ -309,9 +316,10 @@ export async function pollPaymentStatusIfPending(
           data: { status: "PAID", paidAt: new Date() },
         }),
       ]);
-      // void, sem await: o gateway está esperando a resposta deste polling
-      // (chamado tanto em background quanto pelo botão "Já paguei"), e a
-      // escrita do log não pode somar latência a essa resposta.
+      // void, sem await: esta chamada vai PARA o gateway, quem espera a
+      // resposta é o cliente (o botão "Já paguei" via checkPaymentStatusAction,
+      // ou o render da página do comprovante), e a escrita do log não pode
+      // somar latência a essa resposta.
       if (paymentAntesDoPoll?.status !== "APPROVED") {
         void registrarLog({
           acao: "pagamento.aprovado",
