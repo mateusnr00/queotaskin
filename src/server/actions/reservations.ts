@@ -23,6 +23,7 @@ import {
   ensurePixForReservation,
   pollPaymentStatusIfPending,
 } from "@/server/services/pix";
+import { registrarLog } from "@/server/services/activity-log";
 import { onlyDigits, isValidCpf } from "@/lib/cpf";
 import { DomainError, ReservationConflictError } from "@/lib/errors";
 import { getCurrentTenant, assertRaffleInActiveTenant } from "@/lib/tenant";
@@ -230,6 +231,18 @@ export async function createReservationAction(
         where: { id: reservation.id },
         data: { userId: user.id },
       });
+      // void, sem await: isto está no caminho que o cliente espera na tela, e
+      // a escrita do log não pode somar latência à compra.
+      void registrarLog({
+        acao: "reserva.criada",
+        tenantId: tenant.id,
+        origem: "PUBLICO",
+        alvo: { tipo: "Reservation", id: reservation.id },
+        detalhes: {
+          quantidade: input.numbers.length,
+          total: Number(reservation.totalAmount),
+        },
+      });
       // Cria a cobrança Pix (best-effort), mas só quando há valor a
       // cobrar. Reservas grátis já nascem PAID, gerar Pix nelas só causa
       // ruído.
@@ -287,6 +300,19 @@ export async function createReservationAction(
       await prisma.reservation.update({
         where: { id: reservation.id },
         data: { userId: user.id },
+      });
+
+      // void, sem await: isto está no caminho que o cliente espera na tela, e
+      // a escrita do log não pode somar latência à compra.
+      void registrarLog({
+        acao: "reserva.criada",
+        tenantId: tenant.id,
+        origem: "PUBLICO",
+        alvo: { tipo: "Reservation", id: reservation.id },
+        detalhes: {
+          quantidade: numbers.length,
+          total: Number(reservation.totalAmount),
+        },
       });
 
       if (Number(reservation.totalAmount) > 0) {

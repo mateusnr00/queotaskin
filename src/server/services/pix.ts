@@ -9,6 +9,7 @@
 // de novo.
 
 import { prisma } from "@/lib/db";
+import { registrarLog } from "@/server/services/activity-log";
 import { awardXpForReservation } from "@/server/services/xp";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
@@ -199,6 +200,16 @@ export async function ensurePixForReservation(
       },
     });
 
+    // void, sem await: isto está no caminho que o cliente espera na tela
+    // (aguardando o QR Code aparecer), e a escrita do log não pode somar
+    // latência à geração do Pix.
+    void registrarLog({
+      acao: "pix.gerado",
+      origem: "PUBLICO",
+      alvo: { tipo: "Reservation", id: reservation.id },
+      detalhes: { gateway: provider.name, valor: amount },
+    });
+
     return {
       ok: true,
       pix: { pixCode: charge.pixCode, identifier: charge.identifier },
@@ -268,6 +279,21 @@ export async function pollPaymentStatusIfPending(
           data: { status: "PAID", paidAt: new Date() },
         }),
       ]);
+      // void, sem await: o gateway está esperando a resposta deste polling
+      // (chamado tanto em background quanto pelo botão "Já paguei"), e a
+      // escrita do log não pode somar latência a essa resposta.
+      // Este ramo só roda quando `resolved === "APPROVED"`, e os dois
+      // chamadores (checkPaymentStatusAction e a página do comprovante) só
+      // invocam pollPaymentStatusIfPending enquanto a reserva ainda está
+      // PENDING, então a mesma condição que evita confirmar duas vezes
+      // também evita registrar duas vezes.
+      void registrarLog({
+        acao: "pagamento.aprovado",
+        origem: "SISTEMA",
+        ator: { nome: "Consulta de status no gateway" },
+        alvo: { tipo: "Payment", id: paymentId },
+        detalhes: { reservaId: reservationId, caminho: "polling" },
+      });
       // Tudo o que o webhook faz depois de confirmar precisa acontecer aqui
       // também. Quando o webhook não chega, este é o único caminho que marca
       // a reserva como paga, e sem isto a pessoa pagava, recebia os números e
@@ -293,6 +319,14 @@ export async function pollPaymentStatusIfPending(
       await prisma.payment.update({
         where: { id: paymentId },
         data: { status: "REJECTED" },
+      });
+      // void, sem await: mesmo raciocínio do ramo APPROVED acima.
+      void registrarLog({
+        acao: "pagamento.recusado",
+        origem: "SISTEMA",
+        ator: { nome: "Consulta de status no gateway" },
+        alvo: { tipo: "Payment", id: paymentId },
+        detalhes: { reservaId: reservationId, caminho: "polling" },
       });
     }
     return resolved;

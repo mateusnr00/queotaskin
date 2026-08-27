@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { registrarLog } from "@/server/services/activity-log";
 import { extractStatusInfo, getPixStatus } from "@/lib/syncpay";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
@@ -146,6 +147,20 @@ export async function POST(req: Request, { params }: RouteParams) {
         });
       }
     });
+    // A chamada fica DENTRO do `if (resolved === "APPROVED" && payment.status
+    // !== "APPROVED")`: é a mesma guarda de idempotência que impede este
+    // bloco de rodar de novo num reenvio do gateway. Fora dela, cada reenvio
+    // do mesmo evento (a SyncPay reenvia por dias) apareceria como uma
+    // confirmação de pagamento nova na tela de histórico.
+    // void, sem await: o gateway está esperando a resposta HTTP deste
+    // webhook, e a escrita do log não pode atrasar essa resposta.
+    void registrarLog({
+      acao: "pagamento.aprovado",
+      origem: "SISTEMA",
+      ator: { nome: "Webhook SyncPay" },
+      alvo: { tipo: "Payment", id: payment.id },
+      detalhes: { reservaId: payment.reservationId, caminho: "webhook" },
+    });
     // Após PAID, transiciona pra AWARDED os tickets cujos números são
     // títulos premiados cadastrados pra rifa.
     await autoAwardTicketsForReservation(payment.reservationId).catch((err) =>
@@ -162,6 +177,16 @@ export async function POST(req: Request, { params }: RouteParams) {
     await prisma.payment.update({
       where: { id: payment.id },
       data: { status: "REJECTED" },
+    });
+    // Mesma guarda do ramo APPROVED acima (`payment.status === "PENDING"`
+    // neste else-if): reenvio do gateway pra um pagamento já recusado cai
+    // fora deste bloco e não duplica o registro.
+    void registrarLog({
+      acao: "pagamento.recusado",
+      origem: "SISTEMA",
+      ator: { nome: "Webhook SyncPay" },
+      alvo: { tipo: "Payment", id: payment.id },
+      detalhes: { reservaId: payment.reservationId, caminho: "webhook" },
     });
   }
 
