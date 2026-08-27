@@ -112,8 +112,12 @@ export function TrilhaDoPedido({
               />
               <p
                 className={cn(
-                  "text-[10px] font-semibold uppercase tracking-wider",
-                  aceso ? cor.texto : "text-muted-foreground/60"
+                  // Os rótulos apagados eram muted-foreground/60 e mediam
+                  // 3,40:1 no pixel composto, abaixo do mínimo de 4,5 para
+                  // texto pequeno. A opacidade saiu: apagado aqui é o tom
+                  // secundário, não um tom secundário rebaixado de novo.
+                  "text-[11px] font-semibold uppercase tracking-wider",
+                  aceso ? cor.texto : "text-muted-foreground"
                 )}
               >
                 {passo}

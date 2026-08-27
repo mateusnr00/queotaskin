@@ -14,6 +14,8 @@ import { XpGanho } from "@/components/public/xp-ganho";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
 import { TrilhaDoPedido } from "@/components/public/trilha-do-pedido";
+import { TituloDaAba } from "@/components/public/titulo-da-aba";
+import { ComoVoltar } from "@/components/public/como-voltar";
 import {
   ensurePixForReservation,
   pollPaymentStatusIfPending,
@@ -199,6 +201,10 @@ export default async function ReservationReceiptPage({
     }));
     return (
       <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+        {/* Título da aba por estado. Quem paga costuma ter a aba em
+            segundo plano quando o webhook confirma, e o visto é o sinal
+            de que já pode voltar. */}
+        <TituloDaAba texto="✓ Pagamento confirmado" />
         <TrilhaDoPedido estado="pago" titulo={reservation.raffle.title} />
         <PaidCelebration
           raffleTitle={reservation.raffle.title}
@@ -245,6 +251,7 @@ export default async function ReservationReceiptPage({
   ) {
     return (
       <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+        <TituloDaAba texto="Reserva expirada" />
         <TrilhaDoPedido estado="encerrado" titulo={reservation.raffle.title} />
         <ExpiredReservation
           raffleTitle={reservation.raffle.title}
@@ -312,6 +319,7 @@ export default async function ReservationReceiptPage({
         </div>
         <ReservationCountdown
           expiresAtIso={reservation.expiresAt.toISOString()}
+          valorNoTitulo={formatBRL(Number(reservation.totalAmount))}
         />
       </div>
 
@@ -363,6 +371,8 @@ export default async function ReservationReceiptPage({
           )}
         </div>
       </section>
+
+      <ComoVoltar temConta={reservation.userId !== null} />
     </div>
   );
 }

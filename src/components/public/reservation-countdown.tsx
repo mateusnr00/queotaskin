@@ -14,11 +14,19 @@
 // grandes e coloridos, um em cima do outro, disputando a mesma atenção;
 // agora os dois dividem um cartão só, porque respondem à mesma pergunta:
 // quanto custa e até quando.
+//
+// Os dígitos deixaram de ser uma região viva. Estavam dentro de um
+// aria-live="polite" que muda uma vez por segundo: medido, três mutações em
+// três segundos, o que numa reserva de quinze minutos dá cerca de novecentos
+// anúncios seguidos. Um leitor de tela fica preso lendo relógio e a página
+// inteira vira inutilizável. Agora quem anuncia é uma região invisível que
+// só fala nos marcos: dez, cinco, dois, um minuto e a expiração.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 
+import { useTituloDaAba } from "@/components/public/titulo-da-aba";
 import { cn } from "@/lib/utils";
 
 function pad(n: number): string {
@@ -36,10 +44,31 @@ function formatRemaining(ms: number): string {
     : `${pad(minutes)}:${pad(seconds)}`;
 }
 
+// Em segundos, e em ordem CRESCENTE de propósito: `find` devolve o primeiro
+// que casa, então a lista precisa começar pelo mais apertado para que o marco
+// encontrado seja o menor que ainda comporta o tempo restante. Na ordem
+// inversa, `600` casava com qualquer coisa abaixo de dez minutos e só o
+// primeiro anúncio saía, que foi o que a medição mostrou.
+const MARCOS = [30, 60, 120, 300, 600] as const;
+
+function fraseDoMarco(ms: number): string {
+  const segundos = Math.ceil(ms / 1000);
+  if (segundos <= 45) {
+    return "Menos de um minuto para a reserva expirar.";
+  }
+  const minutos = Math.round(segundos / 60);
+  return `Faltam cerca de ${minutos} ${
+    minutos === 1 ? "minuto" : "minutos"
+  } para a reserva expirar.`;
+}
+
 export function ReservationCountdown({
   expiresAtIso,
+  valorNoTitulo,
 }: {
   expiresAtIso: string;
+  /** Quando informado, o tempo restante e este valor viram o título da aba. */
+  valorNoTitulo?: string;
 }) {
   const router = useRouter();
   const expiresAt = new Date(expiresAtIso).getTime();
@@ -69,10 +98,34 @@ export function ReservationCountdown({
 
   const expired = remaining <= 0;
   const urgent = !expired && remaining < 2 * 60_000; // < 2 min
+  const tempo = formatRemaining(remaining);
+
+  // Título da aba: relógio primeiro, porque é o que sobrevive à truncagem.
+  useTituloDaAba(
+    valorNoTitulo ? (expired ? "Reserva expirada" : `${tempo} · ${valorNoTitulo}`) : null
+  );
+
+  // Anúncio por marcos. `ultimoMarco` guarda o menor já anunciado, então
+  // cada faixa fala uma vez só, mesmo que um tick se perca.
+  const [aviso, setAviso] = useState("");
+  const ultimoMarco = useRef(Number.POSITIVE_INFINITY);
+
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const segundos = remaining / 1000;
+    const marco = MARCOS.find((m) => segundos <= m);
+    if (marco !== undefined && marco < ultimoMarco.current) {
+      ultimoMarco.current = marco;
+      setAviso(fraseDoMarco(remaining));
+    }
+  }, [remaining]);
 
   if (expired) {
     return (
-      <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+      <div
+        role="status"
+        className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+      >
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="text-xs leading-relaxed">
           <strong className="font-semibold">Reserva expirada.</strong> Os
@@ -94,7 +147,6 @@ export function ReservationCountdown({
           // alarme constante, e alarme constante deixa de ser alarme.
           urgent ? "text-destructive" : "text-foreground"
         )}
-        aria-live="polite"
         // O servidor desenha o tempo no instante do pedido e o navegador
         // hidrata uns milissegundos depois. Quando o segundo vira entre os
         // dois, o texto difere e o React acusa erro de hidratação: medido,
@@ -102,7 +154,12 @@ export function ReservationCountdown({
         // a natureza de um relógio, e é para isso que serve este atributo.
         suppressHydrationWarning
       >
-        {formatRemaining(remaining)}
+        {tempo}
+      </p>
+
+      {/* A única região viva daqui. Fala nos marcos e cala no resto. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {aviso}
       </p>
     </div>
   );
