@@ -5,12 +5,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ChevronDown, IdCard, User } from "lucide-react";
+import { IdCard, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
-import { PAISES, PAIS_PADRAO, formatarTelefone, paisPorIso } from "@/lib/telefone";
+import { PAIS_PADRAO } from "@/lib/telefone";
+import { CampoDeTelefone } from "@/components/forms/campo-de-telefone";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -20,12 +21,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /** Rótulo miúdo em caixa alta, como nos painéis do jogo. */
@@ -70,13 +65,6 @@ export function RegisterForm() {
       phoneCountry: PAIS_PADRAO,
     },
   });
-
-  // O país escolhido manda na máscara e na validação do número. Fica em
-  // watch porque trocar de país precisa reformatar o que já foi digitado:
-  // sem isso, um número brasileiro mascarado continuaria com parênteses
-  // depois de trocar para Portugal.
-  const isoDoPais = form.watch("phoneCountry");
-  const pais = paisPorIso(isoDoPais);
 
   function onSubmit(values: RegisterInput) {
     setServerError(null);
@@ -166,87 +154,7 @@ export function RegisterForm() {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className={ROTULO}>Telefone</FormLabel>
-              <FormControl>
-                {/* Um campo só, com o país dentro. Antes eram duas caixas
-                    lado a lado, e a do país comia 6,5rem da largura do
-                    telefone; aqui a moldura é comum e o divisor separa as
-                    duas partes, que é como o cadastro de telefone se parece
-                    em todo lugar. */}
-                <div className="flex h-12 items-center rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
-                  <Select
-                    value={isoDoPais}
-                    onValueChange={(v) => {
-                      if (!v) return;
-                      form.setValue("phoneCountry", v);
-                      // Reaplica a máscara do país novo no que já está
-                      // digitado, senão sobra a pontuação do país antigo.
-                      field.onChange(formatarTelefone(field.value, v));
-                    }}
-                  >
-                    <SelectTrigger
-                      aria-label="País do telefone"
-                      className="h-full w-auto shrink-0 gap-1 rounded-l-md rounded-r-none border-0 bg-transparent px-3 shadow-none focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&>svg:last-child]:hidden"
-                    >
-                      {/* leading-none e o tamanho explícito porque emoji
-                          herda a entrelinha do campo e desalinha na
-                          vertical. */}
-                      <span className="text-lg leading-none">
-                        {pais.bandeira}
-                      </span>
-                      <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAISES.map((p) => (
-                        <SelectItem key={p.iso} value={p.iso}>
-                          <span className="flex w-full items-center gap-2.5">
-                            <span className="text-base leading-none">
-                              {p.bandeira}
-                            </span>
-                            <span className="flex-1">{p.nome}</span>
-                            {p.ddi && (
-                              <span className="tabular-nums text-muted-foreground">
-                                +{p.ddi}
-                              </span>
-                            )}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <span aria-hidden className="h-6 w-px shrink-0 bg-border" />
-
-                  <Input
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder={formatarTelefone(
-                      "9".repeat(pais.digitos[1]),
-                      pais.iso
-                    )}
-                    className="h-full flex-1 border-0 bg-transparent px-3 tabular-nums shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
-                    value={field.value}
-                    onChange={(e) => {
-                      const digitos = e.target.value
-                        .replace(/\D/g, "")
-                        .slice(0, pais.digitos[1]);
-                      field.onChange(formatarTelefone(digitos, pais.iso));
-                    }}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <CampoDeTelefone form={form} classeDoRotulo={ROTULO} />
 
         {/* O erro do servidor como aviso emoldurado, e não como linha
             vermelha solta no meio do formulário: solta, ela se confundia com
