@@ -233,3 +233,42 @@ describe("procedência", () => {
     expect(linha.colecao).toBeNull();
   });
 });
+
+describe("montarIndice sem desgaste", () => {
+  const indice = montarIndice([AK, KARAMBIT, LUVA, FACA_LIMPA], [AGENTE], {
+    comDesgaste: false,
+  });
+
+  it("uma linha por skin, sem o desgaste no nome", () => {
+    expect(indice.map((l) => l.nome)).toEqual([
+      "AK-47 | Redline",
+      "★ Karambit | Doppler Phase 2",
+      "★ Sport Gloves | Pandora's Box",
+      "★ Bayonet",
+      "Bloody Darryl The Strapped | The Professionals",
+    ]);
+  });
+
+  it("o campo de desgaste fica vazio: quem cria a campanha escolhe", () => {
+    expect(indice.every((l) => l.desgaste === null)).toBe(true);
+  });
+
+  it("a fase continua no nome, senão as fases colidem", () => {
+    const fases = montarIndice(
+      [
+        { ...KARAMBIT, id: "a", phase: "Phase 1" },
+        { ...KARAMBIT, id: "b", phase: "Phase 2" },
+      ],
+      [],
+      { comDesgaste: false },
+    );
+    expect(new Set(fases.map((l) => l.nome)).size).toBe(2);
+  });
+
+  it("continua achando pelo nome digitado", () => {
+    expect(procurar("ak47 redline", indice).exata?.nome).toBe("AK-47 | Redline");
+    expect(procurar("karambit doppler phase 2", indice).exata?.nome).toBe(
+      "★ Karambit | Doppler Phase 2",
+    );
+  });
+});

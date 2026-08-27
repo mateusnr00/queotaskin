@@ -50,6 +50,9 @@ export interface SkinDoCatalogo {
   skinInspectUrl: string | null;
 }
 
+/** Quantas linhas por lote. Uma tela cheia cabe em bem menos que isso. */
+const LOTE = 60;
+
 const VAZIA: Omit<SkinDoCatalogo, "id"> = {
   name: "",
   imageUrl: null,
@@ -78,6 +81,18 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
   const [editando, setEditando] = useState<SkinDoCatalogo | "nova" | null>(null);
   const [isPending, startTransition] = useTransition();
   const [busca, setBusca] = useState("");
+  // Quantas linhas desenhar de uma vez. Com o catálogo cheio, mandar todas
+  // dava 3,73 MB de HTML: o servidor renderizava 865 linhas que ninguém
+  // ia ler antes de buscar. O teto cresce sob demanda e a busca continua
+  // rodando sobre a lista inteira, não sobre o pedaço visível.
+  const [teto, setTeto] = useState(LOTE);
+
+  // Buscar reinicia o teto: filtrar e continuar mostrando o teto anterior
+  // esconderia resultados sem dizer que existem.
+  function buscar(valor: string) {
+    setBusca(valor);
+    setTeto(LOTE);
+  }
 
   const encontradas = useMemo(() => {
     const termo = normalizar(busca);
@@ -128,7 +143,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(e) => buscar(e.target.value)}
               placeholder={`Buscar entre ${skins.length} skin${
                 skins.length > 1 ? "s" : ""
               }`}
@@ -169,7 +184,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
            eixo: 48px por skin, e o que sobra de tela é o que faz a lista
            ser navegável. */
         <Card className="divide-y overflow-hidden p-0">
-          {encontradas.map((skin) => (
+          {encontradas.slice(0, teto).map((skin) => (
             <div
               key={skin.id}
               className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-muted/40"
@@ -193,6 +208,12 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
                   <img
                     src={skin.imageUrl}
                     alt=""
+                    // As fotos vêm do CDN da Steam, uma por linha. Sem lazy,
+                    // um catálogo de 865 skins dispara 865 downloads de uma
+                    // vez e o "load" da página levava 27s. O DOM já estava
+                    // pronto em 638ms; era só imagem segurando.
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-contain"
                   />
                 ) : (
@@ -258,6 +279,16 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
               </Button>
             </div>
           ))}
+          {encontradas.length > teto && (
+            <button
+              type="button"
+              onClick={() => setTeto((t) => t + LOTE)}
+              className="w-full px-3 py-3 text-center text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+            >
+              Mostrar mais {Math.min(LOTE, encontradas.length - teto)} de{" "}
+              {(encontradas.length - teto).toLocaleString("pt-BR")} restantes
+            </button>
+          )}
         </Card>
       )}
     </div>

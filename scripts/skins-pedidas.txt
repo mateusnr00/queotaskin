@@ -1,0 +1,143 @@
+# As skins de arma pedidas para o catalogo, uma por linha.
+#
+# Vao para o catalogo SEM o desgaste no nome: quem cria a campanha escolhe a
+# skin primeiro e o float depois. Facas, luvas e agentes nao entram aqui, sao
+# adicionados por categoria inteira:
+#
+#   npx tsx scripts/adicionar-skins.ts \
+#     --arquivo scripts/skins-pedidas.txt \
+#     --categoria Knives --categoria Gloves --categoria Agents
+#
+# Acrescente linhas aqui e rode de novo: o comando e idempotente.
+
+AK-47 | Gold Arabesque
+AK-47 | Fire Serpent
+AK-47 | Case Hardened
+AK-47 | Bloodsport
+AK-47 | Vulcan
+AK-47 | Neon Revolution
+AK-47 | Fuel Injector
+AK-47 | The Empress
+AK-47 | AUTOEXEC
+AK-47 | Wasteland Rebel
+AK-47 | Nightwish
+AK-47 | B the Monster
+AK-47 | Neon Rider
+AK-47 | Asiimov
+AK-47 | Inheritance
+AK-47 | Aquamarine Revenge
+AK-47 | The Oligarch
+AK-47 | Redline
+AK-47 | Head Shot
+AK-47 | Green Laminate
+AK-47 | Orbit Mk01
+AK-47 | Frontside Misty
+AK-47 | Point Disarray
+AK-47 | Aphrodite
+AK-47 | The Outsiders
+AK-47 | Crane Flight
+AK-47 | Nouveau Rouge
+AK-47 | Ice Coaled
+AK-47 | Slate
+AK-47 | Midnight Laminate
+AWP | Containment Breach
+AWP | Printstream
+AWP | Neo-Noir
+AWP | LongDog
+AWP | Queen's Gambit
+AWP | Wildfire
+AWP | Redline
+AWP | Hyper Beast
+AWP | Chromatic Aberration
+AWP | Chrome Cannon
+AWP | Crakow!
+AWP | Fever Dream
+AWP | The End
+AWP | Green Energy
+AWP | Ice Coaled
+AWP | Atheris
+AWP | Exoskeleton
+AWP | Mortis
+AWP | Black Nile
+AWP | Fade
+AWP | Asiimov
+M4A1-S | Cyrex
+M4A1-S | Printstream
+M4A1-S | Hyper Beast
+M4A1-S | Mecha Industries
+M4A1-S | Player Two
+M4A1-S | Golden Coil
+M4A1-S | Vaporwave
+M4A1-S | Atomic Alloy
+M4A1-S | Decimator
+M4A1-S | Leaded Glass
+M4A1-S | Party Animal
+M4A1-S | Nightmare
+M4A1-S | Control Panel
+M4A1-S | Black Lotus
+M4A1-S | Stratosphere
+M4A1-S | Glitched Paint
+M4A1-S | Solitude
+M4A1-S | Blue Phosphor
+M4A1-S | Fade
+M4A4 | The Coalition
+M4A4 | Buzz Kill
+M4A4 | Asiimov
+M4A4 | Hellfire
+M4A4 | Royal Paladin
+M4A4 | The Emperor
+M4A4 | Desert-Strike
+M4A4 | Neo-Noir
+M4A4 | In Living Color
+M4A4 | Full Throttle
+M4A4 | Temukau
+M4A4 | Cyber Security
+M4A4 | 龍王 (Dragon King)
+M4A4 | Falak
+M4A4 | Desolate Space
+M4A4 | Hellish
+M4A4 | Tooth Fairy
+M4A4 | Spider Lily
+M4A4 | Evil Daimyo
+Desert Eagle | Emerald Jörmungandr
+Desert Eagle | Ocean Drive
+Desert Eagle | Code Red
+Desert Eagle | Starcade
+Desert Eagle | Printstream
+Desert Eagle | Conspiracy
+Desert Eagle | Eastern Enigma
+Desert Eagle | Night
+Desert Eagle | Crimson Web
+Desert Eagle | Mecha Industries
+Glock-18 | Gamma Doppler (Emerald)
+Glock-18 | Wasteland Rebel
+Glock-18 | Gamma Doppler (Phase 1)
+Glock-18 | Gamma Doppler (Phase 2)
+Glock-18 | Gamma Doppler (Phase 4)
+Glock-18 | Gamma Doppler (Phase 3)
+Glock-18 | Fully Tuned
+Glock-18 | Bullet Queen
+Glock-18 | Neo-Noir
+Glock-18 | Gold Toof
+Glock-18 | AXIA
+Glock-18 | Water Elemental
+Glock-18 | Shinobu
+Glock-18 | Vogue
+P2000 | Fire Elemental
+P250 | See Ya Later
+P250 | Muertos
+P250 | Asiimov
+P250 | Kintsugi
+Tec-9 | Bamboo Forest
+USP-S | Neo-Noir
+USP-S | Kill Confirmed
+USP-S | The Traitor
+USP-S | Printstream
+USP-S | Road Rash
+USP-S | Monster Mashup
+USP-S | Spiral Glitch
+USP-S | Overgrowth
+USP-S | Royal Blue
+USP-S | Cortex
+USP-S | Cyrex
+USP-S | Jawbreaker

@@ -127,19 +127,37 @@ export function nomeDoItem(
   return partes.join(" ");
 }
 
-/** Expande cada item da API nas suas linhas de catálogo, uma por desgaste. */
+/**
+ * Transforma os itens da API em linhas de catálogo.
+ *
+ * Com `comDesgaste`, cada skin vira uma linha por desgaste, e o nome sai como
+ * no mercado da Steam: "AK-47 | Redline (Field-Tested)".
+ *
+ * Sem ele, cada skin vira uma linha só, "AK-47 | Redline", e o campo de
+ * desgaste fica vazio. É o modo que o catálogo usa: quem cria a campanha
+ * escolhe a skin primeiro e o float depois, então guardar as cinco variações
+ * de cada uma encheria a lista de repetição para uma escolha que é feita
+ * adiante.
+ *
+ * A fase continua no nome nos dois modos: sem ela, as sete fases de um
+ * Doppler produzem sete linhas com o mesmo nome, e o catálogo exige nome
+ * único por tenant.
+ */
 export function montarIndice(
   skins: ItemDaApi[],
   agentes: ItemDaApi[] = [],
+  { comDesgaste = true }: { comDesgaste?: boolean } = {},
 ): EntradaDoCatalogo[] {
   const linhas: EntradaDoCatalogo[] = [];
 
   for (const item of skins) {
     // Faca sem pintura ("★ Bayonet") vem sem lista de desgaste na API; ela é
     // uma linha só, sem parênteses.
-    const desgastes = item.wears?.length
-      ? item.wears.map((w) => w.name ?? null)
-      : [null];
+    const desgastes = !comDesgaste
+      ? [null]
+      : item.wears?.length
+        ? item.wears.map((w) => w.name ?? null)
+        : [null];
     for (const desgaste of desgastes) {
       linhas.push({
         nome: nomeDoItem(item.name, desgaste, item.phase),
