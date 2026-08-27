@@ -5,13 +5,23 @@
 // Os textos (título, descrição, label do botão) e a imagem podem ser
 // personalizados por tenant em Admin → Configurações → Mensagens. Quando
 // o admin não preencheu nada, caímos pros defaults abaixo.
+//
+// Deixou de ser âmbar. Âmbar é a cor da tela de aguardar pagamento, e as
+// duas ficavam parecidas justamente onde a diferença mais importa: uma diz
+// "ainda dá tempo", a outra diz "acabou". Aqui a cor é neutra, e o que
+// chama atenção é o botão de tentar de novo, que é a única coisa que ainda
+// pode ser feita.
+//
+// A carinha triste saiu junto: ela ocupava 80px de altura para repetir o
+// que o título já dizia, e num aviso de má notícia o desenho grande soa
+// como deboche.
 
 import Link from "next/link";
-import { Frown } from "lucide-react";
+import { TimerOff } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 
-const DEFAULT_TITLE = "Que pena, sua reserva expirou";
+const DEFAULT_TITLE = "Sua reserva expirou";
 const DEFAULT_TITLE_CANCELLED = "Reserva cancelada";
 const DEFAULT_DESCRIPTION =
   "O tempo para pagamento acabou e seus números voltaram para venda. Se ainda estiverem disponíveis, você pode escolhê-los de novo.";
@@ -30,7 +40,6 @@ interface Props {
 }
 
 export function ExpiredReservation({
-  raffleTitle,
   raffleSlug,
   cancelled = false,
   customTitle,
@@ -48,25 +57,18 @@ export function ExpiredReservation({
   const imageUrl = customImageUrl?.trim() || null;
 
   return (
-    <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/10 p-8 text-center">
-        <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-amber-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-10 -right-10 h-40 w-40 rounded-full bg-orange-500/20 blur-3xl" />
-
-        <div className="relative">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500 shadow-lg shadow-amber-500/40">
-            <Frown className="h-12 w-12 text-white" strokeWidth={2.5} />
-          </div>
-
-          <h2 className="text-2xl font-bold text-amber-900 dark:text-amber-100 whitespace-pre-line">
-            {title}
-          </h2>
-
-          <p className="mt-2 text-sm text-amber-800 dark:text-amber-200 whitespace-pre-line">
-            {description}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <section className="rounded-2xl border bg-card p-5 text-center md:p-6">
+        <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <TimerOff className="h-5 w-5" />
+        </span>
+        <h2 className="mt-3 whitespace-pre-line text-xl font-bold tracking-tight md:text-2xl">
+          {title}
+        </h2>
+        <p className="mx-auto mt-2 max-w-sm whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      </section>
 
       {imageUrl && (
         <div className="overflow-hidden rounded-2xl border bg-card">
@@ -74,16 +76,13 @@ export function ExpiredReservation({
           <img
             src={imageUrl}
             alt=""
-            className="w-full max-h-80 object-cover"
+            className="max-h-72 w-full object-cover"
           />
         </div>
       )}
 
-      <div className="rounded-xl border bg-muted/30 p-4 text-sm">
-        <p className="text-xs text-muted-foreground">Sorteio</p>
-        <p className="font-medium">{raffleTitle}</p>
-      </div>
-
+      {/* O nome da campanha já está no cabeçalho da página, então o cartão
+          que só repetia "Sorteio: X" saiu. O que sobra aqui é a saída. */}
       <Link
         href={`/s/${raffleSlug}`}
         className={buttonVariants({ size: "lg", className: "w-full" })}

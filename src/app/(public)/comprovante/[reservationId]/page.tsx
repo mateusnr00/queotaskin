@@ -13,7 +13,7 @@ import { PaidCelebration } from "@/components/public/paid-celebration";
 import { XpGanho } from "@/components/public/xp-ganho";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
-import { CheckPaymentButton } from "@/components/public/check-payment-button";
+import { TrilhaDoPedido } from "@/components/public/trilha-do-pedido";
 import {
   ensurePixForReservation,
   pollPaymentStatusIfPending,
@@ -195,7 +195,8 @@ export default async function ReservationReceiptPage({
       prize: b.prize ? { prize: b.prize.prize } : null,
     }));
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-12 space-y-6">
+      <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+        <TrilhaDoPedido estado="pago" titulo={reservation.raffle.title} />
         <PaidCelebration
           raffleTitle={reservation.raffle.title}
           raffleSlug={reservation.raffle.slug}
@@ -239,7 +240,8 @@ export default async function ReservationReceiptPage({
     reservation.status === "CANCELLED"
   ) {
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-12">
+      <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+        <TrilhaDoPedido estado="encerrado" titulo={reservation.raffle.title} />
         <ExpiredReservation
           raffleTitle={reservation.raffle.title}
           raffleSlug={reservation.raffle.slug}
@@ -284,99 +286,71 @@ export default async function ReservationReceiptPage({
     // o Pix ficava espremido entre o cronômetro e os dados do participante,
     // e o título dizia "Reserva confirmada" numa reserva que ainda não
     // estava paga.
-    <div className="mx-auto w-full max-w-md px-4 py-6 md:max-w-lg md:py-10">
-      <div className="space-y-4">
-        {/* ---------- cabeçalho ---------- */}
-        <div className="space-y-2 text-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
-            </span>
-            Aguardando pagamento
-          </span>
-          <h1 className="text-lg font-bold leading-tight tracking-tight">
-            {reservation.raffle.title}
-          </h1>
-        </div>
+    <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+      <TrilhaDoPedido estado="aguardando" titulo={reservation.raffle.title} />
 
-        {/* ---------- valor + quantidade ---------- */}
-        {/* O que pagar vem antes de como pagar: é a primeira pergunta de
-            quem abre esta tela. */}
-        <div className="rounded-2xl border bg-gradient-to-br from-accent/40 to-accent/10 px-5 py-4 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* Valor e prazo no mesmo cartão. Eram dois quadros grandes e
+          coloridos empilhados, e o olho não tinha onde pousar primeiro;
+          juntos, respondem de uma vez a "quanto" e "até quando", que é a
+          mesma pergunta vista de dois lados. */}
+      <div className="flex items-center justify-between gap-4 rounded-2xl border bg-card px-4 py-3.5 md:px-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Valor a pagar
           </p>
-          <p className="mt-0.5 text-3xl font-extrabold tabular-nums tracking-tight text-primary">
+          <p className="text-2xl font-extrabold leading-tight tabular-nums tracking-tight text-primary md:text-3xl">
             {formatBRL(Number(reservation.totalAmount))}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {quantidade} {quantidade === 1 ? "número" : "números"} para{" "}
+          <p className="truncate text-xs text-muted-foreground">
+            {quantidade} {quantidade === 1 ? "número" : "números"} ·{" "}
             {reservation.participantName}
           </p>
         </div>
-
         <ReservationCountdown
           expiresAtIso={reservation.expiresAt.toISOString()}
         />
-        {showPix && <PaymentPoller />}
+      </div>
 
-        {showPix && qrDataUrl && pixCode && (
-          <>
-            <PixPayment qrDataUrl={qrDataUrl} pixCode={pixCode} />
-            <CheckPaymentButton reservationId={reservation.id} />
-          </>
-        )}
+      {showPix && <PaymentPoller />}
 
-        {!showPix && (
-          <PixError
-            reservationId={reservation.id}
-            error={
-              pixError ??
-              "Pix ainda não foi gerado. Tente novamente em instantes."
-            }
-          />
-        )}
+      {showPix && qrDataUrl && pixCode ? (
+        <PixPayment
+          qrDataUrl={qrDataUrl}
+          pixCode={pixCode}
+          reservationId={reservation.id}
+        />
+      ) : (
+        <PixError
+          reservationId={reservation.id}
+          error={
+            pixError ?? "Pix ainda não foi gerado. Tente novamente em instantes."
+          }
+        />
+      )}
 
-        {/* ---------- números, ainda fechados ---------- */}
+      {/* Números e dados no mesmo cartão. Separados, eram dois blocos do
+          tamanho do pagamento para informação que ninguém precisa agora: o
+          que importa nesta tela é pagar. */}
+      <section className="rounded-2xl border bg-card">
         {/* Os números só se revelam depois do pagamento. Mostrá-los antes
             dava a impressão de que a compra já estava garantida, e ela não
-            está: a reserva expira e os números voltam para o sorteio. Eles
-            aparecem na tela de confirmação, junto do comprovante. */}
-        <div className="rounded-2xl border bg-card p-4 text-center">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <Lock className="h-4 w-4" />
-          </div>
-          <p className="mt-2 text-sm font-semibold">
-            {quantidade} {quantidade === 1 ? "número reservado" : "números reservados"}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Eles aparecem aqui assim que o pagamento for confirmado.
-          </p>
-          {/* Silhueta do que virá: comunica que os números existem e são
-              seus, sem entregar quais. */}
-          <div
-            className="mt-3 flex flex-wrap justify-center gap-1.5 select-none"
-            aria-hidden
-          >
-            {Array.from({ length: Math.min(quantidade, 12) }).map((_, i) => (
-              <span
-                key={i}
-                className="rounded-md bg-muted px-3 py-1 text-xs font-mono text-transparent blur-[3px]"
-              >
-                000000
-              </span>
-            ))}
-            {quantidade > 12 && (
-              <span className="px-1 py-1 text-xs text-muted-foreground">
-                +{quantidade - 12}
-              </span>
-            )}
+            está: a reserva expira e os números voltam para o sorteio. */}
+        <div className="flex items-center gap-3 border-b px-4 py-3 md:px-5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">
+              {quantidade}{" "}
+              {quantidade === 1 ? "número reservado" : "números reservados"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Aparecem aqui assim que o pagamento for confirmado.
+            </p>
           </div>
         </div>
 
-        {/* ---------- dados da reserva ---------- */}
-        <div className="rounded-2xl border bg-card p-4 text-sm">
+        <div className="px-4 py-1 text-sm md:px-5">
           <Info label="Participante">{reservation.participantName}</Info>
           {reservation.participantPhone && (
             <Info label="Telefone">
@@ -384,7 +358,7 @@ export default async function ReservationReceiptPage({
             </Info>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
@@ -408,8 +382,8 @@ async function getClientIp(): Promise<string> {
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-4 py-1">
-      <span className="text-muted-foreground">{label}</span>
+    <div className="flex items-baseline justify-between gap-4 border-b py-3 last:border-b-0">
+      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
       <span className="text-right">{children}</span>
     </div>
   );

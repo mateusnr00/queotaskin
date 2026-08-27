@@ -41,24 +41,27 @@ export function CheckPaymentButton({ reservationId }: Props) {
     });
   }
 
+  // Discreto de propósito: é a saída de emergência para quando o webhook
+  // demora, não a ação da tela. Cheio e do mesmo tamanho do "Copiar código",
+  // competia com ele e convidava a pessoa a clicar antes de pagar.
   return (
     <Button
       type="button"
-      variant="outline"
-      size="lg"
-      className="w-full"
+      variant="ghost"
+      size="sm"
+      className="h-9 w-full text-xs text-muted-foreground hover:text-foreground"
       onClick={onCheck}
       disabled={pending}
     >
       {pending ? (
         <>
-          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
           Verificando...
         </>
       ) : (
         <>
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          Já paguei, verificar
+          <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+          Já paguei, verificar agora
         </>
       )}
     </Button>
