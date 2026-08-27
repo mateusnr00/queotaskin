@@ -291,18 +291,30 @@ const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3 MB (Sorteamos usa 3.1 MB)
 const LOGO_EXT =
   /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
-// Os dois espaços de imagem do site. Ficam separados porque têm formatos
+// Os três espaços de imagem do site. Ficam separados porque têm formatos
 // incompatíveis: a logo é uma faixa larga com o nome escrito, o favicon é
-// lido a 16px num quadrado.
-export type SlotDeImagem = "logo" | "favicon";
+// lido a 16px num quadrado, e o fundo cobre uma tela inteira.
+export type SlotDeImagem = "logo" | "favicon" | "fundo";
 
-const COLUNA_POR_SLOT: Record<SlotDeImagem, "logoUrl" | "faviconUrl"> = {
+const COLUNA_POR_SLOT: Record<
+  SlotDeImagem,
+  "logoUrl" | "faviconUrl" | "authBackgroundUrl"
+> = {
   logo: "logoUrl",
   favicon: "faviconUrl",
+  fundo: "authBackgroundUrl",
 };
 
+const COLUNAS_DE_IMAGEM = {
+  logoUrl: true,
+  faviconUrl: true,
+  authBackgroundUrl: true,
+} as const;
+
 function slotDoFormulario(valor: FormDataEntryValue | null): SlotDeImagem {
-  return valor === "favicon" ? "favicon" : "logo";
+  if (valor === "favicon") return "favicon";
+  if (valor === "fundo") return "fundo";
+  return "logo";
 }
 
 export async function uploadLogoAction(
@@ -338,7 +350,7 @@ export async function uploadLogoAction(
     // Apaga o logo anterior (best-effort) antes de subir o novo.
     const existing = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { logoUrl: true, faviconUrl: true },
+      select: COLUNAS_DE_IMAGEM,
     });
     const anterior = existing?.[coluna];
     if (anterior) {
@@ -368,7 +380,7 @@ export async function uploadLogoAction(
 // host (postimg, imgur, etc). URL gravada como veio; só apaga o arquivo
 // anterior do Supabase se for um path nosso.
 const logoUrlSchema = z.object({
-  slot: z.enum(["logo", "favicon"]).default("logo"),
+  slot: z.enum(["logo", "favicon", "fundo"]).default("logo"),
   url: z
     .string()
     .trim()
@@ -400,7 +412,7 @@ export async function setLogoByUrlAction(
     // Se a imagem anterior era do nosso bucket, apaga (best-effort).
     const existing = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { logoUrl: true, faviconUrl: true },
+      select: COLUNAS_DE_IMAGEM,
     });
     const anterior = existing?.[coluna];
     if (anterior) {
@@ -430,7 +442,7 @@ export async function removeLogoAction(
     const coluna = COLUNA_POR_SLOT[slot];
     const existing = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { logoUrl: true, faviconUrl: true },
+      select: COLUNAS_DE_IMAGEM,
     });
     const anterior = existing?.[coluna];
     if (anterior) {

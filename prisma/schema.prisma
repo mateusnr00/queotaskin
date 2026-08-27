@@ -174,6 +174,11 @@ model User {
   // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
   // novos sempre cadastram.
   phone              String?   @unique
+  // País do telefone, em ISO 3166-1 alfa-2. O número continua guardado só em
+  // dígitos e sem o código do país: assim as contas que já existem seguem
+  // válidas sem migração de dados, e a formatação sabe de que país o número
+  // é na hora de exibir.
+  phoneCountry       String    @default("BR")
   role               Role      @default(PARTICIPANT)
   image              String?
 
@@ -272,6 +277,10 @@ model Tenant {
   // faixa larga, e o favicon é lido a 16px, a mesma imagem nos dois lugares
   // vira um borrão na aba. Quando vazio, cai na logo.
   faviconUrl                        String?
+  // Arte de fundo das telas de entrar e criar conta. Fica no Tenant e não
+  // num arquivo do repositório porque é escolha de marca de cada site, e
+  // trocar arte não pode depender de deploy.
+  authBackgroundUrl                 String?
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
   logoShape                         LogoShape @default(RECTANGLE)

@@ -5,7 +5,9 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { SiteHeader } from "@/components/public/site-header";
 import { ProvasDoSite } from "@/components/auth/provas-do-site";
 import { FundoDaTela } from "@/components/auth/vitrine-de-skins";
+import { prisma } from "@/lib/db";
 import { getBrand } from "@/lib/brand";
+import { getCurrentTenant } from "@/lib/tenant";
 import { isAdminHost } from "@/lib/host";
 
 // Telas de entrar, criar conta e trocar senha.
@@ -35,6 +37,19 @@ export default async function AuthLayout({
   const host = (await headers()).get("host") ?? "";
   const ano = new Date().getFullYear();
 
+  // A arte de fundo é do site, cadastrada no painel. Falhar aqui não pode
+  // derrubar a tela de entrar: sem ela o fundo cai na arte embutida.
+  const tenant = isAdminHost(host) ? null : await getCurrentTenant().catch(() => null);
+  const fundo = tenant
+    ? await prisma.tenant
+        .findUnique({
+          where: { id: tenant.id },
+          select: { authBackgroundUrl: true },
+        })
+        .then((t) => t?.authBackgroundUrl ?? null)
+        .catch(() => null)
+    : null;
+
   if (isAdminHost(host)) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
@@ -50,7 +65,7 @@ export default async function AuthLayout({
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <FundoDaTela />
+      <FundoDaTela url={fundo} />
 
       {/* Todo o conteúdo numa camada acima do fundo. Sem isto o fundo fixo,
           que é irmão e vem depois no fluxo, ficaria por cima do formulário. */}

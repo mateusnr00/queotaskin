@@ -5,11 +5,12 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowRight, IdCard, Lock, MessageCircle, User } from "lucide-react";
+import { ArrowRight, ChevronDown, IdCard, Phone, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
-import { formatCpf, formatPhone } from "@/lib/cpf";
+import { formatCpf } from "@/lib/cpf";
+import { PAISES, PAIS_PADRAO, formatarTelefone, paisPorIso } from "@/lib/telefone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,8 +45,16 @@ export function RegisterForm() {
       name: "",
       cpf: "",
       phone: "",
+      phoneCountry: PAIS_PADRAO,
     },
   });
+
+  // O país escolhido manda na máscara e na validação do número. Fica em
+  // watch porque trocar de país precisa reformatar o que já foi digitado:
+  // sem isso, um número brasileiro mascarado continuaria com parênteses
+  // depois de trocar para Portugal.
+  const isoDoPais = form.watch("phoneCountry");
+  const pais = paisPorIso(isoDoPais);
 
   function onSubmit(values: RegisterInput) {
     setServerError(null);
@@ -140,45 +149,59 @@ export function RegisterForm() {
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={ROTULO}>WhatsApp</FormLabel>
+              <FormLabel className={ROTULO}>Telefone</FormLabel>
               <FormControl>
-                <div className="relative">
-                  {/* O +55 é rótulo fixo, não seletor de país. O cadastro
-                      guarda e valida número brasileiro de 10 ou 11 dígitos,
-                      então uma listinha de bandeiras aqui prometeria um
-                      cadastro internacional que o resto do sistema recusa. */}
-                  <span className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-sm text-muted-foreground">
-                    <MessageCircle className="h-4 w-4 text-emerald-500" />
-                    <span className="font-medium tabular-nums">+55</span>
-                  </span>
-                  <Input
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="(11) 99999-9999"
-                    className="h-12 pl-[5.25rem] tabular-nums"
-                    value={field.value}
-                    onChange={(e) => {
-                      const digits = e.target.value
-                        .replace(/\D/g, "")
-                        .slice(0, 11);
-                      field.onChange(
-                        digits.length >= 10 ? formatPhone(digits) : digits
-                      );
-                    }}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
+                <div className="flex gap-2">
+                  {/* Seletor de país nativo, e não uma lista desenhada à mão:
+                      no celular ele abre a roda do sistema, que é o jeito
+                      mais rápido de escolher entre dezessete itens, e vem de
+                      graça com teclado e leitor de tela. */}
+                  <div className="relative shrink-0">
+                    <select
+                      aria-label="País do telefone"
+                      value={isoDoPais}
+                      onChange={(e) => {
+                        const novo = e.target.value;
+                        form.setValue("phoneCountry", novo);
+                        // Reaplica a máscara do país novo no que já está
+                        // digitado, senão sobra a pontuação do país antigo.
+                        field.onChange(formatarTelefone(field.value, novo));
+                      }}
+                      className="h-12 appearance-none rounded-md border border-input bg-transparent py-1 pl-3 pr-8 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      {PAISES.map((p) => (
+                        <option key={p.iso} value={p.iso}>
+                          {p.bandeira} {p.ddi ? `+${p.ddi}` : p.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+
+                  <div className="relative flex-1">
+                    <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder={formatarTelefone(
+                        "9".repeat(pais.digitos[1]),
+                        pais.iso
+                      )}
+                      className={cn(CAMPO, "tabular-nums")}
+                      value={field.value}
+                      onChange={(e) => {
+                        const digitos = e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, pais.digitos[1]);
+                        field.onChange(formatarTelefone(digitos, pais.iso));
+                      }}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </div>
                 </div>
               </FormControl>
-              {/* O celular não entra no login, então sem esta linha ele
-                  parece um campo pedido à toa. É por ele que a operação fala
-                  com quem comprou. */}
-              <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                <Lock className="mt-0.5 h-3 w-3 shrink-0" />
-                Usamos seu WhatsApp só para falar sobre pagamento, sorteio e
-                entrega do prêmio.
-              </p>
               <FormMessage />
             </FormItem>
           )}

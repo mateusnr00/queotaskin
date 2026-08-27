@@ -1,7 +1,8 @@
 "use server";
 
 // Server Actions de autenticação. Fluxo PASSWORDLESS por nome + celular:
-// - registerAction: cria conta com {name, cpf, phone}. Sem senha, sem e-mail.
+// - registerAction: cria conta com {name, cpf, phone, phoneCountry}. Sem
+//   senha, sem e-mail.
 //   O CPF é digitado pelo usuário (validado por dígito verificador) e gravado
 //   no User.cpf, alimenta o PIX. Não é exibido na UI depois do cadastro.
 // - loginAction: autentica via nome + CPF. Sem senha.
@@ -49,7 +50,7 @@ export async function registerAction(
     };
   }
 
-  const { name, cpf, phone } = parsed.data;
+  const { name, cpf, phone, phoneCountry } = parsed.data;
 
   // Freio por IP: o cadastro é sem senha e sem captcha, então é criação livre
   // de contas (munição para abuso de reserva) e um oráculo de enumeração. Usa
@@ -83,6 +84,7 @@ export async function registerAction(
         name,
         cpf,
         phone,
+        phoneCountry,
         role: "PARTICIPANT",
         tenantId: tenant?.id ?? null,
       },

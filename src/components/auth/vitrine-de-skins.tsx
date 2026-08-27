@@ -47,24 +47,29 @@ export function FaixaDeRaridade({ className }: { className?: string }) {
  * passa da dobra, e fundo que acompanha a rolagem termina numa faixa preta
  * no fim do caminho.
  *
- * Sem o arquivo, o fundo é desenhado no CSS. O interruptor é explícito de
- * propósito: apontar um <Image> para um arquivo que talvez não exista
- * trocaria a tela por um retângulo quebrado, e ninguém perceberia até
- * alguém abrir a página.
+ * A arte vem do painel, campo Tenant.authBackgroundUrl. Trocar a arte do
+ * site deixou de depender de deploy, e cada site de um deploy multi-tenant
+ * tem a sua. O arquivo que estava no código virou o valor inicial da coluna,
+ * por migração: como ele existe sempre no repositório, usá-lo como reserva
+ * automática deixaria o caso "site sem arte" inalcançável, e o degradê
+ * abaixo seria código morto.
+ *
+ * Sem arte, o fundo é desenhado no CSS. É o que um site recém-criado vê
+ * antes de alguém subir a imagem dele.
  */
-const ARTE_DE_FUNDO = "/auth-fundo.webp";
-export const TEM_ARTE_DE_FUNDO = true;
-
-export function FundoDaTela() {
+export function FundoDaTela({ url }: { url?: string | null }) {
+  const arte = url?.trim();
   return (
     <div aria-hidden className="fixed inset-0 bg-black">
-      {TEM_ARTE_DE_FUNDO ? (
+      {arte ? (
         <Image
-          src={ARTE_DE_FUNDO}
+          src={arte}
           alt=""
           fill
           priority
           sizes="100vw"
+          // unoptimized não: a arte é grande e o otimizador do Next é o que
+          // entrega webp do tamanho da tela em vez do arquivo cheio.
           className="object-cover object-center"
         />
       ) : (
