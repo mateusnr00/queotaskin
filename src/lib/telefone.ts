@@ -10,9 +10,13 @@ import { onlyDigits } from "@/lib/cpf";
 // dado nenhum: o default da coluna é BR, que é o que todos eles são, porque
 // até agora o formulário só aceitava DDD mais 8 ou 9 dígitos.
 //
-// Sem bandeira em emoji: o Windows não tem fonte de bandeiras, e o emoji
-// aparece como as duas letras do país. Como o código ISO já é exibido, a
-// bandeira só somava um caractere que se comporta diferente em cada sistema.
+// A bandeira é emoji. Já foi SVG desenhado à mão, e ficou ruim: num círculo
+// de 20px as simplificações necessárias descaracterizavam metade delas. O
+// emoji é a arte do próprio sistema, e no celular, que é onde a maioria se
+// cadastra, ele sai bonito.
+//
+// O preço é conhecido e aceito: o Windows não tem fonte de bandeiras e
+// mostra as duas letras do país no lugar do desenho.
 //
 // A lista não é a ONU inteira. São os países de onde a operação
 // realisticamente recebe cliente, mais a linha "outro país" no fim, que
@@ -25,6 +29,7 @@ export type Pais = {
   nome: string;
   /** Código internacional, sem o "+". */
   ddi: string;
+  bandeira: string;
   /** Quantos dígitos o número nacional pode ter, inclusive. */
   digitos: [number, number];
   /** Como escrever o número na tela; "#" é um dígito. */
@@ -32,26 +37,26 @@ export type Pais = {
 };
 
 export const PAISES: Pais[] = [
-  { iso: "BR", nome: "Brasil", ddi: "55", digitos: [10, 11], mascara: "(##) #####-####" },
-  { iso: "PT", nome: "Portugal", ddi: "351", digitos: [9, 9], mascara: "### ### ###" },
-  { iso: "US", nome: "Estados Unidos", ddi: "1", digitos: [10, 10], mascara: "(###) ###-####" },
-  { iso: "AR", nome: "Argentina", ddi: "54", digitos: [10, 11] },
-  { iso: "PY", nome: "Paraguai", ddi: "595", digitos: [9, 9] },
-  { iso: "UY", nome: "Uruguai", ddi: "598", digitos: [8, 9] },
-  { iso: "CL", nome: "Chile", ddi: "56", digitos: [9, 9] },
-  { iso: "CO", nome: "Colômbia", ddi: "57", digitos: [10, 10] },
-  { iso: "PE", nome: "Peru", ddi: "51", digitos: [9, 9] },
-  { iso: "BO", nome: "Bolívia", ddi: "591", digitos: [8, 8] },
-  { iso: "MX", nome: "México", ddi: "52", digitos: [10, 10] },
-  { iso: "ES", nome: "Espanha", ddi: "34", digitos: [9, 9] },
-  { iso: "IT", nome: "Itália", ddi: "39", digitos: [9, 11] },
-  { iso: "GB", nome: "Reino Unido", ddi: "44", digitos: [10, 10] },
-  { iso: "CA", nome: "Canadá", ddi: "1", digitos: [10, 10], mascara: "(###) ###-####" },
-  { iso: "JP", nome: "Japão", ddi: "81", digitos: [9, 10] },
+  { iso: "BR", bandeira: "🇧🇷", nome: "Brasil", ddi: "55", digitos: [10, 11], mascara: "(##) #####-####" },
+  { iso: "PT", bandeira: "🇵🇹", nome: "Portugal", ddi: "351", digitos: [9, 9], mascara: "### ### ###" },
+  { iso: "US", bandeira: "🇺🇸", nome: "Estados Unidos", ddi: "1", digitos: [10, 10], mascara: "(###) ###-####" },
+  { iso: "AR", bandeira: "🇦🇷", nome: "Argentina", ddi: "54", digitos: [10, 11] },
+  { iso: "PY", bandeira: "🇵🇾", nome: "Paraguai", ddi: "595", digitos: [9, 9] },
+  { iso: "UY", bandeira: "🇺🇾", nome: "Uruguai", ddi: "598", digitos: [8, 9] },
+  { iso: "CL", bandeira: "🇨🇱", nome: "Chile", ddi: "56", digitos: [9, 9] },
+  { iso: "CO", bandeira: "🇨🇴", nome: "Colômbia", ddi: "57", digitos: [10, 10] },
+  { iso: "PE", bandeira: "🇵🇪", nome: "Peru", ddi: "51", digitos: [9, 9] },
+  { iso: "BO", bandeira: "🇧🇴", nome: "Bolívia", ddi: "591", digitos: [8, 8] },
+  { iso: "MX", bandeira: "🇲🇽", nome: "México", ddi: "52", digitos: [10, 10] },
+  { iso: "ES", bandeira: "🇪🇸", nome: "Espanha", ddi: "34", digitos: [9, 9] },
+  { iso: "IT", bandeira: "🇮🇹", nome: "Itália", ddi: "39", digitos: [9, 11] },
+  { iso: "GB", bandeira: "🇬🇧", nome: "Reino Unido", ddi: "44", digitos: [10, 10] },
+  { iso: "CA", bandeira: "🇨🇦", nome: "Canadá", ddi: "1", digitos: [10, 10], mascara: "(###) ###-####" },
+  { iso: "JP", bandeira: "🇯🇵", nome: "Japão", ddi: "81", digitos: [9, 10] },
   // Escotilha de saída. Sem ela, quem mora fora da lista não conclui o
   // cadastro, e um seletor que não tem o país de quem está preenchendo é
   // pior que não ter seletor nenhum.
-  { iso: "XX", nome: "Outro país", ddi: "", digitos: [6, 15] },
+  { iso: "XX", bandeira: "🌎", nome: "Outro país", ddi: "", digitos: [6, 15] },
 ];
 
 export const PAIS_PADRAO = "BR";

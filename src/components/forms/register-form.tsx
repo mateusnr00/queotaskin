@@ -27,7 +27,6 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { Bandeira } from "@/components/forms/bandeira";
 import { cn } from "@/lib/utils";
 
 /** Rótulo miúdo em caixa alta, como nos painéis do jogo. */
@@ -163,7 +162,7 @@ export function RegisterForm() {
                     telefone; aqui a moldura é comum e o divisor separa as
                     duas partes, que é como o cadastro de telefone se parece
                     em todo lugar. */}
-                <div className="flex h-12 items-center rounded-md border border-input shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+                <div className="flex h-12 items-center rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
                   <Select
                     value={isoDoPais}
                     onValueChange={(v) => {
@@ -176,16 +175,23 @@ export function RegisterForm() {
                   >
                     <SelectTrigger
                       aria-label="País do telefone"
-                      className="h-full w-auto shrink-0 gap-1 rounded-l-md rounded-r-none border-0 px-3 shadow-none focus-visible:ring-0 [&>svg:last-child]:hidden"
+                      className="h-full w-auto shrink-0 gap-1 rounded-l-md rounded-r-none border-0 bg-transparent px-3 shadow-none focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&>svg:last-child]:hidden"
                     >
-                      <Bandeira iso={isoDoPais} />
+                      {/* leading-none e o tamanho explícito porque emoji
+                          herda a entrelinha do campo e desalinha na
+                          vertical. */}
+                      <span className="text-lg leading-none">
+                        {pais.bandeira}
+                      </span>
                       <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                     </SelectTrigger>
                     <SelectContent>
                       {PAISES.map((p) => (
                         <SelectItem key={p.iso} value={p.iso}>
                           <span className="flex w-full items-center gap-2.5">
-                            <Bandeira iso={p.iso} tamanho={18} />
+                            <span className="text-base leading-none">
+                              {p.bandeira}
+                            </span>
                             <span className="flex-1">{p.nome}</span>
                             {p.ddi && (
                               <span className="tabular-nums text-muted-foreground">
@@ -207,7 +213,7 @@ export function RegisterForm() {
                       "9".repeat(pais.digitos[1]),
                       pais.iso
                     )}
-                    className="h-full flex-1 border-0 bg-transparent px-3 tabular-nums shadow-none focus-visible:border-0 focus-visible:ring-0"
+                    className="h-full flex-1 border-0 bg-transparent px-3 tabular-nums shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
                     value={field.value}
                     onChange={(e) => {
                       const digitos = e.target.value
