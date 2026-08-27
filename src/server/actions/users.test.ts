@@ -121,6 +121,11 @@ describe("criarUsuarioAction", () => {
     const entrada = registrarLog.mock.calls[0]![0];
     expect(entrada.acao).toBe("usuario.criado");
     expect(entrada.detalhes.comAcessoAoPainel).toBe(true);
+    // A asserção que interessa vive dentro do `if`, e esta linha existe para
+    // que o ramo não deixe de ser tomado em silêncio: sem ela, uma mudança
+    // que parasse de gerar senha apagaria a única guarda automatizada de que
+    // a senha não vaza para o log, e o teste continuaria passando.
+    expect(r.ok && r.data.senhaTemporaria).toBeTruthy();
     if (r.ok && r.data.senhaTemporaria) {
       expect(JSON.stringify(entrada)).not.toContain(r.data.senhaTemporaria);
     }

@@ -164,8 +164,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       tenantId: payment.reservation?.raffle.tenantId ?? null,
       origem: "SISTEMA",
       ator: { nome: "Webhook SyncPay" },
-      alvo: { tipo: "Payment", id: payment.id },
-      detalhes: { reservaId: payment.reservationId, caminho: "webhook" },
+      alvo: { tipo: "Reservation", id: payment.reservationId },
+      detalhes: { pagamentoId: payment.id, caminho: "webhook" },
     });
     // Após PAID, transiciona pra AWARDED os tickets cujos números são
     // títulos premiados cadastrados pra rifa.
@@ -194,8 +194,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       tenantId: payment.reservation?.raffle.tenantId ?? null,
       origem: "SISTEMA",
       ator: { nome: "Webhook SyncPay" },
-      alvo: { tipo: "Payment", id: payment.id },
-      detalhes: { reservaId: payment.reservationId, caminho: "webhook" },
+      alvo: { tipo: "Reservation", id: payment.reservationId },
+      detalhes: { pagamentoId: payment.id, caminho: "webhook" },
     });
   }
 

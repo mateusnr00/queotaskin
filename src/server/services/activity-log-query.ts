@@ -106,7 +106,9 @@ export async function listarLogs(
  * A consulta ao registro mais antigo vem antes de qualquer deleção: na
  * imensa maioria das execuções não há nada para apagar, e sair por aqui custa
  * uma leitura de índice em vez de um DELETE varrendo a tabela a cada cinco
- * minutos.
+ * minutos. A leitura só é barata por causa do índice em `criadoEm` sozinho:
+ * esta ordenação não tem filtro nenhum, e o composto `(tenantId, criadoEm)`
+ * não a atenderia, porque o Postgres não faz skip scan da primeira coluna.
  */
 export async function limparLogsAntigos(
   agora: Date = new Date()

@@ -43,6 +43,17 @@ function fimDoDia(dia: string): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+// Os tipos são nomes de tabela; no filtro eles aparecem em português, porque
+// quem opera o painel não conhece o schema do Prisma.
+const NOME_DO_TIPO: Record<TipoDeAlvo, string> = {
+  User: "pessoa",
+  Raffle: "sorteio",
+  Reservation: "reserva",
+  Payment: "pagamento",
+  SkinTemplate: "skin do catálogo",
+  Tenant: "painel",
+};
+
 export default async function LogsPage({
   searchParams,
 }: {
@@ -159,12 +170,41 @@ export default async function LogsPage({
           />
         </label>
 
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Tipo de alvo
+          <select
+            name="alvoTipo"
+            defaultValue={tipoDeAlvo ?? ""}
+            className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
+          >
+            <option value="">qualquer</option>
+            {TIPOS.map((t) => (
+              <option key={t} value={t}>
+                {NOME_DO_TIPO[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* O id é o identificador interno, o mesmo que os atalhos "ver
+            histórico" colocam na URL. Ninguém decora um cuid: o campo existe
+            para colar o que veio de um desses atalhos, ou para editar à mão o
+            recorte que já está aberto. */}
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Id do alvo (identificador interno)
+          <input
+            type="text"
+            name="alvoId"
+            defaultValue={alvoId ?? ""}
+            placeholder="cole aqui"
+            className="h-9 w-44 rounded-lg border bg-background px-2 text-sm text-foreground"
+          />
+        </label>
+
         {/* O filtro por pessoa entra pela URL, clicando no nome numa linha.
             Repetir aqui como campo de texto pediria um cuid decorado, então o
             que a tela oferece é o caminho de volta. */}
         {ator && <input type="hidden" name="ator" value={ator} />}
-        {tipoDeAlvo && <input type="hidden" name="alvoTipo" value={tipoDeAlvo} />}
-        {alvoId && <input type="hidden" name="alvoId" value={alvoId} />}
 
         <button className={buttonVariants({ variant: "outline", size: "sm" })}>
           Filtrar

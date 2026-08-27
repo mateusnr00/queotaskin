@@ -326,8 +326,8 @@ export async function pollPaymentStatusIfPending(
           tenantId: reservation.raffle.tenantId,
           origem: "SISTEMA",
           ator: { nome: "Consulta de status no gateway" },
-          alvo: { tipo: "Payment", id: paymentId },
-          detalhes: { reservaId: reservationId, caminho: "polling" },
+          alvo: { tipo: "Reservation", id: reservationId },
+          detalhes: { pagamentoId: paymentId, caminho: "polling" },
         });
       }
       // Tudo o que o webhook faz depois de confirmar precisa acontecer aqui
@@ -363,8 +363,8 @@ export async function pollPaymentStatusIfPending(
           tenantId: reservation.raffle.tenantId,
           origem: "SISTEMA",
           ator: { nome: "Consulta de status no gateway" },
-          alvo: { tipo: "Payment", id: paymentId },
-          detalhes: { reservaId: reservationId, caminho: "polling" },
+          alvo: { tipo: "Reservation", id: reservationId },
+          detalhes: { pagamentoId: paymentId, caminho: "polling" },
         });
       }
     }

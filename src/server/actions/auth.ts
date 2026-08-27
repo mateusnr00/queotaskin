@@ -17,6 +17,7 @@ import { getCurrentTenant } from "@/lib/tenant";
 import { headers } from "next/headers";
 
 import { auth, signIn, signOut } from "@/auth";
+import { registrarLog } from "@/server/services/activity-log";
 import {
   chavesDoLogin,
   estaBloqueado,
@@ -216,6 +217,19 @@ export async function changeOwnPasswordAction(
       passwordHash: await bcrypt.hash(parsed.data.newPassword, 12),
       mustChangePassword: false,
     },
+  });
+
+  // Trocar a própria senha é o movimento clássico de quem tomou uma conta e
+  // quer ficar dentro dela. Sem esta linha, a única troca de senha que o
+  // histórico enxergava era a feita por outra pessoa no painel.
+  //
+  // Nenhuma senha entra aqui, nem a antiga nem a nova: o registro diz que
+  // aconteceu, e é só isso que ele precisa dizer.
+  await registrarLog({
+    acao: "usuario.senha_gerada",
+    tenantId: session?.user?.tenantId ?? null,
+    alvo: { tipo: "User", id: user.id },
+    detalhes: { o_que: "trocou a propria senha" },
   });
 
   return { ok: true, data: undefined };

@@ -170,7 +170,18 @@ describe("limparLogsAntigos", () => {
     const cheio = Array.from({ length: LOTE_DE_LIMPEZA }, (_, i) => ({
       id: `x${i}`,
     }));
-    findMany.mockResolvedValue(cheio);
+    // Lança em vez de devolver lote cheio para sempre: com uma promessa
+    // sempre resolvida, remover o teto faria a suíte TRAVAR, porque o laço
+    // de microtasks nunca devolve o controle ao timer do Vitest. Teste que
+    // trava é pior que teste que falha.
+    let chamadas = 0;
+    findMany.mockImplementation(async () => {
+      chamadas += 1;
+      if (chamadas > LOTES_POR_EXECUCAO + 2) {
+        throw new Error("laço sem teto: findMany chamado demais");
+      }
+      return cheio;
+    });
     deleteMany.mockResolvedValue({ count: LOTE_DE_LIMPEZA });
 
     const r = await limparLogsAntigos(new Date("2026-08-26"));

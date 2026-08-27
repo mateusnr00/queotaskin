@@ -32,11 +32,22 @@ export interface EntradaDeLog {
    */
   origem?: Origem;
   /**
-   * Só quando NÃO há sessão para ler: webhook de gateway e cron. Com ator
+   * Só quando NÃO há sessão para ler: webhook de gateway, cron, e o próprio
+   * authorize do Auth.js, que é quem está criando a sessão. Com ator
    * informado, a sessão nem é consultada, o que também evita uma ida ao banco
    * dentro do caminho de confirmação de pagamento.
+   *
+   * Os campos além do nome são opcionais porque nem todo caminho os conhece:
+   * um webhook não tem conta por trás, mas o login sabe exatamente quem
+   * entrou, e sem o id o registro de entrada não se cruza com o resto do que
+   * a pessoa fez.
    */
-  ator?: { nome: string };
+  ator?: {
+    nome: string;
+    id?: string | null;
+    papel?: Role | null;
+    email?: string | null;
+  };
 }
 
 interface AtorResolvido {
@@ -91,7 +102,12 @@ async function ipAtual(): Promise<string | null> {
 export async function registrarLog(entrada: EntradaDeLog): Promise<void> {
   try {
     const ator: AtorResolvido = entrada.ator
-      ? { id: null, nome: entrada.ator.nome, papel: null, email: null }
+      ? {
+          id: entrada.ator.id ?? null,
+          nome: entrada.ator.nome,
+          papel: entrada.ator.papel ?? null,
+          email: entrada.ator.email ?? null,
+        }
       : await atorDaSessao();
 
     await prisma.activityLog.create({

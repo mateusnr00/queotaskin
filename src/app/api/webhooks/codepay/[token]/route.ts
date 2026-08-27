@@ -141,8 +141,12 @@ export async function POST(req: Request, { params }: RouteParams) {
       tenantId: payment.reservation?.raffle.tenantId ?? null,
       origem: "SISTEMA",
       ator: { nome: "Webhook CodePay" },
-      alvo: { tipo: "Payment", id: payment.id },
-      detalhes: { reservaId: payment.reservationId, caminho: "webhook" },
+      // O alvo é a reserva, não o pagamento, nos três caminhos de confirmação.
+      // Uma compra vira várias linhas (reserva, Pix, confirmação), e partir a
+      // trilha entre dois tipos de alvo faria nenhum id sozinho contar a
+      // história inteira, que é justamente o que se procura numa disputa.
+      alvo: { tipo: "Reservation", id: payment.reservationId },
+      detalhes: { pagamentoId: payment.id, caminho: "webhook" },
     });
     await autoAwardTicketsForReservation(payment.reservationId).catch((err) =>
       console.error("[codepay webhook] autoAwardTickets falhou:", err)
@@ -169,8 +173,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       tenantId: payment.reservation?.raffle.tenantId ?? null,
       origem: "SISTEMA",
       ator: { nome: "Webhook CodePay" },
-      alvo: { tipo: "Payment", id: payment.id },
-      detalhes: { reservaId: payment.reservationId, caminho: "webhook" },
+      alvo: { tipo: "Reservation", id: payment.reservationId },
+      detalhes: { pagamentoId: payment.id, caminho: "webhook" },
     });
   }
 

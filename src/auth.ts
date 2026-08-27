@@ -143,25 +143,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user || !user.passwordHash || !senhaConfere) {
           await registrarFalha(chaves);
           // Ator informado à mão: não existe sessão numa entrada recusada, e
-          // o e-mail digitado é tudo o que se sabe de quem tentou.
+          // o nome fica sendo o e-mail digitado, que é o que se sabe de quem
+          // tentou. Id e papel só existem quando a conta existe: numa
+          // tentativa contra conta inexistente não há o que amarrar.
           await registrarLog({
             acao: "painel.login_recusado",
             tenantId: user?.tenantId ?? null,
             origem: "PAINEL",
-            ator: { nome: parsed.data.email.toLowerCase() },
+            ator: {
+              nome: parsed.data.email.toLowerCase(),
+              id: user?.id,
+              papel: user?.role,
+              email: parsed.data.email.toLowerCase(),
+            },
             detalhes: { motivo: user ? "senha incorreta" : "conta inexistente" },
           });
           return null;
         }
         if (!PAPEIS_DE_PAINEL.has(user.role)) {
           await registrarFalha(chaves);
-          // Ator informado à mão: não existe sessão numa entrada recusada, e
-          // o e-mail digitado é tudo o que se sabe de quem tentou.
+          // Mesma recusa do bloco acima, e aqui a conta existe: o id vai
+          // junto para que o histórico dela mostre a tentativa.
           await registrarLog({
             acao: "painel.login_recusado",
             tenantId: user?.tenantId ?? null,
             origem: "PAINEL",
-            ator: { nome: parsed.data.email.toLowerCase() },
+            ator: {
+              nome: parsed.data.email.toLowerCase(),
+              id: user?.id,
+              papel: user?.role,
+              email: parsed.data.email.toLowerCase(),
+            },
             detalhes: { motivo: "papel sem acesso ao painel" },
           });
           return null;
@@ -172,11 +184,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         // Ator informado à mão pelo mesmo motivo das recusas acima: dentro
         // do authorize a sessão ainda não existe, é ele quem está criando.
+        // Id, papel e e-mail vão junto porque aqui se sabe exatamente quem
+        // entrou: sem o id, a entrada no painel não apareceria no histórico
+        // filtrado por essa pessoa, que é onde se procura o alcance de uma
+        // conta tomada.
         await registrarLog({
           acao: "painel.login",
           tenantId: user.tenantId,
           origem: "PAINEL",
-          ator: { nome: user.name },
+          ator: {
+            nome: user.name,
+            id: user.id,
+            papel: user.role,
+            email: user.email,
+          },
           detalhes: { papel: user.role },
         });
 
