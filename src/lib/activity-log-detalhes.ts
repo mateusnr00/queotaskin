@@ -65,6 +65,26 @@ export function mascararCpf(valor: string): string {
 }
 
 /**
+ * JSON com as chaves em ordem alfabética, em qualquer profundidade.
+ *
+ * JSON.stringify puro é sensível à ordem das chaves, e campo Json do Prisma
+ * volta do Postgres com a ordem que o jsonb canonicalizou, que não é a ordem
+ * em que o formulário mandou. Sem isto, um campo que ninguém tocou aparece
+ * como mudança em todo salvamento.
+ */
+function jsonCanonico(valor: unknown): string {
+  return JSON.stringify(valor, (_chave, v) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.keys(v as Record<string, unknown>)
+            .sort()
+            .map((k) => [k, (v as Record<string, unknown>)[k]])
+        )
+      : v
+  );
+}
+
+/**
  * Dois valores são diferentes?
  *
  * Object.is sozinho compara objeto por REFERÊNCIA, e campo Json do Prisma
@@ -75,7 +95,7 @@ function mudou(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return false;
   if (a && b && typeof a === "object" && typeof b === "object") {
     try {
-      return JSON.stringify(a) !== JSON.stringify(b);
+      return jsonCanonico(a) !== jsonCanonico(b);
     } catch {
       // Ciclo ou valor que não serializa: assume que mudou. Errar para o
       // lado de registrar demais é melhor que perder a mudança.

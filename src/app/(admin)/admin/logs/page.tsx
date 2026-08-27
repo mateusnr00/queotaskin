@@ -84,9 +84,19 @@ export default async function LogsPage({
   ];
   const tipoDeAlvo = TIPOS.find((t) => t === umValor(sp.alvoTipo));
 
+  // Payment fica fora das opções: a trilha de uma compra é toda gravada com
+  // alvo Reservation, e oferecer um filtro que nunca casa nada faria o
+  // operador concluir que não aconteceu nada.
+  const TIPOS_VISIVEIS = TIPOS.filter((t) => t !== "Payment");
+
   // Sem tipo válido não há recorte: descartar só o tipo e manter o alvoId na
   // tela acenderia o aviso de recorte sobre uma lista que não está recortada.
   const alvoId = tipoDeAlvo ? umValor(sp.alvoId) : undefined;
+
+  // Id colado sem escolher o tipo: o campo acima descarta o valor porque não
+  // há como filtrar sem saber a tabela, mas sumir em silêncio faz a pessoa
+  // achar que a busca não achou nada, quando na verdade ela nem rodou.
+  const alvoIdSemTipo = Boolean(umValor(sp.alvoId)) && !tipoDeAlvo;
 
   // O cursor viaja na URL como "<iso>|<id>". Data sozinha pularia registros
   // do mesmo instante, por isso o id vai junto.
@@ -178,7 +188,7 @@ export default async function LogsPage({
             className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
           >
             <option value="">qualquer</option>
-            {TIPOS.map((t) => (
+            {TIPOS_VISIVEIS.map((t) => (
               <option key={t} value={t}>
                 {NOME_DO_TIPO[t]}
               </option>
@@ -200,6 +210,15 @@ export default async function LogsPage({
             className="h-9 w-44 rounded-lg border bg-background px-2 text-sm text-foreground"
           />
         </label>
+
+        {/* Deriva só da URL, sem estado de cliente: id colado sem tipo
+            escolhido é descartado (ver alvoIdSemTipo acima), e sem este aviso
+            a pessoa não teria como saber por que a busca não filtrou nada. */}
+        {alvoIdSemTipo && (
+          <p className="w-full text-xs text-muted-foreground">
+            Escolha o tipo do alvo para a busca por id funcionar.
+          </p>
+        )}
 
         {/* O filtro por pessoa entra pela URL, clicando no nome numa linha.
             Repetir aqui como campo de texto pediria um cuid decorado, então o

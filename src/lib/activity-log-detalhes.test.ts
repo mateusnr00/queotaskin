@@ -47,6 +47,17 @@ describe("diferencas", () => {
     const d = diferencas({ cfg: { x: 1 } }, { cfg: { x: 1 } });
     expect(d.depois).toEqual({});
   });
+
+  it("ordem diferente das mesmas chaves não é mudança", () => {
+    // Campo Json do Prisma volta do Postgres com a ordem que o jsonb
+    // canonicalizou, e o formulário manda na ordem do schema. Comparar o
+    // texto cru acusaria mudança em todo salvamento.
+    const d = diferencas(
+      { campos: { cpf: true, nome: false } },
+      { campos: { nome: false, cpf: true } }
+    );
+    expect(d.depois).toEqual({});
+  });
 });
 
 describe("mascararCpf", () => {

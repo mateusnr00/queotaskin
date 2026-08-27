@@ -246,8 +246,6 @@ export async function updateRaffleAction(
         {
           titulo: oldRaffle.title,
           urlAmigavel: oldRaffle.slug,
-          descricaoCurta: oldRaffle.shortDescription,
-          descricao: oldRaffle.description,
           modoDaDescricao: oldRaffle.descriptionMode,
           categoria: oldRaffle.category,
           privacidade: oldRaffle.privacy,
@@ -287,8 +285,6 @@ export async function updateRaffleAction(
           // Slug vazio mantém o atual (ver montagem de `data` acima), então o
           // lado "depois" é o slug que a rifa realmente ficou tendo.
           urlAmigavel: raffle.slug,
-          descricaoCurta: d.shortDescription ?? null,
-          descricao: d.description ?? null,
           modoDaDescricao: d.descriptionMode,
           categoria: d.category ?? null,
           privacidade: d.privacy,
@@ -323,6 +319,17 @@ export async function updateRaffleAction(
           cardDestaque: d.selectionCardsBestseller,
         }
       );
+
+      // A descrição fica de fora do diff de propósito: são até 50 mil
+      // caracteres de HTML por lado, e ninguém audita texto longo lendo dois
+      // blocos lado a lado num histórico. O marcador diz que mudou, que é o que
+      // se procura; o conteúdo atual está no próprio sorteio.
+      if (oldRaffle.description !== (d.description ?? null)) {
+        mudou.depois.descricaoAlterada = true;
+      }
+      if (oldRaffle.shortDescription !== (d.shortDescription ?? null)) {
+        mudou.depois.descricaoCurtaAlterada = true;
+      }
 
       await registrarLog({
         acao: "sorteio.editado",
