@@ -82,13 +82,36 @@ export default async function AuthLayout({
         <SiteHeader />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* A coluna da esquerda existe para dar respiro à arte e segurar as
-              provas no pé. Some no celular, onde a tela é estreita e ela
-              empurraria o formulário para baixo da dobra. */}
-          <aside className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-end lg:p-10 xl:p-12">
-            <div className="space-y-5">
+          {/* A coluna da esquerda. Some no celular, onde a tela é estreita e
+              ela empurraria o formulário para baixo da dobra.
+
+              A chamada usa my-auto: ela se centra no espaço que sobra e, ao
+              mesmo tempo, empurra as provas para o pé. Com justify-between e
+              um espaçador vazio dava no mesmo, com um elemento a mais que
+              não desenha nada. */}
+          <aside className="relative hidden lg:flex lg:w-1/2 lg:flex-col lg:p-10 xl:p-14">
+            {/* Cortina só deste lado. A arte tem arma clara justamente onde a
+                chamada cai, e texto branco sobre metal aceso não se lê. Ela
+                se dissolve antes do meio da tela, então o desenho continua
+                aparecendo do lado do formulário. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent"
+            />
+            <div className="relative my-auto max-w-xl space-y-4">
+              <h1 className="text-4xl font-bold leading-[1.1] tracking-tight text-white xl:text-5xl">
+                Skins de CS2 sorteadas{" "}
+                <span className="text-primary">de verdade</span>.
+              </h1>
+              <p className="max-w-md text-base leading-relaxed text-white/60 xl:text-lg">
+                Escolha seus números, pague no Pix e acompanhe o resultado por
+                aqui. A skin vai para o seu inventário da Steam.
+              </p>
+            </div>
+
+            <div className="relative space-y-5">
               <ProvasDoSite />
-              <p className="border-t border-white/10 pt-4 text-[11px] text-white/40">
+              <p className="border-t border-white/10 pt-4 text-xs text-white/40">
                 © {ano} {marca.name}. Todos os direitos reservados.
               </p>
             </div>

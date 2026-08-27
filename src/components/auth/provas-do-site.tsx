@@ -27,7 +27,7 @@ const PROVAS = [
 
 export function ProvasDoSite() {
   return (
-    <ul className="grid gap-4 sm:grid-cols-3 sm:gap-0">
+    <ul className="grid gap-5 sm:grid-cols-3 sm:gap-0">
       {PROVAS.map(({ icone: Icone, titulo, texto }, i) => (
         <li
           key={titulo}
@@ -35,18 +35,22 @@ export function ProvasDoSite() {
             // Divisores só entre as colunas, e só quando elas existem: no
             // celular a lista é empilhada e uma barra vertical no meio de
             // cada item não separaria nada.
-            i > 0 ? "sm:border-l sm:border-white/10 sm:pl-4" : "sm:pr-4"
+            i > 0 ? "sm:border-l sm:border-white/10 sm:pl-5" : "sm:pr-5"
           }
         >
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
-              <Icone className="h-4 w-4 text-primary" />
+          {/* Ícone em cima e não ao lado: lado a lado sobravam uns 160px
+              para o texto, e "Pagamento no Pix" quebrava em duas linhas só
+              na coluna do meio, o que desalinhava as três. Empilhado, o
+              título tem a coluna inteira. */}
+          <div className="space-y-2.5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10">
+              <Icone className="h-5 w-5 text-primary" />
             </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-white">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-white">
                 {titulo}
               </p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">
+              <p className="mt-1 text-xs leading-relaxed text-white/55">
                 {texto}
               </p>
             </div>
