@@ -10,6 +10,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 const urlOrEmpty = z
@@ -84,6 +85,16 @@ export async function updateMessagesSettingsAction(
       halfwayPercent: Math.min(d.halfwayPercent, d.almostGonePercent),
       almostGonePercent: Math.max(d.halfwayPercent, d.almostGonePercent),
     },
+  });
+
+  // Só os nomes dos campos do schema, mesma regra de payment-settings: o
+  // conteúdo aqui é texto de UI (não é credencial), mas o padrão de
+  // "camposAlterados" fica consistente entre as duas telas de configuração.
+  await registrarLog({
+    acao: "config.mensagens_alterada",
+    tenantId,
+    alvo: { tipo: "Tenant", id: tenantId },
+    detalhes: { camposAlterados: Object.keys(parsed.data) },
   });
 
   revalidatePath("/admin/configuracoes/mensagens");

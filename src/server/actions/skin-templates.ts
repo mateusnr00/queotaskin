@@ -16,6 +16,7 @@ import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import type { ActionResult } from "@/server/actions/auth";
 import { isStorageConfigured, uploadRaffleImage } from "@/lib/storage";
 import { MAX_IMAGE_BYTES } from "@/lib/raffle-images";
+import { registrarLog } from "@/server/services/activity-log";
 
 // Qualquer image/* passa, com a extensão como segunda pista: o navegador nem
 // sempre preenche file.type.
@@ -99,6 +100,15 @@ export async function criarSkinAction(
       select: { id: true },
     });
 
+    // O select acima só traz o id; o nome usado no rótulo é o mesmo que acaba
+    // de virar skin.name, então parsed.data.name evita um select a mais.
+    await registrarLog({
+      acao: "skin.alterada",
+      tenantId,
+      alvo: { tipo: "SkinTemplate", id: skin.id, rotulo: parsed.data.name },
+      detalhes: { o_que: "criada" },
+    });
+
     revalidatePath("/admin/skins");
     return { ok: true, data: skin };
   } catch (err) {
@@ -135,6 +145,13 @@ export async function atualizarSkinAction(
     });
     if (count === 0) return { ok: false, error: "Skin não encontrada" };
 
+    await registrarLog({
+      acao: "skin.alterada",
+      tenantId,
+      alvo: { tipo: "SkinTemplate", id, rotulo: parsed.data.name },
+      detalhes: { o_que: "editada" },
+    });
+
     revalidatePath("/admin/skins");
     return { ok: true, data: undefined };
   } catch (err) {
@@ -151,10 +168,24 @@ export async function removerSkinAction(id: string): Promise<ActionResult> {
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
 
+    // Carrega o nome antes de apagar: depois do delete a linha some do banco,
+    // e "skin removida" sem dizer qual não ajuda quem lê o histórico depois.
+    const existente = await prisma.skinTemplate.findFirst({
+      where: { id, tenantId },
+      select: { name: true },
+    });
+
     const { count } = await prisma.skinTemplate.deleteMany({
       where: { id, tenantId },
     });
     if (count === 0) return { ok: false, error: "Skin não encontrada" };
+
+    await registrarLog({
+      acao: "skin.alterada",
+      tenantId,
+      alvo: { tipo: "SkinTemplate", id, rotulo: existente?.name ?? null },
+      detalhes: { o_que: "removida" },
+    });
 
     revalidatePath("/admin/skins");
     return { ok: true, data: undefined };

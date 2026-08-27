@@ -15,6 +15,7 @@ import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 const paymentSettingsSchema = z.object({
@@ -116,6 +117,17 @@ export async function updatePaymentSettingsAction(
   await prisma.tenant.update({
     where: { id: tenantId },
     data: update,
+  });
+
+  // Só os NOMES dos campos submetidos. O valor é credencial de gateway, e um
+  // log que guarda a credencial que ele deveria proteger vira outro alvo. A
+  // sanitização em registrarLog também barraria pelo nome da chave, mas não
+  // custa nada não mandar.
+  await registrarLog({
+    acao: "config.pagamento_alterada",
+    tenantId,
+    alvo: { tipo: "Tenant", id: tenantId },
+    detalhes: { camposAlterados: Object.keys(parsed.data) },
   });
 
   revalidatePath("/admin/configuracoes/pagamentos");
