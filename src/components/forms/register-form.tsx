@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -43,6 +43,23 @@ export function RegisterForm() {
     searchParams.get("redirect") ?? searchParams.get("callbackUrl") ?? "/";
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // O verde do clique dura meio segundo, contado aqui e não por :active:
+  // :active acaba no instante em que a pessoa solta o botão, e o que se
+  // quer é que a confirmação do toque continue visível depois disso.
+  const [verde, setVerde] = useState(false);
+  const relogioDoVerde = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (relogioDoVerde.current) clearTimeout(relogioDoVerde.current);
+    };
+  }, []);
+
+  function piscarVerde() {
+    setVerde(true);
+    if (relogioDoVerde.current) clearTimeout(relogioDoVerde.current);
+    relogioDoVerde.current = setTimeout(() => setVerde(false), 500);
+  }
 
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -255,7 +272,13 @@ export function RegisterForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="botao-de-grade w-full py-3.5 text-sm tracking-[0.2em] sm:text-base sm:tracking-[0.3em]"
+          // No apertar, e não no clique: onClick só dispara depois de soltar,
+          // e a resposta ao toque tem de começar no toque.
+          onPointerDown={piscarVerde}
+          className={cn(
+            "botao-de-grade w-full py-3.5 text-sm tracking-[0.2em] sm:text-base sm:tracking-[0.3em]",
+            verde && "esta-verde"
+          )}
         >
           {isPending ? "Criando conta..." : "Criar minha conta"}
         </button>

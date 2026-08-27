@@ -404,9 +404,13 @@
  * 448px, e muito menos no celular.
  */
 .botao-de-grade {
-  --cor-principal: var(--primary);
-  --cor-do-brilho: color-mix(in oklch, var(--primary) 36%, transparent);
-  --cor-da-grade: color-mix(in oklch, var(--primary) 9%, transparent);
+  /* Uma cor manda em tudo: texto, brilho do meio, grade e bordas saem dela.
+     No original eram três valores soltos, e trocar de cor exigia acertar os
+     três na mesma proporção. Com uma raiz só, o verde do clique é uma linha. */
+  --cor-do-botao: var(--primary);
+  --cor-principal: var(--cor-do-botao);
+  --cor-do-brilho: color-mix(in oklch, var(--cor-do-botao) 36%, transparent);
+  --cor-da-grade: color-mix(in oklch, var(--cor-do-botao) 9%, transparent);
 
   cursor: pointer;
   text-transform: uppercase;
@@ -432,7 +436,9 @@
       rgba(0, 0, 0, 0) 100%
     )
     1;
-  transition: background-size 0.2s ease-in-out;
+  transition:
+    background-size 0.2s ease-in-out,
+    color 0.15s ease-out;
 }
 
 .botao-de-grade:hover:not(:disabled) {
@@ -442,10 +448,18 @@
     10px 10px;
 }
 
-/* O giro de matiz no clique é do desenho original: a cor inteira vira outra
- * enquanto o dedo está em cima, e volta ao soltar. */
-.botao-de-grade:active:not(:disabled) {
-  filter: hue-rotate(250deg);
+/* Verde no clique, por meio segundo.
+ *
+ * O desenho original girava a matiz enquanto o dedo estava em cima, o que
+ * sobre o laranja daí um roxo, e durava só o tempo do aperto. Aqui o verde
+ * é o do componente original, #2ed573, e quem conta o tempo é o componente:
+ * :active acabaria no instante em que a pessoa solta, e meio segundo é
+ * justamente para o clique ser percebido depois do dedo sair.
+ *
+ * A classe troca a raiz, então texto, brilho, grade e bordas viram verde
+ * juntos. */
+.botao-de-grade.esta-verde {
+  --cor-do-botao: #2ed573;
 }
 
 .botao-de-grade:disabled {
