@@ -33,5 +33,8 @@ CREATE INDEX "ActivityLog_acao_criadoEm_idx" ON "ActivityLog"("acao", "criadoEm"
 -- CreateIndex
 CREATE INDEX "ActivityLog_actorId_criadoEm_idx" ON "ActivityLog"("actorId", "criadoEm");
 
+-- CreateIndex
+CREATE INDEX "ActivityLog_criadoEm_idx" ON "ActivityLog"("criadoEm");
+
 -- AddForeignKey
 ALTER TABLE "ActivityLog" ADD CONSTRAINT "ActivityLog_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -1228,4 +1228,9 @@ model ActivityLog {
   @@index([alvoTipo, alvoId])
   @@index([acao, criadoEm])
   @@index([actorId, criadoEm])
+  /// criadoEm sozinho, e não só como segunda coluna dos compostos: a limpeza
+  /// varre por data sem filtro nenhum, e a vista do dono da plataforma ordena
+  /// sem filtro de tenant. Postgres não faz skip scan, então índice composto
+  /// com criadoEm na segunda posição não serve para nenhum dos dois.
+  @@index([criadoEm])
 }
