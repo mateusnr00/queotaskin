@@ -15,6 +15,7 @@ import {
 import { raffleGeneralSchema } from "@/lib/validations/raffle";
 import { garantirSlugLivre } from "@/server/services/raffles";
 import { toSlug } from "@/lib/slug";
+import { desviarDeReservado, slugReservado } from "@/lib/rotas-reservadas";
 import type { ActionResult } from "@/server/actions/auth";
 
 const updateInputSchema = z.object({
@@ -58,8 +59,24 @@ export async function createRaffleAction(
     // obrigaria a inventar nome diferente para a mesma skin. Numera sozinho
     // e segue.
     const { slug: providedSlug, ...rest } = parsed.data;
+    // A URL do sorteio mora na raiz do host, então o slug divide o primeiro
+    // segmento do caminho com as rotas do site. O Next resolve rota estática
+    // antes de dinâmica: um slug "login" nasceria inalcançável em silêncio.
+    //
+    // Os dois casos recebem tratamento diferente porque a intenção é outra.
+    // Slug digitado é escolha do admin, e escolha errada se diz na cara.
+    // Slug derivado do título não foi escolhido por ninguém, e recusar a
+    // criação obrigaria a renomear a campanha por causa de um detalhe de
+    // roteamento; esse ganha sufixo e segue.
+    if (providedSlug && slugReservado(toSlug(providedSlug))) {
+      return {
+        ok: false,
+        error: "Essa URL é reservada pelo site. Escolha outra.",
+        fieldErrors: { slug: ["Reservada pelo site"] },
+      };
+    }
     const slug = await garantirSlugLivre(
-      toSlug(providedSlug || parsed.data.title),
+      desviarDeReservado(toSlug(providedSlug || parsed.data.title)),
       tenantId
     );
 
@@ -160,6 +177,15 @@ export async function updateRaffleAction(
 
     // Separa slug do resto. Se vazio, mantém o atual (não muda).
     const { slug, ...rest } = parsed.data.data;
+    // Mesmo motivo da criação: na edição só existe slug digitado, então
+    // não há o que desviar, só o que recusar.
+    if (slug && slugReservado(slug)) {
+      return {
+        ok: false,
+        error: "Essa URL é reservada pelo site. Escolha outra.",
+        fieldErrors: { slug: ["Reservada pelo site"] },
+      };
+    }
     const data: Prisma.RaffleUpdateInput = {
       ...rest,
       ...(slug ? { slug } : {}),
@@ -187,9 +213,9 @@ export async function updateRaffleAction(
 
       revalidatePath("/admin/sorteios");
       revalidatePath(`/admin/sorteios/${raffle.id}/editar`);
-      revalidatePath(`/s/${raffle.slug}`);
+      revalidatePath(`/${raffle.slug}`);
       if (oldRaffle && oldRaffle.slug !== raffle.slug) {
-        revalidatePath(`/s/${oldRaffle.slug}`);
+        revalidatePath(`/${oldRaffle.slug}`);
       }
       revalidatePath("/sorteios");
       revalidatePath("/");
@@ -337,7 +363,7 @@ export async function deleteRaffleAction(
     await prisma.raffle.delete({ where: { id: raffle.id } });
 
     revalidatePath("/admin/sorteios");
-    revalidatePath(`/s/${raffle.slug}`);
+    revalidatePath(`/${raffle.slug}`);
     revalidatePath("/sorteios");
     revalidatePath("/");
     return { ok: true, data: undefined };

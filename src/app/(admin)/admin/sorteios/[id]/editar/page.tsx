@@ -168,15 +168,15 @@ export default async function EditRafflePage({
                   {raffle.title}
                 </h1>
                 {/* URL absoluta do host público, não caminho relativo.
-                    Este painel roda em admin.<domínio>, e ali /s/... não é
-                    página pública: o link caía de volta no admin em vez de
-                    abrir a campanha. */}
+                    Este painel roda em admin.<domínio>, e ali o caminho da
+                    campanha não é página pública: o link caía de volta no
+                    admin em vez de abrir o sorteio. */}
                 <Link
                   href={urlPublica}
                   target="_blank"
                   className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  /s/{raffle.slug}
+                  /{raffle.slug}
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               </div>

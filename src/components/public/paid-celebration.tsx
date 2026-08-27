@@ -218,7 +218,7 @@ export function PaidCelebration({
 
       <div className="grid grid-cols-2 gap-2.5">
         <Link
-          href={`/s/${raffleSlug}`}
+          href={`/${raffleSlug}`}
           className={buttonVariants({ variant: "outline", size: "lg" })}
         >
           Ver sorteio

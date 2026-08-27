@@ -22,6 +22,18 @@ function padroesDeImagem() {
 }
 
 const nextConfig: NextConfig = {
+  // O sorteio morava em /s/<slug> e passou a morar em /<slug>. Todo endereço
+  // já divulgado (story, print, mensagem encaminhada) aponta para o antigo, e
+  // link de campanha em rifa circula por semanas depois de publicado. O 301
+  // mantém esses links abrindo e diz ao buscador que o endereço mudou de vez.
+  //
+  // "s" continua na lista de slugs reservados justamente por isto: se um dia
+  // uma campanha nascesse com esse slug, ela ficaria presa atrás do redirect.
+  async redirects() {
+    return [
+      { source: "/s/:slug", destination: "/:slug", permanent: true },
+    ];
+  },
   images: {
     remotePatterns: padroesDeImagem(),
     // A capa da campanha é arte, não foto de catálogo: fundo escuro com

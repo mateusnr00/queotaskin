@@ -630,7 +630,7 @@ export async function setRaffleAwardedTicketsAction(
     ]);
 
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
-    revalidatePath(`/s/`);
+    revalidatePath("/[slug]", "page");
     return { ok: true, data: undefined };
   } catch (err) {
     console.error("[setRaffleAwardedTicketsAction]", err);
@@ -942,9 +942,10 @@ export async function setRaffleWinnerAction(
     revalidatePath(`/admin/sorteios/${raffleId}/compras`);
     revalidatePath(`/admin/sorteios`);
     revalidatePath(`/sorteios`);
-    // O slug da rifa pública muda por tenant, invalida o pai que abriga
-    // todas as rifas públicas.
-    revalidatePath(`/s/`);
+    // O slug muda por tenant, então invalida a rota dinâmica inteira em vez
+    // de um caminho só. Antes isto era revalidatePath(`/s/`), que apontava
+    // para um caminho que nunca foi uma página: não invalidava nada.
+    revalidatePath("/[slug]", "page");
 
     return {
       ok: true,
@@ -991,7 +992,7 @@ export async function clearRaffleWinnerAction(
     revalidatePath(`/admin/sorteios/${parsed.data.raffleId}/compras`);
     revalidatePath(`/admin/sorteios`);
     revalidatePath(`/sorteios`);
-    revalidatePath(`/s/`);
+    revalidatePath("/[slug]", "page");
     return { ok: true, data: undefined };
   } catch (err) {
     console.error("[clearRaffleWinnerAction]", err);

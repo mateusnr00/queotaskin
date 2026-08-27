@@ -84,7 +84,7 @@ export function ExpiredReservation({
       {/* O nome da campanha já está no cabeçalho da página, então o cartão
           que só repetia "Sorteio: X" saiu. O que sobra aqui é a saída. */}
       <Link
-        href={`/s/${raffleSlug}`}
+        href={`/${raffleSlug}`}
         className={buttonVariants({ size: "lg", className: "w-full" })}
       >
         {buttonLabel}

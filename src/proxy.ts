@@ -18,9 +18,16 @@
 //      - Host público: /admin* redireciona pro host admin equivalente
 //        (admin.<rest>) pra esconder a existência do painel no domínio
 //        do participante.
-//      - Host admin: rotas públicas (/, /sorteios, /s/, /meus-titulos,
-//        /comprovante/) redirecionam pra /admin. Login/registro continuam
-//        acessíveis, são necessários pra autenticar antes do painel.
+//      - Host admin: só o painel e o que serve pra entrar nele existem.
+//        Qualquer outro caminho redireciona pra /admin.
+//
+//        A regra era o contrário disso: uma lista de rotas públicas
+//        conhecidas (/, /sorteios, /s/, /meus-titulos, /comprovante/) que
+//        eram mandadas pro painel. Isso funcionava enquanto o sorteio
+//        morava em /s/<slug>. Com o sorteio na raiz, o conjunto de
+//        caminhos públicos passou a ser aberto: /<qualquer-coisa> é uma
+//        campanha. Não dá pra listar o que é público, então lista-se o que
+//        é do painel, que é fechado e pequeno.
 //
 //    Como o proxy roda em edge runtime (sem Prisma), não consultamos a
 //    tabela TenantHost aqui, a heurística de prefixo já basta pra
@@ -42,14 +49,20 @@ import {
 
 const { auth } = NextAuth(authConfig);
 
-// Rotas públicas que NÃO devem existir no host admin, quando o usuário
-// digita uma delas em admin.<dominio>, joga ele pra /admin.
-const PUBLIC_ROUTE_PREFIXES = [
-  "/sorteios",
-  "/s/",
-  "/meus-titulos",
-  "/comprovante/",
-];
+// O que existe no host admin. Tudo o que não casa com esta lista é
+// entendido como endereço público (inclusive /<slug> de campanha) e vai
+// pro painel.
+//
+// /login e /trocar-senha ficam porque são o caminho de entrada no painel.
+// /api segue porque o cron e os webhooks batem no mesmo deploy, e um
+// redirect no lugar de 200 quebraria os dois em silêncio.
+const CAMINHOS_DO_PAINEL = ["/admin", "/login", "/trocar-senha", "/api", "/_next"];
+
+function ehCaminhoDoPainel(path: string): boolean {
+  return CAMINHOS_DO_PAINEL.some(
+    (base) => path === base || path.startsWith(`${base}/`)
+  );
+}
 
 export default auth((req) => {
   const url = req.nextUrl;
@@ -64,20 +77,15 @@ export default auth((req) => {
   const isAdminPath = path.startsWith("/admin");
 
   if (adminHost) {
-    // No host admin, qualquer rota pública vira /admin. Login e registro
-    // continuam funcionando, são necessários pra autenticar antes do
-    // painel.
-    const isPublicRoute =
-      path === "/" ||
-      PUBLIC_ROUTE_PREFIXES.some((p) => path.startsWith(p));
-    if (isPublicRoute) {
-      return NextResponse.redirect(urlDaRequisicao(req, "/admin"));
-    }
     // Cadastro não existe no painel: conta de admin é criada por quem já
     // opera, nunca por auto-serviço. Deixar /registro aberto aqui permitiria
-    // criar conta pelo endereço do painel.
+    // criar conta pelo endereço do painel. Vem antes do desvio geral porque
+    // mandar pra /login é mais útil que mandar pro painel de quem nem entrou.
     if (path === "/registro") {
       return NextResponse.redirect(urlDaRequisicao(req, "/login"));
+    }
+    if (!ehCaminhoDoPainel(path)) {
+      return NextResponse.redirect(urlDaRequisicao(req, "/admin"));
     }
     return NextResponse.next();
   }
