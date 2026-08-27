@@ -68,6 +68,12 @@ export function FundoDaTela({ url }: { url?: string | null }) {
           fill
           priority
           sizes="100vw"
+          // 92 e não o 75 padrão. É arte escura com fumaça e brilho, e
+          // gradiente escuro é justamente onde a compressão agressiva vira
+          // faixa visível. O mesmo motivo da capa de campanha, e o valor
+          // precisa estar em images.qualities do next.config para valer:
+          // fora da lista o Next rebaixa em silêncio.
+          quality={92}
           // unoptimized não: a arte é grande e o otimizador do Next é o que
           // entrega webp do tamanho da tela em vez do arquivo cheio.
           className="object-cover object-center"

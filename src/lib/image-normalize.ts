@@ -20,6 +20,15 @@ const PASSTHROUGH_BYTES = 400_000;
 
 export interface NormalizeOptions {
   /**
+   * Lado maior permitido, em pixels. Sem isto vale MAX_DIMENSION, que serve
+   * para capa e foto de catálogo, imagens que aparecem dentro de um card.
+   *
+   * Fundo de tela é outra coisa: ele é esticado até a largura do monitor, e
+   * 1600px num monitor de 2560 é a imagem ampliada em 1,6 vez, que é
+   * exatamente a aparência de "sem qualidade".
+   */
+  ladoMaximo?: number;
+  /**
    * Desenha a imagem centralizada num quadro exato deste tamanho, em vez de
    * apenas encolher mantendo a proporção original.
    *
@@ -138,7 +147,7 @@ function renamed(file: File, blob: Blob, ext: string): File {
  */
 export async function normalizeImage(
   file: File,
-  { quadro }: NormalizeOptions = {}
+  { quadro, ladoMaximo = MAX_DIMENSION }: NormalizeOptions = {}
 ): Promise<NormalizeResult> {
   const originalBytes = file.size;
   const keep = (): NormalizeResult => ({ file, normalized: false, originalBytes });
@@ -173,7 +182,7 @@ export async function normalizeImage(
     } else {
       const scale = Math.min(
         1,
-        MAX_DIMENSION / Math.max(decoded.width, decoded.height)
+        ladoMaximo / Math.max(decoded.width, decoded.height)
       );
       canvas.width = Math.max(1, Math.round(decoded.width * scale));
       canvas.height = Math.max(1, Math.round(decoded.height * scale));

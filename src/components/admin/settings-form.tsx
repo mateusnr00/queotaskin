@@ -276,7 +276,10 @@ function GeralTab({ initial }: Props) {
   async function handleFundo(original: File) {
     setEnviandoFundo(true);
     try {
-      const { file } = await normalizeImage(original);
+      // Teto maior que o das capas. O fundo é esticado até a largura do
+      // monitor, e o padrão de 1600px vira imagem ampliada em monitor
+      // grande, que é o que faz a arte parecer sem qualidade.
+      const { file } = await normalizeImage(original, { ladoMaximo: 2560 });
       const fd = new FormData();
       fd.append("file", file);
       fd.append("slot", "fundo");
@@ -661,12 +664,13 @@ function GeralTab({ initial }: Props) {
             Fundo das telas de entrar e criar conta
           </p>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Ideal <strong className="text-foreground">1920 × 1200 px</strong>,
-            deitada. O envio reduz para 1600px no lado maior, então mandar
-            maior que isso não melhora nada e só demora. Arte escura funciona
-            melhor: o formulário fica por cima e há um véu escurecendo.
-            Deixe folga nas bordas, porque a imagem é cortada para preencher a
-            tela e telas estreitas comem as laterais.
+            Ideal <strong className="text-foreground">2560 × 1600 px</strong>,
+            deitada. Menor que isso fica ampliado em monitor grande, e é o que
+            deixa a arte com cara de baixa qualidade. Acima de 2560px no lado
+            maior o envio reduz, então não adianta mandar mais. Arte escura
+            funciona melhor: o formulário fica por cima e há um véu
+            escurecendo. Deixe folga nas bordas, porque a imagem é cortada
+            para preencher a tela e telas estreitas comem as laterais.
             {!fundoUrl && " Sem imagem, o fundo é um degradê escuro."}
           </p>
           {fundoUrl && (

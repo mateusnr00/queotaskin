@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowRight, ChevronDown, IdCard, Phone, User } from "lucide-react";
+import { ArrowRight, IdCard, Phone, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
@@ -21,6 +21,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /** Rótulo miúdo em caixa alta, como nos painéis do jogo. */
@@ -152,31 +159,52 @@ export function RegisterForm() {
               <FormLabel className={ROTULO}>Telefone</FormLabel>
               <FormControl>
                 <div className="flex gap-2">
-                  {/* Seletor de país nativo, e não uma lista desenhada à mão:
-                      no celular ele abre a roda do sistema, que é o jeito
-                      mais rápido de escolher entre dezessete itens, e vem de
-                      graça com teclado e leitor de tela. */}
-                  <div className="relative shrink-0">
-                    <select
+                  {/* Seletor do projeto, e não o <select> do sistema. O
+                      nativo abre uma lista pintada pelo sistema operacional,
+                      que num site escuro aparece como um retângulo branco de
+                      texto quase ilegível, e nenhum CSS alcança aquela
+                      lista. */}
+                  <Select
+                    value={isoDoPais}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      form.setValue("phoneCountry", v);
+                      // Reaplica a máscara do país novo no que já está
+                      // digitado, senão sobra a pontuação do país antigo.
+                      field.onChange(formatarTelefone(field.value, v));
+                    }}
+                  >
+                    <SelectTrigger
                       aria-label="País do telefone"
-                      value={isoDoPais}
-                      onChange={(e) => {
-                        const novo = e.target.value;
-                        form.setValue("phoneCountry", novo);
-                        // Reaplica a máscara do país novo no que já está
-                        // digitado, senão sobra a pontuação do país antigo.
-                        field.onChange(formatarTelefone(field.value, novo));
-                      }}
-                      className="h-12 appearance-none rounded-md border border-input bg-transparent py-1 pl-3 pr-8 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      className="h-12 w-[6.5rem] shrink-0"
                     >
+                      <SelectValue
+                        labels={Object.fromEntries(
+                          PAISES.map((p) => [
+                            p.iso,
+                            p.ddi ? `${p.iso} +${p.ddi}` : p.iso,
+                          ])
+                        )}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
                       {PAISES.map((p) => (
-                        <option key={p.iso} value={p.iso}>
-                          {p.bandeira} {p.ddi ? `+${p.ddi}` : p.nome}
-                        </option>
+                        <SelectItem key={p.iso} value={p.iso}>
+                          <span className="flex w-full items-center gap-2">
+                            <span className="w-7 shrink-0 text-[11px] font-bold text-muted-foreground">
+                              {p.iso}
+                            </span>
+                            <span className="flex-1">{p.nome}</span>
+                            {p.ddi && (
+                              <span className="tabular-nums text-muted-foreground">
+                                +{p.ddi}
+                              </span>
+                            )}
+                          </span>
+                        </SelectItem>
                       ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  </div>
+                    </SelectContent>
+                  </Select>
 
                   <div className="relative flex-1">
                     <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
