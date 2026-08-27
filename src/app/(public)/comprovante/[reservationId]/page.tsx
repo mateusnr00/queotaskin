@@ -32,6 +32,9 @@ const reservationInclude = {
       title: true,
       slug: true,
       tenantId: true,
+      // A data do sorteio entra no selo de confirmação: depois de "deu
+      // certo?" a pergunta seguinte é "quando eu descubro?".
+      drawDate: true,
       surpriseBoxAbrirTodas: true,
     },
   },
@@ -204,6 +207,7 @@ export default async function ReservationReceiptPage({
           participantName={reservation.participantName}
           totalAmount={Number(reservation.totalAmount)}
           paidAt={reservation.paidAt}
+          drawDate={reservation.raffle.drawDate}
           customTitle={tenantMessages?.paidTitle}
           customDescription={tenantMessages?.paidDescription}
           customButtonLabel={tenantMessages?.paidButtonLabel}

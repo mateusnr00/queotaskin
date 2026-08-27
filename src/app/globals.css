@@ -467,6 +467,47 @@
   opacity: 0.55;
 }
 
+/* Entrada do selo de pagamento confirmado.
+ *
+ * Roda uma vez, no instante em que a tela abre, e é o único movimento da
+ * página. O selo é a resposta à pergunta que a pessoa trouxe ao abrir o
+ * link, "deu certo?", e chegar crescendo faz a resposta acontecer diante
+ * dela em vez de já estar ali.
+ *
+ * Curva com passo além de 1: ele cresce um pouco demais e volta, que é o
+ * que separa um selo que aparece de um selo que apenas surge.
+ */
+@keyframes confirmacao-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.confirmacao-entra {
+  animation: confirmacao-entra 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* O anel em volta do selo, que abre depois dele e se dissipa. */
+@keyframes confirmacao-anel {
+  from {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+.confirmacao-anel {
+  animation: confirmacao-anel 900ms ease-out 260ms both;
+}
+
 /* Quem pediu menos movimento no sistema não recebe nenhum. Não é detalhe de
  * acessibilidade distante: movimento repetido em laço causa desconforto real
  * em quem tem sensibilidade vestibular, e aqui ele é enfeite.
@@ -483,8 +524,16 @@
   .caixa-balanca,
   .caixa-abrindo,
   .tampa-fecha,
-  .tampa-abre {
+  .tampa-abre,
+  .confirmacao-entra {
     animation: none;
+  }
+
+  /* Sem animação o anel ficaria parado em cima do selo, tapando o check.
+     Ele é puro enfeite: não some, deixa de existir. */
+  .confirmacao-anel {
+    animation: none;
+    display: none;
   }
 
   /* O botão de grade não tem animação em laço, tem transição no hover.

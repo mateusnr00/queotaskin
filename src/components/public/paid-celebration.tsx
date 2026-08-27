@@ -19,14 +19,12 @@ import type { ReactNode } from "react";
 // parecia elemento perdido. Foi para junto do título, onde a linha é uma só.
 
 import Link from "next/link";
-import { CheckCircle2, Trophy } from "lucide-react";
+import { CalendarDays, Check, Trophy } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { formatBRL } from "@/lib/format";
 
 const DEFAULT_TITLE = "Pagamento confirmado!";
-const DEFAULT_DESCRIPTION =
-  "Obrigado pela sua participação. Seus números estão garantidos. Boa sorte no sorteio!";
 const DEFAULT_BUTTON_LABEL = "Ver mais campanhas";
 
 interface Props {
@@ -36,6 +34,8 @@ interface Props {
   participantName: string;
   totalAmount: number;
   paidAt: Date | null;
+  /** Quando o sorteio acontece. Nem toda campanha tem data marcada. */
+  drawDate?: Date | null;
   customTitle?: string | null;
   customDescription?: string | null;
   customButtonLabel?: string | null;
@@ -51,6 +51,7 @@ export function PaidCelebration({
   participantName,
   totalAmount,
   paidAt,
+  drawDate,
   customTitle,
   customDescription,
   customButtonLabel,
@@ -58,35 +59,98 @@ export function PaidCelebration({
   children,
 }: Props) {
   const title = customTitle?.trim() || DEFAULT_TITLE;
-  const description = customDescription?.trim() || DEFAULT_DESCRIPTION;
+  const description = customDescription?.trim() || null;
   const buttonLabel = customButtonLabel?.trim() || DEFAULT_BUTTON_LABEL;
   const imageUrl = customImageUrl?.trim() || null;
   const primeiroNome = participantName.trim().split(/\s+/)[0];
 
   return (
     <div className="space-y-4">
-      {/* Aviso de confirmação. O ícone ao lado do título, e não sobre ele:
-          empilhado, empurrava tudo para baixo sem dizer mais nada. */}
-      <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.07] p-5 text-center md:p-6">
-        <div className="flex items-center justify-center gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500">
-            <CheckCircle2 className="h-5 w-5 text-white" strokeWidth={2.5} />
-          </span>
-          <h2 className="whitespace-pre-line text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300 md:text-2xl">
+      {/* O selo de confirmação.
+          
+          Era um quadro com check pequeno ao lado do título, três frases
+          centralizadas e uma pílula repetindo "boa sorte", que a frase logo
+          acima já dizia. Nada ali respondia à pergunta que vem depois de
+          "deu certo?", que é "e agora, quando eu descubro?".
+          
+          Agora o selo tem presença e entra crescendo, a frase é uma só e
+          traz o nome e a contagem, e as duas linhas de baixo dizem o que
+          acontece a seguir. A regra de UX pedida na busca é justamente
+          "mensagem de sucesso breve": três frases de agradecimento eram o
+          contrário disso. */}
+      <section className="overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.07]">
+        <div className="px-5 py-6 text-center md:px-6 md:py-7">
+          <div className="relative mx-auto h-14 w-14">
+            {/* Anel que abre depois do selo e se dissipa. Fica atrás e sem
+                eventos: é enfeite, não pode capturar clique. */}
+            <span
+              aria-hidden
+              className="confirmacao-anel pointer-events-none absolute inset-0 rounded-full border-2 border-emerald-400"
+            />
+            <span className="confirmacao-entra relative flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
+              <Check className="h-7 w-7 text-white" strokeWidth={3} />
+            </span>
+          </div>
+
+          <h2 className="mt-4 whitespace-pre-line text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300 md:text-2xl">
             {title}
           </h2>
+
+          {/* Uma frase, com nome e contagem. Personalizada e concreta vale
+              mais que agradecimento genérico, e ela sozinha diz o que as
+              três anteriores diziam somadas. */}
+          <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-emerald-800/80 dark:text-emerald-200/70">
+            {primeiroNome ? `Pronto, ${primeiroNome}. ` : ""}
+            {numbers.length === 1
+              ? "Seu número está garantido"
+              : `Seus ${numbers.length} números estão garantidos`}{" "}
+            neste sorteio.
+          </p>
+
+          {/* O texto do painel, quando o dono escreveu um. Fica embaixo e
+              menor: é recado da casa, não a confirmação. */}
+          {description && (
+            <p className="mx-auto mt-2 max-w-sm whitespace-pre-line text-xs leading-relaxed text-emerald-800/60 dark:text-emerald-200/50">
+              {description}
+            </p>
+          )}
         </div>
 
-        <p className="mx-auto mt-2 max-w-sm whitespace-pre-line text-sm leading-relaxed text-emerald-800/80 dark:text-emerald-200/70">
-          {description}
-        </p>
-
-        {primeiroNome && (
-          <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-            <Trophy className="h-3.5 w-3.5" />
-            Boa sorte, {primeiroNome}!
-          </p>
-        )}
+        {/* O que acontece a seguir. Só entram fatos que o sistema cumpre:
+            a data do sorteio quando ela existe, e onde o resultado sai.
+            Não há aviso automático por mensagem em lugar nenhum do código,
+            então prometer "avisamos você" seria promessa que ninguém
+            cumpre. */}
+        <dl className="grid gap-px border-t border-emerald-500/20 bg-emerald-500/10 text-left sm:grid-cols-2">
+          {drawDate && (
+            <div className="flex items-center gap-2.5 bg-card px-4 py-3">
+              <CalendarDays className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div className="min-w-0">
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Sorteio
+                </dt>
+                <dd className="truncate text-sm font-semibold">
+                  {new Intl.DateTimeFormat("pt-BR", {
+                    day: "2-digit",
+                    month: "long",
+                    timeZone: "America/Sao_Paulo",
+                  }).format(drawDate)}
+                </dd>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2.5 bg-card px-4 py-3">
+            <Trophy className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div className="min-w-0">
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Resultado
+              </dt>
+              <dd className="truncate text-sm font-semibold">
+                Na página da campanha
+              </dd>
+            </div>
+          </div>
+        </dl>
       </section>
 
       {/* Os números primeiro. É o que a pessoa veio ver, e o que ela vai
