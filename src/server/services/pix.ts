@@ -72,6 +72,7 @@ export async function ensurePixForReservation(
       participantPhone: true,
       participantEmail: true,
       raffleId: true,
+      raffle: { select: { tenantId: true } },
       payment: {
         select: { externalId: true, rawResponse: true, method: true },
       },
@@ -203,8 +204,13 @@ export async function ensurePixForReservation(
     // void, sem await: isto está no caminho que o cliente espera na tela
     // (aguardando o QR Code aparecer), e a escrita do log não pode somar
     // latência à geração do Pix.
+    // O tenant vem da rifa da reserva, e não é enfeite: a consulta do
+    // histórico filtra por ele, então registro sem tenant só aparece para
+    // o dono da plataforma. Sem isto, o admin do painel não enxergaria
+    // nenhum evento de pagamento, que é metade do que ele veio procurar.
     void registrarLog({
       acao: "pix.gerado",
+      tenantId: reservation.raffle.tenantId,
       origem: "PUBLICO",
       alvo: { tipo: "Reservation", id: reservation.id },
       detalhes: { gateway: provider.name, valor: amount },
@@ -254,7 +260,10 @@ export async function pollPaymentStatusIfPending(
   // override do sorteio sobre o default do tenant).
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    select: { raffleId: true },
+    select: {
+      raffleId: true,
+      raffle: { select: { tenantId: true } },
+    },
   });
   if (!reservation) return null;
 
@@ -306,6 +315,7 @@ export async function pollPaymentStatusIfPending(
       if (paymentAntesDoPoll?.status !== "APPROVED") {
         void registrarLog({
           acao: "pagamento.aprovado",
+          tenantId: reservation.raffle.tenantId,
           origem: "SISTEMA",
           ator: { nome: "Consulta de status no gateway" },
           alvo: { tipo: "Payment", id: paymentId },
@@ -342,6 +352,7 @@ export async function pollPaymentStatusIfPending(
       if (paymentAntesDoPoll?.status !== "REJECTED") {
         void registrarLog({
           acao: "pagamento.recusado",
+          tenantId: reservation.raffle.tenantId,
           origem: "SISTEMA",
           ator: { nome: "Consulta de status no gateway" },
           alvo: { tipo: "Payment", id: paymentId },

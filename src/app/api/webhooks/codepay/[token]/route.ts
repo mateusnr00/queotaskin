@@ -66,6 +66,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           raffleId: true,
           status: true,
           _count: { select: { tickets: true } },
+          raffle: { select: { tenantId: true } },
         },
       },
     },
@@ -134,6 +135,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     // webhook, e a escrita do log não pode atrasar essa resposta.
     void registrarLog({
       acao: "pagamento.aprovado",
+      tenantId: payment.reservation?.raffle.tenantId ?? null,
       origem: "SISTEMA",
       ator: { nome: "Webhook CodePay" },
       alvo: { tipo: "Payment", id: payment.id },
@@ -159,6 +161,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     // fora deste bloco e não duplica o registro.
     void registrarLog({
       acao: "pagamento.recusado",
+      tenantId: payment.reservation?.raffle.tenantId ?? null,
       origem: "SISTEMA",
       ator: { nome: "Webhook CodePay" },
       alvo: { tipo: "Payment", id: payment.id },
