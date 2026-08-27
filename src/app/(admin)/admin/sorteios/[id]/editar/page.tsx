@@ -141,13 +141,21 @@ export default async function EditRafflePage({
       {/* Header card: breadcrumb compacto, título da rifa em destaque,
           status pill + ações alinhados à direita. */}
       <div className="space-y-3">
-        <Link
-          href="/admin/sorteios"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Voltar para sorteios
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/admin/sorteios"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Voltar para sorteios
+          </Link>
+          <Link
+            href={`/admin/logs?alvoTipo=Raffle&alvoId=${raffle.id}`}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Ver histórico deste sorteio
+          </Link>
+        </div>
 
         <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

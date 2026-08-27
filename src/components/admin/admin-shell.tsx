@@ -17,6 +17,7 @@ import {
   MessageSquare,
   PackageCheck,
   Palette,
+  ScrollText,
   Settings,
   TicketCheck,
   Trophy,
@@ -47,6 +48,7 @@ const NAV_GERAL = [
   { href: "/admin/usuarios", label: "Usuários", icon: UserCog },
   { href: "/admin/ranking", label: "Ranking", icon: Trophy },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/admin/logs", label: "Registro", icon: ScrollText },
 ] as const;
 
 const NAV_CONFIG = [
