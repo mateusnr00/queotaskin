@@ -43,11 +43,13 @@ export function CampoDePremio({
   aoMudar,
   catalogo,
   placeholder,
+  desabilitado = false,
 }: {
   valor: string;
   aoMudar: (v: string) => void;
   catalogo: SkinDoCatalogoSimples[];
   placeholder?: string;
+  desabilitado?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const refDoCampo = useRef<HTMLDivElement | null>(null);
@@ -97,13 +99,15 @@ export function CampoDePremio({
       .slice(0, MAXIMO_DE_SUGESTOES);
   }, [valor, catalogo]);
 
-  const mostrarLista = aberto && sugestoes.length > 0 && !casou;
+  const mostrarLista =
+    aberto && !desabilitado && sugestoes.length > 0 && !casou;
 
   return (
     <div ref={refDoCampo} className="relative">
       <div className="relative">
         <Input
           placeholder={placeholder}
+          disabled={desabilitado}
           value={valor}
           onChange={(e) => {
             aoMudar(e.target.value);

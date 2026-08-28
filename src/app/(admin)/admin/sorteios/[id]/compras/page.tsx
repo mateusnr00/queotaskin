@@ -51,6 +51,14 @@ export default async function ComprasPage({
   });
   if (!raffle || raffle.tenantId !== tenantId) notFound();
 
+  // Só nome e raridade: é o que a sugestão do prêmio precisa, e a ficha
+  // completa de centenas de skins não tem por que atravessar a rede.
+  const catalogoDePremios = await prisma.skinTemplate.findMany({
+    where: { tenantId },
+    orderBy: { name: "asc" },
+    select: { name: true, skinRarity: true },
+  });
+
   // Filtros aplicados na lista (não nos contadores das abas, abas mostram
   // o universo total da rifa, não respeitam search).
   const tabWhere: Prisma.ReservationWhereInput = (() => {
@@ -227,6 +235,7 @@ export default async function ComprasPage({
         totalRows={totalRows}
         totalPages={totalPages}
         surpriseBox={{
+          catalogo: catalogoDePremios,
           enabled: raffle.surpriseBoxEnabled,
           accumulative: raffle.surpriseBoxCombosAccumulative,
           abrirTodas: raffle.surpriseBoxAbrirTodas,

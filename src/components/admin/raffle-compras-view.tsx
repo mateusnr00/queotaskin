@@ -65,6 +65,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  CampoDePremio,
+  type SkinDoCatalogoSimples,
+} from "@/components/admin/campo-de-premio";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -165,6 +169,15 @@ export interface SurpriseBoxConfig {
   displayOrder: SurpriseBoxDisplayOrder;
   combos: SurpriseBoxComboRow[];
   prizes: SurpriseBoxPrizeRow[];
+  /**
+   * Catálogo de skins do tenant, para sugerir o nome do prêmio.
+   *
+   * Viaja dentro da config das caixas, e não como prop nova, porque o
+   * caminho até o campo passa por quatro componentes: a view, o modal das
+   * caixas, o modal de inserir e o corpo dele. Uma prop atravessando os
+   * quatro só para chegar num input é ruído em três deles.
+   */
+  catalogo: SkinDoCatalogoSimples[];
 }
 
 interface Props {
@@ -1046,6 +1059,7 @@ function CaixasModalBody({
         open={inserirOpen}
         onOpenChange={setInserirOpen}
         raffleId={raffleId}
+        catalogo={initial.catalogo}
       />
     </>
   );
@@ -1059,10 +1073,12 @@ function InserirCaixaModal({
   open,
   onOpenChange,
   raffleId,
+  catalogo,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   raffleId: string;
+  catalogo: SkinDoCatalogoSimples[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1070,6 +1086,7 @@ function InserirCaixaModal({
         {open && (
           <InserirCaixaBody
             raffleId={raffleId}
+            catalogo={catalogo}
             onClose={() => onOpenChange(false)}
           />
         )}
@@ -1080,9 +1097,11 @@ function InserirCaixaModal({
 
 function InserirCaixaBody({
   raffleId,
+  catalogo,
   onClose,
 }: {
   raffleId: string;
+  catalogo: SkinDoCatalogoSimples[];
   onClose: () => void;
 }) {
   const [titulo, setTitulo] = useState("Caixa Surpresa");
@@ -1177,12 +1196,16 @@ function InserirCaixaBody({
           <Label htmlFor="caixa-premio" className="text-xs font-medium">
             Prêmio
           </Label>
-          <Input
-            id="caixa-premio"
-            value={premio}
-            onChange={(e) => setPremio(e.target.value)}
-            placeholder="Ex: AK-47 Asiimov, R$ 50, Vale-presente..."
-            disabled={isPending}
+          {/* O placeholder ensinava "AK-47 Asiimov", sem a barra, que e um
+              nome que o catalogo nunca reconhece: o premio saia sem a cor da
+              raridade e ninguem era avisado. Agora o exemplo esta no formato
+              da Steam e a sugestao faz o nome cair certo. */}
+          <CampoDePremio
+            valor={premio}
+            aoMudar={setPremio}
+            catalogo={catalogo}
+            placeholder="Ex: AK-47 | Asiimov, R$ 50, Vale-presente..."
+            desabilitado={isPending}
           />
         </div>
 
