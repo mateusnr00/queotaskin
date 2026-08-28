@@ -36,11 +36,16 @@ import {
   Search,
   Square,
   Unlock,
+  Pencil,
   Trash2,
   Trophy,
   X,
 } from "lucide-react";
-import type { ReservationStatus } from "@prisma/client";
+import type {
+  ReservationStatus,
+  SkinRarity,
+  SurpriseBoxStatus,
+} from "@prisma/client";
 
 import { markReservationPaidAction } from "@/server/actions/reservations";
 import {
@@ -50,7 +55,9 @@ import {
 import {
   clearRaffleWinnerAction,
   createSurpriseBoxPrizesAction,
+  deleteSurpriseBoxAction,
   deleteSurpriseBoxPrizeAction,
+  updateSurpriseBoxPrizeAction,
   setRaffleSurpriseBoxCombosAction,
   setRaffleWinnerAction,
   toggleSurpriseBoxPrizeLockAction,
@@ -69,6 +76,7 @@ import {
   CampoDePremio,
   type SkinDoCatalogoSimples,
 } from "@/components/admin/campo-de-premio";
+import { RARITY_TEXT_VAR } from "@/lib/cs2";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -178,6 +186,21 @@ export interface SurpriseBoxConfig {
    * quatro só para chegar num input é ruído em três deles.
    */
   catalogo: SkinDoCatalogoSimples[];
+  /** As caixas já distribuídas, com quem levou e o que saiu. */
+  caixas: CaixaDistribuida[];
+}
+
+export interface CaixaDistribuida {
+  id: string;
+  status: SurpriseBoxStatus;
+  /** Quando abriu, ou quando foi criada se ainda está fechada. */
+  abertaEm: string;
+  premioId: string | null;
+  premioTitulo: string | null;
+  premio: string | null;
+  raridade: SkinRarity | null;
+  ganhador: string;
+  pagoEm: string | null;
 }
 
 interface Props {
@@ -992,47 +1015,19 @@ function CaixasModalBody({
         )}
 
         {/* Lista compacta dos prêmios cadastrados no pool */}
-        {prizes.length > 0 && (
-          <PrizesTable prizes={prizes} disabled={isPending} />
+        {prizes.some((p) => !p.claimed) && (
+          <PrizesTable
+            prizes={prizes}
+            catalogo={initial.catalogo}
+            disabled={isPending}
+          />
         )}
 
-        {/* Tabela de caixas distribuídas (vazia por enquanto, vem na próxima PR) */}
-        <div className="rounded-lg border overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <tr className="text-left">
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Ganhador
-                </th>
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
-                  Título
-                </th>
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
-                  Status
-                </th>
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
-                  Prêmio
-                </th>
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Associado em
-                </th>
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
-                  Pago
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-3 py-12 text-center text-sm text-muted-foreground"
-                >
-                  Sem Registros
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <TabelaDeCaixas
+          caixas={initial.caixas}
+          catalogo={initial.catalogo}
+          disabled={isPending}
+        />
       </div>
 
       <DistribuicaoCaixasModal
@@ -1293,17 +1288,359 @@ function InserirCaixaBody({
   );
 }
 
+// ============ TABELA DE CAIXAS DISTRIBUÍDAS ============
+//
+// O cabeçalho desta tabela já existia, com o corpo fixo em "Sem Registros" e
+// um comentário dizendo que os dados viriam depois. Nunca vieram, e o efeito
+// era o pior possível: o prêmio sorteado continuava aparecendo na lista de
+// cadastrados, com o contador em "1/1", e não aparecia como premiação em
+// lugar nenhum. Não dava para distinguir o que ainda está no pool do que já
+// saiu para alguém.
+//
+// Agora o que já saiu vive aqui, e some da lista de cadastrados. São dois
+// estados diferentes de duas coisas diferentes: lá é estoque, aqui é
+// premiação.
+
+const ROTULO_DO_STATUS: Record<SurpriseBoxStatus, string> = {
+  UNOPENED: "Não aberta",
+  OPENED_PRIZE: "Premiada",
+  OPENED_EMPTY: "Sem prêmio",
+};
+
+function TabelaDeCaixas({
+  caixas,
+  catalogo,
+  disabled,
+}: {
+  caixas: CaixaDistribuida[];
+  catalogo: SkinDoCatalogoSimples[];
+  disabled: boolean;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [editando, setEditando] = useState<CaixaDistribuida | null>(null);
+  const [removendo, setRemovendo] = useState<CaixaDistribuida | null>(null);
+
+  function remover(boxId: string) {
+    startTransition(async () => {
+      const r = await deleteSurpriseBoxAction({ boxId });
+      if (!r.ok) toast.error(r.error);
+      else toast.success("Caixa removida, prêmio voltou para o pool");
+      setRemovendo(null);
+    });
+  }
+
+  return (
+    <>
+      <div className="rounded-lg border overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40">
+            <tr className="text-left">
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Ganhador
+              </th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Título
+              </th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
+                Status
+              </th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Prêmio
+              </th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Associado em
+              </th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
+                Pago
+              </th>
+              <th className="w-20 px-3 py-2.5" />
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {caixas.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-3 py-12 text-center text-sm text-muted-foreground"
+                >
+                  Sem Registros
+                </td>
+              </tr>
+            )}
+            {caixas.map((c) => (
+              <tr key={c.id} className="hover:bg-muted/20">
+                <td className="px-3 py-2.5 font-medium">{c.ganhador}</td>
+                <td className="px-3 py-2.5 text-muted-foreground">
+                  {c.premioTitulo ?? "-"}
+                </td>
+                <td className="px-3 py-2.5 text-center">
+                  <Badge variant="outline" className="text-[10px]">
+                    {ROTULO_DO_STATUS[c.status]}
+                  </Badge>
+                </td>
+                <td className="px-3 py-2.5">
+                  {c.premio ? (
+                    <span
+                      className="font-medium"
+                      style={
+                        c.raridade
+                          ? { color: RARITY_TEXT_VAR[c.raridade] }
+                          : undefined
+                      }
+                    >
+                      {c.premio}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 tabular-nums text-muted-foreground">
+                  {new Date(c.abertaEm).toLocaleString("pt-BR")}
+                </td>
+                <td className="px-3 py-2.5 text-center tabular-nums text-muted-foreground">
+                  {c.pagoEm
+                    ? new Date(c.pagoEm).toLocaleDateString("pt-BR")
+                    : "-"}
+                </td>
+                <td className="px-3 py-2.5">
+                  <div className="flex items-center justify-end gap-1">
+                    {/* Editar existe sobretudo aqui: nome errado que já saiu
+                        para alguém é o que o ganhador está lendo, e era o
+                        único caso sem conserto. */}
+                    {c.premioId && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        disabled={disabled || isPending}
+                        onClick={() => setEditando(c)}
+                        aria-label="Editar prêmio"
+                        title="Editar o nome do prêmio"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      disabled={disabled || isPending}
+                      onClick={() => setRemovendo(c)}
+                      aria-label="Remover caixa"
+                      title="Remover esta caixa"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <EditarPremioModal
+        aberto={editando != null}
+        aoFechar={() => setEditando(null)}
+        catalogo={catalogo}
+        prizeIds={editando?.premioId ? [editando.premioId] : []}
+        tituloInicial={editando?.premioTitulo ?? ""}
+        premioInicial={editando?.premio ?? ""}
+      />
+
+      <Dialog
+        open={removendo != null}
+        onOpenChange={(v) => !v && setRemovendo(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Remover esta caixa?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            A caixa de <b className="text-foreground">{removendo?.ganhador}</b>{" "}
+            some da lista, e{" "}
+            {removendo?.premio ? (
+              <>
+                <b className="text-foreground">{removendo.premio}</b> volta para
+                os prêmios cadastrados, disponível para sair de novo.
+              </>
+            ) : removendo?.status === "UNOPENED" ? (
+              // Caixa fechada e caixa aberta sem prêmio são coisas diferentes,
+              // e o aviso dizia "saiu vazia" nas duas.
+              "nada volta para o pool: esta caixa ainda não foi aberta."
+            ) : (
+              "nada volta para o pool, porque esta caixa saiu vazia."
+            )}
+          </p>
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setRemovendo(null)}
+              disabled={isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="flex-1"
+              onClick={() => removendo && remover(removendo.id)}
+              disabled={isPending}
+            >
+              {isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Remover
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ============ MODAL: EDITAR PRÊMIO ============
+//
+// Vale para o prêmio ainda no pool e para o que já saiu. Renomear não mexe em
+// quem ganhou nem em quando: só no texto e na raridade que sai dele.
+
+function EditarPremioModal({
+  aberto,
+  aoFechar,
+  catalogo,
+  prizeIds,
+  tituloInicial,
+  premioInicial,
+}: {
+  aberto: boolean;
+  aoFechar: () => void;
+  catalogo: SkinDoCatalogoSimples[];
+  prizeIds: string[];
+  tituloInicial: string;
+  premioInicial: string;
+}) {
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && aoFechar()}>
+      <DialogContent className="sm:max-w-md">
+        {aberto && (
+          <EditarPremioBody
+            // key remonta o formulário a cada prêmio: sem isso o campo
+            // guardaria o texto do prêmio anterior ao abrir o seguinte.
+            key={prizeIds.join(",")}
+            catalogo={catalogo}
+            prizeIds={prizeIds}
+            tituloInicial={tituloInicial}
+            premioInicial={premioInicial}
+            aoFechar={aoFechar}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditarPremioBody({
+  catalogo,
+  prizeIds,
+  tituloInicial,
+  premioInicial,
+  aoFechar,
+}: {
+  catalogo: SkinDoCatalogoSimples[];
+  prizeIds: string[];
+  tituloInicial: string;
+  premioInicial: string;
+  aoFechar: () => void;
+}) {
+  const [titulo, setTitulo] = useState(tituloInicial);
+  const [premio, setPremio] = useState(premioInicial);
+  const [isPending, startTransition] = useTransition();
+
+  function salvar() {
+    if (!premio.trim()) {
+      toast.error("Descreva o prêmio");
+      return;
+    }
+    startTransition(async () => {
+      const r = await updateSurpriseBoxPrizeAction({
+        prizeIds,
+        title: titulo.trim() || "Caixa Surpresa",
+        prize: premio.trim(),
+      });
+      if (!r.ok) toast.error(r.error);
+      else {
+        toast.success("Prêmio atualizado");
+        aoFechar();
+      }
+    });
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-base">Editar prêmio</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="editar-titulo" className="text-xs font-medium">
+            Título
+          </Label>
+          <Input
+            id="editar-titulo"
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            disabled={isPending}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Prêmio</Label>
+          <CampoDePremio
+            valor={premio}
+            aoMudar={setPremio}
+            catalogo={catalogo}
+            placeholder="Ex: AK-47 | Asiimov, R$ 50, Vale-presente..."
+            desabilitado={isPending}
+          />
+        </div>
+        {prizeIds.length > 1 && (
+          <p className="text-[11px] text-muted-foreground">
+            Vale para as {prizeIds.length} unidades deste prêmio.
+          </p>
+        )}
+        <Button
+          type="button"
+          onClick={salvar}
+          disabled={isPending}
+          className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+        >
+          {isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+          Salvar
+        </Button>
+      </div>
+    </>
+  );
+}
+
 // Lista compacta dos prêmios cadastrados no pool, agrupada por title +
 // prize pra não duplicar visualmente quando o admin cria várias unidades.
 // Cada grupo mostra contador (claimed/total) + ações de lock/remove.
 function PrizesTable({
   prizes,
+  catalogo,
   disabled,
 }: {
   prizes: SurpriseBoxPrizeRow[];
+  catalogo: SkinDoCatalogoSimples[];
   disabled: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [editando, setEditando] = useState<{
+    ids: string[];
+    title: string;
+    prize: string;
+  } | null>(null);
 
   function toggleLock(prizeId: string) {
     startTransition(async () => {
@@ -1321,6 +1658,12 @@ function PrizesTable({
     });
   }
 
+  // O que já saiu para alguém não é mais estoque: sai daqui e vive na tabela
+  // de caixas distribuídas. Antes ficava nas duas cabeças ao mesmo tempo, com
+  // o contador em "1/1", e não dava para distinguir o que ainda pode sair do
+  // que já foi entregue.
+  const noPool = prizes.filter((p) => !p.claimed);
+
   // Agrupa por (title|prize|mode|odds) pra mostrar como "X unidades".
   const groups = new Map<
     string,
@@ -1332,7 +1675,7 @@ function PrizesTable({
       ids: { id: string; locked: boolean; claimed: boolean }[];
     }
   >();
-  for (const p of prizes) {
+  for (const p of noPool) {
     const key = `${p.title} ${p.prize} ${p.mode} ${p.odds ?? "-"}`;
     if (!groups.has(key)) {
       groups.set(key, {
@@ -1351,18 +1694,17 @@ function PrizesTable({
   }
 
   return (
+    <>
     <div className="rounded-lg border overflow-hidden">
       <div className="px-3 py-2 border-b bg-muted/30 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Prêmios cadastrados ({prizes.length})
+        Prêmios cadastrados ({noPool.length})
       </div>
       <ul className="divide-y">
         {[...groups.values()].map((g) => {
           const total = g.ids.length;
-          const claimed = g.ids.filter((x) => x.claimed).length;
           const locked = g.ids.filter((x) => x.locked).length;
-          // Pra ações, opera sobre as unidades não-claimed.
-          const operable = g.ids.find((x) => !x.claimed);
-          const allLocked = locked === total - claimed && total - claimed > 0;
+          const operable = g.ids[0];
+          const allLocked = locked === total && total > 0;
           return (
             <li
               key={`${g.title}-${g.prize}-${g.mode}-${g.odds ?? ""}`}
@@ -1373,8 +1715,10 @@ function PrizesTable({
                   <span className="text-sm font-medium truncate">
                     {g.prize}
                   </span>
+                  {/* Só o que resta no pool: o contador "sorteados/total"
+                      perdeu o sentido quando o sorteado saiu desta lista. */}
                   <Badge variant="outline" className="text-[10px] tabular-nums">
-                    {claimed}/{total}
+                    {total} {total === 1 ? "unidade" : "unidades"}
                   </Badge>
                   {g.mode === "PERCENT" && g.odds != null && (
                     <Badge variant="outline" className="text-[10px]">
@@ -1392,6 +1736,24 @@ function PrizesTable({
                 </p>
               </div>
               <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  disabled={disabled || isPending}
+                  onClick={() =>
+                    setEditando({
+                      ids: g.ids.map((x) => x.id),
+                      title: g.title,
+                      prize: g.prize,
+                    })
+                  }
+                  aria-label="Editar prêmio"
+                  title="Editar o nome do prêmio"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
                 {operable && (
                   <Button
                     type="button"
@@ -1438,6 +1800,16 @@ function PrizesTable({
         })}
       </ul>
     </div>
+
+    <EditarPremioModal
+      aberto={editando != null}
+      aoFechar={() => setEditando(null)}
+      catalogo={catalogo}
+      prizeIds={editando?.ids ?? []}
+      tituloInicial={editando?.title ?? ""}
+      premioInicial={editando?.prize ?? ""}
+    />
+    </>
   );
 }
 

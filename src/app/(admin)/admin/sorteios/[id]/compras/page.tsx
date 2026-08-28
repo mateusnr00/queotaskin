@@ -54,6 +54,25 @@ export default async function ComprasPage({
   // Nome, raridade e em quais desgastes a skin existe: é o que a sugestão
   // do prêmio precisa. A ficha completa de centenas de skins, com foto,
   // float e valor, não tem por que atravessar a rede.
+  // As caixas que já foram distribuídas, com quem levou e o que saiu. A
+  // tabela existia com o cabeçalho pronto e o corpo fixo em "Sem Registros",
+  // com um comentário dizendo que vinha depois: nunca veio, e por isso o
+  // prêmio sorteado não aparecia em lugar nenhum como premiação.
+  const caixasDistribuidas = await prisma.surpriseBox.findMany({
+    where: { raffleId: id },
+    orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      status: true,
+      openedAt: true,
+      createdAt: true,
+      prize: { select: { id: true, title: true, prize: true, skinRarity: true } },
+      reservation: {
+        select: { participantName: true, status: true, paidAt: true },
+      },
+    },
+  });
+
   const catalogoDePremios = (
     await prisma.skinTemplate.findMany({
       where: { tenantId },
@@ -243,6 +262,17 @@ export default async function ComprasPage({
         totalPages={totalPages}
         surpriseBox={{
           catalogo: catalogoDePremios,
+          caixas: caixasDistribuidas.map((c) => ({
+            id: c.id,
+            status: c.status,
+            abertaEm: (c.openedAt ?? c.createdAt).toISOString(),
+            premioId: c.prize?.id ?? null,
+            premioTitulo: c.prize?.title ?? null,
+            premio: c.prize?.prize ?? null,
+            raridade: c.prize?.skinRarity ?? null,
+            ganhador: c.reservation.participantName,
+            pagoEm: c.reservation.paidAt?.toISOString() ?? null,
+          })),
           enabled: raffle.surpriseBoxEnabled,
           accumulative: raffle.surpriseBoxCombosAccumulative,
           abrirTodas: raffle.surpriseBoxAbrirTodas,

@@ -860,6 +860,123 @@ export async function toggleSurpriseBoxPrizeLockAction(
   }
 }
 
+const editarPremioDeCaixaSchema = z.object({
+  // O painel agrupa as unidades iguais numa linha só, então editar vale para
+  // o grupo: renomear uma de cem unidades deixaria noventa e nove com o nome
+  // velho e a linha se partiria em duas.
+  prizeIds: z.array(z.string().cuid()).min(1).max(500),
+  title: z.string().min(1).max(120),
+  prize: z.string().min(1).max(200),
+});
+
+/**
+ * Renomeia o prêmio, inclusive o que já foi sorteado.
+ *
+ * Sorteado é justamente o caso que mais precisa: um nome errado que já saiu
+ * para alguém é o que o ganhador está lendo, e antes não havia como corrigir.
+ * Renomear não mexe em quem ganhou nem em quando: só no texto e na raridade
+ * que sai dele.
+ */
+export async function updateSurpriseBoxPrizeAction(
+  raw: unknown
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = editarPremioDeCaixaSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    const { prizeIds, title, prize } = parsed.data;
+
+    const premios = await prisma.surpriseBoxPrize.findMany({
+      where: { id: { in: prizeIds } },
+      select: { id: true, raffleId: true },
+    });
+    if (premios.length === 0) return { ok: false, error: "Prêmio não encontrado" };
+
+    // Todas as unidades têm de ser do mesmo sorteio: sem isto, uma lista
+    // montada à mão editaria prêmio de outra campanha do mesmo tenant.
+    const raffleId = premios[0]!.raffleId;
+    if (premios.some((p) => p.raffleId !== raffleId)) {
+      return { ok: false, error: "Dados inválidos" };
+    }
+    await assertRaffleInActiveTenant(raffleId, session.user);
+
+    const raffle = await prisma.raffle.findUniqueOrThrow({
+      where: { id: raffleId },
+      select: { tenantId: true },
+    });
+    const skinRarity = raridadeDoPremio(
+      prize.trim(),
+      new Map(
+        (
+          await prisma.skinTemplate.findMany({
+            where: { tenantId: raffle.tenantId },
+            select: { name: true, skinRarity: true },
+          })
+        ).map((sk) => [chaveDoNome(sk.name), sk.skinRarity]),
+      ),
+    );
+
+    await prisma.surpriseBoxPrize.updateMany({
+      where: { id: { in: premios.map((p) => p.id) } },
+      data: { title: title.trim(), prize: prize.trim(), skinRarity },
+    });
+
+    revalidatePath(`/admin/sorteios/${raffleId}/compras`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[updateSurpriseBoxPrizeAction]", err);
+    return { ok: false, error: "Erro ao editar prêmio" };
+  }
+}
+
+const caixaIdSchema = z.object({ boxId: z.string().cuid() });
+
+/**
+ * Desfaz uma caixa já aberta: apaga a caixa e devolve o prêmio ao pool.
+ *
+ * Devolver, e não apagar junto, porque são duas decisões diferentes. Aqui o
+ * que se desfaz é a premiação; o prêmio volta a ficar disponível e, se a
+ * intenção era sumir com ele também, é um clique na lista de cadastrados, que
+ * é onde apagar prêmio sempre morou.
+ */
+export async function deleteSurpriseBoxAction(
+  raw: unknown
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = caixaIdSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    const box = await prisma.surpriseBox.findUnique({
+      where: { id: parsed.data.boxId },
+      select: { raffleId: true, prizeId: true },
+    });
+    if (!box) return { ok: false, error: "Caixa não encontrada" };
+    await assertRaffleInActiveTenant(box.raffleId, session.user);
+
+    // Numa transação: apagar a caixa sem soltar o prêmio deixaria um item
+    // marcado como sorteado e sem dono, fora do pool para sempre.
+    await prisma.$transaction([
+      ...(box.prizeId
+        ? [
+            prisma.surpriseBoxPrize.update({
+              where: { id: box.prizeId },
+              data: { claimedAt: null },
+            }),
+          ]
+        : []),
+      prisma.surpriseBox.delete({ where: { id: parsed.data.boxId } }),
+    ]);
+
+    revalidatePath(`/admin/sorteios/${box.raffleId}/compras`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[deleteSurpriseBoxAction]", err);
+    return { ok: false, error: "Erro ao remover caixa" };
+  }
+}
+
+
 // Remove um prêmio do pool. Prêmio já sorteado (claimedAt setado) não
 // pode ser deletado, preserva histórico do ganhador.
 export async function deleteSurpriseBoxPrizeAction(
