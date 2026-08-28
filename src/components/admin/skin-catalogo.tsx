@@ -131,6 +131,14 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
     return (
       <FormularioSkin
         inicial={editando === "nova" ? null : editando}
+        // Sem isto, fechar o formulário e reabrir a mesma skin mostraria as
+        // artes de antes: `editando` é capturado no clique de editar e nunca
+        // mais era atualizado.
+        aoMudarArtes={(artes) =>
+          setEditando((atual) =>
+            atual && atual !== "nova" ? { ...atual, artes } : atual
+          )
+        }
         aoFechar={() => setEditando(null)}
         aoSalvar={() => {
           setEditando(null);
@@ -315,10 +323,13 @@ function FormularioSkin({
   inicial,
   aoFechar,
   aoSalvar,
+  aoMudarArtes,
 }: {
   inicial: SkinDoCatalogo | null;
   aoFechar: () => void;
   aoSalvar: () => void;
+  /** Sobe para o catálogo: é lá que mora o retrato da skin em edição. */
+  aoMudarArtes: (artes: ArteDaSkin[]) => void;
 }) {
   const [dados, setDados] = useState<Omit<SkinDoCatalogo, "id">>(
     inicial ?? VAZIA
@@ -362,8 +373,16 @@ function FormularioSkin({
 
   function salvar() {
     startTransition(async () => {
+      // O corpo nomeia o que entra, campo a campo. `artes` e
+      // `desgastesDisponiveis` ficam de fora: o primeiro é tabela à parte,
+      // que salva sozinha ao enviar, e o segundo vem da fonte de itens do
+      // CS2. Espalhar `dados` mandava os dois no corpo, e o zod os descartava
+      // em silêncio: funciona por acidente e some no dia em que o schema
+      // virar strict.
       const payload = {
-        ...dados,
+        name: dados.name,
+        skinStatTrak: dados.skinStatTrak,
+        skinSouvenir: dados.skinSouvenir,
         imageUrl: dados.imageUrl ?? "",
         skinRarity: dados.skinRarity ?? "",
         skinWear: dados.skinWear ?? "",
@@ -565,9 +584,16 @@ function FormularioSkin({
           arquivos, não campos, e amarrá-las ao botão faria a pessoa enviar
           cinco imagens e perder todas ao fechar sem salvar. */}
       <ArtesDaSkin
+        // A key reinicia a lista de artes ao trocar de skin, no lugar de um
+        // efeito copiando prop em estado.
+        key={inicial?.id ?? "nova"}
         skinId={inicial?.id ?? null}
         desgastesDisponiveis={dados.desgastesDisponiveis}
         artes={inicial?.artes ?? []}
+        // O retrato do pai anda junto. Sem isto, fechar o formulário e
+        // reabrir a mesma skin mostraria as artes de antes: `editando` é
+        // capturado no clique de editar e nunca mais era atualizado.
+        aoMudar={aoMudarArtes}
       />
 
       <div className="flex justify-end gap-2 border-t pt-4">
