@@ -84,6 +84,37 @@
   --sidebar-ring: oklch(0.78 0.17 70);
 }
 
+/* Cor de TEXTO por raridade de skin.
+   Existe ao lado de RARITY_COLOR, que traz as cores oficiais da Valve, porque
+   as duas resolvem problemas diferentes. Aquelas foram feitas para borda e
+   brilho sobre o cinza do inventario do jogo, e como texto reprovam em
+   contraste: no tema claro seis das oito ficam abaixo de 4,5:1, e a
+   Extraordinaria da 1,40:1, ouro sobre branco. Aqui o matiz e a saturacao sao
+   os mesmos e so a luminosidade muda, o minimo para cada uma passar de 4,5:1
+   sobre o card do tema. Oculta continua vermelha, que e como o jogador
+   reconhece. */
+:root {
+  --raridade-consumer: #4f77a5;
+  --raridade-industrial: #2f77c7;
+  --raridade-mil-spec: #4463ff;
+  --raridade-restricted: #8847ff;
+  --raridade-classified: #c41ad8;
+  --raridade-covert: #e61c1c;
+  --raridade-contraband: #966d15;
+  --raridade-extraordinary: #877200;
+}
+
+.dark {
+  --raridade-consumer: #b0c3d9;
+  --raridade-industrial: #5e98d9;
+  --raridade-mil-spec: #5b76ff;
+  --raridade-restricted: #9961ff;
+  --raridade-classified: #d534e7;
+  --raridade-covert: #eb4b4b;
+  --raridade-contraband: #e4ae39;
+  --raridade-extraordinary: #ffd700;
+}
+
 .dark {
   --background: oklch(0.16 0.01 250);
   --foreground: oklch(0.97 0.01 250);

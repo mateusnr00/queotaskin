@@ -41,6 +41,7 @@ import type { PrizeDraft } from "@/components/admin/skin-prize-editor";
 import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
 import { RaffleAwardedTicketsTab } from "@/components/admin/raffle-awarded-tickets-tab";
+import type { SkinDoCatalogoSimples } from "@/components/admin/campo-de-premio";
 
 import {
   raffleGeneralSchema,
@@ -97,6 +98,13 @@ interface RaffleFormProps {
   raffleTitle?: string;
   /** Catálogo de skins do tenant. Só usado na criação. */
   skins?: SkinDoCatalogo[];
+  /**
+   * O mesmo catálogo, só nome e raridade, para sugerir o prêmio nos Títulos
+   * Premiados. Separado de `skins` porque aquele traz foto, float e valor de
+   * cada uma das centenas de skins, e a aba de premiados precisa só do nome:
+   * mandar a ficha completa para o navegador seria pagar caro por nada.
+   */
+  catalogoDePremios?: SkinDoCatalogoSimples[];
   defaultValues?: Partial<RaffleGeneralInput>;
   // Dados de conteúdo das abas, só preenchidos no modo edit.
   initialImages?: RaffleImageItem[];
@@ -215,6 +223,7 @@ export function RaffleForm({
   abaInicial,
   raffleTitle = "",
   skins = [],
+  catalogoDePremios = [],
   defaultValues,
   initialImages = [],
   initialPrizes = [],
@@ -1255,6 +1264,7 @@ export function RaffleForm({
                   initialAwardedTickets[0]?.number ||
                   100
                 }
+                catalogo={catalogoDePremios}
                 initialItems={initialAwardedTickets}
                 initialConfig={initialAwardedConfig}
               />

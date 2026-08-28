@@ -26,45 +26,26 @@
 // verde sem ritmo, e o que ainda esta em jogo, que e o que sustenta a decisao
 // de comprar, sumia no meio.
 
+import type { SkinRarity } from "@prisma/client";
 import { Trophy } from "lucide-react";
 
-import { WEAR_LABEL, WEAR_STEAM } from "@/lib/cs2";
+import { RARITY_TEXT_VAR } from "@/lib/cs2";
+import { nomeCurto } from "@/lib/nome-curto";
+import { separarDesgaste } from "@/lib/premio-nome";
 import { cn } from "@/lib/utils";
-
-/** Os desgastes escritos por extenso, em ingles e em portugues. */
-const DESGASTES = [
-  ...Object.values(WEAR_STEAM),
-  ...Object.values(WEAR_LABEL),
-].map((d) => d.toLowerCase());
-
-/**
- * Separa "AK-47 | Vulcan (Field-Tested)" em nome e desgaste.
- *
- * So corta quando o que esta entre parenteses e mesmo um desgaste conhecido:
- * cortar qualquer parentese final quebraria um premio como "Faca (2 unidades)".
- */
-export function separarDesgaste(texto: string): {
-  nome: string;
-  desgaste: string | null;
-} {
-  const casa = texto.match(/^(.*)\s*\(([^()]+)\)\s*$/);
-  if (!casa) return { nome: texto, desgaste: null };
-  const dentro = casa[2].trim();
-  if (!DESGASTES.includes(dentro.toLowerCase())) {
-    return { nome: texto, desgaste: null };
-  }
-  return { nome: casa[1].trim(), desgaste: dentro };
-}
 
 export function LinhaDePremio({
   numero,
   premio,
+  raridade,
   ganhador,
   rotuloVago,
 }: {
   /** Ja formatado com os zeros a esquerda. Ausente nas caixas surpresas. */
   numero?: string;
   premio: string;
+  /** Preenchida quando o premio veio do catalogo. Pinta o nome. */
+  raridade?: SkinRarity | null;
   ganhador: string | null;
   /** O que dizer quando ainda nao tem dono. */
   rotuloVago: string;
@@ -93,7 +74,13 @@ export function LinhaDePremio({
 
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold leading-snug [overflow-wrap:anywhere]">
-          {nome}
+          {/* A cor da raridade, a mesma leitura que o jogador tem dentro do
+              jogo: Oculta vermelha, Secreta rosa, faca dourada. Sai por
+              variavel CSS porque a cor oficial da Valve reprova em contraste
+              como texto, e cada tema precisa do seu tom. */}
+          <span style={raridade ? { color: RARITY_TEXT_VAR[raridade] } : undefined}>
+            {nome}
+          </span>
           {desgaste && (
             // whitespace-nowrap: o desgaste e um rotulo compacto e desce
             // inteiro para a linha de baixo quando nao cabe. Sem isso o
@@ -108,7 +95,9 @@ export function LinhaDePremio({
         {temDono ? (
           <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
             <Trophy aria-hidden className="h-3.5 w-3.5 shrink-0" />
-            <span className="[overflow-wrap:anywhere]">{ganhador}</span>
+            <span className="[overflow-wrap:anywhere]">
+              {nomeCurto(ganhador!)}
+            </span>
           </p>
         ) : (
           <p className="mt-1 text-xs font-semibold text-primary">{rotuloVago}</p>

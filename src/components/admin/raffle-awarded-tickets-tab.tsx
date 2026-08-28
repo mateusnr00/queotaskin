@@ -19,6 +19,10 @@ import { Button } from "@/components/ui/button";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  CampoDePremio,
+  type SkinDoCatalogoSimples,
+} from "@/components/admin/campo-de-premio";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +50,8 @@ interface AwardedRow {
 interface Props {
   raffleId: string;
   totalNumbers: number;
+  /** Catálogo de skins do tenant, para sugerir o nome e mostrar a raridade. */
+  catalogo: SkinDoCatalogoSimples[];
   initialItems: {
     number: number;
     prizeDescription: string;
@@ -65,6 +71,7 @@ interface Props {
 export function RaffleAwardedTicketsTab({
   raffleId,
   totalNumbers,
+  catalogo,
   initialItems,
   initialConfig,
 }: Props) {
@@ -342,10 +349,11 @@ export function RaffleAwardedTicketsTab({
                   </p>
                 )}
               </div>
-              <Input
-                placeholder="Ex: AK-47 Asiimov Field-Tested"
-                value={it.prizeDescription}
-                onChange={(e) => update(idx, "prizeDescription", e.target.value)}
+              <CampoDePremio
+                placeholder="Ex: AK-47 | Vulcan (Field-Tested)"
+                valor={it.prizeDescription}
+                aoMudar={(v) => update(idx, "prizeDescription", v)}
+                catalogo={catalogo}
               />
               <Button
                 type="button"

@@ -11,6 +11,7 @@
 // total, lista com "mostrar mais", e a linha ganha destaque quando o prêmio
 // já tem dono.
 
+import type { SkinRarity } from "@prisma/client";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
@@ -26,6 +27,8 @@ const VISIVEIS_FECHADO = 5;
 export interface CaixaPublica {
   /** O que sai para o ganhador. */
   premio: string;
+  /** Preenchida quando o prêmio veio do catálogo. Pinta o nome. */
+  raridade: SkinRarity | null;
   /** Nome de quem levou, quando já foi aberta. */
   ganhador: string | null;
 }
@@ -64,6 +67,7 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
           <LinhaDePremio
             key={i}
             premio={c.premio}
+            raridade={c.raridade}
             ganhador={c.ganhador}
             rotuloVago="Disponível"
           />

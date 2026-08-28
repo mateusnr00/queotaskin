@@ -125,6 +125,7 @@ export default async function PublicRaffleDetailPage({
           select: {
             id: true,
             prize: true,
+            skinRarity: true,
             claimedAt: true,
             claimedByBox: {
               select: {
@@ -269,6 +270,7 @@ export default async function PublicRaffleDetailPage({
     (a) => ({
       number: a.number,
       prizeDescription: a.prizeDescription,
+      skinRarity: a.skinRarity,
       participantName: participantByNumber.get(a.number) ?? null,
     })
   );
@@ -283,6 +285,7 @@ export default async function PublicRaffleDetailPage({
     const itens = raffle.surpriseBoxPrizes.map((p) => ({
       id: p.id,
       premio: p.prize,
+      raridade: p.skinRarity,
       // Sem "exibir ganhadores" ligado, o prêmio ainda aparece, mas sem
       // nome: quem decide comprar quer ver o que já saiu, e isso não exige
       // expor quem levou.

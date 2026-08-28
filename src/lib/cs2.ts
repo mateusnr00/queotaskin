@@ -30,6 +30,28 @@ export const RARITY_COLOR: Record<SkinRarity, string> = {
   EXTRAORDINARY: "#ffd700",
 };
 
+/**
+ * A variável CSS com a cor de TEXTO de cada raridade.
+ *
+ * Separada de RARITY_COLOR porque o problema é outro. Aquelas são as cores
+ * oficiais da Valve e servem para borda e brilho, onde contraste de texto não
+ * se aplica. Como texto elas reprovam: no tema claro, seis das oito ficam
+ * abaixo de 4,5:1 sobre o card, e a Extraordinária dá 1,40:1, que é ouro sobre
+ * branco. A variável resolve para um tom por tema, mesmo matiz e mesma
+ * saturação, só a luminosidade ajustada até passar de 4,5:1. Definida em
+ * globals.css.
+ */
+export const RARITY_TEXT_VAR: Record<SkinRarity, string> = {
+  CONSUMER: "var(--raridade-consumer)",
+  INDUSTRIAL: "var(--raridade-industrial)",
+  MIL_SPEC: "var(--raridade-mil-spec)",
+  RESTRICTED: "var(--raridade-restricted)",
+  CLASSIFIED: "var(--raridade-classified)",
+  COVERT: "var(--raridade-covert)",
+  CONTRABAND: "var(--raridade-contraband)",
+  EXTRAORDINARY: "var(--raridade-extraordinary)",
+};
+
 /** Ordem crescente de valor, usada para achar o prêmio "principal". */
 export const RARITY_ORDER: Record<SkinRarity, number> = {
   CONSUMER: 0,

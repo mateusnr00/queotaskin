@@ -5,6 +5,7 @@
 // quando tem muitos. Modo modal: vira um botão que abre Dialog com a mesma
 // lista. Linha do contemplado ganha highlight emerald sólido.
 
+import type { SkinRarity } from "@prisma/client";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Trophy } from "lucide-react";
 
@@ -27,6 +28,7 @@ const COLLAPSED_VISIBLE = 5;
 export interface PublicAwardedTicket {
   number: number;
   prizeDescription: string;
+  skinRarity: SkinRarity | null;
   participantName: string | null;
 }
 
@@ -62,6 +64,7 @@ export function AwardedTicketsSection({
           key={t.number}
           numero={String(t.number).padStart(padDigits, "0")}
           premio={t.prizeDescription}
+          raridade={t.skinRarity}
           ganhador={t.participantName}
           rotuloVago="Em jogo"
         />

@@ -9,11 +9,13 @@
 // os formulários da aba são auto-contidos (admin edita N linhas e salva).
 
 import { revalidatePath } from "next/cache";
+import { SkinRarity } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { assertRaffleInActiveTenant } from "@/lib/tenant";
+import { chaveDoNome, raridadeDoPremio } from "@/lib/premio-nome";
 import {
   deleteRaffleImage,
   isStorageConfigured,
@@ -581,7 +583,7 @@ export async function setRaffleAwardedTicketsAction(
     // Valida limite: números devem estar dentro do intervalo da rifa.
     const raffle = await prisma.raffle.findUnique({
       where: { id: raffleId },
-      select: { totalNumbers: true },
+      select: { totalNumbers: true, tenantId: true },
     });
     if (!raffle) {
       return { ok: false, error: "Sorteio não encontrado" };
@@ -602,6 +604,20 @@ export async function setRaffleAwardedTicketsAction(
     // unique([raffleId, number]) na hora do createMany se tiver dup.
     const dedupe = new Map<number, string>();
     for (const i of items) dedupe.set(i.number, i.prizeDescription);
+
+    // A raridade sai do NOME, conferido contra o catálogo de skins do tenant,
+    // e não de uma escolha guardada no formulário. É o que faz a colagem em
+    // massa ("número, prêmio" por linha) ganhar cor sem trabalho nenhum, e o
+    // que impede a cor de ficar velha quando alguém edita o texto depois.
+    // Prêmio que não é skin simplesmente não casa e fica sem cor, que é o
+    // caso normal de "R$ 500 no Pix".
+    const catalogo = new Map<string, SkinRarity | null>();
+    for (const skin of await prisma.skinTemplate.findMany({
+      where: { tenantId: raffle.tenantId },
+      select: { name: true, skinRarity: true },
+    })) {
+      catalogo.set(chaveDoNome(skin.name), skin.skinRarity);
+    }
 
     const norm = (v: string) => (v.trim() ? v.trim() : null);
 
@@ -624,6 +640,7 @@ export async function setRaffleAwardedTicketsAction(
           raffleId,
           number,
           prizeDescription,
+          skinRarity: raridadeDoPremio(prizeDescription, catalogo),
           isInstantPrize: true,
         })),
       }),
@@ -765,12 +782,31 @@ export async function createSurpriseBoxPrizesAction(
     }
     const { raffleId, title, prize, quantity, mode, odds, locked } = parsed.data;
     await assertRaffleInActiveTenant(raffleId, session.user);
+    const raffle = await prisma.raffle.findUniqueOrThrow({
+      where: { id: raffleId },
+      select: { tenantId: true },
+    });
+
+    // Mesma regra dos Títulos Premiados: a raridade sai do nome conferido
+    // contra o catálogo, e prêmio que não é skin fica sem cor.
+    const skinRarity = raridadeDoPremio(
+      prize.trim(),
+      new Map(
+        (
+          await prisma.skinTemplate.findMany({
+            where: { tenantId: raffle.tenantId },
+            select: { name: true, skinRarity: true },
+          })
+        ).map((sk) => [chaveDoNome(sk.name), sk.skinRarity]),
+      ),
+    );
 
     const result = await prisma.surpriseBoxPrize.createMany({
       data: Array.from({ length: quantity }, () => ({
         raffleId,
         title: title.trim(),
         prize: prize.trim(),
+        skinRarity,
         mode,
         // Em RANDOM zera odds; em PERCENT usa o valor (NULL se admin não passou).
         odds: mode === "PERCENT" && odds != null ? odds : null,
@@ -898,7 +934,7 @@ export async function setRaffleWinnerAction(
 
     const raffle = await prisma.raffle.findUnique({
       where: { id: raffleId },
-      select: { totalNumbers: true },
+      select: { totalNumbers: true, tenantId: true },
     });
     if (!raffle) return { ok: false, error: "Sorteio não encontrado" };
     if (ticketNumber < 1 || ticketNumber > raffle.totalNumbers) {

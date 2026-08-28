@@ -882,6 +882,12 @@ model AwardedTicket {
   prizeDescription String
   isInstantPrize   Boolean @default(false)
 
+  /// Raridade da skin premiada, quando o prêmio foi escolhido do catálogo.
+  /// Nula quando é texto livre, que continua válido: nem todo título premiado
+  /// é skin ("R$ 500 no Pix"). Só serve para a cor do nome na lista pública,
+  /// que é a leitura que o jogador já tem dentro do jogo.
+  skinRarity SkinRarity?
+
   raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
 
   @@unique([raffleId, number])
@@ -956,6 +962,10 @@ model SurpriseBoxPrize {
   raffleId  String
   title     String // agrupador/categoria do prêmio (ex: "Skins Lendárias")
   prize     String // descrição do que sai pro ganhador
+
+  /// Mesma coisa do AwardedTicket: raridade quando veio do catálogo, nula
+  /// quando é texto livre.
+  skinRarity SkinRarity?
   mode      SurpriseBoxPrizeMode @default(RANDOM)
   odds      Decimal?             @db.Decimal(5, 2) // só em PERCENT
   locked    Boolean              @default(false)

@@ -68,6 +68,14 @@ export default async function EditRafflePage({
   // Estado do gateway no tenant, usado pela aba Pagamento pra mostrar
   // qual é o "padrão do site" e se as credenciais de cada provider já
   // foram cadastradas.
+  // Só nome e raridade: é o que a sugestão de prêmio precisa, e a ficha
+  // completa de centenas de skins não tem por que atravessar a rede.
+  const catalogoDePremios = await prisma.skinTemplate.findMany({
+    where: { tenantId: raffle.tenantId },
+    orderBy: { name: "asc" },
+    select: { name: true, skinRarity: true },
+  });
+
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: tenantId },
     select: {
@@ -194,6 +202,7 @@ export default async function EditRafflePage({
       </div>
 
       <RaffleForm
+        catalogoDePremios={catalogoDePremios}
         mode={{ kind: "edit", id: raffle.id }}
         abaInicial={abaInicial}
         raffleTitle={raffle.title}
