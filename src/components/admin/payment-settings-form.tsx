@@ -39,22 +39,26 @@ import {
 
 // Mantém em sync com paymentSettingsSchema do server action.
 const schema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY"]),
+  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY"]),
   syncpayClientId: z.string().max(200).optional().default(""),
   syncpayClientSecret: z.string().max(500).optional().default(""),
   syncpayBaseUrl: z.string().max(300).optional().default(""),
   codepayClientId: z.string().max(200).optional().default(""),
   codepayPassword: z.string().max(500).optional().default(""),
+  sigilopayClientId: z.string().max(200).optional().default(""),
+  sigilopayClientSecret: z.string().max(500).optional().default(""),
 });
 type FormValues = z.infer<typeof schema>;
 
 interface InitialValues {
-  provider: "SYNCPAY" | "CODEPAY";
+  provider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY";
   syncpayClientId: string;
   syncpayClientSecretConfigured: boolean;
   syncpayBaseUrl: string;
   codepayClientId: string;
   codepayPasswordConfigured: boolean;
+  sigilopayClientId: string;
+  sigilopayClientSecretConfigured: boolean;
 }
 
 interface Props {
@@ -62,6 +66,7 @@ interface Props {
   webhookUrls: {
     syncpay: string | null;
     codepay: string | null;
+    sigilopay: string | null;
   };
 }
 
@@ -78,6 +83,8 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
       syncpayBaseUrl: initial.syncpayBaseUrl,
       codepayClientId: initial.codepayClientId,
       codepayPassword: "",
+      sigilopayClientId: initial.sigilopayClientId,
+      sigilopayClientSecret: "",
     },
   });
 
@@ -98,6 +105,7 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
         ...values,
         syncpayClientSecret: "",
         codepayPassword: "",
+        sigilopayClientSecret: "",
       });
     });
   }
@@ -118,12 +126,17 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
                 >
                   <SelectTrigger className="w-full sm:w-60">
                     <SelectValue
-                      labels={{ SYNCPAY: "SyncPay", CODEPAY: "CodePay" }}
+                      labels={{
+                        SYNCPAY: "SyncPay",
+                        CODEPAY: "CodePay",
+                        SIGILOPAY: "SigiloPay",
+                      }}
                     />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SYNCPAY">SyncPay</SelectItem>
                     <SelectItem value="CODEPAY">CodePay</SelectItem>
+                    <SelectItem value="SIGILOPAY">SigiloPay</SelectItem>
                   </SelectContent>
                 </Select>
               </FormControl>
@@ -238,6 +251,58 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
                       {...field}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </ProviderCard>
+        )}
+
+        {provider === "SIGILOPAY" && (
+          <ProviderCard
+            title="Credenciais SigiloPay"
+            webhookUrl={webhookUrls.sigilopay}
+            webhookEnv="SIGILOPAY_WEBHOOK_TOKEN"
+          >
+            <FormField
+              control={form.control}
+              name="sigilopayClientId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chave Pública (Client ID)</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="off" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Painel SigiloPay, em Configurações, Credenciais de API.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="sigilopayClientSecret"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chave Privada (Client Secret)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={
+                        initial.sigilopayClientSecretConfigured
+                          ? "•••• já configurado (deixe vazio pra manter)"
+                          : ""
+                      }
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    A SigiloPay só mostra a chave privada uma vez, na criação
+                    da credencial. Se você não a tem mais, gere outra no painel
+                    deles.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

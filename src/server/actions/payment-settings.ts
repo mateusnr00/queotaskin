@@ -18,7 +18,7 @@ import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import type { ActionResult } from "@/server/actions/auth";
 
 const paymentSettingsSchema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY"]),
+  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY"]),
   syncpayClientId: z.string().max(200).optional().default(""),
   // Vazio = manter atual; com valor = sobrescrever.
   syncpayClientSecret: z.string().max(500).optional().default(""),
@@ -33,6 +33,8 @@ const paymentSettingsSchema = z.object({
     ),
   codepayClientId: z.string().max(200).optional().default(""),
   codepayPassword: z.string().max(500).optional().default(""),
+  sigilopayClientId: z.string().max(200).optional().default(""),
+  sigilopayClientSecret: z.string().max(500).optional().default(""),
 });
 
 export type PaymentSettingsInput = z.input<typeof paymentSettingsSchema>;
@@ -57,12 +59,24 @@ export async function updatePaymentSettingsAction(
   // Pra salvar qualquer secret novo, a env key precisa estar definida.
   // Sem ela, deixa o admin editar o resto mas bloqueia a parte de secret.
   const wantsSecretWrite =
-    data.syncpayClientSecret.length > 0 || data.codepayPassword.length > 0;
+    data.syncpayClientSecret.length > 0 ||
+    data.codepayPassword.length > 0 ||
+    data.sigilopayClientSecret.length > 0;
   if (wantsSecretWrite && !isEncryptionConfigured()) {
     return {
       ok: false,
       error:
         "PAYMENT_SECRET_ENCRYPTION_KEY não definida no Vercel. Impossível gravar credenciais com segurança.",
+    };
+  }
+
+  if (data.provider === "SIGILOPAY" && !data.sigilopayClientId) {
+    return {
+      ok: false,
+      error: "Selecionar SigiloPay exige preencher a Chave Pública.",
+      fieldErrors: {
+        sigilopayClientId: ["Obrigatório quando o gateway é SigiloPay"],
+      },
     };
   }
 
@@ -82,6 +96,7 @@ export async function updatePaymentSettingsAction(
     syncpayClientId: data.syncpayClientId || null,
     syncpayBaseUrl: data.syncpayBaseUrl || null,
     codepayClientId: data.codepayClientId || null,
+    sigilopayClientId: data.sigilopayClientId || null,
   };
 
   if (data.syncpayClientSecret) {
@@ -94,6 +109,14 @@ export async function updatePaymentSettingsAction(
     update.codepayPasswordEnc = encryptSecret(data.codepayPassword);
   } else if (!data.codepayClientId) {
     update.codepayPasswordEnc = null;
+  }
+  if (data.sigilopayClientSecret) {
+    update.sigilopayClientSecretEnc = encryptSecret(data.sigilopayClientSecret);
+  } else if (!data.sigilopayClientId) {
+    // Limpou a chave pública: limpa a privada junto, e o token do webhook
+    // também, que pertence à integração que acabou de sair.
+    update.sigilopayClientSecretEnc = null;
+    update.sigilopayWebhookToken = null;
   }
 
   // Última validação: o provider escolhido precisa ter credenciais
@@ -109,6 +132,22 @@ export async function updatePaymentSettingsAction(
         ok: false,
         error: "CodePay exige a SecretKey. Preencha o campo.",
         fieldErrors: { codepayPassword: ["Obrigatório no primeiro cadastro"] },
+      };
+    }
+  }
+
+  if (data.provider === "SIGILOPAY" && !data.sigilopayClientSecret) {
+    const atual = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { sigilopayClientSecretEnc: true },
+    });
+    if (!atual?.sigilopayClientSecretEnc) {
+      return {
+        ok: false,
+        error: "SigiloPay exige a Chave Privada. Preencha o campo.",
+        fieldErrors: {
+          sigilopayClientSecret: ["Obrigatório no primeiro cadastro"],
+        },
       };
     }
   }

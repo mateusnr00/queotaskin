@@ -1,13 +1,15 @@
 // Cliente SigiloPay.
 //
-// PARCIAL, DE PROPÓSITO.
+// Base: https://app.sigilopay.com.br/api/v1
+// Auth: dois headers, x-public-key e x-secret-key. Sem troca por token, sem
+//   validade para expirar, sem cache para invalidar.
+// Cobrança Pix:
+//   POST /gateway/pix/receive   -> { transactionId, pix: { code } }
+// Consulta:
+//   GET  /gateway/transactions?id=…
 //
-// O que está aqui é o que a documentação de webhooks já fixa: os nomes dos
-// eventos, o que cada um significa para uma reserva, e a prova de origem da
-// notificação. Falta a metade que cria a cobrança, que mora em outra página
-// da documentação deles e ainda não foi lida. Nada neste arquivo é chamado
-// pelo app enquanto essa metade não existir: gateway meio escrito perto do
-// checkout é o pior lugar possível para um palpite.
+// O VALOR VAI EM REAIS, NÃO EM CENTAVOS. Igual à SyncPay, ao contrário da
+// maioria. Está escrito na documentação deles, campo por campo.
 //
 // UMA URL DE CALLBACK, NÃO UMA POR COBRANÇA.
 //
@@ -15,6 +17,8 @@
 // documentação, que quem estoura esse limite está mandando uma URL diferente
 // a cada transação. A nossa é fixa, com um token secreto no caminho, e o
 // identificador da reserva viaja no corpo da cobrança. Uma URL para sempre.
+
+import { diaOficial } from "@/lib/xp/regras";
 
 /** Os eventos que a SigiloPay dispara para transações. */
 export const EVENTOS_DE_TRANSACAO = [
@@ -31,9 +35,46 @@ export type EventoDeTransacao = (typeof EVENTOS_DE_TRANSACAO)[number];
 export type StatusDePagamento = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface SigiloPayCredentials {
+  /** A "Chave Pública (Client ID)" do painel deles. */
   clientId: string;
+  /** A "Chave Privada (Client Secret)". */
   clientSecret: string;
   baseUrl?: string;
+}
+
+const BASE_PADRAO = "https://app.sigilopay.com.br/api/v1";
+
+function base(creds: SigiloPayCredentials): string {
+  return (creds.baseUrl || BASE_PADRAO).replace(/\/$/, "");
+}
+
+function cabecalhos(creds: SigiloPayCredentials): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "x-public-key": creds.clientId,
+    "x-secret-key": creds.clientSecret,
+  };
+}
+
+/** Extrai a mensagem de erro do formato que eles documentam. */
+async function erroDaResposta(res: Response): Promise<string> {
+  const bruto = await res.text().catch(() => "");
+  try {
+    const corpo = JSON.parse(bruto) as {
+      message?: string;
+      errorCode?: string;
+      details?: { field?: string; issue?: string };
+    };
+    const partes = [corpo.message, corpo.details?.issue].filter(Boolean);
+    if (partes.length > 0) {
+      const campo = corpo.details?.field ? ` (campo ${corpo.details.field})` : "";
+      return `${partes.join(" ")}${campo}`;
+    }
+  } catch {
+    // Resposta que não é JSON: devolve o texto cru, que ainda ajuda no log.
+  }
+  return bruto || `HTTP ${res.status}`;
 }
 
 /**
@@ -166,4 +207,131 @@ export function tokenConfere(
     diferenca |= recebido.charCodeAt(i) ^ guardado.charCodeAt(i);
   }
   return diferenca === 0;
+}
+
+/** Traduz o status da transação para o vocabulário do app. */
+export function statusDaTransacao(status: string): StatusDePagamento | null {
+  return STATUS_DA_TRANSACAO[status]?.status ?? null;
+}
+
+export interface CobrancaPix {
+  /** Em REAIS, não em centavos. */
+  amount: number;
+  /** Nosso identificador, único por transação. Volta no webhook. */
+  identifier: string;
+  /** Para onde a SigiloPay avisa. Fixa, uma só para todas as cobranças. */
+  callbackUrl: string;
+  /** Quando a cobrança deixa de valer. Vira dueDate, na data oficial. */
+  expiresAt: Date;
+  client: {
+    name: string;
+    email: string;
+    cpf: string;
+    phone: string;
+  };
+}
+
+export interface RespostaDaCobranca {
+  /** O id deles. Vira Payment.externalId e casa com transaction.id no webhook. */
+  transactionId: string;
+  /** O copia e cola. Também é o que gera o QR Code na tela. */
+  pixCode: string;
+}
+
+/**
+ * Cria uma cobrança Pix.
+ *
+ * O `identifier` é nosso e precisa ser único por transação: é ele que a
+ * SigiloPay devolve como `transaction.identifier` no webhook, e é por ele que
+ * dá para achar a cobrança de novo em `/gateway/transactions` mesmo se a
+ * resposta se perder no caminho.
+ *
+ * O QR Code sai do `pix.code`, e não do `pix.base64`: o campo base64 está
+ * marcado como depreciado na documentação deles e hoje sempre volta vazio.
+ */
+export async function criarCobrancaPix(
+  creds: SigiloPayCredentials,
+  input: CobrancaPix,
+): Promise<RespostaDaCobranca> {
+  const res = await fetch(`${base(creds)}/gateway/pix/receive`, {
+    method: "POST",
+    headers: cabecalhos(creds),
+    body: JSON.stringify({
+      identifier: input.identifier,
+      amount: input.amount,
+      client: {
+        name: input.client.name,
+        email: input.client.email,
+        phone: input.client.phone,
+        document: input.client.cpf,
+      },
+      // Data, e não instante: a granularidade do campo é o dia, então o
+      // vencimento deles nunca chega antes do nosso, que é o que manda.
+      dueDate: diaOficial(input.expiresAt),
+      callbackUrl: input.callbackUrl,
+    }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const detalhe = await erroDaResposta(res);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `SigiloPay recusou as credenciais (${res.status}). Confira a Chave Pública e a Privada em Admin, Configurações, Pagamentos. Resposta: ${detalhe}`,
+      );
+    }
+    throw new Error(`SigiloPay recusou a cobrança (${res.status}): ${detalhe}`);
+  }
+
+  const corpo = (await res.json()) as {
+    transactionId?: string;
+    status?: string;
+    pix?: { code?: string };
+    errorDescription?: string;
+  };
+
+  // 201 com status de falha existe: a documentação lista FAILED, REJECTED e
+  // CANCELED no mesmo corpo de sucesso. Sem esta guarda, uma cobrança recusada
+  // viraria uma tela de Pix com o campo vazio.
+  if (corpo.status && corpo.status !== "OK" && corpo.status !== "PENDING") {
+    throw new Error(
+      `SigiloPay devolveu a transação como ${corpo.status}: ${corpo.errorDescription ?? "sem detalhe"}`,
+    );
+  }
+  if (!corpo.transactionId || !corpo.pix?.code) {
+    throw new Error(
+      "SigiloPay respondeu sem transactionId ou sem o código do Pix",
+    );
+  }
+
+  return { transactionId: corpo.transactionId, pixCode: corpo.pix.code };
+}
+
+/**
+ * Consulta uma transação. É o que sustenta o botão "já paguei", para quem não
+ * quer esperar o webhook chegar.
+ */
+export async function consultarTransacao(
+  creds: SigiloPayCredentials,
+  transactionId: string,
+): Promise<{ status: StatusDePagamento; raw: unknown }> {
+  const url = `${base(creds)}/gateway/transactions?id=${encodeURIComponent(transactionId)}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: cabecalhos(creds),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(
+      `SigiloPay falhou ao consultar a transação (${res.status}): ${await erroDaResposta(res)}`,
+    );
+  }
+  const corpo = (await res.json()) as { status?: string };
+  return {
+    // Status que não conhecemos vira PENDING, e não erro: quem chama está
+    // perguntando "já pagou?", e a resposta honesta para o desconhecido é
+    // "ainda não sei", que faz a tela continuar esperando o webhook.
+    status: (corpo.status && statusDaTransacao(corpo.status)) || "PENDING",
+    raw: corpo,
+  };
 }

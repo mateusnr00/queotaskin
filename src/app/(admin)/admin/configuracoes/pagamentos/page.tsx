@@ -22,6 +22,8 @@ export default async function PagamentosPage() {
       syncpayBaseUrl: true,
       codepayClientId: true,
       codepayPasswordEnc: true,
+      sigilopayClientId: true,
+      sigilopayClientSecretEnc: true,
     },
   });
 
@@ -35,6 +37,11 @@ export default async function PagamentosPage() {
   const codepayWebhookUrl =
     appUrl && codepayWebhookToken
       ? `${appUrl}/api/webhooks/codepay/${codepayWebhookToken}`
+      : null;
+  const sigilopayWebhookToken = process.env.SIGILOPAY_WEBHOOK_TOKEN ?? "";
+  const sigilopayWebhookUrl =
+    appUrl && sigilopayWebhookToken
+      ? `${appUrl}/api/webhooks/sigilopay/${sigilopayWebhookToken}`
       : null;
 
   return (
@@ -58,20 +65,27 @@ export default async function PagamentosPage() {
 
       <PaymentSettingsForm
         initial={{
-          // Tenant.paymentProvider pode ser MERCADO_PAGO (enum legado), mas
-          // o form só conhece SYNCPAY/CODEPAY, caímos pra SYNCPAY se vier
-          // qualquer outra coisa.
+          // Tenant.paymentProvider pode ser MERCADO_PAGO (enum legado), que o
+          // form não conhece: qualquer coisa fora da lista cai pra SYNCPAY.
           provider:
-            tenant.paymentProvider === "CODEPAY" ? "CODEPAY" : "SYNCPAY",
+            tenant.paymentProvider === "CODEPAY" ||
+            tenant.paymentProvider === "SIGILOPAY"
+              ? tenant.paymentProvider
+              : "SYNCPAY",
           syncpayClientId: tenant.syncpayClientId ?? "",
           syncpayClientSecretConfigured: Boolean(tenant.syncpayClientSecretEnc),
           syncpayBaseUrl: tenant.syncpayBaseUrl ?? "",
           codepayClientId: tenant.codepayClientId ?? "",
           codepayPasswordConfigured: Boolean(tenant.codepayPasswordEnc),
+          sigilopayClientId: tenant.sigilopayClientId ?? "",
+          sigilopayClientSecretConfigured: Boolean(
+            tenant.sigilopayClientSecretEnc
+          ),
         }}
         webhookUrls={{
           syncpay: syncpayWebhookUrl,
           codepay: codepayWebhookUrl,
+          sigilopay: sigilopayWebhookUrl,
         }}
       />
     </div>

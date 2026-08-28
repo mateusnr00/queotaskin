@@ -459,7 +459,7 @@ const promotionsSchema = z.object({
 // tenant. Credenciais não passam por aqui, só a escolha do provider.
 const paymentProviderSchema = z.object({
   raffleId: z.string().cuid(),
-  paymentProvider: z.enum(["SYNCPAY", "CODEPAY"]).nullable(),
+  paymentProvider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY"]).nullable(),
 });
 
 export async function setRafflePaymentProviderAction(

@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type ProviderChoice = "DEFAULT" | "SYNCPAY" | "CODEPAY";
+type ProviderChoice = "DEFAULT" | "SYNCPAY" | "CODEPAY" | "SIGILOPAY";
 
 // O padrao do tenant e o enum inteiro do banco, e nao a lista que este seletor
 // oferece: o tenant pode estar num gateway que ainda nao da para escolher por
@@ -38,21 +38,24 @@ type ProviderDoTenant = PaymentProviderEnum;
 interface Props {
   raffleId: string;
   /** Override do sorteio. NULL/undefined → herda o do tenant. */
-  initialProvider: "SYNCPAY" | "CODEPAY" | null;
+  initialProvider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null;
   /** Default ativo no tenant. Usado pra mostrar "(SyncPay)" do lado de "Padrão do site". */
   tenantDefault: ProviderDoTenant;
   /** Provedores cujas credenciais já estão configuradas no tenant. */
   configuredProviders: {
     syncpay: boolean;
     codepay: boolean;
+    sigilopay: boolean;
   };
 }
 
-function toChoice(v: "SYNCPAY" | "CODEPAY" | null): ProviderChoice {
+function toChoice(v: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null): ProviderChoice {
   return v ?? "DEFAULT";
 }
 
-function fromChoice(c: ProviderChoice): "SYNCPAY" | "CODEPAY" | null {
+function fromChoice(
+  c: ProviderChoice,
+): "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null {
   return c === "DEFAULT" ? null : c;
 }
 
@@ -72,8 +75,10 @@ export function RafflePaymentTab({
     effective === "CODEPAY"
       ? configuredProviders.codepay
       : effective === "SYNCPAY"
-      ? configuredProviders.syncpay
-      : false;
+        ? configuredProviders.syncpay
+        : effective === "SIGILOPAY"
+          ? configuredProviders.sigilopay
+          : false;
 
   function onSave() {
     startTransition(async () => {
@@ -115,6 +120,7 @@ export function RafflePaymentTab({
                   DEFAULT: `Padrão do site (${labelFor(tenantDefault)})`,
                   SYNCPAY: "SyncPay",
                   CODEPAY: "CodePay",
+                  SIGILOPAY: "SigiloPay",
                 }}
               />
             </SelectTrigger>
@@ -124,6 +130,7 @@ export function RafflePaymentTab({
               </SelectItem>
               <SelectItem value="SYNCPAY">SyncPay</SelectItem>
               <SelectItem value="CODEPAY">CodePay</SelectItem>
+              <SelectItem value="SIGILOPAY">SigiloPay</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">

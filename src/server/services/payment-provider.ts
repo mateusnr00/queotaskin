@@ -22,6 +22,11 @@ import {
   createPixCharge as codepayCreatePix,
   type CodePayCredentials,
 } from "@/lib/codepay";
+import {
+  consultarTransacao as sigilopayConsulta,
+  criarCobrancaPix as sigilopayCriaPix,
+  type SigiloPayCredentials,
+} from "@/lib/sigilopay";
 
 export interface PaymentProviderClient {
   /** Nome canônico, vai pro Payment.provider e pra URL do webhook. */
@@ -60,6 +65,7 @@ interface TenantCredentials {
   defaultProvider: PaymentProviderEnum;
   syncpay?: SyncPayCredentials;
   codepay?: CodePayCredentials;
+  sigilopay?: SigiloPayCredentials;
 }
 
 export type ProviderResolution =
@@ -106,6 +112,9 @@ async function loadTenantCredentials(tenantId: string): Promise<
       syncpayBaseUrl: true,
       codepayClientId: true,
       codepayPasswordEnc: true,
+      sigilopayClientId: true,
+      sigilopayClientSecretEnc: true,
+      sigilopayBaseUrl: true,
     },
   });
   if (!tenant) {
@@ -118,7 +127,8 @@ async function loadTenantCredentials(tenantId: string): Promise<
 
   const hasAnySecret =
     Boolean(tenant.syncpayClientSecretEnc) ||
-    Boolean(tenant.codepayPasswordEnc);
+    Boolean(tenant.codepayPasswordEnc) ||
+    Boolean(tenant.sigilopayClientSecretEnc);
   if (hasAnySecret && !isEncryptionConfigured()) {
     return {
       ok: false,
@@ -165,12 +175,32 @@ async function loadTenantCredentials(tenantId: string): Promise<
     }
   }
 
+  let sigilopay: SigiloPayCredentials | undefined;
+  if (tenant.sigilopayClientId && tenant.sigilopayClientSecretEnc) {
+    try {
+      sigilopay = {
+        clientId: tenant.sigilopayClientId,
+        clientSecret: decryptSecret(tenant.sigilopayClientSecretEnc),
+        baseUrl: tenant.sigilopayBaseUrl ?? undefined,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: `Falha ao decriptar credencial SigiloPay: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        code: "ENCRYPTION_KEY_MISSING",
+      };
+    }
+  }
+
   return {
     ok: true,
     creds: {
       defaultProvider: tenant.paymentProvider,
       syncpay,
       codepay,
+      sigilopay,
     },
   };
 }
@@ -201,6 +231,43 @@ function buildProvider(
             // CodePay não tem campo de webhook por request, é global no painel.
           });
           return { pixCode: charge.pix_code, identifier: charge.identifier };
+        },
+      },
+    };
+  }
+
+  if (effective === "SIGILOPAY") {
+    if (!creds.sigilopay) {
+      return {
+        ok: false,
+        error:
+          "SigiloPay selecionada mas sem credenciais. Configure em Admin, Configurações, Pagamentos.",
+        code: "PROVIDER_NOT_CONFIGURED",
+      };
+    }
+    const spCreds = creds.sigilopay;
+    return {
+      ok: true,
+      provider: {
+        name: "SIGILOPAY",
+        webhookPath: "sigilopay",
+        async createPixCharge(input) {
+          const cobranca = await sigilopayCriaPix(spCreds, {
+            amount: input.amount,
+            // O identifier deles precisa ser único por transação, e a reserva
+            // já é: uma reserva tem no máximo um pagamento.
+            identifier: input.externalRef,
+            callbackUrl: input.webhookUrl,
+            expiresAt: input.expiresAt,
+            client: input.client,
+          });
+          return {
+            pixCode: cobranca.pixCode,
+            identifier: cobranca.transactionId,
+          };
+        },
+        async getStatus(identifier) {
+          return sigilopayConsulta(spCreds, identifier);
         },
       },
     };

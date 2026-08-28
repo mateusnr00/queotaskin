@@ -90,11 +90,16 @@ export default async function EditRafflePage({
       syncpayClientSecretEnc: true,
       codepayClientId: true,
       codepayPasswordEnc: true,
+      sigilopayClientId: true,
+      sigilopayClientSecretEnc: true,
     },
   });
   const configuredProviders = {
     syncpay: Boolean(tenant.syncpayClientId && tenant.syncpayClientSecretEnc),
     codepay: Boolean(tenant.codepayClientId && tenant.codepayPasswordEnc),
+    sigilopay: Boolean(
+      tenant.sigilopayClientId && tenant.sigilopayClientSecretEnc
+    ),
   };
 
   // Fallback pra campos faltantes no JSON: tudo OFF (identidade vem da
@@ -243,7 +248,8 @@ export default async function EditRafflePage({
         }}
         initialPaymentProvider={
           raffle.paymentProvider === "CODEPAY" ||
-          raffle.paymentProvider === "SYNCPAY"
+          raffle.paymentProvider === "SYNCPAY" ||
+          raffle.paymentProvider === "SIGILOPAY"
             ? raffle.paymentProvider
             : null
         }
