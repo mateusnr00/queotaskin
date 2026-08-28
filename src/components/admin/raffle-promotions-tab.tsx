@@ -58,6 +58,8 @@ interface Props {
   initialConfig: {
     enabled: boolean;
     doubleEnabled: boolean;
+    doubleFrom: string | null;
+    doubleUntil: string | null;
     accumulative: boolean;
   };
 }
@@ -71,6 +73,10 @@ export function RafflePromotionsTab({
   const [enabled, setEnabled] = useState(initialConfig.enabled);
   const [doubleEnabled, setDoubleEnabled] = useState(
     initialConfig.doubleEnabled
+  );
+  const [doubleFrom, setDoubleFrom] = useState(initialConfig.doubleFrom ?? "");
+  const [doubleUntil, setDoubleUntil] = useState(
+    initialConfig.doubleUntil ?? ""
   );
   const [accumulative, setAccumulative] = useState(initialConfig.accumulative);
 
@@ -137,6 +143,8 @@ export function RafflePromotionsTab({
         raffleId,
         enabled,
         doubleEnabled,
+        doubleFrom: doubleFrom || null,
+        doubleUntil: doubleUntil || null,
         accumulative,
         promotions: cleaned,
       });
@@ -174,8 +182,40 @@ export function RafflePromotionsTab({
             checked={doubleEnabled}
             onChange={setDoubleEnabled}
             label="Ativar Promoção em Dobro"
-            description="Cliente recebe o dobro dos números pelo mesmo valor pago. (Ainda não implementado na geração de tickets: por enquanto só salva a configuração.)"
+            description="Quem comprar durante a promoção recebe o dobro dos números pelo mesmo valor."
           />
+          {doubleEnabled && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="doubleFrom">Começa em (opcional)</Label>
+                <Input
+                  id="doubleFrom"
+                  type="datetime-local"
+                  value={doubleFrom}
+                  onChange={(e) => setDoubleFrom(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Vazio começa agora.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="doubleUntil">Termina em</Label>
+                <Input
+                  id="doubleUntil"
+                  type="datetime-local"
+                  value={doubleUntil}
+                  onChange={(e) => setDoubleUntil(e.target.value)}
+                />
+                {/* Sem hora de fim não há contagem regressiva, e é a contagem
+                    que faz a pessoa decidir agora em vez de depois. */}
+                <p className="text-xs text-muted-foreground">
+                  {doubleUntil
+                    ? "O contador na página do sorteio conta até aqui."
+                    : "Vazio não tem prazo, e a página não mostra contador."}
+                </p>
+              </div>
+            </div>
+          )}
           {doubleEnabled && (
             <div className="flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs">
               <Info className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300 mt-0.5" />

@@ -442,6 +442,11 @@ const promotionsSchema = z.object({
   raffleId: z.string().cuid(),
   enabled: z.boolean().default(true),
   doubleEnabled: z.boolean().default(false),
+  // Datas vao como texto do <input type="datetime-local">, que nao tem fuso.
+  // O servidor interpreta no fuso do servidor, que e o mesmo criterio usado
+  // depois para decidir se a promocao vale.
+  doubleFrom: z.string().optional().nullable(),
+  doubleUntil: z.string().optional().nullable(),
   accumulative: z.boolean().default(false),
   promotions: z
     .array(
@@ -504,7 +509,15 @@ export async function setRafflePromotionsAction(
         fieldErrors: parsed.error.flatten().fieldErrors,
       };
     }
-    const { raffleId, promotions, enabled, doubleEnabled, accumulative } =
+    const {
+      raffleId,
+      promotions,
+      enabled,
+      doubleEnabled,
+      doubleFrom,
+      doubleUntil,
+      accumulative,
+    } =
       parsed.data;
     await assertRaffleInActiveTenant(raffleId, session.user);
 
@@ -514,6 +527,8 @@ export async function setRafflePromotionsAction(
         data: {
           promotionsEnabled: enabled,
           promotionsDoubleEnabled: doubleEnabled,
+          promotionsDoubleFrom: doubleFrom ? new Date(doubleFrom) : null,
+          promotionsDoubleUntil: doubleUntil ? new Date(doubleUntil) : null,
           promotionsAccumulative: accumulative,
         },
       }),

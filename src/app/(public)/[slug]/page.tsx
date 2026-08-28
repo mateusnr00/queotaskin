@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { expireForRaffle } from "@/server/services/reservations";
 import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
+import { dobroAtivo } from "@/lib/promocao-em-dobro";
+import { FaixaDeDobro } from "@/components/public/faixa-de-dobro";
 import { ReservationForm } from "@/components/public/reservation-form";
 import type { RequiredFields } from "@/components/public/reservation-form";
 import { SocialShare } from "@/components/public/social-share";
@@ -234,6 +236,16 @@ export default async function PublicRaffleDetailPage({
       : 0;
   const levelLocked =
     raffle.minLevel != null && !meetsMinLevel(viewerXp, raffle.minLevel);
+  // A mesma regra que o servidor usa ao criar a reserva. Ela mora numa função
+  // pura justamente para a tela não prometer uma coisa e a compra fazer outra.
+  const dobroValendo = dobroAtivo(
+    {
+      ativa: raffle.promotionsDoubleEnabled,
+      inicio: raffle.promotionsDoubleFrom,
+      fim: raffle.promotionsDoubleUntil,
+    },
+    new Date()
+  );
   // O oposto do portão: quem alcançou o rank precisa VER que alcançou, senão
   // a campanha exclusiva fica idêntica a qualquer outra e o que ele comprou
   // para chegar ali não aparece em lugar nenhum.
@@ -463,7 +475,14 @@ export default async function PublicRaffleDetailPage({
               jaGarantiram={soldCount}
             />
           ) : (
-            <ReservationForm
+            <>
+              {dobroValendo && (
+                <FaixaDeDobro
+                  fim={raffle.promotionsDoubleUntil?.toISOString() ?? null}
+                  className="mb-4"
+                />
+              )}
+              <ReservationForm
               raffleId={raffle.id}
               totalNumbers={raffle.totalNumbers}
               takenNumbers={takenNumbers}
@@ -476,7 +495,8 @@ export default async function PublicRaffleDetailPage({
               pricePerNumber={Number(raffle.pricePerNumber)}
               selectionCards={raffle.selectionCards ?? []}
               selectionCardsBestseller={raffle.selectionCardsBestseller ?? -1}
-            />
+              />
+            </>
           )}
         </div>
       </div>

@@ -28,6 +28,7 @@ import {
 } from "@/lib/errors";
 import type { CreateReservationInput } from "@/lib/validations/raffle";
 import { pickAvailableNumbers } from "@/server/services/raffles";
+import { bilhetesDe, dobroAtivo } from "@/lib/promocao-em-dobro";
 
 // Expira reservas PENDING da rifa específica que já passaram do expiresAt.
 // Chamada antes de cada createReservation pra liberar números rapidamente
@@ -98,6 +99,7 @@ export async function computeTicketsToRecreate(
     where: { id: reservationId },
     select: {
       totalAmount: true,
+      dobroAplicado: true,
       raffle: {
         select: {
           id: true,
@@ -121,10 +123,14 @@ export async function computeTicketsToRecreate(
     : Number(reservation.raffle.pricePerNumber);
   if (pricePerNumber <= 0) return [];
 
-  const qty = Math.round(
+  const pagas = Math.round(
     (Number(reservation.totalAmount) - fee) / pricePerNumber
   );
-  if (qty <= 0) return [];
+  if (pagas <= 0) return [];
+
+  // O valor pago só conta as cotas compradas. Quem comprou durante a promoção
+  // recebeu o dobro, e recriar pelo valor devolveria metade dos números.
+  const qty = bilhetesDe(pagas, reservation.dobroAplicado);
 
   return pickAvailableNumbers(
     reservation.raffle.id,
@@ -175,9 +181,48 @@ export async function createReservation(input: CreateReservationInput) {
   //    efetivo é zero, mesmo se pricePerNumber tiver algum valor residual
   //    (admin pode ter mudado de paga pra grátis sem zerar o campo).
   const pricePerNumber = raffle.isFree ? 0 : Number(raffle.pricePerNumber);
+  // O valor é o das cotas escolhidas. A promoção em dobro NÃO entra aqui: ela
+  // muda quantos números saem, nunca quanto se paga.
   const totalAmount = pricePerNumber * input.numbers.length;
   const isFreeReservation = totalAmount <= 0;
   const now = new Date();
+
+  // 4b. Promoção em dobro: sorteia os números extras agora, antes da
+  //     transação, e decide uma vez só. Consultar a janela mais de uma vez
+  //     durante a compra deixaria a virada da hora cair no meio de um pedido.
+  const comDobro = dobroAtivo(
+    {
+      ativa: raffle.promotionsDoubleEnabled,
+      inicio: raffle.promotionsDoubleFrom,
+      fim: raffle.promotionsDoubleUntil,
+    },
+    now
+  );
+  let numerosExtras: number[] = [];
+  if (comDobro) {
+    try {
+      // Os escolhidos ainda não estão na tabela, então o sorteio pode repetir
+      // um deles. O filtro aqui embaixo é o que impede isso, e por isso pedimos
+      // com folga antes de cortar.
+      const escolhidos = new Set(input.numbers);
+      const sorteados = await pickAvailableNumbers(
+        raffle.id,
+        Math.min(
+          input.numbers.length * 2,
+          raffle.totalNumbers
+        ),
+        raffle.totalNumbers
+      );
+      numerosExtras = sorteados
+        .filter((n) => !escolhidos.has(n))
+        .slice(0, input.numbers.length);
+    } catch {
+      // Sem números livres suficientes para dobrar, a compra continua sem a
+      // promoção. Recusar a venda porque o brinde não coube seria pior.
+      numerosExtras = [];
+    }
+  }
+  const dobroAplicado = numerosExtras.length > 0;
   const expiresAt = new Date(
     now.getTime() + raffle.reservationTimeoutMinutes * 60_000
   );
@@ -203,6 +248,7 @@ export async function createReservation(input: CreateReservationInput) {
             : null,
           participantEmail: input.participantEmail ?? null,
           totalAmount,
+          dobroAplicado,
           expiresAt,
           status: isFreeReservation ? "PAID" : "PENDING",
           paidAt: isFreeReservation ? now : null,
@@ -213,17 +259,29 @@ export async function createReservation(input: CreateReservationInput) {
         },
       });
 
-      await tx.ticket.createMany({
-        data: input.numbers.map((number) => ({
-          raffleId: raffle.id,
-          number,
-          status: isFreeReservation
-            ? ("PAID" as const)
-            : ("RESERVED" as const),
-          reservationId: reservation.id,
-          paidAt: isFreeReservation ? now : null,
-        })),
+      const comoTicket = (number: number) => ({
+        raffleId: raffle.id,
+        number,
+        status: isFreeReservation ? ("PAID" as const) : ("RESERVED" as const),
+        reservationId: reservation.id,
+        paidAt: isFreeReservation ? now : null,
       });
+
+      // Os escolhidos entram sem tolerância: colidiu, a compra inteira volta
+      // atrás e a pessoa escolhe de novo. É o que ela pediu e pagou.
+      await tx.ticket.createMany({ data: input.numbers.map(comoTicket) });
+
+      // Os bônus entram com `skipDuplicates`, e a diferença é deliberada.
+      // Foram sorteados antes da transação, então alguém pode ter levado um
+      // deles nesse intervalo. Derrubar a venda inteira porque um número de
+      // brinde colidiu seria punir o comprador por causa do presente: aqui o
+      // que colidiu simplesmente não entra, e o resto do pedido segue.
+      if (numerosExtras.length > 0) {
+        await tx.ticket.createMany({
+          data: numerosExtras.map(comoTicket),
+          skipDuplicates: true,
+        });
+      }
 
       return reservation;
     });

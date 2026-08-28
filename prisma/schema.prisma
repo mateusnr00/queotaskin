@@ -522,9 +522,12 @@ model Raffle {
   // ficam em Promotion; aqui só os toggles e flags de exibição.
   promotionsEnabled       Boolean @default(false)
   // "Promoção em Dobro": cliente recebe 2x os números pelo mesmo valor.
-  // Hoje o toggle só é persistido; lógica de multiplicação de tickets
-  // ainda não foi implementada no createReservation (TODO).
   promotionsDoubleEnabled Boolean @default(false)
+  /// Janela da promocao. As duas nulas quer dizer "enquanto estiver ligada",
+  /// sem prazo. So a de fim preenchida e o caso comum: comeca agora e tem
+  /// hora para acabar, que e o que da urgencia.
+  promotionsDoubleFrom    DateTime?
+  promotionsDoubleUntil   DateTime?
   // Quando true, várias promoções podem somar/acumular num mesmo pedido
   // (semântica controlada na lógica de checkout, hoje só persistido).
   promotionsAccumulative  Boolean @default(false)
@@ -1279,6 +1282,12 @@ model Reservation {
   participantBirthDate  DateTime?
 
   totalAmount Decimal           @db.Decimal(10, 2)
+  /// A reserva saiu com a promocao em dobro valendo.
+  ///
+  /// Guardado na reserva, e nao recalculado depois: a promocao acaba, e sem
+  /// esta marca uma reserva feita durante a janela seria reconstruida com
+  /// metade dos numeros se o webhook chegasse atrasado.
+  dobroAplicado Boolean @default(false)
   status      ReservationStatus @default(PENDING)
   expiresAt   DateTime
   paidAt      DateTime?

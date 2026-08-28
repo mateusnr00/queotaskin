@@ -146,6 +146,8 @@ interface RaffleFormProps {
   initialPromotionsConfig?: {
     enabled: boolean;
     doubleEnabled: boolean;
+    doubleFrom: string | null;
+    doubleUntil: string | null;
     accumulative: boolean;
   };
   initialPrizesConfig?: {
@@ -275,6 +277,8 @@ export function RaffleForm({
   initialPromotionsConfig = {
     enabled: true,
     doubleEnabled: false,
+    doubleFrom: null,
+    doubleUntil: null,
     accumulative: false,
   },
   initialPrizesConfig = {

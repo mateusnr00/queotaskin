@@ -35,6 +35,20 @@ const ABAS = [
   "excluir",
 ];
 
+/** Data para o formato do <input type="datetime-local">, no fuso oficial. */
+function paraCampoLocal(data: Date | null): string | null {
+  if (!data) return null;
+  const partes = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(data);
+  return partes.replace(" ", "T");
+}
+
 export default async function EditRafflePage({
   params,
   searchParams,
@@ -246,6 +260,11 @@ export default async function EditRafflePage({
         initialPromotionsConfig={{
           enabled: raffle.promotionsEnabled,
           doubleEnabled: raffle.promotionsDoubleEnabled,
+          // <input type="datetime-local"> quer "YYYY-MM-DDTHH:mm" sem fuso e
+          // sem segundos. toISOString devolveria UTC, e a hora apareceria
+          // deslocada no campo.
+          doubleFrom: paraCampoLocal(raffle.promotionsDoubleFrom),
+          doubleUntil: paraCampoLocal(raffle.promotionsDoubleUntil),
           accumulative: raffle.promotionsAccumulative,
         }}
         initialPaymentProvider={
