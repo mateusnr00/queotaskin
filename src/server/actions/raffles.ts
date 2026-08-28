@@ -8,9 +8,9 @@ import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import {
-  deleteRaffleImage,
+  apagarArquivoSeOrfao,
+  copiarArquivoDoStorage,
   isStorageConfigured,
-  pathFromPublicUrl,
 } from "@/lib/storage";
 import { raffleGeneralSchema } from "@/lib/validations/raffle";
 import { garantirSlugLivre } from "@/server/services/raffles";
@@ -104,6 +104,15 @@ export async function createRaffleAction(
         skin.artes.find((a) => a.wear === null))
       : null;
 
+    // A cópia sai FORA da transação: storage não participa dela, e uma
+    // chamada de rede lá dentro seguraria a transação aberta pelo tempo da
+    // subida. Falhando a cópia, cai na URL da arte, que é o comportamento
+    // antigo: capa compartilhada é pior que capa nenhuma só na hora de
+    // apagar, e apagarArquivoSeOrfao cobre esse caso.
+    const urlDaCapa = arteDaCapa
+      ? await copiarArquivoDoStorage(arteDaCapa.url, "raffles/capas")
+      : null;
+
     try {
       const raffle = await prisma.$transaction(async (tx) => {
         const criado = await tx.raffle.create({
@@ -151,7 +160,11 @@ export async function createRaffleAction(
             await tx.raffleImage.create({
               data: {
                 raffleId: criado.id,
-                url: arteDaCapa.url,
+                // A cópia, e não a URL da arte. Apontar os dois para o mesmo
+                // arquivo fazia um apagar o outro: remover ou trocar a capa
+                // apaga o arquivo, e a arte da skin ficava no banco apontando
+                // para um arquivo que não existe mais.
+                url: urlDaCapa ?? arteDaCapa.url,
                 isCover: true,
                 order: 0,
               },
@@ -382,8 +395,18 @@ export async function deleteRaffleAction(
 
     if (isStorageConfigured()) {
       for (const img of raffle.images) {
-        const path = pathFromPublicUrl(img.url);
-        if (path) await deleteRaffleImage(path);
+        // Mesma guarda da remoção de imagem avulsa: apagar um sorteio não
+        // pode levar embora a arte da skin, que é reaproveitada por toda
+        // campanha futura daquela skin.
+        await apagarArquivoSeOrfao(img.url, async () => {
+          const [outraImagem, arte] = await Promise.all([
+            prisma.raffleImage.count({
+              where: { url: img.url, raffleId: { not: raffle.id } },
+            }),
+            prisma.skinArt.count({ where: { url: img.url } }),
+          ]);
+          return outraImagem + arte > 0;
+        });
       }
     }
 

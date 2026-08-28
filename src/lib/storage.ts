@@ -81,6 +81,57 @@ export async function deleteRaffleImage(path: string): Promise<void> {
   await client.storage.from(bucket).remove([path]);
 }
 
+/**
+ * Copia um arquivo dentro do bucket e devolve a URL pública da cópia.
+ *
+ * Existe porque a capa do sorteio nasce da arte da skin, e apontar as duas
+ * para o MESMO objeto fazia uma apagar a outra: remover ou trocar a capa
+ * chama deleteRaffleImage, que apaga o arquivo, e a arte da skin continuava
+ * no banco apontando para um arquivo que não existe mais. Apagar um sorteio
+ * inteiro fazia isso com todas as artes que ele tinha usado.
+ *
+ * Com a cópia, cada um tem o seu arquivo e um ciclo de vida não encosta no
+ * outro. Devolve null quando não dá para copiar, e aí quem chama decide.
+ */
+export async function copiarArquivoDoStorage(
+  origemUrl: string,
+  destinoPrefixo: string,
+): Promise<string | null> {
+  const client = getStorageClient();
+  const bucket = readEnv("SUPABASE_STORAGE_BUCKET");
+  if (!client || !bucket) return null;
+
+  const origem = pathFromPublicUrl(origemUrl);
+  if (!origem) return null;
+
+  const extensao = origem.slice(origem.lastIndexOf(".")) || ".webp";
+  const destino = `${destinoPrefixo}/${nanoid(10)}${extensao}`;
+
+  const { error } = await client.storage.from(bucket).copy(origem, destino);
+  if (error) return null;
+
+  const { data } = client.storage.from(bucket).getPublicUrl(destino);
+  return data.publicUrl;
+}
+
+/**
+ * Apaga o arquivo SÓ se mais ninguém apontar para ele.
+ *
+ * Rede de proteção para o que já está gravado. A cópia acima impede que
+ * novas capas compartilhem arquivo com a arte da skin, mas as campanhas
+ * criadas antes disso continuam compartilhando, e apagar a imagem de uma
+ * delas levaria a arte junto.
+ */
+export async function apagarArquivoSeOrfao(
+  url: string,
+  aindaReferenciado: () => Promise<boolean>,
+): Promise<void> {
+  const path = pathFromPublicUrl(url);
+  if (!path) return;
+  if (await aindaReferenciado()) return;
+  await deleteRaffleImage(path);
+}
+
 // Extrai a chave do storage a partir da URL pública (split no bucket).
 // Necessário porque guardamos a URL inteira no banco e o delete precisa do path.
 export function pathFromPublicUrl(publicUrl: string): string | null {

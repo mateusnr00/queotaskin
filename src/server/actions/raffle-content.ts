@@ -17,9 +17,8 @@ import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { assertRaffleInActiveTenant } from "@/lib/tenant";
 import { chaveDoNome, raridadeDoPremio } from "@/lib/premio-nome";
 import {
-  deleteRaffleImage,
+  apagarArquivoSeOrfao,
   isStorageConfigured,
-  pathFromPublicUrl,
   uploadRaffleImage,
 } from "@/lib/storage";
 import type { ActionResult } from "@/server/actions/auth";
@@ -189,9 +188,17 @@ export async function deleteRaffleImageAction(
 
     await prisma.raffleImage.delete({ where: { id: parsed.data.id } });
 
-    // Limpa arquivo no storage (best-effort).
-    const path = pathFromPublicUrl(img.url);
-    if (path) await deleteRaffleImage(path);
+    // Limpa o arquivo SÓ se mais ninguém apontar para ele. As campanhas
+    // criadas antes da cópia compartilham o arquivo com a arte da skin, e
+    // apagar aqui levava a arte junto: ela continuava no banco apontando
+    // para um arquivo que não existe mais.
+    await apagarArquivoSeOrfao(img.url, async () => {
+      const [outraImagem, arte] = await Promise.all([
+        prisma.raffleImage.count({ where: { url: img.url } }),
+        prisma.skinArt.count({ where: { url: img.url } }),
+      ]);
+      return outraImagem + arte > 0;
+    });
 
     // Se era a capa, promove a primeira restante a capa.
     if (img.isCover) {
