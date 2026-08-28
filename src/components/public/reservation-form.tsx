@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -610,7 +611,7 @@ function ParticipantExtras({
               name="participantPhone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Telefone</FormLabel>
+                  <FormLabel>Telefone/WhatsApp</FormLabel>
                   <FormControl>
                     <Input
                       inputMode="tel"
@@ -619,6 +620,11 @@ function ParticipantExtras({
                       {...field}
                     />
                   </FormControl>
+                  {/* A entrega da skin acontece pelo WhatsApp. Dizer isso na
+                      hora de digitar muda a chance de vir um número certo. */}
+                  <FormDescription>
+                    Usamos para chamar você e entregar o prêmio.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

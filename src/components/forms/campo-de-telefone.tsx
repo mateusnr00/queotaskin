@@ -19,6 +19,7 @@ import { PAISES, formatarTelefone, paisPorIso } from "@/lib/telefone";
 import { Input } from "@/components/ui/input";
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -41,15 +42,18 @@ type FormComTelefone<T extends FieldValues> = UseFormReturn<T>;
 
 export function CampoDeTelefone<T extends FieldValues>({
   form,
-  rotulo = "Telefone",
+  rotulo = "Telefone/WhatsApp",
   classeDoRotulo,
   altura = "h-12",
+  semAviso = false,
 }: {
   form: FormComTelefone<T>;
   rotulo?: string;
   classeDoRotulo?: string;
   /** O diálogo é mais apertado que a página e usa campos menores. */
   altura?: string;
+  /** Some com a linha do WhatsApp onde ela não faz sentido, como no painel. */
+  semAviso?: boolean;
 }) {
   const campoPais = "phoneCountry" as Path<T>;
   const isoDoPais = form.watch(campoPais) as string;
@@ -135,6 +139,16 @@ export function CampoDeTelefone<T extends FieldValues>({
               />
             </div>
           </FormControl>
+          {/* O rótulo diz "WhatsApp", esta linha diz por quê. A entrega da
+              skin acontece por lá, então o número não é burocracia de
+              cadastro: é por onde a pessoa vai receber o que ganhou, e saber
+              disso na hora de digitar muda a chance de vir um número certo. */}
+          {!semAviso && (
+            <FormDescription>
+              É por aqui que a gente chama você no WhatsApp para entregar o
+              prêmio.
+            </FormDescription>
+          )}
           <FormMessage />
         </FormItem>
       )}
