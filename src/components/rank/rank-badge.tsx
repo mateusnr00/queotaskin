@@ -19,6 +19,8 @@ const SIZES = {
   sm: 26,
   md: 38,
   lg: 64,
+  /** Só o selo herói do portão de campanha exclusiva. */
+  xl: 92,
 } as const;
 
 // Os desenhos vêm em viewBox 200x200; o tamanho em tela é só escala.

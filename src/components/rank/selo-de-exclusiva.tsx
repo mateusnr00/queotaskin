@@ -11,9 +11,8 @@
 // está olhando. Quem trata os dois estados é a página da campanha, com o
 // portão e com o selo de liberado.
 
-import { Lock } from "lucide-react";
-
-import { degrauDoRank } from "@/lib/rank";
+import { RankBadge } from "@/components/rank/rank-badge";
+import { degrauDoRank, rankFromXp } from "@/lib/rank";
 import { cn } from "@/lib/utils";
 
 export function SeloDeExclusiva({
@@ -29,7 +28,7 @@ export function SeloDeExclusiva({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-[10px] font-bold uppercase tracking-wider",
         className,
       )}
       style={{
@@ -38,7 +37,11 @@ export function SeloDeExclusiva({
         backgroundColor: `${degrau.color}1f`,
       }}
     >
-      <Lock aria-hidden className="h-3 w-3 shrink-0" />
+      {/* O selo do nível no lugar do cadeado: falar de nível sem mostrar o
+          desenho dele desperdiça a única coisa que a pessoa reconhece de
+          longe, e o cadeado só dizia "fechado", que é o que menos importa
+          aqui. */}
+      <RankBadge rank={rankFromXp(degrau.xp)} size="xs" />
       {degrau.label}
     </span>
   );

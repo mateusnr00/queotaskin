@@ -152,10 +152,10 @@ export default async function PublicRaffleDetailPage({
   // pra expirar.
   await expireForRaffle(raffle.id);
 
-  // Estas cinco não dependem uma da outra: em série, cada uma paga a
+  // Estas quatro não dependem uma da outra: em série, cada uma paga a
   // latência de rede até o banco. Em paralelo, paga-se uma vez só, o que
   // pesa quando a função e o Postgres estão em regiões diferentes.
-  const [currentUser, soldCount, ocupados, takenTickets, rankSettings] =
+  const [currentUser, soldCount, ocupados, takenTickets] =
     await Promise.all([
     session?.user?.id
       ? prisma.user.findUnique({
@@ -182,10 +182,6 @@ export default async function PublicRaffleDetailPage({
           select: { number: true },
         })
       : Promise.resolve([]),
-      prisma.tenant.findUnique({
-        where: { id: tenant.id },
-        select: { xpPerBrl: true, rankEnabled: true },
-      }),
     ]);
 
   const takenNumbers = takenTickets.map((t) => t.number);
@@ -462,8 +458,9 @@ export default async function PublicRaffleDetailPage({
             <MinLevelGate
               minLevel={raffle.minLevel!}
               xp={viewerXp}
-              xpPerBrl={rankSettings?.xpPerBrl ?? 10}
               isLoggedIn={Boolean(currentUser)}
+              gratuita={raffle.isFree}
+              jaGarantiram={soldCount}
             />
           ) : (
             <ReservationForm
