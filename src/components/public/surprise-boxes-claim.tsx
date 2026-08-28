@@ -109,6 +109,11 @@ export function SurpriseBoxesClaim({
     [boxes]
   );
 
+  const premiadasCount = useMemo(
+    () => boxes.filter((b) => b.status === "OPENED_PRIZE").length,
+    [boxes]
+  );
+
   async function openOne(boxId: string) {
     const comAnimacao = !querMenosMovimento();
     setOpeningId(boxId);
@@ -191,12 +196,32 @@ export function SurpriseBoxesClaim({
           para / abrir!" na largura do celular. O ícone saiu junto: a arte da
           caixa aparece logo abaixo, uma vez por caixa. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Com tudo aberto, "Você tem 0 caixas para abrir!" é a tela negando
+            o prêmio que está desenhado logo abaixo dela. O título passa a
+            contar o que aconteceu, e não o que falta fazer. */}
         <h3 className="text-base font-semibold">
-          Você tem{" "}
-          <span className="text-amber-600 dark:text-amber-400">
-            {unopenedCount}
-          </span>{" "}
-          caixa{unopenedCount === 1 ? "" : "s"} para abrir!
+          {unopenedCount > 0 ? (
+            <>
+              Você tem{" "}
+              <span className="text-amber-600 dark:text-amber-400">
+                {unopenedCount}
+              </span>{" "}
+              caixa{unopenedCount === 1 ? "" : "s"} para abrir!
+            </>
+          ) : premiadasCount > 0 ? (
+            <>
+              Você ganhou{" "}
+              <span className="text-amber-600 dark:text-amber-400">
+                {premiadasCount}
+              </span>{" "}
+              {premiadasCount === 1 ? "prêmio" : "prêmios"} nas caixas!
+            </>
+          ) : (
+            <>
+              Suas caixa{boxes.length === 1 ? "" : "s"}{" "}
+              {boxes.length === 1 ? "foi aberta" : "foram abertas"}
+            </>
+          )}
         </h3>
         {allowOpenAll && unopenedCount > 1 && (
           <Button
@@ -345,14 +370,13 @@ function BoxRow({
               a única coisa escrita na linha, e "AK-47 | Redline (Testa…"
               esconde justamente o desgaste, que é o que muda o valor da
               skin. */}
-          <p className="line-clamp-2 text-sm font-bold leading-tight">
-            {box.prize.prize}
-          </p>
+          {/* Sem o selo "ABERTA" ao lado, o nome fica com a largura toda.
+              O selo era redundante: a faixa já diz "Você ganhou" e traz o
+              botão de reivindicar, e era ele que espremia o nome até cortar
+              o desgaste, que é justamente o que muda o valor da skin. */}
+          <p className="text-sm font-bold leading-tight">{box.prize.prize}</p>
         </div>
       </div>
-      <Badge className="bg-white/95 text-amber-700 hover:bg-white tabular-nums text-[10px]">
-        ABERTA
-      </Badge>
       </div>
 
       {/* O passo seguinte a ganhar. Sem ele a faixa dizia o prêmio e parava

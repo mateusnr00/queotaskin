@@ -23,6 +23,7 @@ import { CalendarDays, Check, Trophy } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { formatBRL } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_TITLE = "Pagamento confirmado!";
 const DEFAULT_BUTTON_LABEL = "Ver mais campanhas";
@@ -121,7 +122,15 @@ export function PaidCelebration({
             Não há aviso automático por mensagem em lugar nenhum do código,
             então prometer "avisamos você" seria promessa que ninguém
             cumpre. */}
-        <dl className="grid gap-px border-t border-emerald-500/20 bg-emerald-500/10 text-left sm:grid-cols-2">
+        {/* Duas colunas só quando há duas coisas a dizer. Sem data de
+            sorteio, o grid de duas deixava metade da faixa vazia com o fundo
+            esverdeado aparecendo, e a tela parecia ter perdido um pedaço. */}
+        <dl
+          className={cn(
+            "grid gap-px border-t border-emerald-500/20 bg-emerald-500/10 text-left",
+            drawDate && "sm:grid-cols-2",
+          )}
+        >
           {drawDate && (
             <div className="flex items-center gap-2.5 bg-card px-4 py-3">
               <CalendarDays className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -176,9 +185,31 @@ export function PaidCelebration({
         </ul>
       </section>
 
-      {/* Comprovante em linhas rótulo/valor, e não numa grade de duas
-          colunas: em grade, "Pago em" ficava numa faixa própria embaixo e as
-          três informações pareciam de blocos diferentes. */}
+      {/* Espaço para o que vier entre o comprovante e os botões, hoje as
+          caixas surpresas e o bloco de XP. Fica aqui e não depois dos botões
+          porque quem clica em "Ver mais campanhas" sai da página, e ela nunca
+          veria o que estivesse embaixo deles. */}
+      {children}
+
+      {imageUrl && (
+        <div className="overflow-hidden rounded-2xl border bg-card">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt="Obrigado pela participação"
+            className="max-h-72 w-full object-cover"
+          />
+        </div>
+      )}
+
+      {/* O extrato por último, e de propósito. Ele é conferência, não
+          notícia: quem ganhou uma skin quer ver a skin, e ter valor pago e
+          hora do pagamento na frente empurrava a caixa premiada para baixo da
+          dobra no celular.
+
+          Em linhas rótulo/valor e não em grade de duas colunas: em grade,
+          "Pago em" ficava numa faixa própria embaixo e as três informações
+          pareciam de blocos diferentes. */}
       <section className="rounded-2xl border bg-card px-4 py-1 text-sm md:px-5">
         <Linha rotulo="Sorteio">{raffleTitle}</Linha>
         <Linha rotulo="Valor pago">
@@ -198,23 +229,6 @@ export function PaidCelebration({
           </Linha>
         )}
       </section>
-
-      {imageUrl && (
-        <div className="overflow-hidden rounded-2xl border bg-card">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt="Obrigado pela participação"
-            className="max-h-72 w-full object-cover"
-          />
-        </div>
-      )}
-
-      {/* Espaço para o que vier entre o comprovante e os botões, hoje as
-          caixas surpresas e o bloco de XP. Fica aqui e não depois dos botões
-          porque quem clica em "Ver mais campanhas" sai da página, e nunca
-          veria o que estivesse embaixo deles. */}
-      {children}
 
       <div className="grid grid-cols-2 gap-2.5">
         <Link

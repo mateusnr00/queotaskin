@@ -724,8 +724,25 @@ function GeralTab({ initial }: Props) {
             onChange={(e) => setSupportPhone(e.target.value)}
             placeholder="(99) 99999-9999"
             className="pl-9"
+            aria-describedby="supportPhone-ajuda"
           />
         </div>
+        {/* O campo parecia opcional e nao e: sem ele o botao de reivindicar
+            premio some do comprovante, e quem acabou de ganhar uma skin fica
+            sem caminho nenhum para receber. Aconteceu de verdade. */}
+        <p
+          id="supportPhone-ajuda"
+          className={cn(
+            "text-xs leading-relaxed",
+            supportPhone.trim()
+              ? "text-muted-foreground"
+              : "font-medium text-amber-600 dark:text-amber-500",
+          )}
+        >
+          {supportPhone.trim()
+            ? "É para cá que vai o botão de reivindicar prêmio, com a mensagem pronta, quando alguém ganha uma skin."
+            : "Sem este número, o botão de reivindicar prêmio não aparece para quem ganha, e a pessoa fica sem saber como receber."}
+        </p>
       </div>
 
       <div className="space-y-1.5">
