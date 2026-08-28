@@ -9,6 +9,7 @@
 // Títulos Premiados, Pagamento, Promoções, Alertas, Upsell, Anti Spam,
 // Suporte, Capitalizadora, Restrições.
 
+import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { useForm, type Resolver } from "react-hook-form";
@@ -113,7 +114,7 @@ interface RaffleFormProps {
   initialPromotions?: PromotionData[];
   // Dados da aba "Pagamento", só populados no modo edit.
   initialPaymentProvider?: "SYNCPAY" | "CODEPAY" | null;
-  tenantPaymentDefault?: "SYNCPAY" | "CODEPAY" | "MERCADO_PAGO";
+  tenantPaymentDefault?: PaymentProviderEnum;
   configuredProviders?: { syncpay: boolean; codepay: boolean };
   initialAwardedTickets?: {
     number: number;

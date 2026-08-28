@@ -17,6 +17,8 @@ import { setRafflePaymentProviderAction } from "@/server/actions/raffle-content"
 import { Button } from "@/components/ui/button";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { Card } from "@/components/ui/card";
+import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
+
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,12 +30,17 @@ import {
 
 type ProviderChoice = "DEFAULT" | "SYNCPAY" | "CODEPAY";
 
+// O padrao do tenant e o enum inteiro do banco, e nao a lista que este seletor
+// oferece: o tenant pode estar num gateway que ainda nao da para escolher por
+// sorteio, e a tela precisa saber dizer o nome dele mesmo assim.
+type ProviderDoTenant = PaymentProviderEnum;
+
 interface Props {
   raffleId: string;
   /** Override do sorteio. NULL/undefined → herda o do tenant. */
   initialProvider: "SYNCPAY" | "CODEPAY" | null;
   /** Default ativo no tenant. Usado pra mostrar "(SyncPay)" do lado de "Padrão do site". */
-  tenantDefault: "SYNCPAY" | "CODEPAY" | "MERCADO_PAGO";
+  tenantDefault: ProviderDoTenant;
   /** Provedores cujas credenciais já estão configuradas no tenant. */
   configuredProviders: {
     syncpay: boolean;
@@ -59,7 +66,7 @@ export function RafflePaymentTab({
   const [saved, setSaved] = useState<ProviderChoice>(toChoice(initialProvider));
   const [isPending, startTransition] = useTransition();
 
-  const effective: "SYNCPAY" | "CODEPAY" | "MERCADO_PAGO" =
+  const effective: ProviderDoTenant =
     choice === "DEFAULT" ? tenantDefault : choice;
   const effectiveConfigured =
     effective === "CODEPAY"
@@ -173,8 +180,9 @@ export function RafflePaymentTab({
   );
 }
 
-function labelFor(p: "SYNCPAY" | "CODEPAY" | "MERCADO_PAGO"): string {
+function labelFor(p: ProviderDoTenant): string {
   if (p === "CODEPAY") return "CodePay";
   if (p === "MERCADO_PAGO") return "Mercado Pago";
+  if (p === "SIGILOPAY") return "SigiloPay";
   return "SyncPay";
 }
