@@ -516,6 +516,163 @@
  * enfeite de fundo: ela treme e estoura, que é exatamente o tipo de
  * movimento que incomoda. O componente também pula a espera nesse caso, para
  * o prêmio aparecer na hora em vez de depois de um tempo parado. */
+/* ===================================================================
+   RASPADINHA PREMIADA
+   ===================================================================
+
+   O dourado nasce de gradiente, nunca de uma cor chapada. Ouro real nao
+   tem uma cor: tem uma faixa clara onde a luz bate, uma escura na sombra e
+   uma transicao entre as duas. Um amarelo unico le como plastico.
+
+   As variaveis ficam aqui e nao no Tailwind porque sao usadas tambem pelo
+   canvas, em JavaScript, e um unico lugar evita o dia em que a pelicula
+   desenhada e a borda pintada deixam de combinar. */
+:root {
+  --ouro-escuro: #6d5220;
+  --ouro-medio: #b8912f;
+  --ouro-claro: #f0d98a;
+  --ouro-brilho: #fff4d0;
+  --champanhe: #e8dcc0;
+  --grafite: #14161a;
+}
+
+/* A borda do bilhete: gradiente pintado ate a borda, cor do papel pintada
+   ate o miolo. Mesma tecnica do cartao de criar conta, e pelo mesmo motivo:
+   envelope com miolo por cima quebra nas quinas arredondadas. */
+.bilhete-dourado {
+  background:
+    linear-gradient(160deg, #1b1d22, #101216 60%, #191b20) padding-box,
+    linear-gradient(
+        135deg,
+        var(--ouro-escuro) 0%,
+        var(--ouro-claro) 18%,
+        var(--ouro-brilho) 26%,
+        var(--ouro-medio) 42%,
+        var(--ouro-escuro) 58%,
+        var(--ouro-claro) 78%,
+        var(--ouro-medio) 100%
+      )
+      border-box;
+  border: 1.5px solid transparent;
+}
+
+/* O serrilhado das pontas, como bilhete destacado de um talao. Feito com
+   radial-gradient repetido, e nao com elementos: sao dezenas de recortes e
+   dezenas de divs custariam caro numa grade de oito bilhetes. */
+.bilhete-serrilha {
+  --recorte: 7px;
+  mask-image:
+    radial-gradient(circle var(--recorte) at 0 50%, transparent 98%, #000 100%),
+    radial-gradient(circle var(--recorte) at 100% 50%, transparent 98%, #000 100%);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+/* O brilho que atravessa o bilhete em repouso. Bem lento e bem discreto:
+   e o que faz o papel parecer metalico sem virar letreiro. */
+@keyframes bilhete-reflexo {
+  0%,
+  100% {
+    transform: translateX(-120%) rotate(8deg);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.5;
+  }
+  55% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(220%) rotate(8deg);
+  }
+}
+.bilhete-reflexo {
+  animation: bilhete-reflexo 7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* A onda de luz da vitoria: uma passada so, rapida, quando o premio sai. */
+@keyframes bilhete-varredura {
+  from {
+    transform: translateX(-130%) rotate(8deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.95;
+  }
+  to {
+    transform: translateX(240%) rotate(8deg);
+    opacity: 0;
+  }
+}
+.bilhete-varredura {
+  animation: bilhete-varredura 900ms cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+/* O bilhete premiado sobe e cresce de leve. 1.02 e 8px porque o objetivo e
+   "ele reagiu", nao "ele pulou": o exagero aqui vira cassino. */
+@keyframes bilhete-premiado {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(-8px) scale(1.02);
+  }
+  100% {
+    transform: translateY(-4px) scale(1.015);
+  }
+}
+.bilhete-premiado {
+  animation: bilhete-premiado 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* O micro impacto do momento em que a raspagem chega no limite. */
+@keyframes bilhete-impacto {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.985);
+  }
+}
+.bilhete-impacto {
+  animation: bilhete-impacto 160ms ease-out 1;
+}
+
+/* A pelicula restante saindo sozinha. Escala e desfoque juntos dao a
+   sensacao de material se soltando, e nao de imagem desaparecendo. */
+@keyframes pelicula-dissolve {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(6px);
+  }
+}
+.pelicula-dissolve {
+  animation: pelicula-dissolve 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* O premio surgindo por tras da pelicula. */
+@keyframes premio-surge {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.premio-surge {
+  animation: premio-surge 420ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cta-pulsa,
   .selo-pulsa,
@@ -525,8 +682,20 @@
   .caixa-abrindo,
   .tampa-fecha,
   .tampa-abre,
-  .confirmacao-entra {
+  .confirmacao-entra,
+  .bilhete-reflexo,
+  .bilhete-varredura,
+  .bilhete-premiado,
+  .bilhete-impacto,
+  .premio-surge {
     animation: none;
+  }
+
+  /* A pelicula precisa sumir de qualquer jeito: sem animacao ela ficaria
+     por cima do premio para sempre, e o bilhete nunca se revelaria. */
+  .pelicula-dissolve {
+    animation: none;
+    opacity: 0;
   }
 
   /* Sem animação o anel ficaria parado em cima do selo, tapando o check.

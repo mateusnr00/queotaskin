@@ -12,6 +12,8 @@ import { PixError } from "@/components/public/pix-error";
 import { PaidCelebration } from "@/components/public/paid-celebration";
 import { XpGanho } from "@/components/public/xp-ganho";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
+import { ColecaoDeRaspadinhas } from "@/components/public/raspadinha/colecao";
+import { numeroDoBilhete } from "@/server/services/raspadinhas";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
 import { TrilhaDoPedido } from "@/components/public/trilha-do-pedido";
 import { TituloDaAba } from "@/components/public/titulo-da-aba";
@@ -39,6 +41,7 @@ const reservationInclude = {
       // certo?" a pergunta seguinte é "quando eu descubro?".
       drawDate: true,
       surpriseBoxAbrirTodas: true,
+      raspadinhaRasparTodas: true,
     },
   },
   tickets: {
@@ -53,6 +56,18 @@ const reservationInclude = {
       method: true,
       rawResponse: true,
     },
+  },
+  raspadinhas: {
+    select: {
+      id: true,
+      numero: true,
+      status: true,
+      // O premio so vem quando o bilhete JA foi raspado. Enquanto esta
+      // DISPONIVEL nao existe premio nenhum: ele e sorteado no servidor no
+      // instante da revelacao, entao nao ha o que espiar no inspetor.
+      premio: { select: { id: true, tipo: true, rotulo: true, valor: true } },
+    },
+    orderBy: { numero: "asc" as const },
   },
   surpriseBoxes: {
     select: {
@@ -195,6 +210,20 @@ export default async function ReservationReceiptPage({
           }))
         : null;
 
+    const raspadinhas = reservation.raspadinhas.map((r) => ({
+      id: r.id,
+      numero: numeroDoBilhete(r.numero),
+      status: r.status as "DISPONIVEL" | "PREMIADA" | "SEM_PREMIO",
+      premio: r.premio
+        ? {
+            id: r.premio.id,
+            tipo: r.premio.tipo as "PIX" | "SKIN",
+            rotulo: r.premio.rotulo,
+            valor: r.premio.valor == null ? null : Number(r.premio.valor),
+          }
+        : null,
+    }));
+
     const boxes = reservation.surpriseBoxes.map((b) => ({
       id: b.id,
       status: b.status as "UNOPENED" | "OPENED_PRIZE" | "OPENED_EMPTY",
@@ -231,6 +260,17 @@ export default async function ReservationReceiptPage({
               E as duas ficam antes dos botões porque "Ver mais campanhas"
               tira a pessoa da página, e ela sairia sem abrir a caixa que
               acabou de ganhar. */}
+          {/* Raspadinhas antes das caixas: e a experiencia mais forte das
+              duas, e quem ganhou as duas coisas ve primeiro a que pede
+              gesto. */}
+          {raspadinhas.length > 0 && (
+            <ColecaoDeRaspadinhas
+              reservationId={reservation.id}
+              raspadinhas={raspadinhas}
+              permiteRasparTodas={reservation.raffle.raspadinhaRasparTodas}
+            />
+          )}
+
           {boxes.length > 0 && (
             <SurpriseBoxesClaim
               reservationId={reservation.id}

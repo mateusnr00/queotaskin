@@ -563,6 +563,14 @@ model Raffle {
   surpriseBoxPrizes SurpriseBoxPrize[]
   surpriseBoxes     SurpriseBox[]
 
+  /// Raspadinha Premiada. Mesma ideia da Caixa Surpresa, experiencia outra.
+  raspadinhaEnabled      Boolean @default(false)
+  /// Deixa raspar todas de uma vez, em vez de uma a uma.
+  raspadinhaRasparTodas  Boolean @default(false)
+  raspadinhaCombos  RaspadinhaCombo[]
+  raspadinhaPremios RaspadinhaPremio[]
+  raspadinhas       Raspadinha[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -988,6 +996,104 @@ model SurpriseBox {
 }
 
 // =====================================================================
+// RASPADINHA PREMIADA
+// =====================================================================
+//
+// Espelha a Caixa Surpresa de proposito: as duas sao "o comprador ganhou N
+// tentativas e cada uma pode ter premio". O que muda e a experiencia, nao a
+// regra. Copiar a forma faz o sorteio, a atomicidade e a checagem de dono
+// se comportarem igual nos dois, em vez de duas invencoes com bugs
+// diferentes.
+
+enum RaspadinhaStatus {
+  DISPONIVEL // criada pos-pagamento, esperando o comprador raspar
+  PREMIADA // raspada e com premio (premioId preenchido)
+  SEM_PREMIO // raspada e sem premio
+}
+
+enum TipoDePremioDaRaspadinha {
+  PIX // dinheiro
+  SKIN // item do jogo
+}
+
+/// Um premio possivel das raspadinhas de um sorteio.
+///
+/// `claimedAt` e a trava de unicidade: o mesmo premio nunca sai duas vezes,
+/// porque quem revela primeiro o marca dentro da mesma transacao.
+model RaspadinhaPremio {
+  id       String @id @default(cuid())
+  raffleId String
+
+  tipo  TipoDePremioDaRaspadinha @default(PIX)
+  /// O que aparece para quem ganhou: "R$ 250 no PIX", "Karambit Doppler".
+  rotulo String
+  /// Em reais, quando o tipo e PIX. Serve para somar quanto ja foi dado.
+  valor Decimal? @db.Decimal(10, 2)
+
+  /// Chance em porcentagem. Nulo entra no sorteio uniforme entre os que
+  /// tambem nao tem chance definida, igual ao modo RANDOM da caixa.
+  chance Decimal? @db.Decimal(5, 2)
+
+  /// Premio guardado: existe no cadastro mas nao sai. Serve para preparar
+  /// um premio grande antes de solta-lo.
+  travado Boolean @default(false)
+
+  /// Quando foi levado. Nulo = ainda disponivel.
+  claimedAt DateTime?
+
+  raffle          Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  raspadinhaQueLevou Raspadinha?
+
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+  @@index([raffleId, travado, claimedAt])
+}
+
+/// Quantos titulos dao quantas raspadinhas.
+model RaspadinhaCombo {
+  id         String  @id @default(cuid())
+  raffleId   String
+  /// "A partir de X titulos".
+  minimo     Int
+  /// "ganha N raspadinhas".
+  quantidade Int
+  visivel    Boolean @default(true)
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@unique([raffleId, minimo])
+  @@index([raffleId])
+}
+
+/// Um bilhete. Pertence a uma reserva paga.
+model Raspadinha {
+  id            String           @id @default(cuid())
+  raffleId      String
+  reservationId String
+  status        RaspadinhaStatus @default(DISPONIVEL)
+
+  /// O numero impresso no bilhete, sequencial por sorteio. E identidade
+  /// visual, nao chave: quem manda e o id.
+  numero Int
+
+  /// 1:1 com o premio levado. Nulo enquanto nao raspou ou se nao premiou.
+  premioId  String?   @unique
+  raspadaEm DateTime?
+
+  raffle      Raffle            @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  reservation Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  premio      RaspadinhaPremio? @relation(fields: [premioId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([raffleId, numero])
+  @@index([reservationId])
+  @@index([raffleId, status])
+}
+
+// =====================================================================
 // RESERVAS E PAGAMENTOS
 // =====================================================================
 
@@ -1037,6 +1143,7 @@ model Reservation {
   @@index([userId])
   @@index([affiliateId])
   @@index([status, expiresAt]) // job de expiração busca por aqui
+  raspadinhas   Raspadinha[]
 }
 
 model Payment {
