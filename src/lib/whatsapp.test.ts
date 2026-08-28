@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   linkDoWhatsapp,
   mensagemDeParabens,
+  mensagemDeReivindicacao,
   numeroInternacional,
 } from "./whatsapp";
 
@@ -71,5 +72,27 @@ describe("mensagemDeParabens", () => {
     const m = mensagemDeParabens({ nome: "  ", premio: "M4A4" });
     expect(m.startsWith("Parabéns! ")).toBe(true);
     expect(m).not.toContain("Parabéns, !");
+  });
+});
+
+describe("mensagemDeReivindicacao", () => {
+  const base = {
+    nome: "Carlos Eduardo",
+    premio: "AK-47 | Redline (Field-Tested)",
+    campanha: "AWP | Dragon Lore",
+    referencia: "cmtd18k6h0019",
+  };
+
+  it("se identifica, diz o prêmio e a campanha", () => {
+    const m = mensagemDeReivindicacao(base);
+    expect(m).toContain("Sou Carlos Eduardo");
+    expect(m).toContain("AK-47 | Redline (Field-Tested)");
+    expect(m).toContain("na campanha AWP | Dragon Lore");
+  });
+
+  // Sem a referência o suporte recebe "ganhei uma AK-47" e tem de perguntar
+  // quem é antes de poder ajudar.
+  it("leva a referência do pedido", () => {
+    expect(mensagemDeReivindicacao(base)).toContain("Pedido cmtd18k6h0019");
   });
 });

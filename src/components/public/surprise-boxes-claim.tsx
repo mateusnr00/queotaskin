@@ -25,6 +25,7 @@ import {
   CaixaQueAbre,
   CaixaSurpresaArte,
 } from "@/components/public/caixa-surpresa-arte";
+import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 import { EstouroDeConfete } from "@/components/public/estouro-de-confete";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,10 @@ interface Props {
   reservationId: string;
   boxes: SurpriseBoxClaimItem[];
   allowOpenAll: boolean;
+  /** Vem de Configurações. Sem ele o botão de reivindicar não aparece. */
+  telefoneDoSuporte: string | null;
+  nomeDoGanhador: string;
+  nomeDaCampanha: string;
 }
 
 const INITIAL_VISIBLE = 5;
@@ -76,6 +81,9 @@ function querMenosMovimento() {
 }
 
 export function SurpriseBoxesClaim({
+  telefoneDoSuporte,
+  nomeDoGanhador,
+  nomeDaCampanha,
   reservationId,
   boxes: initialBoxes,
   allowOpenAll,
@@ -210,6 +218,10 @@ export function SurpriseBoxesClaim({
           // precisa continuar depois que a linha já virou resultado.
           <li key={b.id} className="relative">
             <BoxRow
+              telefoneDoSuporte={telefoneDoSuporte}
+              nomeDoGanhador={nomeDoGanhador}
+              nomeDaCampanha={nomeDaCampanha}
+              referencia={reservationId}
               box={b}
               abrindo={openingId === b.id}
               travado={travado}
@@ -246,11 +258,19 @@ function BoxRow({
   abrindo,
   travado,
   onOpen,
+  telefoneDoSuporte,
+  nomeDoGanhador,
+  nomeDaCampanha,
+  referencia,
 }: {
   box: SurpriseBoxClaimItem;
   abrindo: boolean;
   travado: boolean;
   onOpen: () => void;
+  telefoneDoSuporte: string | null;
+  nomeDoGanhador: string;
+  nomeDaCampanha: string;
+  referencia: string;
 }) {
   if (box.status === "UNOPENED") {
     return (
@@ -308,7 +328,8 @@ function BoxRow({
   }
 
   return (
-    <div className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 p-3 flex items-center justify-between gap-3 shadow-sm">
+    <div className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 p-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2.5 min-w-0 text-white">
         {/* Fundo escuro atrás da caixa. A arte é laranja e a faixa também,
             e sem essa separação a caixa vira um borrão na faixa em vez de
@@ -332,6 +353,21 @@ function BoxRow({
       <Badge className="bg-white/95 text-amber-700 hover:bg-white tabular-nums text-[10px]">
         ABERTA
       </Badge>
+      </div>
+
+      {/* O passo seguinte a ganhar. Sem ele a faixa dizia o prêmio e parava
+          ali, e a pessoa que acabou de ganhar ficava sem saber como recebê-lo:
+          quem sabia procurava o WhatsApp da marca por fora, quem não sabia
+          esperava. */}
+      <BotaoReivindicar
+        telefoneDoSuporte={telefoneDoSuporte}
+        nome={nomeDoGanhador}
+        premio={box.prize.prize}
+        campanha={nomeDaCampanha}
+        referencia={referencia}
+        variante="claro"
+        className="mt-3 w-full"
+      />
     </div>
   );
 }

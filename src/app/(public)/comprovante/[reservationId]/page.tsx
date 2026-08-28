@@ -12,6 +12,7 @@ import { PixError } from "@/components/public/pix-error";
 import { PaidCelebration } from "@/components/public/paid-celebration";
 import { XpGanho } from "@/components/public/xp-ganho";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
+import { TitulosPremiadosGanhos } from "@/components/public/titulos-premiados-ganhos";
 import { ColecaoDeRaspadinhas } from "@/components/public/raspadinha/colecao";
 import { numeroDoBilhete } from "@/server/services/raspadinhas";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
@@ -42,6 +43,8 @@ const reservationInclude = {
       drawDate: true,
       surpriseBoxAbrirTodas: true,
       raspadinhaRasparTodas: true,
+      awardedTicketsEnabled: true,
+      awardedTicketsWinnerText: true,
     },
   },
   tickets: {
@@ -90,6 +93,14 @@ export default async function ReservationReceiptPage({
   const { reservationId } = await params;
   const tenant = await getCurrentTenant();
   if (!tenant) notFound();
+
+  // O telefone do suporte não está no contexto do tenant, que é o mínimo
+  // carregado em toda página. Vem aqui porque só esta precisa: é ele que
+  // liga o ganhador ao atendimento.
+  const suporte = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    select: { supportPhone: true },
+  });
 
   // Auto-cura: se o timer já passou mas o cron ainda não rodou, expira a
   // reserva agora. Evita o estado híbrido em que o countdown client-side
@@ -178,6 +189,23 @@ export default async function ReservationReceiptPage({
 
   // ── Estado pago: tela comemorativa + caixas surpresas (se houver).
   if (reservation.status === "PAID") {
+    // Os títulos premiados que caíram nos números desta pessoa.
+    //
+    // O painel promete que isto aparece no comprovante, e o texto de ganhador
+    // até era gravado, mas nada lia: quem tirava um número premiado terminava
+    // a compra sem nenhum aviso, e só descobria pela lista da campanha, se
+    // olhasse. Aqui é onde ele fica sabendo.
+    const premiadosDaPessoa = reservation.raffle.awardedTicketsEnabled
+      ? await prisma.awardedTicket.findMany({
+          where: {
+            raffleId: reservation.raffleId,
+            number: { in: reservation.tickets.map((t) => t.number) },
+          },
+          orderBy: { number: "asc" },
+          select: { number: true, prizeDescription: true, skinRarity: true },
+        })
+      : [];
+
     // Quanto a conta andou com esta compra.
     //
     // O ganho sai dos lançamentos desta reserva, não de uma conta feita
@@ -263,6 +291,17 @@ export default async function ReservationReceiptPage({
           {/* Raspadinhas antes das caixas: e a experiencia mais forte das
               duas, e quem ganhou as duas coisas ve primeiro a que pede
               gesto. */}
+          {premiadosDaPessoa.length > 0 && (
+            <TitulosPremiadosGanhos
+              premiados={premiadosDaPessoa}
+              telefoneDoSuporte={suporte?.supportPhone ?? null}
+              nomeDoGanhador={reservation.participantName}
+              nomeDaCampanha={reservation.raffle.title}
+              referencia={reservation.id}
+              texto={reservation.raffle.awardedTicketsWinnerText}
+            />
+          )}
+
           {raspadinhas.length > 0 && (
             <ColecaoDeRaspadinhas
               reservationId={reservation.id}
@@ -276,6 +315,9 @@ export default async function ReservationReceiptPage({
               reservationId={reservation.id}
               boxes={boxes}
               allowOpenAll={reservation.raffle.surpriseBoxAbrirTodas}
+              telefoneDoSuporte={suporte?.supportPhone ?? null}
+              nomeDoGanhador={reservation.participantName}
+              nomeDaCampanha={reservation.raffle.title}
             />
           )}
 

@@ -68,3 +68,32 @@ export function mensagemDeParabens({
     `Me manda o seu link de troca da Steam para eu enviar o item.`
   );
 }
+
+/**
+ * A mensagem que o GANHADOR manda para o suporte para reivindicar.
+ *
+ * Sentido oposto da de parabéns: aquela sai do painel para a pessoa, esta
+ * sai da pessoa para o suporte. Por isso ela se identifica e diz o que
+ * ganhou, em vez de cumprimentar.
+ *
+ * Leva a referência do pedido. Sem ela o suporte recebe "ganhei uma AK-47" e
+ * precisa perguntar quem é e em qual campanha antes de poder ajudar, o que
+ * transforma a entrega numa conversa de ida e volta.
+ */
+export function mensagemDeReivindicacao({
+  nome,
+  premio,
+  campanha,
+  referencia,
+}: {
+  nome: string;
+  premio: string;
+  campanha: string;
+  /** Id do pedido, para o suporte achar sem perguntar. */
+  referencia: string;
+}): string {
+  return (
+    `Olá! Sou ${nome.trim()} e ganhei ${premio} na campanha ${campanha}. ` +
+    `Quero reivindicar o prêmio. Pedido ${referencia}.`
+  );
+}
