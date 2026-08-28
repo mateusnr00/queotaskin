@@ -9,6 +9,7 @@ import type { SkinRarity } from "@prisma/client";
 
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
+import { SeloDeExclusiva } from "@/components/rank/selo-de-exclusiva";
 import { formatBRL, formatDate } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,7 @@ export default async function HomePage() {
       pricePerNumber: true,
       isFree: true,
       freeLabel: true,
+      minLevel: true,
       totalNumbers: true,
       showProgressBar: true,
       images: { where: { isCover: true }, take: 1, select: { url: true } },
@@ -255,6 +257,7 @@ interface RaffleCardData {
   pricePerNumber: unknown;
   isFree: boolean;
   freeLabel: string | null;
+  minLevel: number | null;
   totalNumbers: number;
   showProgressBar: boolean;
   images: { url: string }[];
@@ -316,8 +319,9 @@ function FeaturedRaffleCard({
           className="aspect-16/9 w-full sm:aspect-2/1"
           priority
         />
-        <div className="absolute top-3 left-3">
+        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5">
           <SeloDeStatus texto={statusBadge} />
+          <SeloDeExclusiva minLevel={raffle.minLevel} />
         </div>
       </div>
 
@@ -405,7 +409,10 @@ function CompactRaffleCard({
           >
             {priceLabel(raffle)}
           </span>
-          <SeloDeStatus texto={statusBadge} />
+          <span className="flex shrink-0 items-center gap-1.5">
+            <SeloDeExclusiva minLevel={raffle.minLevel} />
+            <SeloDeStatus texto={statusBadge} />
+          </span>
         </div>
       </div>
     </Link>

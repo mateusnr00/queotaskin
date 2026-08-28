@@ -37,7 +37,7 @@ import {
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { awardXpForReservation, getUserXp } from "@/server/services/xp";
-import { meetsMinLevel, rankFromXp } from "@/lib/rank";
+import { degrauDoRank, meetsMinLevel, rankFromXp } from "@/lib/rank";
 import type { ActionResult } from "@/server/actions/auth";
 
 // Campos opcionais que o usuário pode complementar no momento da reserva
@@ -177,7 +177,7 @@ export async function createReservationAction(
     if (!meetsMinLevel(xp, raffle.minLevel)) {
       return {
         ok: false,
-        error: `Campanha exclusiva para o nível ${raffle.minLevel} ou acima. Você está no ${rankFromXp(xp).label.toLowerCase()}.`,
+        error: `Campanha exclusiva para ${degrauDoRank(raffle.minLevel)?.label ?? `o nível ${raffle.minLevel}`} ou acima. Você está no ${rankFromXp(xp).label.toLowerCase()}.`,
       };
     }
   }

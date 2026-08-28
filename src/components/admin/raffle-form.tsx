@@ -41,6 +41,7 @@ import type { PrizeDraft } from "@/components/admin/skin-prize-editor";
 import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
 import { RaffleAwardedTicketsTab } from "@/components/admin/raffle-awarded-tickets-tab";
+import { ESCADA_DE_RANK } from "@/lib/rank";
 import type { SkinDoCatalogoSimples } from "@/components/admin/campo-de-premio";
 
 import {
@@ -217,6 +218,17 @@ const CATEGORIES = [
   "Roupas/Acessórios",
   "Outros",
 ];
+
+/** O valor do item "sem exigência". O Select não aceita string vazia. */
+const ABERTA_A_TODOS = "aberta";
+
+/** Rótulo por valor, para o Select mostrar o nome do rank já escolhido. */
+const ROTULOS_DE_RANK: Record<string, string> = {
+  [ABERTA_A_TODOS]: "Aberta a todos",
+  ...Object.fromEntries(
+    ESCADA_DE_RANK.map((d) => [String(d.valor), d.label]),
+  ),
+};
 
 export function RaffleForm({
   mode,
@@ -1091,25 +1103,40 @@ export function RaffleForm({
                 name="minLevel"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Campanha exclusiva: nível mínimo</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={21}
-                        placeholder="Aberta a todos"
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? Number(e.target.value) : null
-                          )
-                        }
-                      />
-                    </FormControl>
+                    <FormLabel>Campanha exclusiva: rank mínimo</FormLabel>
+                    {/* Lista, e não campo numérico. Digitar "23" não diz a
+                        ninguém que isso é Pro Player, e a escada passou a ter
+                        patente no topo: sem ver os nomes, a exclusiva de GOAT
+                        não seria descoberta. */}
+                    <Select
+                      value={field.value ? String(field.value) : ABERTA_A_TODOS}
+                      onValueChange={(v) =>
+                        field.onChange(v === ABERTA_A_TODOS ? null : Number(v))
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue labels={ROTULOS_DE_RANK} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={ABERTA_A_TODOS}>
+                          Aberta a todos
+                        </SelectItem>
+                        {ESCADA_DE_RANK.map((degrau) => (
+                          <SelectItem
+                            key={degrau.valor}
+                            value={String(degrau.valor)}
+                          >
+                            {degrau.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormDescription>
-                      De 1 a 21. Só quem estiver nesse nível do rank (ou em
-                      patente de prestígio) consegue reservar. Deixe vazio para
-                      abrir a campanha a todos.
+                      Só quem estiver nesse rank ou acima consegue reservar. Vale
+                      para campanha paga e para a gratuita, e é o que permite
+                      soltar sorteio grátis como recompensa de quem já comprou.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -304,11 +304,81 @@ export function xpForPurchase(
   return Math.floor(amountBrl) * perBrl;
 }
 
-/** True quando o nível do usuário libera uma campanha exclusiva. */
+// ------------------------------------------------- escada de exigência
+//
+// A campanha exclusiva guarda um número em `Raffle.minLevel`, e esse número
+// precisava passar do 21 para a ideia de "exclusiva do GOAT" existir. Antes
+// parava no 21 e, pior, meetsMinLevel deixava QUALQUER patente de prestígio
+// entrar em qualquer exigência numérica: não havia como pedir prestígio,
+// porque o próprio prestígio era o curinga que dispensava a checagem.
+//
+// As patentes continuam acima do 21, agora com posição própria na mesma
+// escada. O valor é fixo por chave, e não pelo índice de PRESTIGE_RANKS: se
+// alguém reordenar aquela lista, campanha já publicada mudaria de exigência
+// em silêncio.
+
+export const NIVEL_DE_PRESTIGIO: Record<PrestigeKey, number> = {
+  MVP: 22,
+  PRO_PLAYER: 23,
+  GOAT: 24,
+};
+
+/** Maior valor aceito em `minLevel`. */
+export const MAX_MIN_LEVEL = NIVEL_DE_PRESTIGIO.GOAT;
+
+export interface DegrauDaEscada {
+  /** O que vai gravado em Raffle.minLevel. */
+  valor: number;
+  /** "Nível 14" ou "GOAT". */
+  label: string;
+  /** XP acumulado necessário para alcançar este degrau. */
+  xp: number;
+  color: string;
+}
+
+/**
+ * A escada inteira, do nível 1 ao GOAT, na ordem em que o admin escolhe.
+ *
+ * Deriva de XP_POR_NIVEL e de PRESTIGE_RANKS, então mexer numa das duas
+ * tabelas não deixa esta lista para trás.
+ */
+export const ESCADA_DE_RANK: readonly DegrauDaEscada[] = [
+  ...XP_POR_NIVEL.map((xp, nivel) => ({
+    valor: nivel,
+    label: `Nível ${nivel}`,
+    xp,
+    color: tierForLevel(nivel).color,
+  })).slice(1),
+  ...PRESTIGE_RANKS.map((p) => ({
+    valor: NIVEL_DE_PRESTIGIO[p.key],
+    label: p.label,
+    xp: p.xp,
+    color: p.color,
+  })),
+];
+
+/** O degrau correspondente a um valor de `minLevel`, ou null. */
+export function degrauDoRank(minLevel: number | null): DegrauDaEscada | null {
+  if (minLevel == null || minLevel <= 0) return null;
+  return ESCADA_DE_RANK.find((d) => d.valor === minLevel) ?? null;
+}
+
+/** XP acumulado que a campanha exige. Zero quando ela é aberta a todos. */
+export function xpMinimoParaRank(minLevel: number | null): number {
+  return degrauDoRank(minLevel)?.xp ?? 0;
+}
+
+/**
+ * True quando o rank do usuário libera uma campanha exclusiva.
+ *
+ * Comparar XP acumulado, e não o número do nível, é o que faz a regra valer
+ * para os dois trechos da escada com uma linha só: patente exige mais XP que
+ * qualquer nível numérico, então quem é GOAT continua entrando em campanha de
+ * nível 10 sem precisar de caso especial, e campanha de GOAT deixa de fora
+ * quem está no nível 21.
+ */
 export function meetsMinLevel(xp: number, minLevel: number | null): boolean {
-  if (minLevel == null || minLevel <= 0) return true;
-  const rank = rankFromXp(xp);
-  // Prestígio está acima de qualquer nível numérico exigido.
-  if (rank.prestige) return true;
-  return rank.level >= minLevel;
+  const exigido = xpMinimoParaRank(minLevel);
+  if (exigido <= 0) return true;
+  return Math.max(0, Math.floor(xp)) >= exigido;
 }

@@ -792,10 +792,25 @@
   }
 }
 
+
+/* A entrada do selo de campanha liberada pelo rank. Roda uma vez e para: a
+   barra de progresso logo abaixo ja e o elemento em movimento desta dobra. */
+@keyframes selo-liberado {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.selo-liberado {
+  animation: selo-liberado 420ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .barra-listras,
   .barra-quente,
   .barra-cresce,
+  .selo-liberado,
   .cta-pulsa,
   .selo-pulsa,
   .card-popular-pulsa,

@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 
 import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
-import { rankFromXp, tierForLevel, xpForLevel } from "@/lib/rank";
+import { degrauDoRank, rankFromXp } from "@/lib/rank";
 
 /**
  * Aviso de campanha exclusiva por nível.
@@ -22,8 +22,12 @@ export function MinLevelGate({
   isLoggedIn: boolean;
 }) {
   const rank = rankFromXp(xp);
-  const target = tierForLevel(minLevel);
-  const required = xpForLevel(minLevel);
+  // O alvo sai da escada inteira, e não de tierForLevel: aquele só conhece os
+  // níveis 0 a 21 e devolveria a faixa errada para uma campanha de GOAT.
+  const alvo = degrauDoRank(minLevel);
+  const required = alvo?.xp ?? 0;
+  const rotuloAlvo = alvo?.label ?? `nível ${minLevel}`;
+  const target = { color: alvo?.color ?? "#7d8894" };
   const xpNeeded = Math.max(0, required - xp);
   const brlNeeded = Math.ceil(xpNeeded / (xpPerBrl > 0 ? xpPerBrl : 10));
   const percent = required > 0 ? Math.min(100, (xp / required) * 100) : 0;
@@ -40,7 +44,7 @@ export function MinLevelGate({
         <Lock className="mt-0.5 h-4 w-4 shrink-0" style={{ color: target.color }} />
         <div className="min-w-0">
           <h2 className="text-sm font-bold">
-            Exclusiva: nível {minLevel} ou acima
+            Exclusiva: {rotuloAlvo} ou acima
           </h2>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
             {isLoggedIn ? (
@@ -73,7 +77,7 @@ export function MinLevelGate({
             percent={percent}
             color={target.color}
             className="flex-1"
-            label={`Progresso até o nível ${minLevel}`}
+            label={`Progresso até ${rotuloAlvo}`}
           />
           <RankBadge xp={required} size="sm" muted />
         </div>

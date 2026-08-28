@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MAX_MIN_LEVEL } from "@/lib/rank";
+
 export const raffleStatusSchema = z.enum([
   "DRAFT",
   "ACTIVE",
@@ -112,12 +114,13 @@ export const raffleGeneralSchema = z.object({
     .max(10_000_000)
     .optional()
     .nullable(),
-  // Campanha exclusiva: nível mínimo do rank para reservar. Null/0 = aberta.
+  // Campanha exclusiva: degrau mínimo do rank para reservar. Null/0 = aberta.
+  // O teto é o GOAT, e não o nível 21: a escada segue nas patentes.
   minLevel: z.coerce
     .number()
     .int()
-    .min(1, "O nível mínimo vai de 1 a 21")
-    .max(21, "O nível mínimo vai de 1 a 21")
+    .min(1, "Escolha um degrau entre o nível 1 e o GOAT")
+    .max(MAX_MIN_LEVEL, "Escolha um degrau entre o nível 1 e o GOAT")
     .optional()
     .nullable(),
   showProgressBar: z.coerce.boolean().default(true),

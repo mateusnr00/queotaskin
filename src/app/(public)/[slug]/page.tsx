@@ -16,7 +16,8 @@ import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
-import { meetsMinLevel } from "@/lib/rank";
+import { SeloDeLiberado } from "@/components/rank/selo-de-liberado";
+import { meetsMinLevel, rankFromXp } from "@/lib/rank";
 import { getUserXp } from "@/server/services/xp";
 import {
   AwardedTicketsSection,
@@ -237,6 +238,11 @@ export default async function PublicRaffleDetailPage({
       : 0;
   const levelLocked =
     raffle.minLevel != null && !meetsMinLevel(viewerXp, raffle.minLevel);
+  // O oposto do portão: quem alcançou o rank precisa VER que alcançou, senão
+  // a campanha exclusiva fica idêntica a qualquer outra e o que ele comprou
+  // para chegar ali não aparece em lugar nenhum.
+  const liberadaPeloRank =
+    raffle.minLevel != null && Boolean(currentUser) && !levelLocked;
 
   // Skin principal da campanha: a de maior raridade entre os prêmios. É ela
   // que abre a página e define a cor de destaque.
@@ -405,6 +411,13 @@ export default async function PublicRaffleDetailPage({
       {/* Fixa na coluna da direita no desktop; no celular é só o bloco
           seguinte, logo abaixo do título. */}
       <div className="mt-5 space-y-3 md:mt-6 md:space-y-4">
+        {liberadaPeloRank && (
+          <SeloDeLiberado
+            minLevel={raffle.minLevel!}
+            rank={rankFromXp(viewerXp)}
+            gratuita={raffle.isFree}
+          />
+        )}
         {/* Preço antes da barra: é o que decide a compra, e a barra é
             contexto para essa decisão. Com a barra em cima, quem abre a
             página lê primeiro quanto já foi vendido e só depois descobre o

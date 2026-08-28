@@ -6,6 +6,7 @@ import { TicketCheck } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { statusDaCampanha } from "@/lib/campanha-status";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
+import { SeloDeExclusiva } from "@/components/rank/selo-de-exclusiva";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 import { contarVendidosPorRifa } from "@/server/services/vendidos";
 import { formatBRL } from "@/lib/format";
@@ -105,6 +106,8 @@ export default async function PublicRafflesListPage() {
                           ? r.freeLabel || "Grátis"
                           : formatBRL(Number(r.pricePerNumber))}
                       </span>
+                      <span className="flex shrink-0 items-center gap-1.5">
+                      <SeloDeExclusiva minLevel={r.minLevel} />
                       <SeloDeStatus
                         texto={statusDaCampanha(
                           vendidosPorRifa.get(r.id) ?? 0,
@@ -112,6 +115,7 @@ export default async function PublicRafflesListPage() {
                           statusConfig
                         )}
                       />
+                      </span>
                     </div>
                   </div>
                 </div>
