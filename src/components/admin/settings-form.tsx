@@ -123,8 +123,16 @@ const RANKING_CACHE_OPTIONS = [1, 2, 3, 4, 5, 10, 15, 20, 30, 45, 60];
 export function SettingsForm({ initial }: Props) {
   return (
     <Tabs defaultValue="geral" className="gap-4">
-      <div className="border-b -mx-4 md:-mx-6 px-4 md:px-6 overflow-x-auto">
-        <TabsList variant="line" className="h-auto py-1 gap-0">
+      {/* Rolagem só onde ela é necessária. No desktop havia barra de rolagem
+          nativa e a última aba ficava cortada com meia tela sobrando ao lado:
+          a lista era `inline-flex w-fit`, então ela não sabia quebrar linha e
+          o container só podia rolar. Aqui ela vira `flex-wrap` a partir do
+          tablet, e no telefone continua deslizando, que é o certo lá. */}
+      <div className="border-b -mx-4 md:-mx-6 px-4 md:px-6 overflow-x-auto sm:overflow-x-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <TabsList
+          variant="line"
+          className="h-auto max-w-full flex-nowrap justify-start gap-0 gap-y-2.5 py-1 sm:flex-wrap"
+        >
           <Tab value="geral" icon={Settings} label="Geral" />
           <Tab value="suporte" icon={Headset} label="Chats & Suporte" />
           <Tab value="compra" icon={ShoppingBag} label="Campanha / Compra" />
@@ -154,14 +162,9 @@ export function SettingsForm({ initial }: Props) {
         <PromosTab initial={initial} />
       </TabsContent>
 
-      {[["suporte", "Chats & Suporte"]].map(([value, label]) => (
-        <TabsContent key={value} value={value}>
-          <Card className="p-8 text-center text-sm text-muted-foreground">
-            <p className="font-semibold text-foreground mb-1">{label}</p>
-            <p>Configurações dessa seção em breve.</p>
-          </Card>
-        </TabsContent>
-      ))}
+      <TabsContent value="suporte">
+        <SuporteTab initial={initial} />
+      </TabsContent>
     </Tabs>
   );
 }
@@ -197,8 +200,6 @@ function GeralTab({ initial }: Props) {
   );
   const [companyName, setCompanyName] = useState(initial.companyName);
   const [siteDescription, setSiteDescription] = useState(initial.siteDescription);
-  const [supportPhone, setSupportPhone] = useState(initial.supportPhone ?? "");
-  const [supportEmail, setSupportEmail] = useState(initial.supportEmail ?? "");
   const [logoUrlInput, setLogoUrlInput] = useState("");
   const [isAddingLogoUrl, setIsAddingLogoUrl] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -387,8 +388,6 @@ function GeralTab({ initial }: Props) {
       const result = await updateSiteAction({
         companyName,
         siteDescription,
-        supportPhone: supportPhone || null,
-        supportEmail: supportEmail || null,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -711,10 +710,56 @@ function GeralTab({ initial }: Props) {
         />
       </div>
 
+      <div className="flex justify-end pt-2 border-t">
+        <Button type="button" onClick={save} disabled={isPending}>
+          {isPending ? "Salvando..." : "Salvar"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// ---------------- ABA CHATS & SUPORTE ----------------
+
+/**
+ * O canal de atendimento, na aba que leva o nome dele.
+ *
+ * Os dois campos moravam em "Geral", e a aba chamada "Chats & Suporte" era um
+ * cartão dizendo "em breve". Quem foi procurar o número de suporte clicou no
+ * nome certo e encontrou uma promessa vazia; o campo estava a duas abas dali.
+ * Nome de aba é promessa, e esta agora cumpre a dela.
+ */
+function SuporteTab({ initial }: Props) {
+  const [supportPhone, setSupportPhone] = useState(initial.supportPhone ?? "");
+  const [supportEmail, setSupportEmail] = useState(initial.supportEmail ?? "");
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    startTransition(async () => {
+      const result = await updateSiteAction({
+        supportPhone: supportPhone || null,
+        supportEmail: supportEmail || null,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Contatos de suporte salvos");
+    });
+  }
+
+  return (
+    <Card className="max-w-2xl space-y-5 p-5 md:p-6">
+      <div className="space-y-1">
+        <h2 className="text-base font-bold">Contato do suporte</h2>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          É por aqui que quem compra fala com você, e é para cá que o botão de
+          reivindicar prêmio leva quem ganha uma skin.
+        </p>
+      </div>
+
       <div className="space-y-1.5">
-        <Label htmlFor="supportPhone">
-          Telefone para suporte &quot;problemas com a sua compra?&quot;
-        </Label>
+        <Label htmlFor="supportPhone">Telefone / WhatsApp</Label>
         <div className="relative">
           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -756,7 +801,7 @@ function GeralTab({ initial }: Props) {
         />
       </div>
 
-      <div className="flex justify-end pt-2 border-t">
+      <div className="flex justify-end border-t pt-4">
         <Button type="button" onClick={save} disabled={isPending}>
           {isPending ? "Salvando..." : "Salvar"}
         </Button>

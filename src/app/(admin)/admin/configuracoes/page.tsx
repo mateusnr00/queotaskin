@@ -59,7 +59,7 @@ export default async function ConfiguracoesPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
           Configurações
