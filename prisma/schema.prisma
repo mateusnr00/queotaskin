@@ -359,6 +359,11 @@ model Tenant {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   skinTemplates SkinTemplate[]
+  visitas       VisitaDiaria[]
+
+  /// Id do pixel da Meta. Vazio desliga o rastreamento: sem ele nenhum
+  /// script de terceiro entra na página de quem compra.
+  metaPixelId String?
 }
 
 // Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts
@@ -656,6 +661,32 @@ model SkinTemplate {
   /// na hora de escolher.
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+/// Quantas visitas o site recebeu, por dia.
+///
+/// Guarda o contador do dia, e nao uma linha por acesso: o painel so precisa
+/// de "hoje", "ontem" e "total", e uma tabela com uma linha por pageview
+/// chegaria a milhoes de linhas para responder tres numeros.
+///
+/// Duas contagens, porque sao perguntas diferentes. `visitas` conta cada
+/// pagina aberta, que e o que mede movimento e serve para comparar com o
+/// gasto de anuncio. `visitantes` conta pessoa distinta no dia, que e o que
+/// nao infla quando alguem fica recarregando a mesma pagina.
+model VisitaDiaria {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// O dia em Brasilia, a meia-noite. O fuso e o do negocio, nao o do
+  /// servidor: "visitas de hoje" tem de virar quando vira o dia aqui.
+  dia DateTime @db.Date
+
+  visitas    Int @default(0)
+  visitantes Int @default(0)
+
+  @@unique([tenantId, dia])
+  @@index([tenantId, dia])
 }
 
 /// A arte de campanha de uma skin.

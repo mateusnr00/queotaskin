@@ -460,3 +460,53 @@ export async function removeLogoAction(
     return { ok: false, error: "Erro ao remover logo" };
   }
 }
+
+/**
+ * Id do pixel da Meta.
+ *
+ * Guardado como texto e não como número: o id tem 15 ou 16 dígitos e cabe
+ * mal em inteiro de 32 bits, e ninguém faz conta com ele.
+ *
+ * Vazio desliga. É o caminho de sair do rastreamento sem precisar de outro
+ * botão: sem id, nenhum script de terceiro entra na página de quem compra.
+ */
+const pixelSchema = z.object({
+  metaPixelId: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || /^\d{10,20}$/.test(v),
+      "O id do pixel é só de números, com 15 ou 16 dígitos",
+    ),
+});
+
+export async function updateMetaPixelAction(
+  raw: unknown
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+    const parsed = pixelSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Dados inválidos",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { metaPixelId: parsed.data.metaPixelId || null },
+    });
+
+    // O pixel entra no layout público, que é servido para todo mundo: sem
+    // invalidar, quem já tinha a página em cache continuaria sem ele.
+    revalidatePath("/", "layout");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[updateMetaPixelAction]", err);
+    return { ok: false, error: "Erro ao salvar o pixel" };
+  }
+}

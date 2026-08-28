@@ -24,6 +24,7 @@ import {
   Users2,
   Wallet,
   X,
+  Megaphone,
 } from "lucide-react";
 
 import { logoutAction } from "@/server/actions/auth";
@@ -53,6 +54,7 @@ const NAV_CONFIG = [
   { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
   { href: "/admin/configuracoes/pagamentos", label: "Pagamentos", icon: Wallet },
   { href: "/admin/configuracoes/mensagens", label: "Mensagens", icon: MessageSquare },
+  { href: "/admin/configuracoes/anuncios", label: "Anúncios", icon: Megaphone },
   { href: "/admin/personalizar-tema", label: "Personalizar tema", icon: Palette },
 ] as const;
 

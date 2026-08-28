@@ -15,6 +15,7 @@ import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
 import { TrilhaDoPedido } from "@/components/public/trilha-do-pedido";
 import { TituloDaAba } from "@/components/public/titulo-da-aba";
+import { EventoDeCompra } from "@/components/public/evento-de-compra";
 import { ComoVoltar } from "@/components/public/como-voltar";
 import {
   ensurePixForReservation,
@@ -205,6 +206,13 @@ export default async function ReservationReceiptPage({
             segundo plano quando o webhook confirma, e o visto é o sinal
             de que já pode voltar. */}
         <TituloDaAba texto="✓ Pagamento confirmado" />
+        {/* Fecha o ciclo do anúncio: a Meta só sabe que a campanha deu venda
+            quando este evento chega do navegador de quem clicou nela. */}
+        <EventoDeCompra
+          reservationId={reservation.id}
+          valor={Number(reservation.totalAmount)}
+          quantidade={reservation.tickets.length}
+        />
         <TrilhaDoPedido estado="pago" titulo={reservation.raffle.title} />
         <PaidCelebration
           raffleTitle={reservation.raffle.title}

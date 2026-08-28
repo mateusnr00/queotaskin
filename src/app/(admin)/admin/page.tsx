@@ -8,6 +8,9 @@ import {
   TicketCheck,
   TrendingUp,
   Users,
+  Activity,
+  CalendarClock,
+  Eye,
 } from "lucide-react";
 
 import { prisma } from "@/lib/db";
@@ -18,6 +21,7 @@ import { formatBRL } from "@/lib/format";
 import { formatCpf, formatPhone } from "@/lib/cpf";
 import { cn } from "@/lib/utils";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { resumoDeVisitas } from "@/server/services/visitas";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 
 export const metadata: Metadata = { title: "Início" };
@@ -69,6 +73,19 @@ function bucketize(
   return points;
 }
 
+/**
+ * "12% a mais que ontem", ou nada quando ontem foi zero.
+ *
+ * Sem o caso do zero, o primeiro dia de vida do site mostraria um aumento
+ * infinito, e dividir por zero na tela é pior que não dizer nada.
+ */
+function comparacaoComOntem(hoje: number, ontem: number): string | undefined {
+  if (ontem === 0) return hoje > 0 ? "primeiro dia com movimento" : undefined;
+  const variacao = Math.round(((hoje - ontem) / ontem) * 100);
+  if (variacao === 0) return "igual a hoje";
+  return variacao > 0 ? `hoje está ${variacao}% acima` : `hoje está ${Math.abs(variacao)}% abaixo`;
+}
+
 export default async function AdminDashboardPage() {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
@@ -82,6 +99,8 @@ export default async function AdminDashboardPage() {
     paidAgg,
     activeRaffles,
     participantsTodayRows,
+    participantesTotalRows,
+    visitas,
     lastHourReservations,
     topBuyersRaw,
   ] = await Promise.all([
@@ -102,6 +121,18 @@ export default async function AdminDashboardPage() {
         AND r."participantCpf" IS NOT NULL
         AND rf."tenantId" = ${tenantId}
     `),
+    // Participantes de todos os tempos, e não só de hoje: é o tamanho da
+    // base, o número que se compara com as visitas para saber quantos dos
+    // que entraram viraram comprador.
+    prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+      SELECT COUNT(DISTINCT r."participantCpf")::bigint AS count
+      FROM "Reservation" r
+      JOIN "Raffle" rf ON rf.id = r."raffleId"
+      WHERE r."status" = 'PAID'
+        AND r."participantCpf" IS NOT NULL
+        AND rf."tenantId" = ${tenantId}
+    `),
+    resumoDeVisitas(tenantId, now),
     prisma.reservation.findMany({
       where: {
         createdAt: { gte: lastHour },
@@ -129,6 +160,7 @@ export default async function AdminDashboardPage() {
   const compras = paidAgg._count._all;
   const ticketMedio = compras > 0 ? faturamento / compras : 0;
   const participantsToday = Number(participantsTodayRows[0]?.count ?? 0);
+  const participantesTotal = Number(participantesTotalRows[0]?.count ?? 0);
 
   // Para cada CPF top, busca o último nome/telefone usado.
   const cpfs = topBuyersRaw
@@ -215,8 +247,10 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Duas fileiras, e não uma só de sete. Em cima o dinheiro, embaixo o
+          público: são perguntas diferentes, e sete cartões em fila viram uma
+          régua onde o olho não sabe onde parar. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           label="Faturamento Total"
           value={formatBRL(faturamento)}
@@ -238,10 +272,36 @@ export default async function AdminDashboardPage() {
           accent="from-blue-500/15 to-blue-500/0"
           iconBg="bg-blue-500/15 text-blue-600 dark:text-blue-300"
         />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Participantes Hoje"
-          value={participantsToday.toLocaleString("pt-BR")}
-          subline={`${activeRaffles} sorteio(s) ativo(s)`}
+          label="Visitas Hoje"
+          value={visitas.hoje.toLocaleString("pt-BR")}
+          subline={`${visitas.visitantesHoje.toLocaleString("pt-BR")} pessoa(s) diferente(s)`}
+          icon={Eye}
+          accent="from-sky-500/15 to-sky-500/0"
+          iconBg="bg-sky-500/15 text-sky-600 dark:text-sky-300"
+        />
+        <KpiCard
+          label="Visitas Ontem"
+          value={visitas.ontem.toLocaleString("pt-BR")}
+          subline={comparacaoComOntem(visitas.hoje, visitas.ontem)}
+          icon={CalendarClock}
+          accent="from-violet-500/15 to-violet-500/0"
+          iconBg="bg-violet-500/15 text-violet-600 dark:text-violet-300"
+        />
+        <KpiCard
+          label="Visitas Total"
+          value={visitas.total.toLocaleString("pt-BR")}
+          icon={Activity}
+          accent="from-cyan-500/15 to-cyan-500/0"
+          iconBg="bg-cyan-500/15 text-cyan-600 dark:text-cyan-300"
+        />
+        <KpiCard
+          label="Participantes"
+          value={participantesTotal.toLocaleString("pt-BR")}
+          subline={`${participantsToday.toLocaleString("pt-BR")} hoje · ${activeRaffles} sorteio(s) ativo(s)`}
           icon={Users}
           accent="from-fuchsia-500/15 to-fuchsia-500/0"
           iconBg="bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300"
