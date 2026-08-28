@@ -15,12 +15,17 @@ import {
   Loader2,
   Pencil,
   ShoppingCart,
+  ChevronDown,
+  ChevronUp,
+  Crown,
   Star,
   TicketCheck,
   Link2,
 } from "lucide-react";
 
 import {
+  definirCampanhaPrincipalAction,
+  moverCampanhaAction,
   updateRaffleHighlightAction,
   updateRaffleStatusAction,
 } from "@/server/actions/raffles";
@@ -56,6 +61,8 @@ export interface RaffleCardData {
   drawDate: string | null; // ISO string
   createdAt: string; // ISO string
   showOnHome: boolean;
+  /** A campanha principal do site: o card grande no topo da vitrine. */
+  principal: boolean;
   totalNumbers: number;
   soldTickets: number; // count de tickets pagos (= compras)
 }
@@ -70,6 +77,7 @@ export function RaffleCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [highlight, setHighlight] = useState(raffle.showOnHome);
+  const [principal, setPrincipal] = useState(raffle.principal);
   const [status, setStatus] = useState(raffle.status);
   const [duplicando, setDuplicando] = useState(false);
 
@@ -95,6 +103,47 @@ export function RaffleCard({
       ? Math.round((raffle.soldTickets / raffle.totalNumbers) * 100)
       : 0
   );
+
+  function alternarPrincipal() {
+    const proximo = !principal;
+    setPrincipal(proximo); // otimista
+    startTransition(async () => {
+      // Server Action lança quando a rede cai, e o `if (!ok)` nunca rodaria:
+      // sem o try o selo ficaria aceso na tela e apagado no banco.
+      try {
+        const r = await definirCampanhaPrincipalAction({ raffleId: raffle.id });
+        if (!r.ok) {
+          setPrincipal(!proximo);
+          toast.error(r.error);
+          return;
+        }
+        toast.success(
+          proximo
+            ? "Agora é a campanha principal do site"
+            : "Deixou de ser a campanha principal",
+        );
+        router.refresh();
+      } catch {
+        setPrincipal(!proximo);
+        toast.error("Não foi possível salvar. Tente de novo.");
+      }
+    });
+  }
+
+  function mover(direcao: "cima" | "baixo") {
+    startTransition(async () => {
+      try {
+        const r = await moverCampanhaAction({ raffleId: raffle.id, direcao });
+        if (!r.ok) {
+          toast.error(r.error);
+          return;
+        }
+        router.refresh();
+      } catch {
+        toast.error("Não foi possível mover. Tente de novo.");
+      }
+    });
+  }
 
   function toggleHighlight() {
     const next = !highlight;
@@ -193,6 +242,42 @@ export function RaffleCard({
 
         {/* Ações */}
         <div className="flex items-center gap-1 flex-wrap">
+          {/* Subir e descer no lugar de arrastar: a lista é paginada e o
+              painel é usado no telefone, onde arrastar item de lista disputa
+              com a rolagem da página. Dois botões resolvem o mesmo e
+              funcionam pelo teclado. */}
+          <IconAction
+            label="Subir na vitrine"
+            onClick={() => mover("cima")}
+            disabled={isPending}
+          >
+            <ChevronUp className="h-4 w-4" />
+          </IconAction>
+          <IconAction
+            label="Descer na vitrine"
+            onClick={() => mover("baixo")}
+            disabled={isPending}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </IconAction>
+
+          {/* A principal é uma só no site inteiro, então o ícone é diferente
+              do destaque na home: coroa é "a maior", estrela é "aparece lá". */}
+          <IconAction
+            label={
+              principal
+                ? "Deixar de ser a principal"
+                : "Tornar a campanha principal do site"
+            }
+            onClick={alternarPrincipal}
+            active={principal}
+            disabled={isPending}
+          >
+            <Crown
+              className={cn("h-4 w-4", principal && "fill-primary text-primary")}
+            />
+          </IconAction>
+
           <IconAction
             label={highlight ? "Remover destaque" : "Destacar na home"}
             onClick={toggleHighlight}

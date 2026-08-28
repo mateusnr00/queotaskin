@@ -451,6 +451,18 @@ model Raffle {
   showDrawDate              Boolean          @default(true)
   allowReceiptDownload      Boolean          @default(true)
   showOnHome                Boolean          @default(false) // destacar na home
+
+  /// A campanha principal do site: a que vira o card grande no topo da home e
+  /// da lista de campanhas. Só uma por tenant, garantido por índice parcial na
+  /// migration: duas principais fariam a vitrine escolher uma pela ordem de
+  /// criação, que é o mesmo que não ter escolhido.
+  principal Boolean @default(false)
+
+  /// Posição na vitrine, menor primeiro. Empate cai para a mais recente, que
+  /// é o comportamento antigo. Existe porque a ordem era só a data de
+  /// criação: para subir uma campanha antiga não havia nada a fazer além de
+  /// recriá-la.
+  ordem Int @default(0)
   showProgressBar           Boolean          @default(true)
   showParticipantName       Boolean          @default(false) // exibe nome de quem comprou
   showDailyRanking          Boolean          @default(false)

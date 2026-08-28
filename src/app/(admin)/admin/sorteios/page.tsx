@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { Plus, ChevronRight } from "lucide-react";
 
 import { prisma } from "@/lib/db";
+import { ORDEM_DA_VITRINE } from "@/lib/vitrine";
 import { buttonVariants } from "@/components/ui/button";
 import { RaffleCard } from "@/components/admin/raffle-card";
 import { RafflesFilters } from "@/components/admin/raffles-filters";
@@ -65,7 +66,7 @@ export default async function AdminRafflesListPage({
     prisma.raffle.count({ where }),
     prisma.raffle.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: ORDEM_DA_VITRINE,
       take: PAGE_SIZE,
       skip: (page - 1) * PAGE_SIZE,
       select: {
@@ -74,6 +75,7 @@ export default async function AdminRafflesListPage({
         slug: true,
         status: true,
         showOnHome: true,
+      principal: true,
         totalNumbers: true,
         drawDate: true,
         createdAt: true,
@@ -164,6 +166,7 @@ export default async function AdminRafflesListPage({
                 drawDate: r.drawDate ? r.drawDate.toISOString() : null,
                 createdAt: r.createdAt.toISOString(),
                 showOnHome: r.showOnHome,
+                principal: r.principal,
                 totalNumbers: r.totalNumbers,
                 soldTickets: paidByRaffle.get(r.id) ?? 0,
               }}

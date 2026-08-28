@@ -6,7 +6,10 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
-import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import {
+  assertRaffleInActiveTenant,
+  getActiveTenantIdForAdmin,
+} from "@/lib/tenant";
 import {
   apagarArquivoSeOrfao,
   copiarArquivoDoStorage,
@@ -420,5 +423,148 @@ export async function deleteRaffleAction(
   } catch (err) {
     console.error("[deleteRaffleAction]", err);
     return { ok: false, error: "Erro ao excluir sorteio" };
+  }
+}
+
+// =============================================================
+// VITRINE: campanha principal e ordem manual
+// =============================================================
+
+const campanhaDaVitrineSchema = z.object({ raffleId: z.string().cuid() });
+
+/**
+ * Marca a campanha principal do site, e desmarca a anterior.
+ *
+ * Numa transação, e nesta ordem: existe índice parcial único garantindo uma
+ * principal por tenant, então marcar antes de desmarcar bateria nele. A
+ * exclusividade morar no banco é proposital: duas principais fariam a vitrine
+ * escolher uma pela ordem de criação, que é o mesmo que não ter escolhido.
+ */
+export async function definirCampanhaPrincipalAction(
+  raw: unknown
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = campanhaDaVitrineSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    await assertRaffleInActiveTenant(parsed.data.raffleId, session.user);
+
+    const raffle = await prisma.raffle.findUniqueOrThrow({
+      where: { id: parsed.data.raffleId },
+      select: { tenantId: true, principal: true },
+    });
+
+    await prisma.$transaction([
+      prisma.raffle.updateMany({
+        where: { tenantId: raffle.tenantId, principal: true },
+        data: { principal: false },
+      }),
+      // Clicar na que já é principal desmarca: sem isso não haveria como
+      // deixar a vitrine sem destaque escolhido.
+      ...(raffle.principal
+        ? []
+        : [
+            prisma.raffle.update({
+              where: { id: parsed.data.raffleId },
+              data: { principal: true },
+            }),
+          ]),
+    ]);
+
+    revalidatePath("/admin/sorteios");
+    revalidatePath("/sorteios");
+    revalidatePath("/");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[definirCampanhaPrincipalAction]", err);
+    return { ok: false, error: "Erro ao definir a campanha principal" };
+  }
+}
+
+const moverCampanhaSchema = z.object({
+  raffleId: z.string().cuid(),
+  direcao: z.enum(["cima", "baixo"]),
+});
+
+/**
+ * Sobe ou desce a campanha uma posição na vitrine.
+ *
+ * Troca a `ordem` com a vizinha, em vez de reescrever a lista inteira: o
+ * painel é paginado, e renumerar tudo a partir do que está na tela mexeria na
+ * posição de campanha que o admin nem está vendo.
+ *
+ * A vizinha é procurada pela mesma ordem da vitrine, senão subir no painel
+ * moveria a campanha para um lugar diferente do que o site mostra.
+ */
+export async function moverCampanhaAction(
+  raw: unknown
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = moverCampanhaSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    await assertRaffleInActiveTenant(parsed.data.raffleId, session.user);
+
+    const atual = await prisma.raffle.findUniqueOrThrow({
+      where: { id: parsed.data.raffleId },
+      select: { id: true, tenantId: true, ordem: true, createdAt: true },
+    });
+
+    const paraCima = parsed.data.direcao === "cima";
+    const vizinha = await prisma.raffle.findFirst({
+      where: {
+        tenantId: atual.tenantId,
+        id: { not: atual.id },
+        ...(paraCima
+          ? {
+              OR: [
+                { ordem: { lt: atual.ordem } },
+                { ordem: atual.ordem, createdAt: { gt: atual.createdAt } },
+              ],
+            }
+          : {
+              OR: [
+                { ordem: { gt: atual.ordem } },
+                { ordem: atual.ordem, createdAt: { lt: atual.createdAt } },
+              ],
+            }),
+      },
+      orderBy: paraCima
+        ? [{ ordem: "desc" }, { createdAt: "asc" }]
+        : [{ ordem: "asc" }, { createdAt: "desc" }],
+      select: { id: true, ordem: true },
+    });
+
+    // Já é a primeira ou a última: nada a fazer, e não é erro.
+    if (!vizinha) return { ok: true, data: undefined };
+
+    // Empate na ordem não move nada ao trocar os valores. Nesse caso a atual
+    // recebe a posição da vizinha e a vizinha anda um passo, o que desempata
+    // sem tocar no resto da lista.
+    const [novaAtual, novaVizinha] =
+      atual.ordem === vizinha.ordem
+        ? paraCima
+          ? [vizinha.ordem, vizinha.ordem + 1]
+          : [vizinha.ordem, vizinha.ordem - 1]
+        : [vizinha.ordem, atual.ordem];
+
+    await prisma.$transaction([
+      prisma.raffle.update({
+        where: { id: atual.id },
+        data: { ordem: novaAtual },
+      }),
+      prisma.raffle.update({
+        where: { id: vizinha.id },
+        data: { ordem: novaVizinha },
+      }),
+    ]);
+
+    revalidatePath("/admin/sorteios");
+    revalidatePath("/sorteios");
+    revalidatePath("/");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[moverCampanhaAction]", err);
+    return { ok: false, error: "Erro ao mover a campanha" };
   }
 }
