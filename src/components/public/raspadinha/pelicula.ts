@@ -9,11 +9,14 @@
 // superfície que o gesto apaga com destination-out. Uma película em CSS por
 // cima do canvas não seria apagada pelo dedo.
 
-/** Champanhe e prata, as duas cores da folha. */
-const PRATA_ESCURA = "#8a8578";
-const PRATA = "#c9c2b0";
-const CHAMPANHE = "#e6dcc4";
-const BRILHO = "#f7f2e4";
+// Prata acinzentada, e não champanhe. A folha fica DENTRO de uma janela
+// dourada: em champanhe ela quase some contra o ouro em volta, e a pessoa
+// deixa de perceber que existe algo ali para tirar. O cinza cria o contraste
+// que anuncia "isto aqui sai".
+const PRATA_ESCURA = "#7e7d78";
+const PRATA = "#b4b2ab";
+const CHAMPANHE = "#d2d0c8";
+const BRILHO = "#eceae4";
 
 /**
  * Pinta a película inteira.
@@ -125,10 +128,13 @@ export function desenharChamada(
   ctx.font = `700 ${corpo}px ui-sans-serif, system-ui, sans-serif`;
   // Escrito em duas passadas, escura embaixo e clara em cima: é como texto
   // gravado em relevo se comporta, e uma passada só ficaria plano.
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  // letterSpacing do canvas nao existe em Safari antigo. Atribuir uma
+  // propriedade que o contexto nao tem e inofensivo, entao nao ha guarda: o
+  // texto so sai sem o espacamento, e continua legivel.
   ctx.letterSpacing = `${corpo * 0.22}px`;
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.fillText(texto, w / 2, h / 2 + 1);
-  ctx.fillStyle = "rgba(60,52,32,0.55)";
+  ctx.fillStyle = "rgba(52,48,40,0.7)";
   ctx.fillText(texto, w / 2, h / 2);
   ctx.restore();
 }

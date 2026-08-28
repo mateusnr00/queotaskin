@@ -2,19 +2,25 @@
 
 // O bilhete da Raspadinha Premiada.
 //
-// A ideia é um objeto físico dentro da interface, não um cartão de UI. O que
-// constrói isso, em ordem de importância:
+// O CORPO É DOURADO, O TEXTO É ESCURO
 //
-//   a proporção            1.55:1, de bilhete e não de card
-//   a borda em gradiente   ouro nasce de faixas claras e escuras, nunca de
-//                          um amarelo chapado, que lê como plástico
-//   o serrilhado           recortes nas duas pontas, como talão destacado
-//   as camadas             prêmio embaixo, película por cima, e o gesto
-//                          removendo a de cima de verdade
-//   os microdetalhes       filete interno, número impresso, marcas laterais
+// A primeira versão era o contrário: bilhete escuro com um fio de ouro na
+// borda. A inversão muda tudo, porque um bilhete premiado de verdade é FEITO
+// de ouro, não decorado com ouro. Sobre o dourado, o texto precisa ser
+// marrom escuro: claro sobre claro some, e é o contraste que faz o papel
+// parecer impresso em vez de iluminado.
 //
-// Nada de neon, nada de roxo, nada de emoji. O brilho em repouso é lento e
-// discreto: é o que faz o papel parecer metálico sem virar letreiro.
+// O que constrói o objeto físico, em ordem de importância:
+//
+//   corpo em ouro         gradiente de sete paradas, nunca cor chapada
+//   moldura dupla         dois fios com folga entre eles, um escuro e um
+//                         claro, que é o que separa impresso de recortado
+//   janela recortada      a área raspável é um buraco no ouro, com sombra
+//                         caindo para dentro
+//   texto vertical        nas duas laterais, como bilhete de talão
+//   ornamentos            estrelas no topo e no rodapé, cantos marcados
+//
+// Nada de neon, nada de roxo, nada de emoji.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -37,35 +43,56 @@ export interface PremioNoBilhete {
   valor: number | null;
 }
 
+/** Abaixo disto, em pixels de CSS, o bilhete perde texto lateral e encolhe a
+    tipografia: e a largura em que a lateral vira borrao e rouba a janela. */
+const LARGURA_FOLGADA = 260;
+
+/** O marrom da tinta sobre o ouro. */
+const TINTA = "text-[#3d2c08]";
+const TINTA_FRACA = "text-[#3d2c08]/65";
+
 export function Bilhete({
   numero,
   posicao,
   estado,
   premio,
   aoRevelar,
-  compacto = false,
+  compacto: palpiteDeCompacto = false,
 }: {
-  /** O número impresso, já formatado com zeros. */
   numero: string;
-  /** A ordem na coleção: 01, 02, 03. */
   posicao: number;
   estado: EstadoDoBilhete;
   premio: PremioNoBilhete | null;
-  /** Chamado quando o gesto passa do limite. Quem chama busca o resultado. */
   aoRevelar: () => void;
-  /** Na grade os bilhetes são menores e o texto encolhe junto. */
+  /** Na grade os bilhetes encolhem e os ornamentos saem de cena. */
   compacto?: boolean;
 }) {
   const revelado = estado === "premiada" || estado === "sem-premio";
   const ganhou = estado === "premiada";
   const [saindo, setSaindo] = useState(false);
   const [impacto, setImpacto] = useState(false);
+
+  // "Compacto" quer dizer que ESTE bilhete ficou pequeno, e quem sabe isso e
+  // a largura medida, nao a quantidade de bilhetes do pedido: no telefone a
+  // grade tem uma coluna so, entao um pedido de oito ainda renderiza cartoes
+  // largos, e contar bilhetes encolheria a tipografia de um cartao folgado.
+  // O palpite de quem chama vale como valor inicial, porque no servidor nao
+  // ha largura, e trocar por ele evita o pisca no caso comum.
+  const refDaMoldura = useRef<HTMLDivElement | null>(null);
+  const [compacto, setCompacto] = useState(palpiteDeCompacto);
+  useEffect(() => {
+    const no = refDaMoldura.current;
+    if (!no || typeof ResizeObserver === "undefined") return;
+    const observador = new ResizeObserver(([entrada]) => {
+      setCompacto(entrada.contentRect.width < LARGURA_FOLGADA);
+    });
+    observador.observe(no);
+    return () => observador.disconnect();
+  }, []);
   const particulas = useRef<ControleDeParticulas | null>(null);
   const luz = useRef(0.5);
   const relogios = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Todo timer criado aqui morre com o componente. Sem isso, sair da página
-  // no meio da revelação deixaria um setState apontando para o vazio.
   const depois = useCallback((ms: number, fn: () => void) => {
     relogios.current.push(setTimeout(fn, ms));
   }, []);
@@ -85,8 +112,6 @@ export function Bilhete({
   );
 
   const concluir = useCallback(() => {
-    // A pausa antes de terminar sozinho. Sem ela a película some no mesmo
-    // quadro em que o dedo cruza o limite, e o movimento parece um corte.
     setImpacto(true);
     depois(130, () => {
       setSaindo(true);
@@ -101,8 +126,6 @@ export function Bilhete({
     aoRaspar: (x, y) => particulas.current?.emitir(x, y),
   });
 
-  // O reflexo da película acompanha o ponteiro no desktop. Em ref e sem
-  // repintura por evento: só o próximo traço usa a posição nova.
   function seguirLuz(e: React.PointerEvent) {
     const caixa = e.currentTarget.getBoundingClientRect();
     luz.current = Math.min(1, Math.max(0, (e.clientX - caixa.left) / caixa.width));
@@ -114,93 +137,125 @@ export function Bilhete({
     <figure
       className={cn(
         "group relative select-none",
-        ganhou && !compacto && "bilhete-premiado",
+        ganhou && "bilhete-premiado",
       )}
     >
       <div
+        ref={refDaMoldura}
         className={cn(
-          "bilhete-dourado bilhete-serrilha relative overflow-hidden rounded-2xl transition-transform duration-200",
-          // A elevação no hover é do mouse; no toque não existe hover e o
-          // bilhete não pode depender dela para parecer tocável.
+          "bilhete-dourado relative overflow-hidden rounded-xl shadow-lg shadow-black/40 transition-transform duration-200",
           "md:group-hover:-translate-y-[3px]",
           impacto && "bilhete-impacto",
+          ganhou && "ring-2 ring-amber-300/70",
         )}
         style={{ aspectRatio: "1.55 / 1" }}
         onPointerMove={seguirLuz}
       >
-        {/* O brilho em repouso, atravessando o bilhete devagar. */}
         {!revelado && (
           <span
             aria-hidden
-            className="bilhete-reflexo pointer-events-none absolute -inset-y-8 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            className="bilhete-reflexo pointer-events-none absolute -inset-y-8 left-0 z-10 w-1/4 bg-gradient-to-r from-transparent via-white/45 to-transparent"
           />
         )}
-        {/* A varredura de luz do momento da vitória. */}
         {ganhou && (
           <span
             aria-hidden
-            className="bilhete-varredura pointer-events-none absolute -inset-y-8 left-0 z-30 w-1/3 bg-gradient-to-r from-transparent via-amber-100/50 to-transparent"
+            className="bilhete-varredura pointer-events-none absolute -inset-y-8 left-0 z-30 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent"
           />
         )}
 
-        {/* Filete interno: o segundo fio de ouro, que é o que faz o papel
-            parecer impresso e não recortado. */}
+        {/* A moldura dupla, por sombra interna: dois fios com folga, um
+            escuro e um claro. Não é borda, é o desenho impresso na chapa. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-[6px] rounded-xl border border-[color:var(--ouro-medio)]/25"
+          className="bilhete-moldura pointer-events-none absolute inset-[3px] rounded-lg"
         />
 
-        <div className="relative flex h-full flex-col px-4 py-3 md:px-5">
-          {/* ================= TOPO ================= */}
-          <header className="flex items-start justify-between gap-2">
-            <div className="leading-none">
-              <p
-                className={cn(
-                  "font-black tracking-[0.18em] text-[color:var(--ouro-claro)]",
-                  compacto ? "text-[9px]" : "text-[11px]",
-                )}
-              >
-                QUÉ OTA?
-              </p>
-              <p
-                className={cn(
-                  "mt-0.5 font-black tracking-[0.32em] text-[color:var(--champanhe)]/70",
-                  compacto ? "text-[8px]" : "text-[10px]",
-                )}
-              >
-                SKIN
-              </p>
-            </div>
-            <p
+        {/* O texto de pé nas laterais. Quem decide se ele aparece é a largura
+            do próprio bilhete, por container query, e não a quantidade de
+            bilhetes do pedido: no telefone a grade tem uma coluna só, então
+            um pedido de oito ainda renderiza cartões largos, e contar
+            bilhetes tiraria a lateral de um cartão que tem espaço de sobra.
+            Abaixo de 260px ele vira borrão e rouba espaço da janela. */}
+        {!compacto && (
+          <>
+            <span
+              aria-hidden
               className={cn(
-                "shrink-0 rounded-full border border-[color:var(--ouro-medio)]/40 px-2 py-0.5 font-bold tabular-nums text-[color:var(--ouro-claro)]",
-                compacto ? "text-[8px]" : "text-[9px]",
+                "bilhete-lateral bilhete-lateral-esquerda pointer-events-none absolute bottom-3 left-[7px] top-3 flex items-center justify-center text-[7px] font-bold uppercase tracking-[0.3em]",
+                TINTA_FRACA,
               )}
             >
-              {posicao.toString().padStart(2, "0")}
+              Prêmio instantâneo
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                "bilhete-lateral pointer-events-none absolute bottom-3 right-[7px] top-3 flex items-center justify-center text-[7px] font-bold uppercase tracking-[0.3em]",
+                TINTA_FRACA,
+              )}
+            >
+              Colecionável
+            </span>
+          </>
+        )}
+
+        <div
+          className={cn(
+            "relative flex h-full flex-col py-2",
+            compacto ? "px-3" : "px-5",
+          )}
+        >
+          {/* ================= TOPO ================= */}
+          <header className="text-center leading-none">
+            <p
+              className={cn(
+                "font-black tracking-[0.14em]",
+                TINTA,
+                compacto ? "text-[8px]" : "text-[10px]",
+              )}
+            >
+              <span aria-hidden className="opacity-50">
+                {"─ ★ "}
+              </span>
+              QUÉ OTA?
+              <span aria-hidden className="opacity-50">
+                {" ★ ─"}
+              </span>
+            </p>
+            <p
+              className={cn(
+                "mt-[1px] font-bold tracking-[0.42em]",
+                TINTA_FRACA,
+                compacto ? "text-[6px]" : "text-[7px]",
+              )}
+            >
+              SKIN
             </p>
           </header>
 
-          <p
+          <h3
             className={cn(
-              "mt-1 font-bold uppercase tracking-[0.24em] text-[color:var(--champanhe)]/55",
-              compacto ? "text-[7px]" : "text-[9px]",
+              "mt-1 text-center font-black uppercase leading-none tracking-[0.06em]",
+              TINTA,
+              compacto ? "text-[9px]" : "text-sm",
             )}
           >
             Raspadinha Premiada
-          </p>
+          </h3>
 
-          {/* ============== ÁREA RASPÁVEL ============== */}
-          {/* min-h é piso de segurança, não estética. A área é flex-1 dentro
-              de uma altura fechada pela proporção: se o cabeçalho e o rodapé
-              crescerem (fonte maior do sistema, tradução mais longa), o
-              flex-1 chega a zero e o canvas some sem erro nenhum. Foi o que
-              aconteceu na primeira medição. */}
-          <div className="relative mt-2 min-h-[72px] flex-1 overflow-hidden rounded-lg ring-1 ring-inset ring-black/40">
-            {/* O prêmio fica atrás e está sempre desenhado: é ele que aparece
-                conforme a película some. Só entra na árvore quando o servidor
-                já respondeu, então antes disso não há o que espiar. */}
-            <div className="absolute inset-0 bg-[#0d0f13]">
+          {/* ============== JANELA RASPÁVEL ============== */}
+          {/* min-h é piso de segurança: a janela é flex-1 dentro de uma altura
+              fechada pela proporção, e se o topo crescer (fonte grande do
+              sistema) o flex-1 chega a zero e o canvas some sem erro nenhum.
+              Foi o que aconteceu na primeira medição. */}
+          <div
+            className={cn(
+              "bilhete-janela relative mt-1.5 min-h-[62px] flex-1 overflow-hidden rounded-[3px]",
+              compacto ? "mx-0" : "mx-1",
+            )}
+          >
+            <div className="absolute inset-0 bg-[#efe9dc]">
               <Conteudo estado={estado} premio={premio} compacto={compacto} />
             </div>
 
@@ -208,9 +263,6 @@ export function Bilhete({
               <Particulas ref={particulas} className="absolute inset-0 z-10" />
             )}
 
-            {/* A película. touch-none impede o navegador de tratar o arrasto
-                como rolagem antes de o evento chegar aqui; a rolagem normal
-                da página segue livre fora deste retângulo. */}
             <canvas
               ref={refDoCanvas}
               aria-hidden
@@ -221,13 +273,13 @@ export function Bilhete({
               )}
             />
 
-            {/* A saída para quem não consegue arrastar. Discreta, mas sempre
-                presente: raspar é gesto, e gesto exclui gente. */}
+            {/* A saída para quem não consegue arrastar. Discreta e fora do
+                caminho do gesto: colada no canto, e não sobre a área útil. */}
             {!revelado && !comecou && (
               <button
                 type="button"
                 onClick={revelarSemGesto}
-                className="absolute bottom-1 right-1 z-30 rounded-md bg-black/45 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[color:var(--champanhe)] backdrop-blur-sm transition-colors hover:bg-black/70"
+                className="absolute bottom-0 right-0 z-30 rounded-tl-md bg-[#3d2c08]/75 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#f5e6bd] transition-colors hover:bg-[#3d2c08]"
               >
                 Revelar
               </button>
@@ -235,32 +287,39 @@ export function Bilhete({
           </div>
 
           {/* ================= RODAPÉ ================= */}
-          <footer className="mt-2 flex items-center justify-between gap-2">
-            <span
-              aria-hidden
-              className="h-px flex-1 bg-gradient-to-r from-transparent to-[color:var(--ouro-medio)]/35"
-            />
-            <p
-              className={cn(
-                "shrink-0 font-mono tracking-wider text-[color:var(--champanhe)]/60",
-                compacto ? "text-[8px]" : "text-[10px]",
-              )}
-            >
-              TICKET Nº {numero}
-            </p>
-            <span
-              aria-hidden
-              className="h-px flex-1 bg-gradient-to-l from-transparent to-[color:var(--ouro-medio)]/35"
-            />
+          <footer
+            className={cn(
+              "mt-1 text-center font-bold tracking-[0.1em]",
+              TINTA_FRACA,
+              compacto ? "text-[7px]" : "text-[9px]",
+            )}
+          >
+            <span aria-hidden className="opacity-60">
+              {"★★ "}
+            </span>
+            TICKET Nº <span className="tabular-nums">{numero}</span>
+            <span aria-hidden className="opacity-60">
+              {" ★★"}
+            </span>
           </footer>
         </div>
+
+        {/* A ordem na coleção, no canto. Fica FORA do fluxo para não empurrar
+            o topo e roubar altura da janela. */}
+        <span
+          aria-hidden
+          className={cn(
+            "absolute left-2 top-2 rounded bg-[#3d2c08]/80 px-1 font-bold tabular-nums text-[#f5e6bd]",
+            compacto ? "text-[7px]" : "text-[8px]",
+          )}
+        >
+          {posicao.toString().padStart(2, "0")}
+        </span>
       </div>
 
-      {/* O resultado precisa ser dito, e não só mostrado: quem usa leitor de
-          tela não vê a película sair. */}
       <p className="sr-only" role="status" aria-live="polite">
         {estado === "premiada" && premio
-          ? `Bilhete ${numero}: prêmio encontrado, ${premio.rotulo}.`
+          ? `Bilhete ${numero}: você ganhou ${premio.rotulo}.`
           : estado === "sem-premio"
             ? `Bilhete ${numero}: não foi dessa vez.`
             : ""}
@@ -269,7 +328,7 @@ export function Bilhete({
   );
 }
 
-/** O que aparece atrás da película. */
+/** O que aparece atrás da película, na cor de papel. */
 function Conteudo({
   estado,
   premio,
@@ -282,26 +341,26 @@ function Conteudo({
   if (estado === "revelando") {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-[color:var(--ouro-claro)]" />
+        <Loader2 className="h-4 w-4 animate-spin text-[#8a6820]" />
       </div>
     );
   }
 
   if (estado === "premiada" && premio) {
     return (
-      <div className="premio-surge flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
+      <div className="premio-surge flex h-full flex-col items-center justify-center gap-0.5 px-2 text-center">
         <p
           className={cn(
-            "font-bold uppercase tracking-[0.2em] text-[color:var(--ouro-claro)]",
-            compacto ? "text-[8px]" : "text-[10px]",
+            "font-bold uppercase tracking-[0.16em] text-[#3d2c08]/70",
+            compacto ? "text-[7px]" : "text-[9px]",
           )}
         >
-          Prêmio encontrado
+          Você ganhou
         </p>
         <p
           className={cn(
-            "font-black leading-tight text-[color:var(--ouro-brilho)]",
-            compacto ? "text-base" : "text-2xl",
+            "font-black leading-none text-[#2a1d04]",
+            compacto ? "text-sm" : "text-2xl",
           )}
         >
           {premio.tipo === "PIX" && premio.valor != null
@@ -315,8 +374,8 @@ function Conteudo({
         {premio.tipo === "PIX" && (
           <p
             className={cn(
-              "font-bold uppercase tracking-[0.28em] text-[color:var(--champanhe)]/70",
-              compacto ? "text-[8px]" : "text-[10px]",
+              "font-bold uppercase tracking-[0.24em] text-[#3d2c08]/70",
+              compacto ? "text-[7px]" : "text-[9px]",
             )}
           >
             no Pix
@@ -330,17 +389,17 @@ function Conteudo({
     // Sem vermelho, sem cara triste, sem animação de fracasso. O bilhete só
     // assume o estado final: não deu, e ninguém errou nada.
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-0.5 px-2 text-center">
         <p
           className={cn(
-            "font-bold uppercase tracking-[0.18em] text-[color:var(--champanhe)]/75",
-            compacto ? "text-[9px]" : "text-xs",
+            "font-bold uppercase tracking-[0.14em] text-[#3d2c08]/75",
+            compacto ? "text-[8px]" : "text-[11px]",
           )}
         >
           Não foi dessa vez
         </p>
         {!compacto && (
-          <p className="text-[10px] leading-relaxed text-[color:var(--champanhe)]/45">
+          <p className="text-[9px] leading-relaxed text-[#3d2c08]/50">
             Essa raspadinha não possui prêmio.
           </p>
         )}

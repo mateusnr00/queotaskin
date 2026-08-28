@@ -540,32 +540,50 @@
    ate o miolo. Mesma tecnica do cartao de criar conta, e pelo mesmo motivo:
    envelope com miolo por cima quebra nas quinas arredondadas. */
 .bilhete-dourado {
-  background:
-    linear-gradient(160deg, #1b1d22, #101216 60%, #191b20) padding-box,
-    linear-gradient(
-        135deg,
-        var(--ouro-escuro) 0%,
-        var(--ouro-claro) 18%,
-        var(--ouro-brilho) 26%,
-        var(--ouro-medio) 42%,
-        var(--ouro-escuro) 58%,
-        var(--ouro-claro) 78%,
-        var(--ouro-medio) 100%
-      )
-      border-box;
-  border: 1.5px solid transparent;
+  /* O CORPO e dourado, e o texto e escuro. Era o contrario: bilhete escuro
+     com filete de ouro. A inversao muda tudo, porque um bilhete premiado de
+     verdade e feito de ouro, nao decorado com ouro.
+
+     Sete paradas para o metal ter faixa clara, faixa escura e o retorno. Com
+     duas, vira rampa lisa e le como plastico amarelo. */
+  background: linear-gradient(
+    152deg,
+    #8a6820 0%,
+    #c79c33 12%,
+    #f2dc95 24%,
+    #ffeec2 30%,
+    #d9ae3c 44%,
+    #9a7524 58%,
+    #e2c87a 70%,
+    #cfa233 84%,
+    #7d5c1c 100%
+  );
 }
 
-/* O serrilhado das pontas, como bilhete destacado de um talao. Feito com
-   radial-gradient repetido, e nao com elementos: sao dezenas de recortes e
-   dezenas de divs custariam caro numa grade de oito bilhetes. */
-.bilhete-serrilha {
-  --recorte: 7px;
-  mask-image:
-    radial-gradient(circle var(--recorte) at 0 50%, transparent 98%, #000 100%),
-    radial-gradient(circle var(--recorte) at 100% 50%, transparent 98%, #000 100%);
-  mask-composite: intersect;
-  -webkit-mask-composite: source-in;
+/* A moldura interna: dois fios, um escuro e um claro, com folga entre eles.
+   E o que separa "impresso" de "recortado". */
+.bilhete-moldura {
+  box-shadow:
+    inset 0 0 0 1px rgba(70, 48, 8, 0.55),
+    inset 0 0 0 3px rgba(255, 236, 180, 0.35),
+    inset 0 0 0 4px rgba(70, 48, 8, 0.4);
+}
+
+/* A janela raspavel: um recorte no ouro, com sombra caindo para dentro. */
+.bilhete-janela {
+  box-shadow:
+    inset 0 2px 6px rgba(48, 32, 4, 0.55),
+    inset 0 0 0 1px rgba(48, 32, 4, 0.7),
+    0 1px 0 rgba(255, 240, 200, 0.35);
+}
+
+/* O texto de pe nas laterais, como em bilhete de talao. */
+.bilhete-lateral {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+.bilhete-lateral-esquerda {
+  transform: rotate(180deg);
 }
 
 /* O brilho que atravessa o bilhete em repouso. Bem lento e bem discreto:
@@ -577,10 +595,10 @@
     opacity: 0;
   }
   45% {
-    opacity: 0.5;
+    opacity: 0.65;
   }
   55% {
-    opacity: 0.5;
+    opacity: 0.65;
   }
   100% {
     transform: translateX(220%) rotate(8deg);

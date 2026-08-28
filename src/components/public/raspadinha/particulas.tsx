@@ -35,6 +35,11 @@ const MAXIMO = 90;
 /** Quanto da vida some por quadro, a 60 por segundo. */
 const DESGASTE = 0.055;
 
+/** Teto de lado do canvas, em pixels de CSS. Rede de protecao contra medida
+    absurda: nenhum bilhete chega perto disso, e um numero fora da escala vira
+    canvas que o navegador nao aloca. */
+const TETO_DE_LADO = 2000;
+
 export const Particulas = forwardRef<
   ControleDeParticulas,
   { className?: string }
@@ -67,11 +72,28 @@ export const Particulas = forwardRef<
       return;
     }
 
-    const caixa = canvas.getBoundingClientRect();
+    // A medida sai do PAI, nunca do proprio canvas. Canvas e elemento
+    // substituido: posicionado com inset-0 mas largura automatica, o CSS
+    // resolve o tamanho pelo atributo width e ignora o right, entao medir a si
+    // mesmo e escrever o resultado de volta multiplicado pela densidade dobra
+    // o canvas a cada quadro. Dezessete quadros levam de 300px a 33 milhoes, o
+    // navegador desiste de alocar e desenha o icone de imagem quebrada.
+    const pai = canvas.parentElement;
+    const caixa = (pai ?? canvas).getBoundingClientRect();
     const densidade = Math.min(window.devicePixelRatio || 1, 2);
-    if (canvas.width !== Math.round(caixa.width * densidade)) {
-      canvas.width = Math.round(caixa.width * densidade);
-      canvas.height = Math.round(caixa.height * densidade);
+    const larguraDesejada = Math.round(
+      Math.min(caixa.width, TETO_DE_LADO) * densidade,
+    );
+    const alturaDesejada = Math.round(
+      Math.min(caixa.height, TETO_DE_LADO) * densidade,
+    );
+    if (larguraDesejada < 1 || alturaDesejada < 1) {
+      quadro.current = null;
+      return;
+    }
+    if (canvas.width !== larguraDesejada || canvas.height !== alturaDesejada) {
+      canvas.width = larguraDesejada;
+      canvas.height = alturaDesejada;
     }
     ctx.setTransform(densidade, 0, 0, densidade, 0, 0);
     ctx.clearRect(0, 0, caixa.width, caixa.height);
@@ -120,6 +142,10 @@ export const Particulas = forwardRef<
   }));
 
   return (
-    <canvas ref={refDoCanvas} aria-hidden className={`${className} pointer-events-none`} />
+    <canvas
+      ref={refDoCanvas}
+      aria-hidden
+      className={`${className} pointer-events-none h-full w-full`}
+    />
   );
 });
