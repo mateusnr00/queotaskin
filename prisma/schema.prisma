@@ -240,10 +240,6 @@ model Tenant {
   sigilopayClientId        String?
   sigilopayClientSecretEnc String?
   sigilopayBaseUrl         String?
-  // A SigiloPay devolve, na criacao da transacao, um token proprio que ela
-  // repete em todo webhook daquela integracao. E a segunda camada de prova
-  // de origem, alem do token que vai no caminho da nossa URL.
-  sigilopayWebhookToken    String?
 
   // Customização das páginas finais (pagamento confirmado / reserva
   // expirada). Quando NULL, renderiza o texto padrão hardcoded. Cada

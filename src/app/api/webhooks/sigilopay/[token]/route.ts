@@ -6,12 +6,19 @@
 // uma URL diferente por transação. A nossa referência viaja no corpo da
 // cobrança, não no endereço.
 //
-// DUAS PROVAS DE ORIGEM
+// A PROVA DE ORIGEM É O TOKEN DO CAMINHO, E SÓ ELE
 //
-// O token secreto no caminho, que é nosso, e o token que a SigiloPay repete em
-// toda notificação, que é deles. O primeiro barra quem não conhece a URL. O
-// segundo, guardado no Tenant na primeira notificação, barra quem descobriu a
-// URL depois. Só o primeiro já vale como porta; o segundo é o ferrolho.
+// A notificação traz um campo `token`, e eu cheguei a compará-lo com um valor
+// guardado no Tenant, achando que fosse fixo da integração. Não é: a primeira
+// transação real mostrou a MESMA transação, no MESMO evento, chegando quatro
+// vezes em dois segundos com dois tokens diferentes. Três entregas legítimas
+// levaram 403 por causa disso.
+//
+// E não era só instável, era inútil como prova: nunca recebemos esse token por
+// outro caminho, então a primeira notificação de qualquer transação teria de
+// ser aceita de olhos fechados de todo jeito. Verificar contra um valor que só
+// existe dentro da própria mensagem não prova nada. O segredo no caminho da
+// URL é a defesa de verdade, e é a mesma que a SyncPay e a CodePay usam aqui.
 //
 // SEMPRE 2XX, MENOS QUANDO É PARA REENVIAR
 //
@@ -24,7 +31,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { lerWebhook, tokenConfere } from "@/lib/sigilopay";
+import { lerWebhook } from "@/lib/sigilopay";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
@@ -77,7 +84,6 @@ export async function POST(req: Request, { params }: RouteParams) {
         select: {
           raffleId: true,
           status: true,
-          raffle: { select: { tenantId: true } },
           _count: { select: { tickets: true } },
         },
       },
@@ -91,31 +97,25 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ ok: true, ignored: "cobrança de outro sistema" });
   }
 
-  // O ferrolho: confere o token deles contra o que está guardado, e guarda na
-  // primeira vez. `tenantId` vem pela reserva porque a notificação em si não
-  // diz de qual tenant é.
-  const tenantId = payment.reservation?.raffle.tenantId;
-  if (tenantId) {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { sigilopayWebhookToken: true },
+  if (aviso.status === "APPROVED") {
+    // A transição é reivindicada com uma escrita condicional, e não com um
+    // "if" sobre o status lido antes. A SigiloPay entregou o mesmo evento
+    // quatro vezes em dois segundos na primeira transação real: com leitura
+    // seguida de escrita, duas entregas simultâneas passariam as duas pelo
+    // teste e emitiriam os prêmios em dobro. Aqui só uma leva o `count: 1`.
+    const agoraDaClaim = new Date();
+    const reivindicou = await prisma.payment.updateMany({
+      where: { id: payment.id, status: { not: "APPROVED" } },
+      data: { status: "APPROVED", paidAt: agoraDaClaim },
     });
-    if (!tokenConfere(aviso.token, tenant?.sigilopayWebhookToken)) {
+    if (reivindicou.count === 0) {
       await prisma.paymentWebhookEvent.update({
         where: { id: evento.id },
-        data: { processedAt: new Date(), processingError: "Token não confere" },
+        data: { processedAt: new Date() },
       });
-      return new NextResponse("forbidden", { status: 403 });
+      return NextResponse.json({ ok: true, duplicado: true });
     }
-    if (!tenant?.sigilopayWebhookToken && aviso.token) {
-      await prisma.tenant.update({
-        where: { id: tenantId },
-        data: { sigilopayWebhookToken: aviso.token },
-      });
-    }
-  }
 
-  if (aviso.status === "APPROVED" && payment.status !== "APPROVED") {
     // Webhook chegou tarde, reserva já expirou e os tickets foram apagados:
     // calcula números novos para recriar.
     const precisaRecriar =
@@ -130,12 +130,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       }
     }
 
-    const agora = new Date();
+    const agora = agoraDaClaim;
     await prisma.$transaction(async (tx) => {
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: { status: "APPROVED", paidAt: agora },
-      });
       await tx.reservation.update({
         where: { id: payment.reservationId },
         data: { status: "PAID", paidAt: agora },

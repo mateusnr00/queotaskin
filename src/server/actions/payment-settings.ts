@@ -113,10 +113,9 @@ export async function updatePaymentSettingsAction(
   if (data.sigilopayClientSecret) {
     update.sigilopayClientSecretEnc = encryptSecret(data.sigilopayClientSecret);
   } else if (!data.sigilopayClientId) {
-    // Limpou a chave pública: limpa a privada junto, e o token do webhook
-    // também, que pertence à integração que acabou de sair.
+    // Limpou a chave pública: limpa a privada junto, para não sobrar secret
+    // órfão de uma integração que já saiu.
     update.sigilopayClientSecretEnc = null;
-    update.sigilopayWebhookToken = null;
   }
 
   // Última validação: o provider escolhido precisa ter credenciais

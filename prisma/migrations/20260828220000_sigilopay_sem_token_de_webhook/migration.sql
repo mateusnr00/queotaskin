@@ -1,0 +1,13 @@
+-- Remove a coluna do token de webhook da SigiloPay.
+--
+-- Ela nasceu de uma leitura errada da documentacao: eu tratei o campo `token`
+-- da notificacao como fixo da integracao. A primeira transacao real mostrou a
+-- mesma transacao, no mesmo evento, chegando quatro vezes em dois segundos com
+-- dois tokens diferentes, e tres entregas legitimas levaram 403 por causa
+-- disso.
+--
+-- O DROP e seguro: a coluna foi criada horas atras, e o unico valor que chegou
+-- a existir nela e justamente o token instavel que causou o erro. O campo
+-- continua guardado no payload de PaymentWebhookEvent, entao nenhuma
+-- informacao de auditoria se perde.
+ALTER TABLE "Tenant" DROP COLUMN IF EXISTS "sigilopayWebhookToken";

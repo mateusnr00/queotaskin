@@ -6,7 +6,6 @@ import {
   EVENTOS_DE_TRANSACAO,
   lerWebhook,
   statusDoEvento,
-  tokenConfere,
 } from "./sigilopay";
 
 describe("statusDoEvento", () => {
@@ -51,26 +50,6 @@ describe("statusDoEvento", () => {
     // como falha colocaria a notificação em loop de reentrega.
     expect(statusDoEvento("WITHDRAW_CREATED")).toBeNull();
     expect(statusDoEvento("")).toBeNull();
-  });
-});
-
-describe("tokenConfere", () => {
-  it("aceita o token igual e recusa o diferente", () => {
-    expect(tokenConfere("abc123", "abc123")).toBe(true);
-    expect(tokenConfere("abc124", "abc123")).toBe(false);
-  });
-
-  it("recusa tamanho diferente e valor que não é texto", () => {
-    expect(tokenConfere("abc12", "abc123")).toBe(false);
-    expect(tokenConfere(undefined, "abc123")).toBe(false);
-    expect(tokenConfere(123456, "abc123")).toBe(false);
-  });
-
-  it("aceita quando ainda não há token guardado", () => {
-    // Primeira notificação da integração: é nela que o token aparece. Quem
-    // chegou até aqui já provou saber o token secreto do caminho da URL.
-    expect(tokenConfere("qualquer", null)).toBe(true);
-    expect(tokenConfere("qualquer", "")).toBe(true);
   });
 });
 

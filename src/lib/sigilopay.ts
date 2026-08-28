@@ -121,7 +121,11 @@ const STATUS_DA_TRANSACAO: Record<
 
 export interface WebhookDaSigiloPay {
   evento: string;
-  /** Token que a SigiloPay repete em toda notificacao daquela integracao. */
+  /**
+   * O campo `token` da notificação. Guardado no registro do evento para
+   * auditoria, e nada além disso: ele muda de uma entrega para outra da mesma
+   * transação, então não serve como prova de origem.
+   */
   token: string | null;
   /** O id da transacao no lado deles. E o que casa com Payment.externalId. */
   idDaTransacao: string | null;
@@ -182,31 +186,6 @@ export function lerWebhook(payload: unknown): WebhookDaSigiloPay | null {
     status: vale.status,
     desfazPagamento: vale.desfazPagamento,
   };
-}
-
-/**
- * Confere o token que a SigiloPay repete em todo webhook.
- *
- * Comparação em tempo constante. A diferença prática é pequena, mas o custo
- * também é, e aqui o que está em jogo é alguém forjar "reserva paga".
- *
- * Quando ainda não há token guardado, aceita: a primeira notificação de uma
- * integração nova é justamente onde ele aparece. A defesa de verdade nesse
- * momento é o token secreto no caminho da URL, que já barrou quem não o sabe.
- */
-export function tokenConfere(
-  recebido: unknown,
-  guardado: string | null | undefined,
-): boolean {
-  if (!guardado) return true;
-  if (typeof recebido !== "string" || recebido.length !== guardado.length) {
-    return false;
-  }
-  let diferenca = 0;
-  for (let i = 0; i < guardado.length; i++) {
-    diferenca |= recebido.charCodeAt(i) ^ guardado.charCodeAt(i);
-  }
-  return diferenca === 0;
 }
 
 /** Traduz o status da transação para o vocabulário do app. */
