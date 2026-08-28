@@ -722,7 +722,80 @@
   animation: premio-surge 420ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
 }
 
+
+/* A corrida da barra ao entrar.
+
+   Sem o quadro `to`: assim a animacao interpola de zero ate a largura que o
+   proprio elemento ja tem, que vem inline do servidor. E o que permite o HTML
+   sair com a largura certa, e a campanha nao aparecer zerada para quem esta
+   sem JavaScript ou antes dele carregar. */
+@keyframes barra-cresce {
+  from {
+    width: 0;
+  }
+}
+
+.barra-cresce {
+  animation: barra-cresce 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* O rotulo entra depois que a barra assenta. Durante a corrida o recorte entre
+   a camada clara e a escura esta no valor final, entao ele apareceria escuro
+   sobre o trilho escuro por meio segundo. */
+@keyframes barra-rotulo {
+  from {
+    opacity: 0;
+  }
+}
+
+.barra-rotulo {
+  animation: barra-rotulo 260ms ease-out 820ms both;
+}
+
+/* A barra de vendas da campanha.
+
+   As listras andam por transform, e nao por background-position: assim o
+   trabalho fica no compositor, e a barra nao repinta a cada quadro enquanto
+   a pagina inteira rola. Sao de baixissimo contraste de proposito, porque o
+   papel delas e dizer "ativo" no canto do olho, e nao chamar atencao. */
+.barra-listras {
+  background-image: repeating-linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.16) 0px,
+    rgba(255, 255, 255, 0.16) 10px,
+    rgba(255, 255, 255, 0) 10px,
+    rgba(255, 255, 255, 0) 22px
+  );
+  animation: barra-listras 1.6s linear infinite;
+}
+
+@keyframes barra-listras {
+  to {
+    transform: translateX(22px);
+  }
+}
+
+/* O modo "acabando". So entra quando a campanha esta mesmo no fim, entao o
+   alarme corresponde ao fato: pulso permanente em barra de 9% seria mentira,
+   e a pessoa aprende a ignorar. */
+.barra-quente {
+  animation: barra-quente 1.8s ease-in-out infinite;
+}
+
+@keyframes barra-quente {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+  50% {
+    box-shadow: 0 0 12px 1px rgba(249, 115, 22, 0.35);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .barra-listras,
+  .barra-quente,
+  .barra-cresce,
   .cta-pulsa,
   .selo-pulsa,
   .card-popular-pulsa,
@@ -738,6 +811,13 @@
   .bilhete-impacto,
   .premio-surge {
     animation: none;
+  }
+
+  /* O rotulo da barra precisa aparecer de qualquer jeito: ele nasce em
+     opacity 0 e, sem a animacao que o traz, a porcentagem nunca apareceria. */
+  .barra-rotulo {
+    animation: none;
+    opacity: 1;
   }
 
   /* A pelicula precisa sumir de qualquer jeito: sem animacao ela ficaria

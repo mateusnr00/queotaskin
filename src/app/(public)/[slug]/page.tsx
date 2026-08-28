@@ -24,6 +24,8 @@ import {
 } from "@/components/public/awarded-tickets-section";
 import { SurpriseBoxesCombos } from "@/components/public/surprise-boxes-combos";
 import { SurpriseBoxesSection } from "@/components/public/surprise-boxes-section";
+import { BarraDeProgresso } from "@/components/public/barra-de-progresso";
+import { PrecoDaCampanha } from "@/components/public/preco-da-campanha";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { raffleUrl } from "@/lib/raffle-url";
 import { getCurrentTenant } from "@/lib/tenant";
@@ -414,18 +416,13 @@ export default async function PublicRaffleDetailPage({
             </span>
           </div>
         ) : (
-          <div className="flex items-center justify-between rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-2.5 md:px-5 md:py-3.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Por apenas
-            </span>
-            <span className="text-xl font-bold tabular-nums tracking-tight text-primary md:text-2xl">
-              {formatBRL(Number(raffle.pricePerNumber))}
-            </span>
-          </div>
+          <PrecoDaCampanha
+            preco={formatBRL(Number(raffle.pricePerNumber))}
+          />
         )}
 
         {raffle.showProgressBar && (
-          <SalesProgressBar
+          <BarraDeProgresso
             percent={Math.min(100, Math.max(0, soldPercent))}
             soldCount={soldCount}
             remaining={remaining}
@@ -562,66 +559,6 @@ export default async function PublicRaffleDetailPage({
 //
 // A versão anterior era um card à parte: rótulo "Progresso da venda", barra
 // de 36px e as contagens embaixo, quatro linhas para dizer "37% vendido".
-// Nas três referências do mercado a barra é uma faixa fina logo abaixo da
-// imagem, com a porcentagem dentro dela. Encolher isso devolve espaço da
-// primeira dobra para o que de fato converte: preço e seletor de números.
-//
-// A % continua legível sobre qualquer fundo pelo mesmo truque de duas
-// camadas: o texto base aparece na parte vazia e a cópia clara é clipada à
-// largura preenchida.
-function SalesProgressBar({
-  percent,
-  soldCount,
-  remaining,
-}: {
-  percent: number;
-  soldCount: number;
-  remaining: number;
-}) {
-  const pct = `${percent}%`;
-  return (
-    <div className="space-y-1.5">
-      <div
-        className="relative h-6 w-full overflow-hidden rounded-full bg-muted ring-1 ring-border/60 md:h-7"
-        role="progressbar"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`Vendido ${percent}%`}
-      >
-        <div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary via-primary to-primary/80 transition-all duration-500"
-          style={{ width: pct }}
-        />
-        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums text-foreground/70">
-          {pct}
-        </span>
-        <span
-          className="absolute inset-0 flex items-center justify-center overflow-hidden text-xs font-bold tabular-nums text-primary-foreground"
-          style={{ clipPath: `inset(0 ${100 - percent}% 0 0)` }}
-          aria-hidden
-        >
-          {pct}
-        </span>
-      </div>
-
-      <div className="flex justify-between text-[11px] tabular-nums text-muted-foreground">
-        <span>
-          <strong className="text-foreground">
-            {soldCount.toLocaleString("pt-BR")}
-          </strong>{" "}
-          vendidos
-        </span>
-        <span>
-          <strong className="text-foreground">
-            {remaining.toLocaleString("pt-BR")}
-          </strong>{" "}
-          disponíveis
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // CTA exibida quando o visitante não está logado. Leva pra /registro ou
 // /login preservando o slug da rifa pra voltar pra cá depois.
