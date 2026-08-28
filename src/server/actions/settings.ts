@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { conferirId } from "@/lib/analytics-ids";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import {
@@ -461,52 +462,59 @@ export async function removeLogoAction(
   }
 }
 
-/**
- * Id do pixel da Meta.
- *
- * Guardado como texto e não como número: o id tem 15 ou 16 dígitos e cabe
- * mal em inteiro de 32 bits, e ninguém faz conta com ele.
- *
- * Vazio desliga. É o caminho de sair do rastreamento sem precisar de outro
- * botão: sem id, nenhum script de terceiro entra na página de quem compra.
- */
-const pixelSchema = z.object({
-  metaPixelId: z
-    .string()
-    .trim()
-    .refine(
-      (v) => v === "" || /^\d{10,20}$/.test(v),
-      "O id do pixel é só de números, com 15 ou 16 dígitos",
-    ),
+const analyticsSchema = z.object({
+  metaPixelId: z.string().trim().default(""),
+  googleAnalyticsId: z.string().trim().default(""),
+  tiktokPixelId: z.string().trim().default(""),
 });
 
-export async function updateMetaPixelAction(
+/**
+ * Salva os três identificadores de rastreamento.
+ *
+ * A conferência de formato é refeita AQUI, e não só no formulário: o cliente
+ * pode ser contornado, e um id inválido gravado deixa a ferramenta desligada
+ * em silêncio, que é o pior desfecho possível numa tela de rastreamento.
+ */
+export async function updateAnalyticsAction(
   raw: unknown
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
 
-    const parsed = pixelSchema.safeParse(raw);
-    if (!parsed.success) {
+    const parsed = analyticsSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    const conferencias = [
+      { campo: "metaPixelId" as const, provedor: "meta" as const },
+      { campo: "googleAnalyticsId" as const, provedor: "ga4" as const },
+      { campo: "tiktokPixelId" as const, provedor: "tiktok" as const },
+    ].map((c) => ({ ...c, r: conferirId(parsed.data[c.campo], c.provedor) }));
+
+    const invalida = conferencias.find((c) => !c.r.ok);
+    if (invalida) {
       return {
         ok: false,
-        error: parsed.error.issues[0]?.message ?? "Dados inválidos",
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        error: invalida.r.erro ?? "Identificador inválido",
+        fieldErrors: { [invalida.campo]: [invalida.r.erro ?? ""] },
       };
     }
 
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { metaPixelId: parsed.data.metaPixelId || null },
+      data: {
+        metaPixelId: conferencias[0]!.r.valor || null,
+        googleAnalyticsId: conferencias[1]!.r.valor || null,
+        tiktokPixelId: conferencias[2]!.r.valor || null,
+      },
     });
 
-    // O pixel entra no layout público, que é servido para todo mundo: sem
-    // invalidar, quem já tinha a página em cache continuaria sem ele.
+    // Os scripts entram no layout público, servido para todo mundo: sem
+    // invalidar, quem já tinha a página em cache continuaria sem eles.
     revalidatePath("/", "layout");
     return { ok: true, data: undefined };
   } catch (err) {
-    console.error("[updateMetaPixelAction]", err);
-    return { ok: false, error: "Erro ao salvar o pixel" };
+    console.error("[updateAnalyticsAction]", err);
+    return { ok: false, error: "Erro ao salvar o rastreamento" };
   }
 }

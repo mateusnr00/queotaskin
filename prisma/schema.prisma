@@ -366,6 +366,11 @@ model Tenant {
   /// Id do pixel da Meta. Vazio desliga o rastreamento: sem ele nenhum
   /// script de terceiro entra na página de quem compra.
   metaPixelId String?
+
+  /// Google Analytics 4, no formato "G-XXXXXXXXXX". Vazio desliga.
+  googleAnalyticsId String?
+  /// Pixel do TikTok Ads. Vazio desliga.
+  tiktokPixelId String?
 }
 
 // Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts

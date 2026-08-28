@@ -14,7 +14,11 @@ export default async function AnunciosPage() {
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { metaPixelId: true },
+    select: {
+      metaPixelId: true,
+      googleAnalyticsId: true,
+      tiktokPixelId: true,
+    },
   });
 
   return (
@@ -29,15 +33,21 @@ export default async function AnunciosPage() {
               Anúncios
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Ligue o pixel da Meta para medir o que o anúncio traz, e monte o
-              link com as marcas de origem para saber de qual campanha veio
-              cada venda.
+              Ligue os pixels para medir o que o anúncio traz, e monte o link
+              com as marcas de origem para saber de qual campanha veio cada
+              venda.
             </p>
           </div>
         </div>
       </div>
 
-      <FormularioDeAnuncios metaPixelId={tenant?.metaPixelId ?? ""} />
+      <FormularioDeAnuncios
+        ids={{
+          metaPixelId: tenant?.metaPixelId ?? "",
+          googleAnalyticsId: tenant?.googleAnalyticsId ?? "",
+          tiktokPixelId: tenant?.tiktokPixelId ?? "",
+        }}
+      />
     </div>
   );
 }

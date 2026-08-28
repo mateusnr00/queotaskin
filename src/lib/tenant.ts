@@ -25,6 +25,10 @@ export type TenantContext = {
   host: string;
   /** Id do pixel da Meta, ou null. Vazio desliga o rastreamento. */
   metaPixelId: string | null;
+  /** Google Analytics 4, ou null. */
+  googleAnalyticsId: string | null;
+  /** Pixel do TikTok, ou null. */
+  tiktokPixelId: string | null;
 };
 
 async function readHost(): Promise<string> {
@@ -61,6 +65,8 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
       hostKind: "PUBLIC",
       host,
       metaPixelId: fallback.metaPixelId,
+      googleAnalyticsId: fallback.googleAnalyticsId,
+      tiktokPixelId: fallback.tiktokPixelId,
     };
   }
 
@@ -77,6 +83,8 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
     hostKind: tenantHost.kind,
     host,
     metaPixelId: tenantHost.tenant.metaPixelId,
+    googleAnalyticsId: tenantHost.tenant.googleAnalyticsId,
+    tiktokPixelId: tenantHost.tenant.tiktokPixelId,
   };
 });
 

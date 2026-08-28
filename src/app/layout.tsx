@@ -12,6 +12,10 @@ import { isAdminHost } from "@/lib/host";
 import { ContadorDeVisita } from "@/components/public/contador-de-visita";
 import { PixelDaMeta } from "@/components/public/pixel-da-meta";
 import {
+  GoogleAnalytics,
+  PixelDoTiktok,
+} from "@/components/public/rastreadores";
+import {
   isThemePresetKey,
   themePresetCss,
   type ThemePresetKey,
@@ -184,6 +188,12 @@ export default async function RootLayout({
           <Suspense fallback={null}>
             <ContadorDeVisita />
             {tenant?.metaPixelId && <PixelDaMeta id={tenant.metaPixelId} />}
+            {tenant?.googleAnalyticsId && (
+              <GoogleAnalytics id={tenant.googleAnalyticsId} />
+            )}
+            {tenant?.tiktokPixelId && (
+              <PixelDoTiktok id={tenant.tiktokPixelId} />
+            )}
           </Suspense>
         )}
         {children}
