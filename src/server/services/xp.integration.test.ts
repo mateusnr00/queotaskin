@@ -91,13 +91,49 @@ suite("serviço de XP (integração)", () => {
     return reservation.id;
   }
 
-  it("credita 10 XP por real de uma reserva paga", async () => {
+  // R$ 150 rende 1.500 de base e entra na faixa "relevante", que soma 10%.
+  // O bônus por faixa de compra é interno: existe no cálculo, nunca na tela.
+  it("credita a base mais o bônus da faixa da compra", async () => {
     const id = await paidReservation(150);
     const result = await awardXpForReservation(id);
 
     expect(result?.credited).toBe(true);
-    expect(result?.amount).toBe(1500);
-    expect(await getUserXp(userId, tenantId)).toBe(1500);
+    expect(result?.amount).toBe(1650);
+    expect(await getUserXp(userId, tenantId)).toBe(1650);
+
+    // A decomposição fica gravada: é ela que o extrato mostra, e é o que
+    // impede uma mudança de regra de reescrever o que já foi creditado.
+    const lancamento = await prisma.xpEntry.findFirst({
+      where: { reservationId: id, reason: "PURCHASE" },
+      select: { baseXp: true, bonusXp: true, multiplier: true },
+    });
+    expect(lancamento?.baseXp).toBe(1500);
+    expect(lancamento?.bonusXp).toBe(150);
+    expect(Number(lancamento?.multiplier)).toBeCloseTo(1.1, 5);
+  });
+
+  // Compra pequena não ganha faixa: dez por real e nada mais.
+  it("compra abaixo da primeira faixa recebe só a base", async () => {
+    const antes = await getUserXp(userId, tenantId);
+    const id = await paidReservation(10);
+    const result = await awardXpForReservation(id);
+
+    expect(result?.amount).toBe(100);
+    expect(await getUserXp(userId, tenantId)).toBe(antes + 100);
+  });
+
+  it("o gasto acumulado sobe junto, para o GOAT poder exigi-lo", async () => {
+    const antes = await prisma.userProgress.findUnique({
+      where: { userId_tenantId: { userId, tenantId } },
+      select: { totalSpent: true },
+    });
+    const id = await paidReservation(40);
+    await awardXpForReservation(id);
+    const depois = await prisma.userProgress.findUnique({
+      where: { userId_tenantId: { userId, tenantId } },
+      select: { totalSpent: true },
+    });
+    expect(Number(depois?.totalSpent ?? 0) - Number(antes?.totalSpent ?? 0)).toBe(40);
   });
 
   it("é idempotente: reentrega do webhook não credita de novo", async () => {
@@ -111,7 +147,7 @@ suite("serviço de XP (integração)", () => {
     expect(first?.credited).toBe(true);
     expect(second?.credited).toBe(false);
     expect(third?.credited).toBe(false);
-    expect(await getUserXp(userId, tenantId)).toBe(before + 1000);
+    expect(await getUserXp(userId, tenantId)).toBe(before + 1100);
   });
 
   it("não perde crédito com pagamentos simultâneos do mesmo usuário", async () => {
@@ -124,8 +160,13 @@ suite("serviço de XP (integração)", () => {
     );
     const results = await Promise.all(ids.map((id) => awardXpForReservation(id)));
 
+    // A soma dos creditados, e não um número fixo: o que este teste prova é
+    // que nenhum crédito se perde, e o valor de cada um pode variar conforme
+    // o boost sobe durante a própria execução.
+    const creditado = results.reduce((soma, r) => soma + (r?.amount ?? 0), 0);
     expect(results.every((r) => r?.credited)).toBe(true);
-    expect(await getUserXp(userId, tenantId)).toBe(before + 10 * 100);
+    expect(creditado).toBeGreaterThanOrEqual(10 * 100);
+    expect(await getUserXp(userId, tenantId)).toBe(before + creditado);
   });
 
   it("a mesma reserva creditada em paralelo entra uma vez só", async () => {
@@ -137,7 +178,7 @@ suite("serviço de XP (integração)", () => {
     );
 
     expect(results.filter((r) => r?.credited).length).toBe(1);
-    expect(await getUserXp(userId, tenantId)).toBe(before + 500);
+    expect(await getUserXp(userId, tenantId)).toBe(before + 550);
   });
 
   it("ignora reserva não paga e reserva de convidado", async () => {
@@ -171,17 +212,42 @@ suite("serviço de XP (integração)", () => {
 
   it("estorna o XP da compra e não estorna duas vezes", async () => {
     const before = await getUserXp(userId, tenantId);
+    const gastoAntes = await prisma.userProgress.findUnique({
+      where: { userId_tenantId: { userId, tenantId } },
+      select: { totalSpent: true },
+    });
+
     const id = await paidReservation(200);
-    await awardXpForReservation(id);
-    expect(await getUserXp(userId, tenantId)).toBe(before + 2000);
+    // O valor creditado depende do boost e da faixa da compra, então o teste
+    // usa o que foi de fato creditado: o que ele prova é que o estorno desfaz
+    // exatamente aquilo, e não um número escolhido a mão.
+    const credito = await awardXpForReservation(id);
+    expect(await getUserXp(userId, tenantId)).toBe(before + credito!.amount);
 
     const first = await reverseXpForReservation(id);
     const second = await reverseXpForReservation(id);
 
     expect(first?.credited).toBe(true);
-    expect(first?.amount).toBe(-2000);
+    expect(first?.amount).toBe(-credito!.amount);
     expect(second?.credited).toBe(false);
     expect(await getUserXp(userId, tenantId)).toBe(before);
+
+    // O gasto volta junto: compra estornada não pode continuar contando para
+    // o GOAT, que é o único degrau que exige gasto.
+    const gastoDepois = await prisma.userProgress.findUnique({
+      where: { userId_tenantId: { userId, tenantId } },
+      select: { totalSpent: true },
+    });
+    expect(Number(gastoDepois?.totalSpent ?? 0)).toBeCloseTo(
+      Number(gastoAntes?.totalSpent ?? 0),
+      2,
+    );
+
+    // O lançamento original continua no extrato: o estorno é uma linha nova.
+    const compra = await prisma.xpEntry.findFirst({
+      where: { reservationId: id, reason: "PURCHASE" },
+    });
+    expect(compra).not.toBeNull();
   });
 
   it("ajuste manual soma e nunca deixa o total negativo", async () => {

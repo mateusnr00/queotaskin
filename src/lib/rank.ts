@@ -8,6 +8,8 @@
 // é gasto nem expira: o nível é permanente. Isso é proposital, um rank que
 // pode cair pune quem parou de comprar, e o objetivo é o contrário.
 
+import { GOAT_MIN_TOTAL_SPENT } from "@/lib/xp/config";
+
 export const XP_PER_BRL_DEFAULT = 10;
 
 /** Último nível numérico. Acima disso começam as patentes de prestígio. */
@@ -166,18 +168,33 @@ export interface Rank {
   xp: number;
 }
 
-/** Patente de prestígio mais alta alcançada com esse XP, ou null. */
-export function prestigeFromXp(xp: number): PrestigeRank | null {
+/**
+ * Patente de prestígio mais alta alcançada, ou null.
+ *
+ * O GOAT é a única exceção da escada: exige XP E gasto acumulado. Sem isso,
+ * um multiplicador alto levaria alguém ao topo do prestígio da plataforma sem
+ * ter sustentado nada, e o degrau que deveria ser o mais difícil viraria o
+ * mais fácil de forçar.
+ *
+ * `totalSpent` é opcional para não quebrar quem chama só com XP; quando não
+ * vem, o GOAT simplesmente não é concedido, que é o lado seguro do erro.
+ */
+export function prestigeFromXp(
+  xp: number,
+  totalSpent = 0,
+): PrestigeRank | null {
   let found: PrestigeRank | null = null;
   for (const rank of PRESTIGE_RANKS) {
-    if (xp >= rank.xp) found = rank;
+    if (xp < rank.xp) continue;
+    if (rank.key === "GOAT" && totalSpent < GOAT_MIN_TOTAL_SPENT) continue;
+    found = rank;
   }
   return found;
 }
 
-export function rankFromXp(xp: number): Rank {
+export function rankFromXp(xp: number, totalSpent = 0): Rank {
   const total = Math.max(0, Math.floor(xp));
-  const prestige = prestigeFromXp(total);
+  const prestige = prestigeFromXp(total, totalSpent);
 
   if (prestige) {
     return {
@@ -230,7 +247,14 @@ export function rankProgress(
   xpPerBrl: number = XP_PER_BRL_DEFAULT,
 ): RankProgress {
   const total = Math.max(0, Math.floor(xp));
-  const rank = rankFromXp(total);
+  // A BARRA MEDE SÓ A ESCADA DE XP.
+  //
+  // Por isso o rank aqui é calculado sem o gasto: quem tem 500 mil XP está no
+  // topo da escada de XP, e a barra tem de dizer isso. A exigência financeira
+  // do GOAT vive no selo, que sai de rankFromXp com o gasto. Misturar as duas
+  // faria a barra parar em 99% sem poder explicar por quê, já que o requisito
+  // em reais não pode aparecer na tela.
+  const rank = rankFromXp(total, GOAT_MIN_TOTAL_SPENT);
 
   const { floorXp, ceilXp, nextLabel } = nextStep(total, rank);
 

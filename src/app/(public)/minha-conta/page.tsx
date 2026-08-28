@@ -12,6 +12,9 @@ import { SteamTradeUrlForm } from "@/components/forms/steam-trade-url-form";
 import { RankCard, RankLadder } from "@/components/rank/rank-card";
 import { XpHistory } from "@/components/rank/xp-history";
 import { getUserXp, xpHistory } from "@/server/services/xp";
+import { TETO_DE_BOOST, estadoDoBoost } from "@/server/services/boost";
+import { CardDeBoost } from "@/components/rank/card-de-boost";
+import { XP_MULTIPLIER_TIERS } from "@/lib/xp/config";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -59,12 +62,22 @@ export default async function MyAccountPage() {
   });
 
   const rankOn = settings?.rankEnabled ?? true;
-  const [xp, history] = rankOn
+  const [xp, history, boost, progresso] = rankOn
     ? await Promise.all([
         getUserXp(session.user.id, tenant.id),
         xpHistory(session.user.id, tenant.id, 10),
+        // Aplica decaimento e avalia o Boost de Sorte antes de ler: as duas
+        // regras dependem só do tempo, e sem isto a pessoa veria um estado
+        // velho até a próxima compra.
+        estadoDoBoost(session.user.id, tenant.id),
+        // O gasto acumulado NÃO vai para a interface. Ele existe aqui só para
+        // resolver o GOAT, que é o único degrau com exigência financeira.
+        prisma.userProgress.findUnique({
+          where: { userId_tenantId: { userId: session.user.id, tenantId: tenant.id } },
+          select: { totalSpent: true },
+        }),
       ])
-    : [0, []];
+    : [0, [], null, null];
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
@@ -76,7 +89,20 @@ export default async function MyAccountPage() {
       </header>
 
       {rankOn && (
-        <RankCard xp={xp} xpPerBrl={settings?.xpPerBrl ?? 10} />
+        <>
+          <RankCard
+            xp={xp}
+            totalSpent={Number(progresso?.totalSpent ?? 0)}
+            multiplicador={boost?.multiplicador}
+          />
+          {boost && (
+            <CardDeBoost
+              dados={boost}
+              faixas={[...XP_MULTIPLIER_TIERS]}
+              tetoDePontos={TETO_DE_BOOST}
+            />
+          )}
+        </>
       )}
 
       {!user.steamTradeUrl && (

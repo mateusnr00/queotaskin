@@ -14,7 +14,16 @@
 import type { Prisma, XpReason } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { xpForPurchase } from "@/lib/rank";
+import {
+  calculatePurchaseXp,
+  diaOficial,
+  diasEntre,
+  faixaDaCompra,
+  getActivityMultiplier,
+  getLuckXpBonus,
+  podeGanharBoostDeSorte,
+} from "@/lib/xp/regras";
+import { registrarParticipacao } from "@/server/services/boost";
 
 // Idempotência é resolvida com "consulta antes de inserir", nunca capturando
 // a violação do índice único: no Postgres, um statement que falha aborta a
@@ -88,6 +97,8 @@ export async function awardXpForReservation(
         userId: true,
         status: true,
         totalAmount: true,
+        paidAt: true,
+        raffleId: true,
         raffle: { select: { tenantId: true, title: true } },
       },
     });
@@ -102,11 +113,12 @@ export async function awardXpForReservation(
     });
     if (!tenant?.rankEnabled) return null;
 
-    const amount = xpForPurchase(Number(reservation.totalAmount), tenant.xpPerBrl);
-    if (amount <= 0) return null;
+    const valorEmReais = Number(reservation.totalAmount);
+    if (valorEmReais <= 0) return null;
 
     const userId = reservation.userId;
     const tenantId = reservation.raffle.tenantId;
+    const quando = reservation.paidAt ?? new Date();
 
     return await prisma.$transaction(async (tx) => {
       await lockUser(tx, userId, tenantId);
@@ -121,19 +133,81 @@ export async function awardXpForReservation(
         return { credited: false, amount: 0, totalXp };
       }
 
+      // Garante a linha de progresso antes de qualquer leitura de boost.
+      await tx.userProgress.upsert({
+        where: { userId_tenantId: { userId, tenantId } },
+        update: {},
+        create: { userId, tenantId, xp: 0 },
+      });
+
+      // O multiplicador é o de ANTES desta compra. Registrar a participação
+      // primeiro faria a própria compra pagar o boost que ela mesma gerou.
+      const progresso = await tx.userProgress.findUnique({
+        where: { userId_tenantId: { userId, tenantId } },
+        select: { boostPoints: true, lastWinAt: true, lastParticipationAt: true, createdAt: true },
+      });
+
+      const hoje = diaOficial(quando);
+      const desdeVitoria = progresso?.lastWinAt ?? progresso?.createdAt ?? quando;
+      const diasSemPremio = diasEntre(diaOficial(desdeVitoria), hoje);
+      const diasDesdeParticipacao = progresso?.lastParticipationAt
+        ? diasEntre(diaOficial(progresso.lastParticipationAt), hoje)
+        : null;
+
+      const compra = faixaDaCompra(valorEmReais);
+      const luckBonus = podeGanharBoostDeSorte({
+        diasSemPremio,
+        diasDesdeUltimaParticipacao: diasDesdeParticipacao,
+      })
+        ? getLuckXpBonus(diasSemPremio)
+        : 0;
+
+      const composicao = calculatePurchaseXp({
+        purchaseAmount: valorEmReais,
+        activityMultiplier: getActivityMultiplier(progresso?.boostPoints ?? 0),
+        purchaseBonus: compra.bonus,
+        luckBonus,
+      });
+      if (composicao.earnedXp <= 0) return { credited: false, amount: 0, totalXp: 0 };
+
       await tx.xpEntry.create({
         data: {
           userId,
           tenantId,
-          amount,
+          amount: composicao.earnedXp,
           reason: "PURCHASE",
           reservationId,
           description: reservation.raffle.title,
+          baseXp: composicao.baseXp,
+          multiplier: composicao.finalMultiplier,
+          bonusXp: composicao.bonusXp,
+          metadata: {
+            faixaDaCompra: compra.faixa,
+            rotuloDaCompra: compra.rotulo,
+            activityMultiplier: composicao.activityMultiplier,
+            purchaseBonus: composicao.purchaseBonus,
+            luckBonus: composicao.luckBonus,
+          },
         },
       });
 
+      // O gasto acumulado sobe junto, na mesma transação: é ele que o GOAT
+      // exige, e somar fora daqui abriria a janela para os dois divergirem.
+      await tx.userProgress.update({
+        where: { userId_tenantId: { userId, tenantId } },
+        data: { totalSpent: { increment: reservation.totalAmount } },
+      });
+
+      await registrarParticipacao(tx, {
+        userId,
+        tenantId,
+        raffleId: reservation.raffleId,
+        reservationId,
+        quando,
+      });
+
       const totalXp = await recomputeTotal(tx, userId, tenantId);
-      return { credited: true, amount, totalXp };
+      return { credited: true, amount: composicao.earnedXp, totalXp };
     });
   } catch (err) {
     console.error("[awardXpForReservation]", err);
@@ -156,7 +230,16 @@ export async function reverseXpForReservation(
   try {
     const purchase = await prisma.xpEntry.findFirst({
       where: { reservationId, reason: "PURCHASE" },
-      select: { userId: true, tenantId: true, amount: true, description: true },
+      select: {
+        userId: true,
+        tenantId: true,
+        amount: true,
+        description: true,
+        baseXp: true,
+        multiplier: true,
+        bonusXp: true,
+        reservation: { select: { totalAmount: true } },
+      },
     });
     if (!purchase || purchase.amount <= 0) return null;
 
@@ -182,8 +265,22 @@ export async function reverseXpForReservation(
           reason: "REFUND",
           reservationId,
           description: `Estorno de ${purchase.description ?? "compra"}`,
+          // O lançamento original fica intacto. O estorno é uma linha nova,
+          // negativa: apagar o histórico esconderia que a compra existiu.
+          baseXp: purchase.baseXp == null ? null : -purchase.baseXp,
+          multiplier: purchase.multiplier,
+          bonusXp: purchase.bonusXp == null ? null : -purchase.bonusXp,
         },
       });
+
+      // O gasto volta junto: o GOAT exige gasto, e compra estornada não é
+      // gasto. Sem isto o degrau ficaria destravado por dinheiro devolvido.
+      if (purchase.reservation) {
+        await tx.userProgress.updateMany({
+          where: { userId, tenantId },
+          data: { totalSpent: { decrement: purchase.reservation.totalAmount } },
+        });
+      }
 
       const totalXp = await recomputeTotal(tx, userId, tenantId);
       return { credited: true, amount: -purchase.amount, totalXp };

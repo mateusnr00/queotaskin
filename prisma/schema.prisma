@@ -203,6 +203,7 @@ model User {
   sessions       Session[]
   reservations   Reservation[]
   xpEntries      XpEntry[]
+  boostEntries      BoostEntry[]
   progress       UserProgress[]
   affiliate      Affiliate?
   createdRaffles Raffle[]       @relation("CreatedRaffles")
@@ -354,6 +355,7 @@ model Tenant {
   raffles   Raffle[]
   members   User[]         @relation("TenantMembers")
   xpEntries XpEntry[]
+  boostEntries BoostEntry[]
   progress  UserProgress[]
 
   createdAt     DateTime       @default(now())
@@ -806,6 +808,19 @@ model XpEntry {
   reason        XpReason
   reservationId String?
   description   String?
+
+  /// A conta que produziu `amount`, congelada no momento do lançamento.
+  ///
+  /// Guardar a decomposição, e não só o total, é o que permite explicar o
+  /// extrato ("XP base 800, boost 1,2x, +160") sem recalcular: regra que
+  /// mudar amanhã não pode reescrever o que foi creditado ontem.
+  /// Nulo nos lançamentos antigos, anteriores ao multiplicador.
+  baseXp     Int?
+  multiplier Decimal? @db.Decimal(4, 2)
+  bonusXp    Int?
+  /// Detalhe complementar: faixa da compra, bônus de sorte, evento.
+  metadata   Json?
+
   createdAt     DateTime @default(now())
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -827,6 +842,42 @@ model UserProgress {
   userId    String
   tenantId  String
   xp        Int      @default(0)
+
+  /// Gasto acumulado em compras pagas, em reais.
+  ///
+  /// Desnormalizado porque o GOAT depende dele e o rank é lido em toda página
+  /// pública; agregar as reservas a cada leitura seria uma soma por render.
+  /// É dado FINANCEIRO: fica no servidor e não vai para a interface.
+  totalSpent Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Pontos de boost, de 0 a 100. O multiplicador NÃO é gravado: é derivado
+  /// dos pontos, senão os dois desandam e um passa a mentir sobre o outro.
+  boostPoints Int @default(0)
+
+  /// Sequência de dias diferentes com participação.
+  currentStreak Int @default(0)
+  longestStreak Int @default(0)
+
+  /// Último dia oficial com participação, como "AAAA-MM-DD" no fuso do
+  /// projeto. Texto, e não data: o que importa é o DIA no fuso oficial, e
+  /// guardar timestamp obrigaria a reconverter a cada leitura.
+  lastActiveDate      String?
+  lastParticipationAt DateTime?
+
+  /// Perdoa uma ausência sem quebrar a sequência.
+  streakProtectionAvailable Boolean   @default(true)
+  streakProtectionUsedAt    DateTime?
+  /// Dias ativos desde que a proteção foi gasta, para ela voltar.
+  diasAtivosAposProtecao    Int       @default(0)
+
+  /// Última aplicação do decaimento, para ele não rodar duas vezes no mesmo
+  /// período só porque a pessoa abriu a página de novo.
+  lastDecayAppliedAt DateTime?
+  lastDecayDay       String?
+
+  /// Última premiação registrada, base do Boost de Sorte.
+  lastWinAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -835,6 +886,42 @@ model UserProgress {
 
   @@unique([userId, tenantId])
   @@index([tenantId, xp(sort: Desc)])
+}
+
+/// Motivo de uma alteração de pontos de boost.
+enum BoostReason {
+  ACTIVITY
+  STREAK
+  MISSION
+  DECAY
+  TEMPORARY_BOOST
+  ADMIN_ADJUSTMENT
+}
+
+/// Histórico das alterações de boost. Mesma ideia do extrato de XP: nenhum
+/// ponto entra ou sai sem deixar rastro de por quê.
+model BoostEntry {
+  id       String      @id @default(cuid())
+  userId   String
+  tenantId String
+  type     BoostReason
+  points   Int
+  reason   String
+
+  /// Idempotência. Um marco de sequência por ciclo, um decaimento por dia,
+  /// uma missão por ciclo: a chave carrega esses limites.
+  idempotencyKey String
+
+  /// Boost temporário: depois disto ele deixa de contar.
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey])
+  @@index([userId, tenantId, createdAt(sort: Desc)])
 }
 
 model Prize {

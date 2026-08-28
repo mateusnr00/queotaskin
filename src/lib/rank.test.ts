@@ -110,8 +110,10 @@ describe("prestigeFromXp", () => {
     expect(prestigeFromXp(350_000)?.key).toBe("MVP"); // R$ 35.000
     expect(prestigeFromXp(425_000)?.key).toBe("PRO_PLAYER"); // R$ 42.500
     expect(prestigeFromXp(499_999)?.key).toBe("PRO_PLAYER");
-    expect(prestigeFromXp(500_000)?.key).toBe("GOAT"); // R$ 50.000
-    expect(prestigeFromXp(9_000_000)?.key).toBe("GOAT");
+    expect(prestigeFromXp(500_000, 50_000)?.key).toBe("GOAT");
+    expect(prestigeFromXp(9_000_000, 50_000)?.key).toBe("GOAT");
+    // Sem o gasto, o mesmo XP para na patente anterior.
+    expect(prestigeFromXp(9_000_000, 0)?.key).toBe("PRO_PLAYER");
   });
 
   it("as patentes estão em ordem crescente de XP", () => {
@@ -130,7 +132,7 @@ describe("rankFromXp", () => {
   });
 
   it("no prestígio, o rótulo vira a patente e o nível fica em 21", () => {
-    const rank = rankFromXp(500_000); // R$ 50.000
+    const rank = rankFromXp(500_000, 50_000);
     expect(rank.label).toBe("GOAT");
     expect(rank.level).toBe(MAX_LEVEL);
     expect(rank.prestige?.key).toBe("GOAT");
@@ -141,7 +143,7 @@ describe("rankFromXp", () => {
     expect(rankFromXp(47_000).numeral).toBe("10");
     expect(rankFromXp(0).numeral).toBe("0");
     // Patente não usa mais numeral romano: o selo traz o nome desenhado.
-    expect(rankFromXp(500_000).numeral).toBe("GOAT");
+    expect(rankFromXp(500_000, 50_000).numeral).toBe("GOAT");
     expect(rankFromXp(350_000).numeral).toBe("MVP");
   });
 
@@ -151,7 +153,7 @@ describe("rankFromXp", () => {
     expect(rankFromXp(xpForLevel(14)).tierName).toBe("Águia Lendária");
     expect(rankFromXp(xpForLevel(21)).tierName).toBe("Global Elite");
     // No prestígio, a faixa é a própria patente.
-    expect(rankFromXp(500_000).tierName).toBe("GOAT");
+    expect(rankFromXp(500_000, 50_000).tierName).toBe("GOAT");
   });
 });
 
@@ -179,7 +181,11 @@ describe("rankProgress", () => {
     expect(p.xpToNext).toBe(75_000); // 425.000 − 350.000
   });
 
-  it("GOAT é o teto: sem próximo degrau e 100%", () => {
+  // rankProgress mede a ESCADA DE XP, e por isso não conhece a exigência de
+  // gasto do GOAT: ela existe só no selo, que sai de rankFromXp com o gasto.
+  // Separar os dois é o que permite a barra continuar dizendo "chegou ao topo
+  // do XP" sem a página precisar revelar o requisito financeiro.
+  it("no topo da escada de XP não há próximo degrau", () => {
     const p = rankProgress(500_000);
     expect(p.atMax).toBe(true);
     expect(p.nextLabel).toBeNull();

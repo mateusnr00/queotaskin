@@ -1,5 +1,12 @@
 import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
-import { MAX_LEVEL, PRESTIGE_RANKS, TIERS, rankProgress, xpForLevel } from "@/lib/rank";
+import {
+  MAX_LEVEL,
+  PRESTIGE_RANKS,
+  TIERS,
+  rankFromXp,
+  rankProgress,
+  xpForLevel,
+} from "@/lib/rank";
 
 /** Painel com aresta de acento à esquerda, a marca visual do rank. */
 function Panel({
@@ -28,18 +35,29 @@ function Panel({
 /**
  * Cartão de progresso do participante.
  *
- * O "faltam R$ X" é o que puxa a recorrência, número redondo e acionável,
- * bem melhor do que exibir só o XP cru.
+ * SEM VALOR EM REAIS.
+ *
+ * Ele mostrava "faltam 920 XP, cerca de R$ 92 em números". O real lia como
+ * etiqueta de preço do nível, e o número é maior justamente para quem está
+ * começando, ou seja, aparecia maior para quem menos deveria se assustar. A
+ * régua de conversão é interna: existe no servidor, e não na tela.
  */
 export function RankCard({
   xp,
-  xpPerBrl,
+  totalSpent = 0,
+  multiplicador,
 }: {
   xp: number;
-  xpPerBrl: number;
+  /** Só para resolver o GOAT. Nunca é exibido. */
+  totalSpent?: number;
+  /** Boost atual, para a linha de baixo. */
+  multiplicador?: number;
 }) {
-  const progress = rankProgress(xp, xpPerBrl);
-  const { rank } = progress;
+  const progress = rankProgress(xp);
+  // rankProgress ainda não conhece a exigência de gasto do GOAT, então o
+  // selo sai daqui: os dois precisam concordar, senão a página mostra GOAT
+  // num usuário que o servidor não reconhece como GOAT.
+  const rank = rankFromXp(xp, totalSpent);
 
   return (
     <Panel color={rank.color}>
@@ -104,19 +122,29 @@ export function RankCard({
           />
         </div>
 
-        {!progress.atMax && (
-          <p className="mt-3 border-t border-[#232730] pt-3 text-xs text-muted-foreground">
-            Faltam{" "}
-            <b className="font-semibold text-foreground">
-              {progress.xpToNext.toLocaleString("pt-BR")} XP
-            </b>{" "}
-            , cerca de{" "}
-            <b className="font-semibold text-foreground">
-              R$ {progress.brlToNext.toLocaleString("pt-BR")}
-            </b>{" "}
-            em números.
-          </p>
-        )}
+        <div className="mt-3 space-y-1 border-t border-[#232730] pt-3 text-xs text-muted-foreground">
+          {!progress.atMax && (
+            <p>
+              Faltam{" "}
+              <b className="font-semibold text-foreground">
+                {progress.xpToNext.toLocaleString("pt-BR")} XP
+              </b>{" "}
+              para o {progress.nextLabel}.
+            </p>
+          )}
+          {multiplicador != null && (
+            <p>
+              Seu boost atual é{" "}
+              <b className="font-semibold text-foreground">
+                {multiplicador.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 1,
+                })}
+                x
+              </b>
+              . Mantenha sua sequência para acumular XP mais rápido.
+            </p>
+          )}
+        </div>
       </div>
     </Panel>
   );
