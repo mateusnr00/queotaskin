@@ -10,6 +10,9 @@
 // Suporte, Capitalizadora, Restrições.
 
 import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
+
+import { precoDaSkinAction } from "@/server/actions/preco-da-skin";
+import { precoPorNumero } from "@/lib/steam-market";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { useForm, type Resolver } from "react-hook-form";
@@ -319,6 +322,70 @@ export function RaffleForm({
     null,
   );
 
+  // ===== Preço sugerido a partir do valor da skin na Steam =====
+  //
+  // Tudo aqui é disparado por evento, e não por efeito: quem escolhe a skin,
+  // troca o desgaste ou muda a quantidade de cotas é uma ação do admin, e
+  // amarrar a busca a essas ações deixa claro quando a rede é usada.
+  const [valorNaSteam, setValorNaSteam] = useState<{
+    brl: number;
+    volume: number | null;
+  } | null>(null);
+  const [buscandoValor, setBuscandoValor] = useState(false);
+  const [erroDoValor, setErroDoValor] = useState<string | null>(null);
+  // Preço digitado à mão manda. Sugestão que sobrescreve o que a pessoa
+  // acabou de escrever não é ajuda, é briga.
+  const [precoEditadoAMao, setPrecoEditadoAMao] = useState(false);
+
+  /** Aplica valor ÷ cotas no campo de preço, se a sugestão ainda for bem-vinda. */
+  function aplicarSugestao(brl: number, cotas: unknown) {
+    if (precoEditadoAMao || form.getValues("isFree")) return;
+    const sugerido = precoPorNumero(brl, Number(cotas));
+    if (sugerido != null) {
+      form.setValue("pricePerNumber", sugerido, { shouldDirty: true });
+    }
+  }
+
+  /**
+   * Busca o valor da skin escolhida.
+   *
+   * Só busca quando o desgaste já está definido para quem tem desgaste: na
+   * Steam a mesma AWP custa milhares a mais Factory New do que Battle-Scarred,
+   * e perguntar sem o acabamento devolveria "não existe" de todo jeito.
+   */
+  async function buscarValorDaSkin(
+    skinId: string | null,
+    wear: SkinWear | null,
+  ) {
+    setErroDoValor(null);
+    if (!skinId) {
+      setValorNaSteam(null);
+      return;
+    }
+    const skin = skins.find((sk) => sk.id === skinId);
+    if (skin && skin.desgastesDisponiveis.length > 0 && !wear) {
+      setValorNaSteam(null);
+      return;
+    }
+
+    setBuscandoValor(true);
+    try {
+      const r = await precoDaSkinAction({ skinTemplateId: skinId, wear });
+      if (!r.ok) {
+        setValorNaSteam(null);
+        setErroDoValor(r.erro);
+        return;
+      }
+      setValorNaSteam({ brl: r.brl, volume: r.volume });
+      aplicarSugestao(r.brl, form.getValues("totalNumbers"));
+    } catch {
+      setValorNaSteam(null);
+      setErroDoValor("Não foi possível falar com a Steam agora.");
+    } finally {
+      setBuscandoValor(false);
+    }
+  }
+
   const form = useForm<RaffleGeneralInput>({
     resolver: zodResolver(
       raffleGeneralSchema
@@ -469,9 +536,15 @@ export function RaffleForm({
                 <SeletorDeSkin
                   skins={skins}
                   escolhida={skinEscolhida}
-                  aoEscolher={setSkinEscolhida}
+                  aoEscolher={(id) => {
+                    setSkinEscolhida(id);
+                    void buscarValorDaSkin(id, desgasteEscolhido);
+                  }}
                   desgaste={desgasteEscolhido}
-                  aoEscolherDesgaste={setDesgasteEscolhido}
+                  aoEscolherDesgaste={(w) => {
+                    setDesgasteEscolhido(w);
+                    void buscarValorDaSkin(skinEscolhida, w);
+                  }}
                   aoPreencherTitulo={(nome) => {
                     form.setValue("title", nome, { shouldDirty: true });
                     acompanharTitulo(nome);
@@ -939,13 +1012,25 @@ export function RaffleForm({
                           placeholder="0,00"
                           disabled={isFree}
                           {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            setPrecoEditadoAMao(true);
+                          }}
                           value={isFree ? 0 : (field.value ?? "")}
                         />
                       </FormControl>
-                      {isFree && (
+                      {isFree ? (
                         <FormDescription>
                           Campanha gratuita. Preço forçado em R$ 0,00.
                         </FormDescription>
+                      ) : (
+                        <AvisoDoPrecoSugerido
+                          buscando={buscandoValor}
+                          valor={valorNaSteam}
+                          erro={erroDoValor}
+                          cotas={Number(form.watch("totalNumbers")) || 0}
+                          editadoAMao={precoEditadoAMao}
+                        />
                       )}
                       <FormMessage />
                     </FormItem>
@@ -965,6 +1050,15 @@ export function RaffleForm({
                           max={10_000_000}
                           placeholder="100"
                           {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            // A divisão muda junto com o divisor: trocar de
+                            // 100 para 200 cotas sem refazer a conta deixaria
+                            // a rifa arrecadando o dobro da skin.
+                            if (valorNaSteam) {
+                              aplicarSugestao(valorNaSteam.brl, e.target.value);
+                            }
+                          }}
                           value={field.value ?? ""}
                         />
                       </FormControl>
@@ -1598,5 +1692,64 @@ function SwitchField({
         </FormItem>
       )}
     />
+  );
+}
+
+/**
+ * A linha embaixo do preço, explicando de onde veio o número.
+ *
+ * Campo que se preenche sozinho sem dizer por quê vira desconfiança: o admin
+ * precisa ver a conta (valor da skin dividido pelas cotas) para saber se
+ * aceita ou corrige. E quando ele corrige, a linha reconhece isso em vez de
+ * insistir na sugestão.
+ */
+function AvisoDoPrecoSugerido({
+  buscando,
+  valor,
+  erro,
+  cotas,
+  editadoAMao,
+}: {
+  buscando: boolean;
+  valor: { brl: number; volume: number | null } | null;
+  erro: string | null;
+  cotas: number;
+  editadoAMao: boolean;
+}) {
+  if (buscando) {
+    return <FormDescription>Consultando o preço na Steam...</FormDescription>;
+  }
+  if (erro) {
+    return (
+      <FormDescription className="text-amber-600 dark:text-amber-500">
+        {erro} Preencha o preço à mão.
+      </FormDescription>
+    );
+  }
+  if (!valor) return null;
+
+  const emReais = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const sugerido = precoPorNumero(valor.brl, cotas);
+
+  return (
+    <FormDescription>
+      Steam: <b className="font-semibold">{emReais(valor.brl)}</b>
+      {cotas > 0 && sugerido != null && (
+        <>
+          {" "}
+          ÷ {cotas.toLocaleString("pt-BR")} cotas ={" "}
+          <b className="font-semibold">{emReais(sugerido)}</b>
+        </>
+      )}
+      {editadoAMao && " (você ajustou o preço, a sugestão não é mais aplicada)"}
+      {valor.volume != null && valor.volume < 5 && (
+        <>
+          {" "}
+          Só {valor.volume} venda{valor.volume === 1 ? "" : "s"} nas últimas 24h,
+          então esse preço é pouco confiável.
+        </>
+      )}
+    </FormDescription>
   );
 }
