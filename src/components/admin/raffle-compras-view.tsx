@@ -77,6 +77,11 @@ import {
   type SkinDoCatalogoSimples,
 } from "@/components/admin/campo-de-premio";
 import { RARITY_TEXT_VAR } from "@/lib/cs2";
+import {
+  linkDoWhatsapp,
+  mensagemDeParabens,
+  numeroInternacional,
+} from "@/lib/whatsapp";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -200,6 +205,8 @@ export interface CaixaDistribuida {
   premio: string | null;
   raridade: SkinRarity | null;
   ganhador: string;
+  telefone: string | null;
+  paisDoTelefone: string | null;
   pagoEm: string | null;
 }
 
@@ -667,7 +674,10 @@ function RankingRow({ buyer }: { buyer: TopBuyer }) {
             <Phone className="h-4 w-4" />
           </Link>
           <Link
-            href={`https://wa.me/+55${phoneDigits}`}
+            // numeroInternacional em vez de "+55" no código: o cadastro
+            // aceita outros países, e o DDI fixo montava um link para um
+            // número brasileiro que não é o da pessoa.
+            href={`https://wa.me/${numeroInternacional(phoneDigits)}`}
             target="_blank"
             aria-label="WhatsApp"
             title="WhatsApp"
@@ -1320,6 +1330,15 @@ function TabelaDeCaixas({
   const [editando, setEditando] = useState<CaixaDistribuida | null>(null);
   const [removendo, setRemovendo] = useState<CaixaDistribuida | null>(null);
 
+  function avisar(c: CaixaDistribuida): string | null {
+    if (!c.premio) return null;
+    return linkDoWhatsapp(
+      c.telefone,
+      mensagemDeParabens({ nome: c.ganhador, premio: c.premio }),
+      c.paisDoTelefone,
+    );
+  }
+
   function remover(boxId: string) {
     startTransition(async () => {
       const r = await deleteSurpriseBoxAction({ boxId });
@@ -1404,6 +1423,25 @@ function TabelaDeCaixas({
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end gap-1">
+                    {/* Avisar o ganhador é o passo seguinte a ele ganhar, e
+                        era feito fora do sistema: abrir o WhatsApp, procurar o
+                        número, copiar o nome da skin da tela. O link já leva a
+                        conversa certa com o texto escrito, e o WhatsApp abre
+                        com ele editável antes de enviar. Sem número cadastrado
+                        o botão não aparece, em vez de abrir uma conversa
+                        vazia. */}
+                    {avisar(c) && (
+                      <a
+                        href={avisar(c)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Avisar ${c.ganhador} no WhatsApp`}
+                        title="Avisar no WhatsApp com a mensagem pronta"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                      >
+                        <WhatsAppIcon />
+                      </a>
+                    )}
                     {/* Editar existe sobretudo aqui: nome errado que já saiu
                         para alguém é o que o ganhador está lendo, e era o
                         único caso sem conserto. */}

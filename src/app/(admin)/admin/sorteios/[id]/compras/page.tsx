@@ -68,7 +68,15 @@ export default async function ComprasPage({
       createdAt: true,
       prize: { select: { id: true, title: true, prize: true, skinRarity: true } },
       reservation: {
-        select: { participantName: true, status: true, paidAt: true },
+        select: {
+          participantName: true,
+          participantPhone: true,
+          status: true,
+          paidAt: true,
+          // O país mora na conta, e não na reserva. Sem conta o link assume
+          // Brasil, que é o padrão do cadastro.
+          user: { select: { phoneCountry: true } },
+        },
       },
     },
   });
@@ -271,6 +279,8 @@ export default async function ComprasPage({
             premio: c.prize?.prize ?? null,
             raridade: c.prize?.skinRarity ?? null,
             ganhador: c.reservation.participantName,
+            telefone: c.reservation.participantPhone,
+            paisDoTelefone: c.reservation.user?.phoneCountry ?? null,
             pagoEm: c.reservation.paidAt?.toISOString() ?? null,
           })),
           enabled: raffle.surpriseBoxEnabled,
