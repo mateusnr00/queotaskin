@@ -91,7 +91,17 @@ export async function createRaffleAction(
     const skin = skinTemplateId
       ? await prisma.skinTemplate.findFirst({
           where: { id: skinTemplateId, tenantId },
+          // As artes vêm junto: é uma delas que vira a capa.
+          include: { artes: true },
         })
+      : null;
+
+    // A arte de campanha da skin, se houver. A do desgaste escolhido manda; a
+    // genérica (wear nulo) é o resto. A foto da skin nunca entra aqui: ela é
+    // o render do jogo, e a capa é arte feita à mão.
+    const arteDaCapa = skin
+      ? (skin.artes.find((a) => a.wear === (skinWear ?? skin.skinWear)) ??
+        skin.artes.find((a) => a.wear === null))
       : null;
 
     try {
@@ -127,16 +137,26 @@ export async function createRaffleAction(
             },
           });
 
-          // A skin NAO vira a capa da campanha.
+          // A capa vem da ARTE da skin, nunca da foto dela.
           //
-          // Ela virava, e estava errado: a arte da campanha é feita à parte,
-          // e a foto de catálogo da Steam entrando como capa obrigava a
-          // trocar depois, em toda campanha, uma imagem que ninguém pediu.
+          // A foto é o render do jogo e continua sendo a imagem do prêmio,
+          // que é o que aparece em "Ver as skins premiadas". Ela chegou a
+          // virar capa, e estava errado: obrigava a trocar depois, em toda
+          // campanha, uma imagem que ninguém pediu.
           //
-          // A skin continua sendo a imagem do prêmio, que é onde ela serve:
-          // é ela que aparece em "Ver as skins premiadas". Sem capa, a página
-          // desenha o painel com a cor da raridade e o nome da skin até a
-          // arte ser enviada, então nada fica quebrado no meio do caminho.
+          // Sem arte cadastrada, o sorteio nasce sem capa e a página desenha
+          // o painel com a cor da raridade e o nome da skin, então nada fica
+          // quebrado enquanto a arte não existe.
+          if (arteDaCapa) {
+            await tx.raffleImage.create({
+              data: {
+                raffleId: criado.id,
+                url: arteDaCapa.url,
+                isCover: true,
+                order: 0,
+              },
+            });
+          }
         }
 
         return criado;

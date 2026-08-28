@@ -18,12 +18,14 @@ import {
   uploadFotoDaSkinAction,
 } from "@/server/actions/skin-templates";
 import { normalizeImage } from "@/lib/image-normalize";
+import { ArtesDaSkin, type ArteDaSkin } from "@/components/admin/artes-da-skin";
 import {
   PROPORCAO_DA_SKIN,
   QUADRO_DA_SKIN,
   RARITY_LABEL,
   WEAR_LABEL,
   rarityColor,
+  WEARS_EM_ORDEM,
 } from "@/lib/cs2";
 import { formatBRL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -48,12 +50,18 @@ export interface SkinDoCatalogo {
   skinValueBrl: number | null;
   skinCollection: string | null;
   skinInspectUrl: string | null;
+  /** Em quais desgastes a skin existe; manda nos espaços de arte. */
+  desgastesDisponiveis: Desgaste[];
+  /** As artes de campanha ja enviadas. */
+  artes: ArteDaSkin[];
 }
 
 /** Quantas linhas por lote. Uma tela cheia cabe em bem menos que isso. */
 const LOTE = 60;
 
 const VAZIA: Omit<SkinDoCatalogo, "id"> = {
+  desgastesDisponiveis: WEARS_EM_ORDEM,
+  artes: [],
   name: "",
   imageUrl: null,
   skinRarity: null,
@@ -551,6 +559,16 @@ function FormularioSkin({
           Souvenir
         </label>
       </div>
+
+      {/* As artes ficam por último e fora do estado do formulário: cada uma
+          salva sozinha ao ser enviada, e não junto com "Salvar skin". São
+          arquivos, não campos, e amarrá-las ao botão faria a pessoa enviar
+          cinco imagens e perder todas ao fechar sem salvar. */}
+      <ArtesDaSkin
+        skinId={inicial?.id ?? null}
+        desgastesDisponiveis={dados.desgastesDisponiveis}
+        artes={inicial?.artes ?? []}
+      />
 
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button type="button" variant="ghost" onClick={aoFechar}>

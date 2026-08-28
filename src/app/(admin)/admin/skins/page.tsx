@@ -16,6 +16,8 @@ export default async function SkinsPage() {
   const skins = await prisma.skinTemplate.findMany({
     where: { tenantId },
     orderBy: { name: "asc" },
+    // As artes de campanha vêm junto: são elas que viram a capa do sorteio.
+    include: { artes: { select: { id: true, wear: true, url: true } } },
   });
 
   return (
@@ -51,6 +53,8 @@ export default async function SkinsPage() {
           skinValueBrl: s.skinValueBrl ? Number(s.skinValueBrl) : null,
           skinCollection: s.skinCollection,
           skinInspectUrl: s.skinInspectUrl,
+          desgastesDisponiveis: s.skinWears,
+          artes: s.artes,
         }))}
       />
     </div>

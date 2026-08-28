@@ -649,10 +649,45 @@ model SkinTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// A arte de campanha desta skin, por desgaste.
+  artes SkinArt[]
+
   /// Nome único por tenant: cadastrar a mesma skin duas vezes só cria dúvida
   /// na hora de escolher.
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+/// A arte de campanha de uma skin.
+///
+/// É diferente da foto da skin. A foto é o render do jogo, que veio da fonte
+/// de itens e serve para mostrar o item em "Ver as skins premiadas". A arte é
+/// feita à mão, tem logo, fundo e o nome escrito, e é ela que vira a capa do
+/// sorteio.
+///
+/// Fica presa ao desgaste porque a arte traz o desgaste escrito nela: a de
+/// "AK-47 | Redline (Field Tested)" não serve para a Minimal Wear. Com `wear`
+/// nulo, a mesma arte vale para qualquer desgaste, que é a saída para quem
+/// não quer desenhar cinco.
+model SkinArt {
+  id             String       @id @default(cuid())
+  skinTemplateId String
+  skin           SkinTemplate @relation(fields: [skinTemplateId], references: [id], onDelete: Cascade)
+
+  /// Nulo vale para qualquer desgaste, e só entra quando não há arte
+  /// específica para o desgaste escolhido.
+  wear SkinWear?
+
+  url String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Uma arte por desgaste. A do desgaste nulo tem índice parcial próprio na
+  /// migration: em Postgres, NULL não é igual a NULL, e sem ele daria para
+  /// cadastrar duas artes genéricas para a mesma skin.
+  @@unique([skinTemplateId, wear])
+  @@index([skinTemplateId])
 }
 
 enum SkinRarity {

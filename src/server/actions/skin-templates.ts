@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { WEARS_EM_ORDEM } from "@/lib/cs2";
+import type { SkinWear } from "@prisma/client";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import type { ActionResult } from "@/server/actions/auth";
@@ -219,5 +220,81 @@ export async function uploadFotoDaSkinAction(
   } catch (err) {
     console.error("[uploadFotoDaSkinAction]", err);
     return { ok: false, error: "Erro ao enviar a foto" };
+  }
+}
+
+/**
+ * Guarda a arte de campanha de uma skin, para um desgaste ou para todos.
+ *
+ * A arte é o que vira a capa do sorteio quando essa skin é escolhida no
+ * catálogo. Não se confunde com a foto: a foto é o render do jogo e continua
+ * sendo o que aparece em "Ver as skins premiadas".
+ *
+ * `wear` nulo é a arte que vale para qualquer desgaste, usada só quando não
+ * existe uma específica. Reenviar para o mesmo par troca a que estava lá, que
+ * é o que se espera de "trocar a arte".
+ */
+export async function salvarArteDaSkinAction(
+  skinTemplateId: string,
+  wear: SkinWear | null,
+  url: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+    // A skin tem de ser deste tenant: sem esta checagem, o id de outro tenant
+    // ganharia arte pelo painel de quem não é dono dela.
+    const skin = await prisma.skinTemplate.findFirst({
+      where: { id: skinTemplateId, tenantId },
+      select: { id: true },
+    });
+    if (!skin) return { ok: false, error: "Skin não encontrada" };
+
+    // O par (skin, desgaste) tem única, mas com wear nulo o upsert do Prisma
+    // não alcança: NULL não casa em where composto. Por isso os dois caminhos.
+    const existente = await prisma.skinArt.findFirst({
+      where: { skinTemplateId, wear },
+      select: { id: true },
+    });
+    const arte = existente
+      ? await prisma.skinArt.update({
+          where: { id: existente.id },
+          data: { url },
+          select: { id: true },
+        })
+      : await prisma.skinArt.create({
+          data: { skinTemplateId, wear, url },
+          select: { id: true },
+        });
+
+    revalidatePath("/admin/skins");
+    return { ok: true, data: arte };
+  } catch (err) {
+    console.error("[salvarArteDaSkinAction]", err);
+    return { ok: false, error: "Erro ao salvar a arte" };
+  }
+}
+
+/** Tira a arte. O arquivo fica no Storage; é lixo barato e reversível. */
+export async function removerArteDaSkinAction(
+  id: string
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+    const arte = await prisma.skinArt.findFirst({
+      where: { id, skin: { tenantId } },
+      select: { id: true },
+    });
+    if (!arte) return { ok: false, error: "Arte não encontrada" };
+
+    await prisma.skinArt.delete({ where: { id: arte.id } });
+    revalidatePath("/admin/skins");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[removerArteDaSkinAction]", err);
+    return { ok: false, error: "Erro ao remover a arte" };
   }
 }
