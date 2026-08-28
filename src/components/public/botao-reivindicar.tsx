@@ -13,8 +13,7 @@
 // conversa com ninguém é pior do que botão nenhum: promete atendimento e não
 // entrega. O número sai de Configurações → Telefone de suporte.
 
-import { MessageCircle } from "lucide-react";
-
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
 import { linkDoWhatsapp, mensagemDeReivindicacao } from "@/lib/whatsapp";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +54,7 @@ export function BotaoReivindicar({
         className,
       )}
     >
-      <MessageCircle aria-hidden className="h-4 w-4 shrink-0" />
+      <IconeDoWhatsapp className="h-4 w-4 shrink-0" />
       Reivindicar prêmio
     </a>
   );

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, MessageCircle, Send, Share2 } from "lucide-react";
+import { Check, Copy, Send, Share2 } from "lucide-react";
+
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
 
 import { cn } from "@/lib/utils";
 
@@ -23,7 +25,7 @@ export function SocialShare({ url, title }: SocialShareProps) {
     {
       name: "WhatsApp",
       href: `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
-      icon: MessageCircle,
+      icon: IconeDoWhatsapp,
       cls: "bg-[#25D366] hover:bg-[#25D366]/90 text-white",
     },
     {
