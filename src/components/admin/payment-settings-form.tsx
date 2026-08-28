@@ -39,7 +39,7 @@ import {
 
 // Mantém em sync com paymentSettingsSchema do server action.
 const schema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY"]),
+  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]),
   syncpayClientId: z.string().max(200).optional().default(""),
   syncpayClientSecret: z.string().max(500).optional().default(""),
   syncpayBaseUrl: z.string().max(300).optional().default(""),
@@ -47,11 +47,13 @@ const schema = z.object({
   codepayPassword: z.string().max(500).optional().default(""),
   sigilopayClientId: z.string().max(200).optional().default(""),
   sigilopayClientSecret: z.string().max(500).optional().default(""),
+  nexuspagApiKey: z.string().max(500).optional().default(""),
+  nexuspagWebhookSecret: z.string().max(500).optional().default(""),
 });
 type FormValues = z.infer<typeof schema>;
 
 interface InitialValues {
-  provider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY";
+  provider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | "NEXUSPAG";
   syncpayClientId: string;
   syncpayClientSecretConfigured: boolean;
   syncpayBaseUrl: string;
@@ -59,6 +61,8 @@ interface InitialValues {
   codepayPasswordConfigured: boolean;
   sigilopayClientId: string;
   sigilopayClientSecretConfigured: boolean;
+  nexuspagApiKeyConfigured: boolean;
+  nexuspagWebhookSecretConfigured: boolean;
 }
 
 interface Props {
@@ -67,6 +71,7 @@ interface Props {
     syncpay: string | null;
     codepay: string | null;
     sigilopay: string | null;
+    nexuspag: string | null;
   };
 }
 
@@ -85,6 +90,8 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
       codepayPassword: "",
       sigilopayClientId: initial.sigilopayClientId,
       sigilopayClientSecret: "",
+      nexuspagApiKey: "",
+      nexuspagWebhookSecret: "",
     },
   });
 
@@ -106,6 +113,8 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
         syncpayClientSecret: "",
         codepayPassword: "",
         sigilopayClientSecret: "",
+        nexuspagApiKey: "",
+        nexuspagWebhookSecret: "",
       });
     });
   }
@@ -130,6 +139,7 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
                         SYNCPAY: "SyncPay",
                         CODEPAY: "CodePay",
                         SIGILOPAY: "SigiloPay",
+                        NEXUSPAG: "NexusPag",
                       }}
                     />
                   </SelectTrigger>
@@ -137,6 +147,7 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
                     <SelectItem value="SYNCPAY">SyncPay</SelectItem>
                     <SelectItem value="CODEPAY">CodePay</SelectItem>
                     <SelectItem value="SIGILOPAY">SigiloPay</SelectItem>
+                    <SelectItem value="NEXUSPAG">NexusPag</SelectItem>
                   </SelectContent>
                 </Select>
               </FormControl>
@@ -302,6 +313,68 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
                     A SigiloPay só mostra a chave privada uma vez, na criação
                     da credencial. Se você não a tem mais, gere outra no painel
                     deles.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </ProviderCard>
+        )}
+
+        {provider === "NEXUSPAG" && (
+          <ProviderCard
+            title="Credenciais NexusPag"
+            webhookUrl={webhookUrls.nexuspag}
+            webhookEnv="NEXUSPAG_WEBHOOK_TOKEN"
+          >
+            <FormField
+              control={form.control}
+              name="nexuspagApiKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chave de API</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={
+                        initial.nexuspagApiKeyConfigured
+                          ? "•••• já configurada (deixe vazio pra manter)"
+                          : "nxp_live_..."
+                      }
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Painel NexusPag, em Integrações. Começa com nxp_live_.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="nexuspagWebhookSecret"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Segredo do webhook</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={
+                        initial.nexuspagWebhookSecretConfigured
+                          ? "•••• já configurado (deixe vazio pra manter)"
+                          : ""
+                      }
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Painel NexusPag, em Integrações, Webhooks.{" "}
+                    <b className="font-semibold">Sem ele nada é confirmado</b>:
+                    a NexusPag só assina a notificação quando há segredo, e a
+                    rota recusa notificação sem assinatura.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -28,7 +28,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type ProviderChoice = "DEFAULT" | "SYNCPAY" | "CODEPAY" | "SIGILOPAY";
+type ProviderChoice =
+  | "DEFAULT"
+  | "SYNCPAY"
+  | "CODEPAY"
+  | "SIGILOPAY"
+  | "NEXUSPAG";
 
 // O padrao do tenant e o enum inteiro do banco, e nao a lista que este seletor
 // oferece: o tenant pode estar num gateway que ainda nao da para escolher por
@@ -38,7 +43,7 @@ type ProviderDoTenant = PaymentProviderEnum;
 interface Props {
   raffleId: string;
   /** Override do sorteio. NULL/undefined → herda o do tenant. */
-  initialProvider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null;
+  initialProvider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | "NEXUSPAG" | null;
   /** Default ativo no tenant. Usado pra mostrar "(SyncPay)" do lado de "Padrão do site". */
   tenantDefault: ProviderDoTenant;
   /** Provedores cujas credenciais já estão configuradas no tenant. */
@@ -46,16 +51,19 @@ interface Props {
     syncpay: boolean;
     codepay: boolean;
     sigilopay: boolean;
+    nexuspag: boolean;
   };
 }
 
-function toChoice(v: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null): ProviderChoice {
+function toChoice(
+  v: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | "NEXUSPAG" | null,
+): ProviderChoice {
   return v ?? "DEFAULT";
 }
 
 function fromChoice(
   c: ProviderChoice,
-): "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null {
+): "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | "NEXUSPAG" | null {
   return c === "DEFAULT" ? null : c;
 }
 
@@ -78,7 +86,9 @@ export function RafflePaymentTab({
         ? configuredProviders.syncpay
         : effective === "SIGILOPAY"
           ? configuredProviders.sigilopay
-          : false;
+          : effective === "NEXUSPAG"
+            ? configuredProviders.nexuspag
+            : false;
 
   function onSave() {
     startTransition(async () => {
@@ -121,6 +131,7 @@ export function RafflePaymentTab({
                   SYNCPAY: "SyncPay",
                   CODEPAY: "CodePay",
                   SIGILOPAY: "SigiloPay",
+                  NEXUSPAG: "NexusPag",
                 }}
               />
             </SelectTrigger>
@@ -131,6 +142,7 @@ export function RafflePaymentTab({
               <SelectItem value="SYNCPAY">SyncPay</SelectItem>
               <SelectItem value="CODEPAY">CodePay</SelectItem>
               <SelectItem value="SIGILOPAY">SigiloPay</SelectItem>
+              <SelectItem value="NEXUSPAG">NexusPag</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
@@ -191,5 +203,6 @@ function labelFor(p: ProviderDoTenant): string {
   if (p === "CODEPAY") return "CodePay";
   if (p === "MERCADO_PAGO") return "Mercado Pago";
   if (p === "SIGILOPAY") return "SigiloPay";
+  if (p === "NEXUSPAG") return "NexusPag";
   return "SyncPay";
 }

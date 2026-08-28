@@ -92,6 +92,7 @@ export default async function EditRafflePage({
       codepayPasswordEnc: true,
       sigilopayClientId: true,
       sigilopayClientSecretEnc: true,
+      nexuspagApiKeyEnc: true,
     },
   });
   const configuredProviders = {
@@ -100,6 +101,7 @@ export default async function EditRafflePage({
     sigilopay: Boolean(
       tenant.sigilopayClientId && tenant.sigilopayClientSecretEnc
     ),
+    nexuspag: Boolean(tenant.nexuspagApiKeyEnc),
   };
 
   // Fallback pra campos faltantes no JSON: tudo OFF (identidade vem da
@@ -249,7 +251,8 @@ export default async function EditRafflePage({
         initialPaymentProvider={
           raffle.paymentProvider === "CODEPAY" ||
           raffle.paymentProvider === "SYNCPAY" ||
-          raffle.paymentProvider === "SIGILOPAY"
+          raffle.paymentProvider === "SIGILOPAY" ||
+          raffle.paymentProvider === "NEXUSPAG"
             ? raffle.paymentProvider
             : null
         }

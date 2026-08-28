@@ -23,6 +23,11 @@ import {
   type CodePayCredentials,
 } from "@/lib/codepay";
 import {
+  consultarCobranca as nexusConsulta,
+  criarCobrancaPix as nexusCriaPix,
+  type NexusPagCredentials,
+} from "@/lib/nexuspag";
+import {
   consultarTransacao as sigilopayConsulta,
   criarCobrancaPix as sigilopayCriaPix,
   type SigiloPayCredentials,
@@ -66,6 +71,7 @@ interface TenantCredentials {
   syncpay?: SyncPayCredentials;
   codepay?: CodePayCredentials;
   sigilopay?: SigiloPayCredentials;
+  nexuspag?: NexusPagCredentials;
 }
 
 export type ProviderResolution =
@@ -115,6 +121,9 @@ async function loadTenantCredentials(tenantId: string): Promise<
       sigilopayClientId: true,
       sigilopayClientSecretEnc: true,
       sigilopayBaseUrl: true,
+      nexuspagApiKeyEnc: true,
+      nexuspagWebhookSecretEnc: true,
+      nexuspagBaseUrl: true,
     },
   });
   if (!tenant) {
@@ -128,7 +137,8 @@ async function loadTenantCredentials(tenantId: string): Promise<
   const hasAnySecret =
     Boolean(tenant.syncpayClientSecretEnc) ||
     Boolean(tenant.codepayPasswordEnc) ||
-    Boolean(tenant.sigilopayClientSecretEnc);
+    Boolean(tenant.sigilopayClientSecretEnc) ||
+    Boolean(tenant.nexuspagApiKeyEnc);
   if (hasAnySecret && !isEncryptionConfigured()) {
     return {
       ok: false,
@@ -194,6 +204,27 @@ async function loadTenantCredentials(tenantId: string): Promise<
     }
   }
 
+  let nexuspag: NexusPagCredentials | undefined;
+  if (tenant.nexuspagApiKeyEnc) {
+    try {
+      nexuspag = {
+        apiKey: decryptSecret(tenant.nexuspagApiKeyEnc),
+        webhookSecret: tenant.nexuspagWebhookSecretEnc
+          ? decryptSecret(tenant.nexuspagWebhookSecretEnc)
+          : undefined,
+        baseUrl: tenant.nexuspagBaseUrl ?? undefined,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: `Falha ao decriptar credencial NexusPag: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        code: "ENCRYPTION_KEY_MISSING",
+      };
+    }
+  }
+
   return {
     ok: true,
     creds: {
@@ -201,6 +232,7 @@ async function loadTenantCredentials(tenantId: string): Promise<
       syncpay,
       codepay,
       sigilopay,
+      nexuspag,
     },
   };
 }
@@ -231,6 +263,43 @@ function buildProvider(
             // CodePay não tem campo de webhook por request, é global no painel.
           });
           return { pixCode: charge.pix_code, identifier: charge.identifier };
+        },
+      },
+    };
+  }
+
+  if (effective === "NEXUSPAG") {
+    if (!creds.nexuspag) {
+      return {
+        ok: false,
+        error:
+          "NexusPag selecionada mas sem credenciais. Configure em Admin, Configurações, Pagamentos.",
+        code: "PROVIDER_NOT_CONFIGURED",
+      };
+    }
+    const npCreds = creds.nexuspag;
+    return {
+      ok: true,
+      provider: {
+        name: "NEXUSPAG",
+        webhookPath: "nexuspag",
+        async createPixCharge(input) {
+          const cobranca = await nexusCriaPix(npCreds, {
+            amount: input.amount,
+            // A reserva vira a chave de idempotência deles: repetir a chamada
+            // devolve a cobrança que já existe em vez de criar outra.
+            externalId: input.externalRef,
+            descricao: input.description,
+            webhookUrl: input.webhookUrl,
+            expiresAt: input.expiresAt,
+          });
+          return {
+            pixCode: cobranca.pixCode,
+            identifier: cobranca.transactionId,
+          };
+        },
+        async getStatus(identifier) {
+          return nexusConsulta(npCreds, identifier);
         },
       },
     };

@@ -24,6 +24,8 @@ export default async function PagamentosPage() {
       codepayPasswordEnc: true,
       sigilopayClientId: true,
       sigilopayClientSecretEnc: true,
+      nexuspagApiKeyEnc: true,
+      nexuspagWebhookSecretEnc: true,
     },
   });
 
@@ -42,6 +44,11 @@ export default async function PagamentosPage() {
   const sigilopayWebhookUrl =
     appUrl && sigilopayWebhookToken
       ? `${appUrl}/api/webhooks/sigilopay/${sigilopayWebhookToken}`
+      : null;
+  const nexuspagWebhookToken = process.env.NEXUSPAG_WEBHOOK_TOKEN ?? "";
+  const nexuspagWebhookUrl =
+    appUrl && nexuspagWebhookToken
+      ? `${appUrl}/api/webhooks/nexuspag/${nexuspagWebhookToken}`
       : null;
 
   return (
@@ -69,7 +76,8 @@ export default async function PagamentosPage() {
           // form não conhece: qualquer coisa fora da lista cai pra SYNCPAY.
           provider:
             tenant.paymentProvider === "CODEPAY" ||
-            tenant.paymentProvider === "SIGILOPAY"
+            tenant.paymentProvider === "SIGILOPAY" ||
+            tenant.paymentProvider === "NEXUSPAG"
               ? tenant.paymentProvider
               : "SYNCPAY",
           syncpayClientId: tenant.syncpayClientId ?? "",
@@ -81,11 +89,16 @@ export default async function PagamentosPage() {
           sigilopayClientSecretConfigured: Boolean(
             tenant.sigilopayClientSecretEnc
           ),
+          nexuspagApiKeyConfigured: Boolean(tenant.nexuspagApiKeyEnc),
+          nexuspagWebhookSecretConfigured: Boolean(
+            tenant.nexuspagWebhookSecretEnc
+          ),
         }}
         webhookUrls={{
           syncpay: syncpayWebhookUrl,
           codepay: codepayWebhookUrl,
           sigilopay: sigilopayWebhookUrl,
+          nexuspag: nexuspagWebhookUrl,
         }}
       />
     </div>

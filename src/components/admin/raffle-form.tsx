@@ -116,12 +116,18 @@ interface RaffleFormProps {
   initialPrizes?: PrizeData[];
   initialPromotions?: PromotionData[];
   // Dados da aba "Pagamento", só populados no modo edit.
-  initialPaymentProvider?: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | null;
+  initialPaymentProvider?:
+    | "SYNCPAY"
+    | "CODEPAY"
+    | "SIGILOPAY"
+    | "NEXUSPAG"
+    | null;
   tenantPaymentDefault?: PaymentProviderEnum;
   configuredProviders?: {
     syncpay: boolean;
     codepay: boolean;
     sigilopay: boolean;
+    nexuspag: boolean;
   };
   initialAwardedTickets?: {
     number: number;
@@ -250,7 +256,12 @@ export function RaffleForm({
   initialPromotions = [],
   initialPaymentProvider = null,
   tenantPaymentDefault = "SYNCPAY",
-  configuredProviders = { syncpay: false, codepay: false, sigilopay: false },
+  configuredProviders = {
+    syncpay: false,
+    codepay: false,
+    sigilopay: false,
+    nexuspag: false,
+  },
   initialAwardedTickets = [],
   initialAwardedConfig = {
     enabled: true,

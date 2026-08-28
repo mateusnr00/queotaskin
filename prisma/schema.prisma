@@ -115,6 +115,7 @@ enum PaymentProvider {
   SYNCPAY
   CODEPAY
   SIGILOPAY
+  NEXUSPAG
 }
 
 enum CommissionStatus {
@@ -240,6 +241,12 @@ model Tenant {
   sigilopayClientId        String?
   sigilopayClientSecretEnc String?
   sigilopayBaseUrl         String?
+  nexuspagApiKeyEnc        String?
+  /// Segredo do webhook da NexusPag, do painel deles. Sem ele a plataforma
+  /// nao assina a notificacao, e a rota recusa tudo: pagamento confirmado por
+  /// quem nao provou ser a NexusPag e a porta aberta mais cara do sistema.
+  nexuspagWebhookSecretEnc String?
+  nexuspagBaseUrl          String?
 
   // Customização das páginas finais (pagamento confirmado / reserva
   // expirada). Quando NULL, renderiza o texto padrão hardcoded. Cada

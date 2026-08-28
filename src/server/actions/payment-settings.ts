@@ -18,7 +18,7 @@ import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import type { ActionResult } from "@/server/actions/auth";
 
 const paymentSettingsSchema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY"]),
+  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]),
   syncpayClientId: z.string().max(200).optional().default(""),
   // Vazio = manter atual; com valor = sobrescrever.
   syncpayClientSecret: z.string().max(500).optional().default(""),
@@ -35,6 +35,8 @@ const paymentSettingsSchema = z.object({
   codepayPassword: z.string().max(500).optional().default(""),
   sigilopayClientId: z.string().max(200).optional().default(""),
   sigilopayClientSecret: z.string().max(500).optional().default(""),
+  nexuspagApiKey: z.string().max(500).optional().default(""),
+  nexuspagWebhookSecret: z.string().max(500).optional().default(""),
 });
 
 export type PaymentSettingsInput = z.input<typeof paymentSettingsSchema>;
@@ -61,7 +63,9 @@ export async function updatePaymentSettingsAction(
   const wantsSecretWrite =
     data.syncpayClientSecret.length > 0 ||
     data.codepayPassword.length > 0 ||
-    data.sigilopayClientSecret.length > 0;
+    data.sigilopayClientSecret.length > 0 ||
+    data.nexuspagApiKey.length > 0 ||
+    data.nexuspagWebhookSecret.length > 0;
   if (wantsSecretWrite && !isEncryptionConfigured()) {
     return {
       ok: false,
@@ -110,6 +114,12 @@ export async function updatePaymentSettingsAction(
   } else if (!data.codepayClientId) {
     update.codepayPasswordEnc = null;
   }
+  if (data.nexuspagApiKey) {
+    update.nexuspagApiKeyEnc = encryptSecret(data.nexuspagApiKey);
+  }
+  if (data.nexuspagWebhookSecret) {
+    update.nexuspagWebhookSecretEnc = encryptSecret(data.nexuspagWebhookSecret);
+  }
   if (data.sigilopayClientSecret) {
     update.sigilopayClientSecretEnc = encryptSecret(data.sigilopayClientSecret);
   } else if (!data.sigilopayClientId) {
@@ -147,6 +157,20 @@ export async function updatePaymentSettingsAction(
         fieldErrors: {
           sigilopayClientSecret: ["Obrigatório no primeiro cadastro"],
         },
+      };
+    }
+  }
+
+  if (data.provider === "NEXUSPAG" && !data.nexuspagApiKey) {
+    const atual = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { nexuspagApiKeyEnc: true },
+    });
+    if (!atual?.nexuspagApiKeyEnc) {
+      return {
+        ok: false,
+        error: "NexusPag exige a chave de API. Preencha o campo.",
+        fieldErrors: { nexuspagApiKey: ["Obrigatório no primeiro cadastro"] },
       };
     }
   }
