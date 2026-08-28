@@ -189,7 +189,7 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   freeLabel: null,
   hasFee: false,
   feeAmount: null,
-  reservationTimeoutMinutes: 15,
+  reservationTimeoutMinutes: 5,
   minPurchase: 1,
   maxPurchase: 100,
   initialQuantity: null,

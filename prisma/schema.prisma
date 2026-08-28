@@ -494,7 +494,7 @@ model Raffle {
   maxPurchase               Int?
   initialQuantity           Int? // quantidade pré-selecionada no input
   maxPerBuyer               Int? // cap cumulativo por CPF (todas as reservas)
-  reservationTimeoutMinutes Int              @default(15)
+  reservationTimeoutMinutes Int              @default(5)
 
   // Quando setado, sobrescreve o tenant.paymentProvider só nesse sorteio
   // (credenciais continuam vindo do tenant). NULL = herda o padrão do
