@@ -50,6 +50,32 @@ export const WEAR_LABEL: Record<SkinWear, string> = {
   BATTLE_SCARRED: "Veterana de Guerra",
 };
 
+/**
+ * O nome do desgaste como a Steam escreve, em inglês e com hífen.
+ *
+ * Existe ao lado de WEAR_LABEL, que é a tradução, porque os dois têm público
+ * diferente. A tradução é para quem compra: a página do sorteio é em
+ * português e "Testada em Campo" é o que a pessoa entende. Este aqui é para
+ * quem administra e para o título da campanha, que segue o nome de mercado
+ * da skin, e é assim que ele foi pedido.
+ */
+export const WEAR_STEAM: Record<SkinWear, string> = {
+  FACTORY_NEW: "Factory New",
+  MINIMAL_WEAR: "Minimal Wear",
+  FIELD_TESTED: "Field-Tested",
+  WELL_WORN: "Well-Worn",
+  BATTLE_SCARRED: "Battle-Scarred",
+};
+
+/** A ordem do jogo, do novo ao surrado. */
+export const WEARS_EM_ORDEM: SkinWear[] = [
+  "FACTORY_NEW",
+  "MINIMAL_WEAR",
+  "FIELD_TESTED",
+  "WELL_WORN",
+  "BATTLE_SCARRED",
+];
+
 /** Sigla usada pela comunidade (FN, MW, FT, WW, BS). */
 export const WEAR_SHORT: Record<SkinWear, string> = {
   FACTORY_NEW: "FN",

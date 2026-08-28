@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { Prisma, type SkinWear } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -38,7 +38,12 @@ export async function createRaffleAction(
   // Skin do catálogo escolhida na criação. Vira o primeiro prêmio e a capa
   // no mesmo passo: sem isso, a pessoa criaria o sorteio e depois teria de
   // redigitar a ficha na aba Prêmios e reenviar a mesma foto na aba Imagens.
-  skinTemplateId?: string
+  skinTemplateId?: string,
+  // Desgaste escolhido na criação. O catálogo guarda uma linha por skin sem
+  // desgaste, porque a mesma skin é sorteada em Field-Tested numa campanha e
+  // em Factory New na outra; sem este parâmetro o prêmio nascia sem desgaste
+  // e a ficha na página do sorteio ficava incompleta.
+  skinWear?: SkinWear
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   try {
     const session = await getAdminOrThrow();
@@ -110,7 +115,9 @@ export async function createRaffleAction(
               imageUrl: skin.imageUrl,
               skinName: skin.name,
               skinRarity: skin.skinRarity,
-              skinWear: skin.skinWear,
+              // O escolhido manda; o do catálogo é o resto, para a skin
+              // cadastrada à mão que já veio com desgaste.
+              skinWear: skinWear ?? skin.skinWear,
               skinFloat: skin.skinFloat,
               skinStatTrak: skin.skinStatTrak,
               skinSouvenir: skin.skinSouvenir,

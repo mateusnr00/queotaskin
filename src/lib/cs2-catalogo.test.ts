@@ -272,3 +272,37 @@ describe("montarIndice sem desgaste", () => {
     );
   });
 });
+
+describe("desgastes disponíveis", () => {
+  it("traz os desgastes que a skin tem, traduzidos", () => {
+    const [linha] = montarIndice([AK], [], { comDesgaste: false });
+    expect(linha.desgastesDisponiveis).toEqual(["FIELD_TESTED", "MINIMAL_WEAR"]);
+  });
+
+  it("skin que não chega aos cinco não oferece os cinco", () => {
+    // A M4A4 Howl para em Well-Worn: o float dela não passa de 0,4.
+    const [linha] = montarIndice(
+      [
+        {
+          ...AK,
+          name: "M4A4 | Howl",
+          wears: [
+            { name: "Factory New" },
+            { name: "Minimal Wear" },
+            { name: "Field-Tested" },
+            { name: "Well-Worn" },
+          ],
+        },
+      ],
+      [],
+      { comDesgaste: false },
+    );
+    expect(linha.desgastesDisponiveis).not.toContain("BATTLE_SCARRED");
+    expect(linha.desgastesDisponiveis).toHaveLength(4);
+  });
+
+  it("agente e faca sem pintura ficam com a lista vazia", () => {
+    const indice = montarIndice([FACA_LIMPA], [AGENTE], { comDesgaste: false });
+    expect(indice.every((l) => l.desgastesDisponiveis.length === 0)).toBe(true);
+  });
+});

@@ -295,6 +295,7 @@ async function main() {
       imageUrl: linha.imagem,
       skinRarity: linha.raridade,
       skinWear: linha.desgaste,
+      skinWears: linha.desgastesDisponiveis,
       skinCollection: linha.colecao,
     };
     if (existente) {

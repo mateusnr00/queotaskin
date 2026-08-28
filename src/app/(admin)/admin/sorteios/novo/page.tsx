@@ -22,6 +22,7 @@ export default async function NewRafflePage() {
       skinRarity: true,
       skinWear: true,
       skinValueBrl: true,
+      skinWears: true,
     },
   });
 
@@ -58,6 +59,7 @@ export default async function NewRafflePage() {
         skins={skins.map((sk) => ({
           ...sk,
           skinValueBrl: sk.skinValueBrl ? Number(sk.skinValueBrl) : null,
+          desgastesDisponiveis: sk.skinWears,
         }))}
       />
     </div>

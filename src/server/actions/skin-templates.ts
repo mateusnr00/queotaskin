@@ -11,6 +11,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { WEARS_EM_ORDEM } from "@/lib/cs2";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import type { ActionResult } from "@/server/actions/auth";
@@ -95,7 +96,12 @@ export async function criarSkinAction(
     }
 
     const skin = await prisma.skinTemplate.create({
-      data: { ...parsed.data, tenantId },
+      // Skin cadastrada à mão nasce existindo nos cinco desgastes. É o
+      // palpite certo: skin com faixa de float restrita é minoria, e a lista
+      // só existe para não oferecer o que não existe. Vazia aqui esconderia a
+      // escolha do desgaste na criação do sorteio, que é justamente o que
+      // esta lista veio destravar. Quem importa do CS2 recebe a lista real.
+      data: { ...parsed.data, skinWears: WEARS_EM_ORDEM, tenantId },
       select: { id: true },
     });
 

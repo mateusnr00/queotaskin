@@ -42,6 +42,13 @@ export interface EntradaDoCatalogo {
   imagem: string | null;
   raridade: SkinRarity | null;
   desgaste: SkinWear | null;
+  /**
+   * Em quais desgastes a skin existe. Vai junto porque quem cria a campanha
+   * escolhe o desgaste na hora, e oferecer os cinco sempre prometeria item
+   * que não existe: 504 das 2126 skins não chegam aos cinco. Agente e faca
+   * sem pintura vêm com a lista vazia, que é o certo, eles não têm desgaste.
+   */
+  desgastesDisponiveis: SkinWear[];
   colecao: string | null;
   /** Só para o relatório; o catálogo não guarda. */
   categoria: string;
@@ -153,6 +160,10 @@ export function montarIndice(
   for (const item of skins) {
     // Faca sem pintura ("★ Bayonet") vem sem lista de desgaste na API; ela é
     // uma linha só, sem parênteses.
+    const disponiveis = (item.wears ?? [])
+      .map((w) => DESGASTE_POR_NOME[normalizar(w.name ?? "")])
+      .filter((d): d is SkinWear => Boolean(d));
+
     const desgastes = !comDesgaste
       ? [null]
       : item.wears?.length
@@ -166,6 +177,7 @@ export function montarIndice(
         desgaste: desgaste
           ? (DESGASTE_POR_NOME[normalizar(desgaste)] ?? null)
           : null,
+        desgastesDisponiveis: disponiveis,
         // Faca e luva não pertencem a coleção, vêm de caixa: 671 dos 2126
         // itens têm collections vazio, e para boa parte deles a caixa é a
         // procedência que existe. "Chroma Case" diz mais que nada.
@@ -182,6 +194,7 @@ export function montarIndice(
       raridade: RARIDADE_POR_ID[agente.rarity?.id ?? ""] ?? null,
       // Agente não tem desgaste: é personagem, não pintura.
       desgaste: null,
+      desgastesDisponiveis: [],
       colecao: agente.collections?.[0]?.name ?? agente.crates?.[0]?.name ?? null,
       categoria: "Agents",
     });

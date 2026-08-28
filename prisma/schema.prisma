@@ -631,6 +631,14 @@ model SkinTemplate {
   /// cadastrar só o nome e completar depois.
   skinRarity     SkinRarity?
   skinWear       SkinWear?
+  /// Em quais desgastes esta skin existe. Vem da fonte de itens do CS2, e
+  /// não é decorativo: 504 das 2126 skins não existem nos cinco. A M4A4 Howl
+  /// para em Well-Worn porque o float dela não passa de 0,4, e oferecer
+  /// Battle-Scarred na criação do sorteio prometeria um item inexistente.
+  /// Lista vazia quer dizer "não tem desgaste": agente é personagem e faca
+  /// sem pintura não tem acabamento. Skin cadastrada à mão nasce com os
+  /// cinco, então não existe estado de "não sei" para representar aqui.
+  skinWears      SkinWear[]
   skinFloat      Float?
   skinStatTrak   Boolean     @default(false)
   skinSouvenir   Boolean     @default(false)
