@@ -503,17 +503,17 @@ model Raffle {
 
   // Config dos Títulos Premiados (prêmio instantâneo): ver AwardedTicket
   // pra lista de números. Aqui ficam os toggles e textos de exibição.
-  awardedTicketsEnabled    Boolean @default(true)
-  awardedTicketsShowList   Boolean @default(true) // mostra lista pro público?
+  awardedTicketsEnabled    Boolean @default(false)
+  awardedTicketsShowList   Boolean @default(false) // mostra lista pro público?
   awardedTicketsViewMode   String  @default("list") // "list" | "modal"
   awardedTicketsWinnerText String? @db.Text
-  awardedTicketsLoserShow  Boolean @default(true)
+  awardedTicketsLoserShow  Boolean @default(false)
   awardedTicketsLoserTitle String?
   awardedTicketsLoserText  String? @db.Text
 
   // Config das Promoções (combos de cotas com desconto). As entradas
   // ficam em Promotion; aqui só os toggles e flags de exibição.
-  promotionsEnabled       Boolean @default(true)
+  promotionsEnabled       Boolean @default(false)
   // "Promoção em Dobro": cliente recebe 2x os números pelo mesmo valor.
   // Hoje o toggle só é persistido; lógica de multiplicação de tickets
   // ainda não foi implementada no createReservation (TODO).

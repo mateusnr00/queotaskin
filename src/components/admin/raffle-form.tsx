@@ -195,7 +195,7 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   initialQuantity: null,
   maxPerBuyer: null,
   minLevel: null,
-  showProgressBar: false,
+  showProgressBar: true,
   showDailyRanking: false,
   showOverallRanking: false,
   showShareButtons: false,

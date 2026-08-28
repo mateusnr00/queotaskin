@@ -85,6 +85,21 @@ export function RaffleAwardedTicketsTab({
   const [loserTitle, setLoserTitle] = useState(initialConfig.loserTitle);
   const [loserText, setLoserText] = useState(initialConfig.loserText);
 
+  /**
+   * O mestre arrasta os de baixo junto.
+   *
+   * Desligar a seção e deixar "mostrar lista" e "aviso pros não ganhadores"
+   * ligados guardava um estado que não existe na tela do público: com a seção
+   * off, nada daquilo aparece. Quem voltasse a ligar herdava escolhas de outro
+   * dia sem perceber. Agora o mestre decide os dois de uma vez, e quem quiser
+   * uma combinação diferente desmarca depois, que é uma ação visível.
+   */
+  function alternarSecao(ligado: boolean) {
+    setEnabled(ligado);
+    setShowList(ligado);
+    setLoserShow(ligado);
+  }
+
   const [items, setItems] = useState<AwardedRow[]>(
     initialItems.length > 0
       ? initialItems.map((i) => ({
@@ -231,7 +246,7 @@ export function RaffleAwardedTicketsTab({
         <div className="space-y-3 border-t pt-4">
           <ToggleRow
             checked={enabled}
-            onChange={setEnabled}
+            onChange={alternarSecao}
             label="Ativar Títulos Premiados"
             description="Liga/desliga o sistema inteiro. Quando off, nenhum ticket é marcado como AWARDED automaticamente."
           />
