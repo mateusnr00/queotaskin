@@ -1,0 +1,135 @@
+// A linha de prêmio, usada por "Títulos Premiados" e por "Caixas surpresas".
+//
+// Existia uma marcação para cada um. Ficam a menos de uma tela de distância na
+// página da campanha e liam como dois produtos diferentes: um com o número em
+// caixa sólida e o prêmio em texto solto, o outro com o prêmio dentro de uma
+// pílula e sem número. Mesma informação, dois desenhos.
+//
+// O NOME DO PRÊMIO GANHA A LINHA INTEIRA
+//
+// Era esse o defeito de verdade. As três informações disputavam a largura na
+// mesma linha, e no telefone sobravam uns 150px para o nome da skin. O
+// resultado media 243px de texto em 173px de caixa: "SSG 08 | Emphorosaur-S
+// (Field-Tested)" saía cortado, e "M4A1-S | Printstream (Field-Tested)"
+// quebrava no meio da palavra, separando "(Field-" de "Tested)". O nome do
+// prêmio e o que vende a campanha, e era ele que estava sendo espremido.
+//
+// Agora o nome ocupa a linha toda e o ganhador desce para a segunda, onde cabe
+// inteiro. "Joao Vitor de Alencar" pedia 125px e recebia 90.
+//
+// O desgaste sai destacado do nome. Em CS2 "AK-47 | Vulcan" e "Field-Tested"
+// sao dois fatos distintos, e jogar tudo no mesmo peso obriga a pessoa a ler a
+// linha inteira para achar a condicao do item.
+//
+// O estado vira um fio na borda esquerda, e nao preenchimento do bloco todo.
+// Com cinco de oito ja contemplados, o preenchimento solido virava uma parede
+// verde sem ritmo, e o que ainda esta em jogo, que e o que sustenta a decisao
+// de comprar, sumia no meio.
+
+import { Trophy } from "lucide-react";
+
+import { WEAR_LABEL, WEAR_STEAM } from "@/lib/cs2";
+import { cn } from "@/lib/utils";
+
+/** Os desgastes escritos por extenso, em ingles e em portugues. */
+const DESGASTES = [
+  ...Object.values(WEAR_STEAM),
+  ...Object.values(WEAR_LABEL),
+].map((d) => d.toLowerCase());
+
+/**
+ * Separa "AK-47 | Vulcan (Field-Tested)" em nome e desgaste.
+ *
+ * So corta quando o que esta entre parenteses e mesmo um desgaste conhecido:
+ * cortar qualquer parentese final quebraria um premio como "Faca (2 unidades)".
+ */
+export function separarDesgaste(texto: string): {
+  nome: string;
+  desgaste: string | null;
+} {
+  const casa = texto.match(/^(.*)\s*\(([^()]+)\)\s*$/);
+  if (!casa) return { nome: texto, desgaste: null };
+  const dentro = casa[2].trim();
+  if (!DESGASTES.includes(dentro.toLowerCase())) {
+    return { nome: texto, desgaste: null };
+  }
+  return { nome: casa[1].trim(), desgaste: dentro };
+}
+
+export function LinhaDePremio({
+  numero,
+  premio,
+  ganhador,
+  rotuloVago,
+}: {
+  /** Ja formatado com os zeros a esquerda. Ausente nas caixas surpresas. */
+  numero?: string;
+  premio: string;
+  ganhador: string | null;
+  /** O que dizer quando ainda nao tem dono. */
+  rotuloVago: string;
+}) {
+  const temDono = Boolean(ganhador);
+  const { nome, desgaste } = separarDesgaste(premio);
+
+  return (
+    <li
+      className={cn(
+        "flex items-start gap-3 rounded-xl border border-l-[3px] px-3 py-2.5 transition-colors",
+        temDono
+          ? "border-emerald-500/25 border-l-emerald-500 bg-emerald-500/[0.06]"
+          : "border-border/60 border-l-primary bg-muted/20",
+      )}
+    >
+      {numero && (
+        // Continua sendo o primeiro elemento da linha porque a pessoa varre
+        // esta lista procurando o proprio numero. O que mudou foi o peso: era
+        // o elemento mais alto da linha, em caixa solida, competindo com o
+        // premio que ele so identifica.
+        <span className="mt-px shrink-0 rounded-md bg-foreground/[0.07] px-2 py-1 text-[13px] font-bold tabular-nums text-foreground/80">
+          {numero}
+        </span>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold leading-snug [overflow-wrap:anywhere]">
+          {nome}
+          {desgaste && (
+            // whitespace-nowrap: o desgaste e um rotulo compacto e desce
+            // inteiro para a linha de baixo quando nao cabe. Sem isso o
+            // navegador quebra no hifen e sai "Field-" numa linha e "Tested"
+            // na outra, que e o defeito que esta correcao veio consertar.
+            <span className="whitespace-nowrap font-medium text-muted-foreground">
+              {" "}
+              {desgaste}
+            </span>
+          )}
+        </p>
+        {temDono ? (
+          <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            <Trophy aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            <span className="[overflow-wrap:anywhere]">{ganhador}</span>
+          </p>
+        ) : (
+          <p className="mt-1 text-xs font-semibold text-primary">{rotuloVago}</p>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** O contador de contemplados sobre o total, igual nas duas seções. */
+export function ContadorDePremios({
+  feitos,
+  total,
+}: {
+  feitos: number;
+  total: number;
+}) {
+  return (
+    <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-bold tabular-nums">
+      {feitos}
+      <span className="font-normal text-muted-foreground">/{total}</span>
+    </span>
+  );
+}
