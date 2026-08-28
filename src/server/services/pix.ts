@@ -40,17 +40,28 @@ export type PixErrorCode =
   | "MISSING_CPF"
   | "GATEWAY_ERROR";
 
-function buildWebhookUrl(provider: PaymentProviderClient): string | null {
+/**
+ * Monta a URL do webhook, ou diz exatamente qual variável falta.
+ *
+ * Antes devolvia só null e a mensagem citava as duas variáveis, então quem
+ * lia ia conferir a que já estava certa. São coisas diferentes: a base é uma
+ * só para o site inteiro, e o token é um por gateway.
+ */
+function buildWebhookUrl(
+  provider: PaymentProviderClient
+): { url: string } | { faltando: string } {
   const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  if (!base) return null;
+  if (!base) return { faltando: "NEXT_PUBLIC_APP_URL" };
   // Cada gateway tem o próprio token: SYNCPAY_WEBHOOK_TOKEN /
   // CODEPAY_WEBHOOK_TOKEN. Isolar permite rotacionar sem afetar o outro.
   const envKey = `${provider.name}_WEBHOOK_TOKEN`;
   const token = process.env[envKey];
-  if (!token) return null;
-  return `${base}/api/webhooks/${provider.webhookPath}/${encodeURIComponent(
-    token
-  )}`;
+  if (!token) return { faltando: envKey };
+  return {
+    url: `${base}/api/webhooks/${provider.webhookPath}/${encodeURIComponent(
+      token
+    )}`,
+  };
 }
 
 
@@ -124,14 +135,15 @@ export async function ensurePixForReservation(
   }
   const provider = resolution.provider;
 
-  const webhookUrl = buildWebhookUrl(provider);
-  if (!webhookUrl) {
+  const webhook = buildWebhookUrl(provider);
+  if ("faltando" in webhook) {
     return {
       ok: false,
-      error: `URL do webhook ausente. Defina NEXT_PUBLIC_APP_URL e ${provider.name}_WEBHOOK_TOKEN no Vercel.`,
+      error: `Falta a variável ${webhook.faltando} no Vercel, no escopo Production. Sem ela o gateway não tem para onde avisar que o pagamento entrou. Cadastre e refaça o deploy.`,
       code: "WEBHOOK_URL_MISSING",
     };
   }
+  const webhookUrl = webhook.url;
 
   if (!reservation.participantCpf) {
     return {
