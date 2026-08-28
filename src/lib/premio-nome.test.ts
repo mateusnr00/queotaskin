@@ -77,11 +77,20 @@ describe("raridadeDoPremio", () => {
     expect(raridadeDoPremio("R$ 500 no Pix", catalogo)).toBeNull();
   });
 
-  // Nome digitado à mão que não bate com o catálogo sai sem cor, e é por isso
-  // que o painel mostra a raridade ao lado do campo: sem esse aviso, o erro
-  // some.
-  it("não adivinha nome parecido", () => {
-    expect(raridadeDoPremio("AK47 Vulcan", catalogo)).toBeNull();
+  // A comparação ignora pontuação de propósito. Exigir "AK-47 | Vulcan" com
+  // a barra fazia quem escrevia do jeito natural não achar nada e salvar um
+  // prêmio sem cor, sem ser avisado.
+  it("aceita o nome sem a barra e sem o hífen", () => {
+    expect(raridadeDoPremio("AK47 Vulcan", catalogo)).toBe("COVERT");
+    expect(raridadeDoPremio("ak-47 vulcan", catalogo)).toBe("COVERT");
+    expect(raridadeDoPremio("AK 47 | Vulcan (Field-Tested)", catalogo)).toBe(
+      "COVERT",
+    );
+  });
+
+  it("continua sem casar nome que é outra coisa", () => {
+    expect(raridadeDoPremio("AK-47 | Redline", catalogo)).toBeNull();
+    expect(raridadeDoPremio("Vulcan", catalogo)).toBeNull();
   });
 
   it("skin cadastrada sem raridade não inventa cor", () => {

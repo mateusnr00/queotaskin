@@ -7,6 +7,7 @@
 import type { SkinRarity } from "@prisma/client";
 
 import { WEAR_LABEL, WEAR_STEAM } from "@/lib/cs2";
+import { chaveDeBusca } from "@/lib/cs2-catalogo";
 
 /** Os desgastes escritos por extenso, em ingles e em portugues. */
 const DESGASTES = [
@@ -50,12 +51,22 @@ export function raridadeDoPremio(
   return catalogo.get(chaveDoNome(nome)) ?? null;
 }
 
-/** A chave de comparação: sem acento, sem caixa, sem espaço sobrando. */
+/**
+ * A chave de comparação de nomes de prêmio.
+ *
+ * Delega para chaveDeBusca, do catálogo, que além de tirar acento e caixa
+ * também tira pontuação e espaço: "AK-47 | Asiimov", "ak47 asiimov" e
+ * "ak-47 asiimov" viram todos "ak47asiimov".
+ *
+ * Antes ela só baixava a caixa e apertava os espaços, e a barra continuava
+ * fazendo parte da chave. Isso obrigava a digitar "AK-47 | Asiimov", com a
+ * barra, para o nome casar com o catálogo, tanto na sugestão quanto na hora
+ * de descobrir a raridade. Quem escrevia do jeito natural não achava nada e
+ * salvava um prêmio sem cor.
+ *
+ * Conferido contra o catálogo real: as 865 skins continuam com chave única,
+ * então apertar mais a comparação não junta duas skins diferentes.
+ */
 export function chaveDoNome(nome: string): string {
-  return nome
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return chaveDeBusca(nome);
 }

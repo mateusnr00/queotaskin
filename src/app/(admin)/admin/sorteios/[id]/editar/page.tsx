@@ -70,11 +70,17 @@ export default async function EditRafflePage({
   // foram cadastradas.
   // Só nome e raridade: é o que a sugestão de prêmio precisa, e a ficha
   // completa de centenas de skins não tem por que atravessar a rede.
-  const catalogoDePremios = await prisma.skinTemplate.findMany({
-    where: { tenantId: raffle.tenantId },
-    orderBy: { name: "asc" },
-    select: { name: true, skinRarity: true },
-  });
+  const catalogoDePremios = (
+    await prisma.skinTemplate.findMany({
+      where: { tenantId: raffle.tenantId },
+      orderBy: { name: "asc" },
+      select: { name: true, skinRarity: true, skinWears: true },
+    })
+  ).map((sk) => ({
+    name: sk.name,
+    skinRarity: sk.skinRarity,
+    desgastes: sk.skinWears,
+  }));
 
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: tenantId },
