@@ -127,16 +127,16 @@ export async function createRaffleAction(
             },
           });
 
-          if (skin.imageUrl) {
-            await tx.raffleImage.create({
-              data: {
-                raffleId: criado.id,
-                url: skin.imageUrl,
-                isCover: true,
-                order: 0,
-              },
-            });
-          }
+          // A skin NAO vira a capa da campanha.
+          //
+          // Ela virava, e estava errado: a arte da campanha é feita à parte,
+          // e a foto de catálogo da Steam entrando como capa obrigava a
+          // trocar depois, em toda campanha, uma imagem que ninguém pediu.
+          //
+          // A skin continua sendo a imagem do prêmio, que é onde ela serve:
+          // é ela que aparece em "Ver as skins premiadas". Sem capa, a página
+          // desenha o painel com a cor da raridade e o nome da skin até a
+          // arte ser enviada, então nada fica quebrado no meio do caminho.
         }
 
         return criado;

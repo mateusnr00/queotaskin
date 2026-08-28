@@ -3,9 +3,12 @@
 // Escolha da skin do catálogo, no topo da criação de sorteio.
 //
 // Escolher preenche o título na hora e, ao salvar, cria o primeiro prêmio com
-// a ficha completa e a capa. Sem isso a pessoa criava o sorteio e depois
-// redigitava raridade, desgaste, float e valor na aba Prêmios, e reenviava a
-// mesma foto na aba Imagens.
+// a ficha completa. Sem isso a pessoa criava o sorteio e depois redigitava
+// raridade, desgaste, float e valor na aba Prêmios.
+//
+// A capa não vem daqui. A arte da campanha é feita à parte e enviada na aba
+// Imagens; a foto de catálogo da Steam entrando como capa obrigava a
+// substituí-la em toda campanha.
 //
 // Só aparece na criação: depois que o sorteio existe, prêmio e capa são
 // editados nas próprias abas, e um seletor aqui só criaria dúvida sobre qual
@@ -251,8 +254,9 @@ export function SeletorDeSkin({
         )}
 
         <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-          Ao salvar, essa skin vira o prêmio com a ficha completa e a capa da
-          campanha.
+          Ao salvar, essa skin vira o prêmio com a ficha completa e é ela que
+          aparece em &ldquo;Ver as skins premiadas&rdquo;. A capa da campanha
+          é a sua arte, enviada na aba Imagens.
           {opcoesDeDesgaste.length > 0 && !desgaste && (
             <> Escolha o desgaste acima para ele entrar no título e na ficha.</>
           )}
