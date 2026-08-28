@@ -13,6 +13,8 @@ export interface MarcasDeOrigem {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  /** O canal dentro da campanha: "ads", "instagram-bio", "ranking". */
+  utmContent?: string;
 }
 
 /** Corta no tamanho da coluna, que é 120. */
@@ -27,6 +29,7 @@ export function marcasDaBusca(busca: URLSearchParams): MarcasDeOrigem {
     utmSource: limitar(busca.get("utm_source")),
     utmMedium: limitar(busca.get("utm_medium")),
     utmCampaign: limitar(busca.get("utm_campaign")),
+    utmContent: limitar(busca.get("utm_content")),
   };
 }
 
@@ -51,7 +54,9 @@ export function guardarOuRecuperarMarcas(
   busca: URLSearchParams,
 ): MarcasDeOrigem {
   const daUrl = marcasDaBusca(busca);
-  const temNaUrl = Boolean(daUrl.utmSource || daUrl.utmMedium || daUrl.utmCampaign);
+  const temNaUrl = Boolean(
+    daUrl.utmSource || daUrl.utmMedium || daUrl.utmCampaign || daUrl.utmContent,
+  );
 
   if (typeof window === "undefined") return daUrl;
 

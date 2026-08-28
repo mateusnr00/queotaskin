@@ -34,7 +34,20 @@ export function ContadorDeVisita() {
 
     if (ultimo.current === caminho) return;
     ultimo.current = caminho;
-    fetch("/api/visita", { method: "POST", keepalive: true }).catch(() => {
+    // O slug e o canal vão junto quando a página é de um sorteio aberto por
+    // link de campanha: é assim que o painel sabe qual divulgação trouxe
+    // gente para aquele sorteio. O primeiro segmento do caminho é o slug,
+    // porque o endereço do sorteio mora na raiz do site.
+    const segmentos = caminho.split("/").filter(Boolean);
+    const slug = segmentos.length === 1 ? segmentos[0] : null;
+    const canal = busca.get("utm_content");
+
+    fetch("/api/visita", {
+      method: "POST",
+      keepalive: true,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(slug && canal ? { slug, canal } : {}),
+    }).catch(() => {
       // Contador é secundário: se falhar, a pessoa não pode nem saber.
     });
   }, [caminho, busca]);

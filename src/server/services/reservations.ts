@@ -209,6 +209,7 @@ export async function createReservation(input: CreateReservationInput) {
           utmSource: input.utmSource ?? null,
           utmMedium: input.utmMedium ?? null,
           utmCampaign: input.utmCampaign ?? null,
+          utmContent: input.utmContent ?? null,
         },
       });
 

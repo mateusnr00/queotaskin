@@ -13,6 +13,7 @@
 // linhas para respondê-los.
 
 import { prisma } from "@/lib/db";
+import { canalConhecido } from "@/lib/canais-de-campanha";
 
 /** O fuso do negócio. "Hoje" tem de virar quando vira o dia aqui. */
 export const TZ = "America/Sao_Paulo";
@@ -93,4 +94,34 @@ export async function resumoDeVisitas(
     total: total._sum.visitas ?? 0,
     visitantesHoje: doDia(hoje)?.visitantes ?? 0,
   };
+}
+
+/**
+ * Conta a abertura de um link de campanha de um sorteio.
+ *
+ * Só entra canal da lista conhecida. O valor vem da URL, que qualquer um
+ * pode editar; sem essa checagem, um link com utm_content inventado criaria
+ * linha nova no banco a cada visita e o painel viraria lixo.
+ *
+ * Sorteio de outro tenant não conta: o slug vem do navegador, e sem o filtro
+ * um endereço de outro site somaria visita aqui.
+ */
+export async function registrarVisitaDeCanal(
+  tenantId: string,
+  slug: string,
+  canal: string,
+): Promise<void> {
+  if (!canalConhecido(canal)) return;
+
+  const raffle = await prisma.raffle.findFirst({
+    where: { slug, tenantId },
+    select: { id: true },
+  });
+  if (!raffle) return;
+
+  await prisma.visitaDeCampanha.upsert({
+    where: { raffleId_canal: { raffleId: raffle.id, canal } },
+    create: { raffleId: raffle.id, canal, visitas: 1 },
+    update: { visitas: { increment: 1 } },
+  });
 }

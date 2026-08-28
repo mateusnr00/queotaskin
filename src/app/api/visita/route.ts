@@ -14,13 +14,17 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { getCurrentTenant } from "@/lib/tenant";
-import { diaEmBrasilia, registrarVisita } from "@/server/services/visitas";
+import {
+  diaEmBrasilia,
+  registrarVisita,
+  registrarVisitaDeCanal,
+} from "@/server/services/visitas";
 
 const COOKIE_VISITANTE = "qos_v";
 const COOKIE_DIA = "qos_vd";
 const UM_ANO = 60 * 60 * 24 * 365;
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const tenant = await getCurrentTenant();
     // Host sem tenant: nada a contar, e responder erro daria log de erro em
@@ -50,6 +54,19 @@ export async function POST() {
     }
 
     await registrarVisita(tenant.id, novoNoDia);
+
+    // Quando a página aberta é um sorteio E o link trazia um canal, conta
+    // também para aquele canal. É o que responde "qual divulgação está
+    // trazendo gente para este sorteio".
+    const corpo = (await req.json().catch(() => null)) as
+      | { slug?: unknown; canal?: unknown }
+      | null;
+    const slug = typeof corpo?.slug === "string" ? corpo.slug : null;
+    const canal = typeof corpo?.canal === "string" ? corpo.canal : null;
+    if (slug && canal) {
+      await registrarVisitaDeCanal(tenant.id, slug, canal);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     // Falhar aqui não pode atrapalhar quem está navegando: o contador é

@@ -17,6 +17,7 @@ import {
   ShoppingCart,
   Star,
   TicketCheck,
+  Link2,
 } from "lucide-react";
 
 import {
@@ -234,6 +235,13 @@ export function RaffleCard({
             external
           >
             <ExternalLink className="h-4 w-4" />
+          </IconLink>
+
+          <IconLink
+            href={`/admin/sorteios/${raffle.id}/campanha`}
+            label="Links de campanha"
+          >
+            <Link2 className="h-4 w-4" />
           </IconLink>
 
           <IconLink
