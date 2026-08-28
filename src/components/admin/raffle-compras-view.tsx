@@ -344,7 +344,7 @@ function RaffleHeaderCard({
         </HeaderActionButton>
         <HeaderActionButton
           label="Visualizar página"
-          // Absoluta: este painel roda em admin.<domínio>, e ali um /s/...
+          // Absoluta: este painel roda em admin.<domínio>, e ali o caminho
           // relativo cai de volta no admin em vez de abrir a campanha.
           href={raffle.urlPublica}
           external

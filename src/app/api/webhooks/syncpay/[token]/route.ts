@@ -22,6 +22,7 @@ import { extractStatusInfo, getPixStatus } from "@/lib/syncpay";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation } from "@/server/services/xp";
 
 interface RouteParams {
@@ -176,6 +177,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     await autoGenerateSurpriseBoxesForReservation(payment.reservationId).catch(
       (err) =>
         console.error("[syncpay webhook] autoGenerateSurpriseBoxes falhou:", err)
+    );
+    // E as Raspadinhas, pela mesma regra e com o mesmo cadeado.
+    await gerarRaspadinhasParaReserva(payment.reservationId).catch((err) =>
+      console.error("[syncpay webhook] gerarRaspadinhas falhou:", err)
     );
     // Credita o XP do rank. Idempotente: reentrega do webhook não dobra.
     await awardXpForReservation(payment.reservationId);

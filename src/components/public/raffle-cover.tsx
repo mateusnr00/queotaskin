@@ -104,9 +104,12 @@ export function RaffleCover({
       />
 
       {thumb ? (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center px-2">
+          {/* truncate porque a sigla nem sempre é sigla: "Specialist Gloves"
+              não tem abreviação óbvia e sai inteira, e numa miniatura de
+              96px a palavra vazava para fora da moldura. */}
           <span
-            className="text-lg leading-none font-extrabold tracking-tight sm:text-xl"
+            className="max-w-full truncate text-base leading-none font-extrabold tracking-tight sm:text-lg"
             style={{ color: `${accent}`, textShadow: "0 2px 10px rgba(0,0,0,.5)" }}
           >
             {siglaDaArma(nome)}

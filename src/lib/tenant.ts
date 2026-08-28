@@ -23,6 +23,8 @@ export type TenantContext = {
   name: string;
   hostKind: TenantHostKind;
   host: string;
+  /** Id do pixel da Meta, ou null. Vazio desliga o rastreamento. */
+  metaPixelId: string | null;
 };
 
 async function readHost(): Promise<string> {
@@ -58,6 +60,7 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
       name: fallback.name,
       hostKind: "PUBLIC",
       host,
+      metaPixelId: fallback.metaPixelId,
     };
   }
 
@@ -73,6 +76,7 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
     name: tenantHost.tenant.name,
     hostKind: tenantHost.kind,
     host,
+    metaPixelId: tenantHost.tenant.metaPixelId,
   };
 });
 

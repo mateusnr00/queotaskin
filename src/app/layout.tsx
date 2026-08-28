@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { Public_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
@@ -6,6 +8,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { prisma } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { getCurrentTenant } from "@/lib/tenant";
+import { isAdminHost } from "@/lib/host";
+import { ContadorDeVisita } from "@/components/public/contador-de-visita";
+import { PixelDaMeta } from "@/components/public/pixel-da-meta";
 import {
   isThemePresetKey,
   themePresetCss,
@@ -130,6 +135,11 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const { themeMode, themePreset } = await loadTheme();
+  // O host decide se este render é do site ou do painel: a mesma aplicação
+  // serve os dois, e só o site é medido.
+  const host = (await headers()).get("host") ?? "";
+  const noPainel = isAdminHost(host);
+  const tenant = noPainel ? null : await getCurrentTenant().catch(() => null);
   const css = themePresetCss(themePreset);
 
   return (
@@ -161,6 +171,21 @@ export default async function RootLayout({
         <style dangerouslySetInnerHTML={{ __html: css }} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
+        {/* O pixel e o contador ficam aqui, e não no layout público.
+        
+            No layout público eles cobriam a home, os sorteios e o
+            comprovante, mas ficavam de fora de /login e /registro, que são
+            justamente onde quem chega de anúncio termina de comprar. Aqui
+            cobrem o site inteiro, hoje e nos sorteios que ainda não existem.
+        
+            Fora do painel: o host de admin não reporta nada para a Meta, e
+            quem opera navegando pelo próprio site não vira visita. */}
+        {!noPainel && (
+          <Suspense fallback={null}>
+            <ContadorDeVisita />
+            {tenant?.metaPixelId && <PixelDaMeta id={tenant.metaPixelId} />}
+          </Suspense>
+        )}
         {children}
         <Toaster richColors position="top-right" />
       </body>

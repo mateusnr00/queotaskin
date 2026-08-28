@@ -18,12 +18,14 @@ import {
   uploadFotoDaSkinAction,
 } from "@/server/actions/skin-templates";
 import { normalizeImage } from "@/lib/image-normalize";
+import { ArtesDaSkin, type ArteDaSkin } from "@/components/admin/artes-da-skin";
 import {
   PROPORCAO_DA_SKIN,
   QUADRO_DA_SKIN,
   RARITY_LABEL,
   WEAR_LABEL,
   rarityColor,
+  WEARS_EM_ORDEM,
 } from "@/lib/cs2";
 import { formatBRL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -48,9 +50,18 @@ export interface SkinDoCatalogo {
   skinValueBrl: number | null;
   skinCollection: string | null;
   skinInspectUrl: string | null;
+  /** Em quais desgastes a skin existe; manda nos espaços de arte. */
+  desgastesDisponiveis: Desgaste[];
+  /** As artes de campanha ja enviadas. */
+  artes: ArteDaSkin[];
 }
 
+/** Quantas linhas por lote. Uma tela cheia cabe em bem menos que isso. */
+const LOTE = 60;
+
 const VAZIA: Omit<SkinDoCatalogo, "id"> = {
+  desgastesDisponiveis: WEARS_EM_ORDEM,
+  artes: [],
   name: "",
   imageUrl: null,
   skinRarity: null,
@@ -78,6 +89,18 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
   const [editando, setEditando] = useState<SkinDoCatalogo | "nova" | null>(null);
   const [isPending, startTransition] = useTransition();
   const [busca, setBusca] = useState("");
+  // Quantas linhas desenhar de uma vez. Com o catálogo cheio, mandar todas
+  // dava 3,73 MB de HTML: o servidor renderizava 865 linhas que ninguém
+  // ia ler antes de buscar. O teto cresce sob demanda e a busca continua
+  // rodando sobre a lista inteira, não sobre o pedaço visível.
+  const [teto, setTeto] = useState(LOTE);
+
+  // Buscar reinicia o teto: filtrar e continuar mostrando o teto anterior
+  // esconderia resultados sem dizer que existem.
+  function buscar(valor: string) {
+    setBusca(valor);
+    setTeto(LOTE);
+  }
 
   const encontradas = useMemo(() => {
     const termo = normalizar(busca);
@@ -108,6 +131,14 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
     return (
       <FormularioSkin
         inicial={editando === "nova" ? null : editando}
+        // Sem isto, fechar o formulário e reabrir a mesma skin mostraria as
+        // artes de antes: `editando` é capturado no clique de editar e nunca
+        // mais era atualizado.
+        aoMudarArtes={(artes) =>
+          setEditando((atual) =>
+            atual && atual !== "nova" ? { ...atual, artes } : atual
+          )
+        }
         aoFechar={() => setEditando(null)}
         aoSalvar={() => {
           setEditando(null);
@@ -128,7 +159,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(e) => buscar(e.target.value)}
               placeholder={`Buscar entre ${skins.length} skin${
                 skins.length > 1 ? "s" : ""
               }`}
@@ -169,7 +200,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
            eixo: 48px por skin, e o que sobra de tela é o que faz a lista
            ser navegável. */
         <Card className="divide-y overflow-hidden p-0">
-          {encontradas.map((skin) => (
+          {encontradas.slice(0, teto).map((skin) => (
             <div
               key={skin.id}
               className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-muted/40"
@@ -193,6 +224,12 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
                   <img
                     src={skin.imageUrl}
                     alt=""
+                    // As fotos vêm do CDN da Steam, uma por linha. Sem lazy,
+                    // um catálogo de 865 skins dispara 865 downloads de uma
+                    // vez e o "load" da página levava 27s. O DOM já estava
+                    // pronto em 638ms; era só imagem segurando.
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-contain"
                   />
                 ) : (
@@ -258,6 +295,16 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
               </Button>
             </div>
           ))}
+          {encontradas.length > teto && (
+            <button
+              type="button"
+              onClick={() => setTeto((t) => t + LOTE)}
+              className="w-full px-3 py-3 text-center text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+            >
+              Mostrar mais {Math.min(LOTE, encontradas.length - teto)} de{" "}
+              {(encontradas.length - teto).toLocaleString("pt-BR")} restantes
+            </button>
+          )}
         </Card>
       )}
     </div>
@@ -276,10 +323,13 @@ function FormularioSkin({
   inicial,
   aoFechar,
   aoSalvar,
+  aoMudarArtes,
 }: {
   inicial: SkinDoCatalogo | null;
   aoFechar: () => void;
   aoSalvar: () => void;
+  /** Sobe para o catálogo: é lá que mora o retrato da skin em edição. */
+  aoMudarArtes: (artes: ArteDaSkin[]) => void;
 }) {
   const [dados, setDados] = useState<Omit<SkinDoCatalogo, "id">>(
     inicial ?? VAZIA
@@ -323,8 +373,16 @@ function FormularioSkin({
 
   function salvar() {
     startTransition(async () => {
+      // O corpo nomeia o que entra, campo a campo. `artes` e
+      // `desgastesDisponiveis` ficam de fora: o primeiro é tabela à parte,
+      // que salva sozinha ao enviar, e o segundo vem da fonte de itens do
+      // CS2. Espalhar `dados` mandava os dois no corpo, e o zod os descartava
+      // em silêncio: funciona por acidente e some no dia em que o schema
+      // virar strict.
       const payload = {
-        ...dados,
+        name: dados.name,
+        skinStatTrak: dados.skinStatTrak,
+        skinSouvenir: dados.skinSouvenir,
         imageUrl: dados.imageUrl ?? "",
         skinRarity: dados.skinRarity ?? "",
         skinWear: dados.skinWear ?? "",
@@ -520,6 +578,23 @@ function FormularioSkin({
           Souvenir
         </label>
       </div>
+
+      {/* As artes ficam por último e fora do estado do formulário: cada uma
+          salva sozinha ao ser enviada, e não junto com "Salvar skin". São
+          arquivos, não campos, e amarrá-las ao botão faria a pessoa enviar
+          cinco imagens e perder todas ao fechar sem salvar. */}
+      <ArtesDaSkin
+        // A key reinicia a lista de artes ao trocar de skin, no lugar de um
+        // efeito copiando prop em estado.
+        key={inicial?.id ?? "nova"}
+        skinId={inicial?.id ?? null}
+        desgastesDisponiveis={dados.desgastesDisponiveis}
+        artes={inicial?.artes ?? []}
+        // O retrato do pai anda junto. Sem isto, fechar o formulário e
+        // reabrir a mesma skin mostraria as artes de antes: `editando` é
+        // capturado no clique de editar e nunca mais era atualizado.
+        aoMudar={aoMudarArtes}
+      />
 
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button type="button" variant="ghost" onClick={aoFechar}>

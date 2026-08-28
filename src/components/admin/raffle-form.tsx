@@ -36,6 +36,7 @@ import {
 import { RaffleDangerZone } from "@/components/admin/raffle-danger-zone";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
 import { RafflePrizesTab } from "@/components/admin/raffle-prizes-tab";
+import type { SkinWear } from "@prisma/client";
 import type { PrizeDraft } from "@/components/admin/skin-prize-editor";
 import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
@@ -285,6 +286,12 @@ export function RaffleForm({
   // Skin escolhida do catálogo. Só existe na criação: depois, prêmio e capa
   // passam a ser editados nas próprias abas.
   const [skinEscolhida, setSkinEscolhida] = useState<string | null>(null);
+  // O desgaste é escolhido na criação, e não vem do catálogo: a mesma skin é
+  // sorteada em desgastes diferentes, e é por isso que o catálogo guarda uma
+  // linha por skin sem desgaste nenhum.
+  const [desgasteEscolhido, setDesgasteEscolhido] = useState<SkinWear | null>(
+    null,
+  );
 
   const form = useForm<RaffleGeneralInput>({
     resolver: zodResolver(
@@ -361,7 +368,11 @@ export function RaffleForm({
     startTransition(async () => {
       const result =
         mode.kind === "create"
-          ? await createRaffleAction(values, skinEscolhida ?? undefined)
+          ? await createRaffleAction(
+              values,
+              skinEscolhida ?? undefined,
+              desgasteEscolhido ?? undefined,
+            )
           : await updateRaffleAction({ id: mode.id, data: values });
 
       if (!result.ok) {
@@ -433,6 +444,8 @@ export function RaffleForm({
                   skins={skins}
                   escolhida={skinEscolhida}
                   aoEscolher={setSkinEscolhida}
+                  desgaste={desgasteEscolhido}
+                  aoEscolherDesgaste={setDesgasteEscolhido}
                   aoPreencherTitulo={(nome) => {
                     form.setValue("title", nome, { shouldDirty: true });
                     acompanharTitulo(nome);

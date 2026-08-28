@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { paisPorIso } from "@/lib/telefone";
 
 export type CustomerSort = "spent" | "recent" | "purchases" | "name";
 
@@ -10,6 +11,8 @@ export interface Customer {
   phone: string | null;
   email: string | null;
   cpf: string | null;
+  /** ISO do país do telefone. Manda no DDI do link de WhatsApp. */
+  phoneCountry: string;
   role: Role;
   showModBadge: boolean;
   createdAt: Date;
@@ -81,9 +84,46 @@ export function ordenarClientes(
  * Tudo sai de agregações: buscar reserva por usuário num laço daria uma
  * query por linha da tabela.
  */
+/** O que uma busca livre quer dizer, deduzido do formato do que foi digitado. */
+export type TipoDeBusca = "email" | "documento" | "nome";
+
+/**
+ * Interpreta o campo de busca única.
+ *
+ * A tela tinha quatro campos sempre abertos, e o argumento para isso era
+ * real: quem opera rifa procura por CPF quando o cliente liga reclamando de
+ * pagamento e por telefone quando chega mensagem, e um campo só faria "11"
+ * casar com telefone, CPF e qualquer nome que tenha 11.
+ *
+ * O erro estava na conclusão, não na premissa. O jeito de respeitar isso não
+ * é obrigar a escolher a caixa certa antes de digitar: é olhar o que foi
+ * digitado. Arroba é e-mail. Só dígitos é documento, e aí procura em CPF e
+ * telefone ao mesmo tempo, porque no Brasil os dois têm onze dígitos e não
+ * há como distinguir, nem faz falta: quem digita um número quer achar a
+ * pessoa daquele número. Qualquer outra coisa é nome.
+ *
+ * Os quatro campos continuam existindo, atrás de "busca avançada", para
+ * quando alguém precisa mesmo restringir a um deles.
+ */
+export function interpretarBusca(termo: string): {
+  tipo: TipoDeBusca;
+  valor: string;
+} {
+  const limpo = termo.trim();
+  if (limpo.includes("@")) return { tipo: "email", valor: limpo };
+  const digitos = limpo.replace(/\D/g, "");
+  // Só dígitos e pontuação de documento: nada de letra no meio.
+  if (digitos.length >= 3 && !/[a-zA-ZÀ-ÿ]/.test(limpo)) {
+    return { tipo: "documento", valor: digitos };
+  }
+  return { tipo: "nome", valor: limpo };
+}
+
 export async function listCustomers(
   tenantId: string,
   opts: {
+    /** Busca única da tela. Ver interpretarBusca. */
+    busca?: string;
     nome?: string;
     cpf?: string;
     email?: string;
@@ -102,6 +142,10 @@ export async function listCustomers(
   const { sort = "spent" } = opts;
   const page = Math.max(1, opts.page ?? 1);
 
+  // A busca livre vira uma das condições abaixo, conforme o formato.
+  const busca = (opts.busca ?? "").trim();
+  const interpretada = busca ? interpretarBusca(busca) : null;
+
   const nome = (opts.nome ?? "").trim();
   const cpf = (opts.cpf ?? "").replace(/\D/g, "");
   const email = (opts.email ?? "").trim();
@@ -118,6 +162,23 @@ export async function listCustomers(
           { reservations: { some: { raffle: { tenantId } } } },
         ],
       },
+      ...(interpretada?.tipo === "nome"
+        ? [{ name: { contains: interpretada.valor, mode: "insensitive" as const } }]
+        : []),
+      ...(interpretada?.tipo === "email"
+        ? [{ email: { contains: interpretada.valor, mode: "insensitive" as const } }]
+        : []),
+      // Documento procura nos dois: CPF e telefone têm onze dígitos aqui.
+      ...(interpretada?.tipo === "documento"
+        ? [
+            {
+              OR: [
+                { cpf: { contains: interpretada.valor } },
+                { phone: { contains: interpretada.valor } },
+              ],
+            },
+          ]
+        : []),
       ...(nome ? [{ name: { contains: nome, mode: "insensitive" as const } }] : []),
       ...(cpf ? [{ cpf: { contains: cpf } }] : []),
       ...(email ? [{ email: { contains: email, mode: "insensitive" as const } }] : []),
@@ -134,6 +195,7 @@ export async function listCustomers(
       phone: true,
       email: true,
       cpf: true,
+      phoneCountry: true,
       role: true,
       showModBadge: true,
       createdAt: true,
@@ -200,6 +262,7 @@ export async function listCustomers(
       phone: u.phone,
       email: u.email,
       cpf: u.cpf,
+      phoneCountry: u.phoneCountry,
       role: u.role,
       showModBadge: u.showModBadge,
       createdAt: u.createdAt,
@@ -259,9 +322,26 @@ async function calcularTotais(tenantId: string): Promise<CustomerTotals> {
 }
 
 /** Link de conversa no WhatsApp a partir de um celular brasileiro. */
-export function whatsappLink(phone: string | null): string | null {
+/**
+ * Link de conversa no WhatsApp.
+ *
+ * O DDI vem do país cadastrado, e não do 55 fixo que estava aqui. Desde que
+ * o cadastro passou a ter seletor de país, um cliente de Portugal ganhava um
+ * link com 55 na frente do número dele: abria uma conversa com um número
+ * brasileiro que não existe, ou com o desconhecido que tiver aquele número.
+ */
+export function whatsappLink(
+  phone: string | null,
+  paisIso: string = "BR",
+): string | null {
   if (!phone) return null;
   const d = phone.replace(/\D/g, "");
-  if (d.length < 10 || d.length > 11) return null;
-  return `https://wa.me/55${d}`;
+  const pais = paisPorIso(paisIso);
+  // A faixa é a do país: nove dígitos é número inteiro em Portugal e número
+  // pela metade no Brasil.
+  const [minimo, maximo] = pais.digitos;
+  if (d.length < minimo || d.length > maximo) return null;
+  // "Outro país" não tem DDI conhecido; ali o número vai como está, que é o
+  // melhor palpite possível sem inventar prefixo.
+  return pais.ddi ? `https://wa.me/${pais.ddi}${d}` : `https://wa.me/${d}`;
 }

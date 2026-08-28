@@ -174,6 +174,11 @@ model User {
   // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
   // novos sempre cadastram.
   phone              String?   @unique
+  // País do telefone, em ISO 3166-1 alfa-2. O número continua guardado só em
+  // dígitos e sem o código do país: assim as contas que já existem seguem
+  // válidas sem migração de dados, e a formatação sabe de que país o número
+  // é na hora de exibir.
+  phoneCountry       String    @default("BR")
   role               Role      @default(PARTICIPANT)
   image              String?
 
@@ -272,6 +277,10 @@ model Tenant {
   // faixa larga, e o favicon é lido a 16px, a mesma imagem nos dois lugares
   // vira um borrão na aba. Quando vazio, cai na logo.
   faviconUrl                        String?
+  // Arte de fundo das telas de entrar e criar conta. Fica no Tenant e não
+  // num arquivo do repositório porque é escolha de marca de cada site, e
+  // trocar arte não pode depender de deploy.
+  authBackgroundUrl                 String?
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
   logoShape                         LogoShape @default(RECTANGLE)
@@ -351,6 +360,11 @@ model Tenant {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   skinTemplates SkinTemplate[]
+  visitas       VisitaDiaria[]
+
+  /// Id do pixel da Meta. Vazio desliga o rastreamento: sem ele nenhum
+  /// script de terceiro entra na página de quem compra.
+  metaPixelId String?
 }
 
 // Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts
@@ -550,6 +564,14 @@ model Raffle {
   surpriseBoxPrizes SurpriseBoxPrize[]
   surpriseBoxes     SurpriseBox[]
 
+  /// Raspadinha Premiada. Mesma ideia da Caixa Surpresa, experiencia outra.
+  raspadinhaEnabled      Boolean @default(false)
+  /// Deixa raspar todas de uma vez, em vez de uma a uma.
+  raspadinhaRasparTodas  Boolean @default(false)
+  raspadinhaCombos  RaspadinhaCombo[]
+  raspadinhaPremios RaspadinhaPremio[]
+  raspadinhas       Raspadinha[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -557,6 +579,7 @@ model Raffle {
   @@index([status, privacy])
   @@index([createdById])
   @@index([tenantId])
+  visitasDeCampanha VisitaDeCampanha[]
 }
 
 model RaffleImage {
@@ -623,6 +646,14 @@ model SkinTemplate {
   /// cadastrar só o nome e completar depois.
   skinRarity     SkinRarity?
   skinWear       SkinWear?
+  /// Em quais desgastes esta skin existe. Vem da fonte de itens do CS2, e
+  /// não é decorativo: 504 das 2126 skins não existem nos cinco. A M4A4 Howl
+  /// para em Well-Worn porque o float dela não passa de 0,4, e oferecer
+  /// Battle-Scarred na criação do sorteio prometeria um item inexistente.
+  /// Lista vazia quer dizer "não tem desgaste": agente é personagem e faca
+  /// sem pintura não tem acabamento. Skin cadastrada à mão nasce com os
+  /// cinco, então não existe estado de "não sei" para representar aqui.
+  skinWears      SkinWear[]
   skinFloat      Float?
   skinStatTrak   Boolean     @default(false)
   skinSouvenir   Boolean     @default(false)
@@ -633,10 +664,92 @@ model SkinTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// A arte de campanha desta skin, por desgaste.
+  artes SkinArt[]
+
   /// Nome único por tenant: cadastrar a mesma skin duas vezes só cria dúvida
   /// na hora de escolher.
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+/// Quantas vezes cada link de campanha de um sorteio foi aberto.
+///
+/// Separado de VisitaDiaria porque a pergunta e outra: aquela mede o site
+/// inteiro ao longo do tempo, esta mede qual canal esta trazendo gente para
+/// UM sorteio. Sem dimensao de dia de proposito: o painel mostra o total por
+/// canal, e guardar por dia multiplicaria as linhas por nada.
+model VisitaDeCampanha {
+  id       String @id @default(cuid())
+  raffleId String
+  raffle   Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  /// O valor de utm_content do link. Minusculo e sem espaco, como sai do
+  /// montador de links.
+  canal String
+
+  visitas Int @default(0)
+
+  @@unique([raffleId, canal])
+  @@index([raffleId])
+}
+
+/// Quantas visitas o site recebeu, por dia.
+///
+/// Guarda o contador do dia, e nao uma linha por acesso: o painel so precisa
+/// de "hoje", "ontem" e "total", e uma tabela com uma linha por pageview
+/// chegaria a milhoes de linhas para responder tres numeros.
+///
+/// Duas contagens, porque sao perguntas diferentes. `visitas` conta cada
+/// pagina aberta, que e o que mede movimento e serve para comparar com o
+/// gasto de anuncio. `visitantes` conta pessoa distinta no dia, que e o que
+/// nao infla quando alguem fica recarregando a mesma pagina.
+model VisitaDiaria {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// O dia em Brasilia, a meia-noite. O fuso e o do negocio, nao o do
+  /// servidor: "visitas de hoje" tem de virar quando vira o dia aqui.
+  dia DateTime @db.Date
+
+  visitas    Int @default(0)
+  visitantes Int @default(0)
+
+  @@unique([tenantId, dia])
+  @@index([tenantId, dia])
+}
+
+/// A arte de campanha de uma skin.
+///
+/// É diferente da foto da skin. A foto é o render do jogo, que veio da fonte
+/// de itens e serve para mostrar o item em "Ver as skins premiadas". A arte é
+/// feita à mão, tem logo, fundo e o nome escrito, e é ela que vira a capa do
+/// sorteio.
+///
+/// Fica presa ao desgaste porque a arte traz o desgaste escrito nela: a de
+/// "AK-47 | Redline (Field Tested)" não serve para a Minimal Wear. Com `wear`
+/// nulo, a mesma arte vale para qualquer desgaste, que é a saída para quem
+/// não quer desenhar cinco.
+model SkinArt {
+  id             String       @id @default(cuid())
+  skinTemplateId String
+  skin           SkinTemplate @relation(fields: [skinTemplateId], references: [id], onDelete: Cascade)
+
+  /// Nulo vale para qualquer desgaste, e só entra quando não há arte
+  /// específica para o desgaste escolhido.
+  wear SkinWear?
+
+  url String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Uma arte por desgaste. A do desgaste nulo tem índice parcial próprio na
+  /// migration: em Postgres, NULL não é igual a NULL, e sem ele daria para
+  /// cadastrar duas artes genéricas para a mesma skin.
+  @@unique([skinTemplateId, wear])
+  @@index([skinTemplateId])
 }
 
 enum SkinRarity {
@@ -884,6 +997,104 @@ model SurpriseBox {
 }
 
 // =====================================================================
+// RASPADINHA PREMIADA
+// =====================================================================
+//
+// Espelha a Caixa Surpresa de proposito: as duas sao "o comprador ganhou N
+// tentativas e cada uma pode ter premio". O que muda e a experiencia, nao a
+// regra. Copiar a forma faz o sorteio, a atomicidade e a checagem de dono
+// se comportarem igual nos dois, em vez de duas invencoes com bugs
+// diferentes.
+
+enum RaspadinhaStatus {
+  DISPONIVEL // criada pos-pagamento, esperando o comprador raspar
+  PREMIADA // raspada e com premio (premioId preenchido)
+  SEM_PREMIO // raspada e sem premio
+}
+
+enum TipoDePremioDaRaspadinha {
+  PIX // dinheiro
+  SKIN // item do jogo
+}
+
+/// Um premio possivel das raspadinhas de um sorteio.
+///
+/// `claimedAt` e a trava de unicidade: o mesmo premio nunca sai duas vezes,
+/// porque quem revela primeiro o marca dentro da mesma transacao.
+model RaspadinhaPremio {
+  id       String @id @default(cuid())
+  raffleId String
+
+  tipo  TipoDePremioDaRaspadinha @default(PIX)
+  /// O que aparece para quem ganhou: "R$ 250 no PIX", "Karambit Doppler".
+  rotulo String
+  /// Em reais, quando o tipo e PIX. Serve para somar quanto ja foi dado.
+  valor Decimal? @db.Decimal(10, 2)
+
+  /// Chance em porcentagem. Nulo entra no sorteio uniforme entre os que
+  /// tambem nao tem chance definida, igual ao modo RANDOM da caixa.
+  chance Decimal? @db.Decimal(5, 2)
+
+  /// Premio guardado: existe no cadastro mas nao sai. Serve para preparar
+  /// um premio grande antes de solta-lo.
+  travado Boolean @default(false)
+
+  /// Quando foi levado. Nulo = ainda disponivel.
+  claimedAt DateTime?
+
+  raffle          Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  raspadinhaQueLevou Raspadinha?
+
+  createdAt DateTime @default(now())
+
+  @@index([raffleId])
+  @@index([raffleId, travado, claimedAt])
+}
+
+/// Quantos titulos dao quantas raspadinhas.
+model RaspadinhaCombo {
+  id         String  @id @default(cuid())
+  raffleId   String
+  /// "A partir de X titulos".
+  minimo     Int
+  /// "ganha N raspadinhas".
+  quantidade Int
+  visivel    Boolean @default(true)
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  @@unique([raffleId, minimo])
+  @@index([raffleId])
+}
+
+/// Um bilhete. Pertence a uma reserva paga.
+model Raspadinha {
+  id            String           @id @default(cuid())
+  raffleId      String
+  reservationId String
+  status        RaspadinhaStatus @default(DISPONIVEL)
+
+  /// O numero impresso no bilhete, sequencial por sorteio. E identidade
+  /// visual, nao chave: quem manda e o id.
+  numero Int
+
+  /// 1:1 com o premio levado. Nulo enquanto nao raspou ou se nao premiou.
+  premioId  String?   @unique
+  raspadaEm DateTime?
+
+  raffle      Raffle            @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  reservation Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  premio      RaspadinhaPremio? @relation(fields: [premioId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([raffleId, numero])
+  @@index([reservationId])
+  @@index([raffleId, status])
+}
+
+// =====================================================================
 // RESERVAS E PAGAMENTOS
 // =====================================================================
 
@@ -911,6 +1122,10 @@ model Reservation {
   utmSource   String?
   utmMedium   String?
   utmCampaign String?
+  /// O canal dentro da campanha ("ads", "instagram-bio", "grupo-whatsapp").
+  /// E o que separa "veio do anuncio" de "veio da bio do Instagram" quando
+  /// as duas apontam para o mesmo sorteio.
+  utmContent  String?
 
   raffle    Raffle     @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -929,6 +1144,7 @@ model Reservation {
   @@index([userId])
   @@index([affiliateId])
   @@index([status, expiresAt]) // job de expiração busca por aqui
+  raspadinhas   Raspadinha[]
 }
 
 model Payment {

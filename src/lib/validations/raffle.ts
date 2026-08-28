@@ -158,5 +158,6 @@ export const createReservationSchema = z.object({
   utmSource: z.string().max(120).optional().nullable(),
   utmMedium: z.string().max(120).optional().nullable(),
   utmCampaign: z.string().max(120).optional().nullable(),
+  utmContent: z.string().max(120).optional().nullable(),
 });
 export type CreateReservationInput = z.infer<typeof createReservationSchema>;

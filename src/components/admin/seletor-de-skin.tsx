@@ -3,9 +3,12 @@
 // Escolha da skin do catálogo, no topo da criação de sorteio.
 //
 // Escolher preenche o título na hora e, ao salvar, cria o primeiro prêmio com
-// a ficha completa e a capa. Sem isso a pessoa criava o sorteio e depois
-// redigitava raridade, desgaste, float e valor na aba Prêmios, e reenviava a
-// mesma foto na aba Imagens.
+// a ficha completa. Sem isso a pessoa criava o sorteio e depois redigitava
+// raridade, desgaste, float e valor na aba Prêmios.
+//
+// A capa não vem daqui. A arte da campanha é feita à parte e enviada na aba
+// Imagens; a foto de catálogo da Steam entrando como capa obrigava a
+// substituí-la em toda campanha.
 //
 // Só aparece na criação: depois que o sorteio existe, prêmio e capa são
 // editados nas próprias abas, e um seletor aqui só criaria dúvida sobre qual
@@ -22,7 +25,15 @@ import { useMemo, useState } from "react";
 import { Boxes, Plus, Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import { PROPORCAO_DA_SKIN, RARITY_LABEL, WEAR_LABEL, rarityColor } from "@/lib/cs2";
+import {
+  PROPORCAO_DA_SKIN,
+  RARITY_LABEL,
+  WEARS_EM_ORDEM,
+  WEAR_LABEL,
+  WEAR_SHORT,
+  WEAR_STEAM,
+  rarityColor,
+} from "@/lib/cs2";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +47,16 @@ export interface SkinDoCatalogo {
   skinRarity: Raridade | null;
   skinWear: Desgaste | null;
   skinValueBrl: number | null;
+  /**
+   * Em quais desgastes a skin existe. Vazio quer dizer "não tem desgaste",
+   * que é o caso do agente e da faca sem pintura.
+   */
+  desgastesDisponiveis: Desgaste[];
+}
+
+/** O nome final do sorteio: a skin, e o desgaste entre parênteses. */
+export function nomeComDesgaste(nome: string, desgaste: Desgaste | null) {
+  return desgaste ? `${nome} (${WEAR_STEAM[desgaste]})` : nome;
 }
 
 /** Quantas linhas a busca mostra antes de exigir refinar o termo. */
@@ -95,11 +116,16 @@ export function SeletorDeSkin({
   skins,
   escolhida,
   aoEscolher,
+  desgaste,
+  aoEscolherDesgaste,
   aoPreencherTitulo,
 }: {
   skins: SkinDoCatalogo[];
   escolhida: string | null;
   aoEscolher: (id: string | null) => void;
+  /** Desgaste escolhido para esta campanha. */
+  desgaste: Desgaste | null;
+  aoEscolherDesgaste: (desgaste: Desgaste | null) => void;
   /** Chamado com o nome da skin para preencher o título do sorteio. */
   aoPreencherTitulo: (nome: string) => void;
 }) {
@@ -143,6 +169,13 @@ export function SeletorDeSkin({
   // lista aberta depois da escolha faria a pessoa se perguntar se precisa
   // escolher de novo.
   if (skinEscolhida) {
+    // Vazio é o agente e a faca sem pintura: ali a seção inteira some, em
+    // vez de oferecer cinco opções que o item não tem. Skin cadastrada à mão
+    // nasce com os cinco, então lista vazia nunca quer dizer "não sei".
+    const opcoesDeDesgaste = WEARS_EM_ORDEM.filter((d) =>
+      skinEscolhida.desgastesDisponiveis.includes(d),
+    );
+
     return (
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="flex items-center gap-3">
@@ -159,6 +192,7 @@ export function SeletorDeSkin({
             type="button"
             onClick={() => {
               aoEscolher(null);
+              aoEscolherDesgaste(null);
               setBusca("");
               setAberto(false);
             }}
@@ -169,9 +203,63 @@ export function SeletorDeSkin({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          Ao salvar, essa skin vira o prêmio com a ficha completa e a capa da
-          campanha.
+        {/* A escolha do desgaste, aqui e não na aba Prêmios.
+        
+            O catálogo guarda uma linha por skin, sem desgaste, justamente
+            porque a mesma skin é sorteada em desgastes diferentes. Faltava o
+            outro lado disso: escolher a skin não perguntava nada e o sorteio
+            nascia sem desgaste nenhum.
+        
+            Só entram os desgastes em que a skin existe. A M4A4 Howl para em
+            Well-Worn porque o float dela não passa de 0,4, e oferecer
+            Battle-Scarred seria prometer um item que não existe. Quando o
+            catálogo não sabe (skin cadastrada à mão), os cinco aparecem. */}
+        {opcoesDeDesgaste.length > 0 && (
+          <div className="mt-3 border-t pt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Desgaste
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {opcoesDeDesgaste.map((d) => {
+                const ativo = desgaste === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      const novo = ativo ? null : d;
+                      aoEscolherDesgaste(novo);
+                      aoPreencherTitulo(
+                        nomeComDesgaste(skinEscolhida.name, novo),
+                      );
+                    }}
+                    aria-pressed={ativo}
+                    title={WEAR_LABEL[d]}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      ativo
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    <span className="font-bold">{WEAR_SHORT[d]}</span>
+                    <span className="ml-1.5 hidden sm:inline">
+                      {WEAR_STEAM[d]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+          Ao salvar, essa skin vira o prêmio com a ficha completa e é ela que
+          aparece em &ldquo;Ver as skins premiadas&rdquo;. A capa da campanha
+          é a sua arte, enviada na aba Imagens.
+          {opcoesDeDesgaste.length > 0 && !desgaste && (
+            <> Escolha o desgaste acima para ele entrar no título e na ficha.</>
+          )}
         </p>
       </div>
     );
@@ -229,6 +317,9 @@ export function SeletorDeSkin({
                   type="button"
                   onClick={() => {
                     aoEscolher(skin.id);
+                    // Trocar de skin zera o desgaste: o da anterior pode nem
+                    // existir nesta.
+                    aoEscolherDesgaste(null);
                     aoPreencherTitulo(skin.name);
                     setAberto(false);
                     setBusca("");

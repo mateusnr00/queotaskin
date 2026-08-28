@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { Prisma, type SkinWear } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -17,6 +17,7 @@ import { garantirSlugLivre } from "@/server/services/raffles";
 import { toSlug } from "@/lib/slug";
 import { registrarLog } from "@/server/services/activity-log";
 import { diferencas } from "@/lib/activity-log-detalhes";
+import { desviarDeReservado, slugReservado } from "@/lib/rotas-reservadas";
 import type { ActionResult } from "@/server/actions/auth";
 
 const updateInputSchema = z.object({
@@ -39,7 +40,12 @@ export async function createRaffleAction(
   // Skin do catálogo escolhida na criação. Vira o primeiro prêmio e a capa
   // no mesmo passo: sem isso, a pessoa criaria o sorteio e depois teria de
   // redigitar a ficha na aba Prêmios e reenviar a mesma foto na aba Imagens.
-  skinTemplateId?: string
+  skinTemplateId?: string,
+  // Desgaste escolhido na criação. O catálogo guarda uma linha por skin sem
+  // desgaste, porque a mesma skin é sorteada em Field-Tested numa campanha e
+  // em Factory New na outra; sem este parâmetro o prêmio nascia sem desgaste
+  // e a ficha na página do sorteio ficava incompleta.
+  skinWear?: SkinWear
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   try {
     const session = await getAdminOrThrow();
@@ -60,8 +66,24 @@ export async function createRaffleAction(
     // obrigaria a inventar nome diferente para a mesma skin. Numera sozinho
     // e segue.
     const { slug: providedSlug, ...rest } = parsed.data;
+    // A URL do sorteio mora na raiz do host, então o slug divide o primeiro
+    // segmento do caminho com as rotas do site. O Next resolve rota estática
+    // antes de dinâmica: um slug "login" nasceria inalcançável em silêncio.
+    //
+    // Os dois casos recebem tratamento diferente porque a intenção é outra.
+    // Slug digitado é escolha do admin, e escolha errada se diz na cara.
+    // Slug derivado do título não foi escolhido por ninguém, e recusar a
+    // criação obrigaria a renomear a campanha por causa de um detalhe de
+    // roteamento; esse ganha sufixo e segue.
+    if (providedSlug && slugReservado(toSlug(providedSlug))) {
+      return {
+        ok: false,
+        error: "Essa URL é reservada pelo site. Escolha outra.",
+        fieldErrors: { slug: ["Reservada pelo site"] },
+      };
+    }
     const slug = await garantirSlugLivre(
-      toSlug(providedSlug || parsed.data.title),
+      desviarDeReservado(toSlug(providedSlug || parsed.data.title)),
       tenantId
     );
 
@@ -71,7 +93,17 @@ export async function createRaffleAction(
     const skin = skinTemplateId
       ? await prisma.skinTemplate.findFirst({
           where: { id: skinTemplateId, tenantId },
+          // As artes vêm junto: é uma delas que vira a capa.
+          include: { artes: true },
         })
+      : null;
+
+    // A arte de campanha da skin, se houver. A do desgaste escolhido manda; a
+    // genérica (wear nulo) é o resto. A foto da skin nunca entra aqui: ela é
+    // o render do jogo, e a capa é arte feita à mão.
+    const arteDaCapa = skin
+      ? (skin.artes.find((a) => a.wear === (skinWear ?? skin.skinWear)) ??
+        skin.artes.find((a) => a.wear === null))
       : null;
 
     try {
@@ -95,7 +127,9 @@ export async function createRaffleAction(
               imageUrl: skin.imageUrl,
               skinName: skin.name,
               skinRarity: skin.skinRarity,
-              skinWear: skin.skinWear,
+              // O escolhido manda; o do catálogo é o resto, para a skin
+              // cadastrada à mão que já veio com desgaste.
+              skinWear: skinWear ?? skin.skinWear,
               skinFloat: skin.skinFloat,
               skinStatTrak: skin.skinStatTrak,
               skinSouvenir: skin.skinSouvenir,
@@ -105,11 +139,21 @@ export async function createRaffleAction(
             },
           });
 
-          if (skin.imageUrl) {
+          // A capa vem da ARTE da skin, nunca da foto dela.
+          //
+          // A foto é o render do jogo e continua sendo a imagem do prêmio,
+          // que é o que aparece em "Ver as skins premiadas". Ela chegou a
+          // virar capa, e estava errado: obrigava a trocar depois, em toda
+          // campanha, uma imagem que ninguém pediu.
+          //
+          // Sem arte cadastrada, o sorteio nasce sem capa e a página desenha
+          // o painel com a cor da raridade e o nome da skin, então nada fica
+          // quebrado enquanto a arte não existe.
+          if (arteDaCapa) {
             await tx.raffleImage.create({
               data: {
                 raffleId: criado.id,
-                url: skin.imageUrl,
+                url: arteDaCapa.url,
                 isCover: true,
                 order: 0,
               },
@@ -169,6 +213,15 @@ export async function updateRaffleAction(
 
     // Separa slug do resto. Se vazio, mantém o atual (não muda).
     const { slug, ...rest } = parsed.data.data;
+    // Mesmo motivo da criação: na edição só existe slug digitado, então
+    // não há o que desviar, só o que recusar.
+    if (slug && slugReservado(slug)) {
+      return {
+        ok: false,
+        error: "Essa URL é reservada pelo site. Escolha outra.",
+        fieldErrors: { slug: ["Reservada pelo site"] },
+      };
+    }
     const data: Prisma.RaffleUpdateInput = {
       ...rest,
       ...(slug ? { slug } : {}),
@@ -340,9 +393,9 @@ export async function updateRaffleAction(
 
       revalidatePath("/admin/sorteios");
       revalidatePath(`/admin/sorteios/${raffle.id}/editar`);
-      revalidatePath(`/s/${raffle.slug}`);
+      revalidatePath(`/${raffle.slug}`);
       if (oldRaffle && oldRaffle.slug !== raffle.slug) {
-        revalidatePath(`/s/${oldRaffle.slug}`);
+        revalidatePath(`/${oldRaffle.slug}`);
       }
       revalidatePath("/sorteios");
       revalidatePath("/");
@@ -519,7 +572,7 @@ export async function deleteRaffleAction(
     });
 
     revalidatePath("/admin/sorteios");
-    revalidatePath(`/s/${raffle.slug}`);
+    revalidatePath(`/${raffle.slug}`);
     revalidatePath("/sorteios");
     revalidatePath("/");
     return { ok: true, data: undefined };

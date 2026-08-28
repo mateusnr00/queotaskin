@@ -1,13 +1,18 @@
-// URL pública de um sorteio. Sempre path-based:
-//   https://<host-público-do-tenant>/s/<slug>
+// URL pública de um sorteio. Sempre path-based, na raiz do host:
+//   https://<host-público-do-tenant>/<slug>
 //
 // Em multi-tenant, o host depende do tenant, sorteio do Mateus é
-// https://sorteios.vip/s/<slug>, sorteio do André é
-// https://dominio-do-andre.com/s/<slug>. Por isso resolvemos o host
+// https://queotaskin.com/<slug>, sorteio do André é
+// https://dominio-do-andre.com/<slug>. Por isso resolvemos o host
 // atual via headers() em vez de usar NEXT_PUBLIC_APP_URL.
 //
-// O prefixo /s/ cria um namespace pra evitar colisão com rotas reservadas
-// (/admin, /login, /api, /comprovante, etc.).
+// Morava em /s/<slug>. O prefixo existia como namespace contra colisão com
+// as rotas do site (/admin, /login, /api, /comprovante). Saiu porque o
+// endereço é o que a pessoa lê no story e digita no navegador, e "/s/" ali
+// não quer dizer nada para ela. O que o prefixo protegia agora é protegido
+// na origem, em src/lib/rotas-reservadas.ts: nenhum slug nasce com nome de
+// rota. Endereços antigos continuam abrindo por um redirect permanente
+// declarado em next.config.ts.
 
 import { headers } from "next/headers";
 
@@ -19,12 +24,12 @@ export async function raffleUrl(slug: string): Promise<string> {
   const publicHost = rawHost.replace(/^(admin|painel)\./, "");
   if (!publicHost) {
     const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    return `${base}/s/${slug}`;
+    return `${base}/${slug}`;
   }
   // Em dev/localhost mantém http; resto https.
   const proto =
     publicHost.startsWith("localhost") || publicHost.startsWith("127.0.0.1")
       ? "http"
       : "https";
-  return `${proto}://${publicHost}/s/${slug}`;
+  return `${proto}://${publicHost}/${slug}`;
 }

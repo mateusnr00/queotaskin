@@ -64,6 +64,7 @@ interface Props {
     logoUrl: string | null;
     logoShape: "ROUND" | "RECTANGLE";
     faviconUrl: string | null;
+    authBackgroundUrl: string | null;
     companyName: string;
     siteDescription: string;
     supportPhone: string | null;
@@ -208,6 +209,11 @@ function GeralTab({ initial }: Props) {
   );
   const [enviandoFavicon, setEnviandoFavicon] = useState(false);
   const faviconRef = useRef<HTMLInputElement>(null);
+  const [fundoUrl, setFundoUrl] = useState<string | null>(
+    initial.authBackgroundUrl
+  );
+  const [enviandoFundo, setEnviandoFundo] = useState(false);
+  const fundoRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(original: File) {
     setIsUploading(true);
@@ -265,6 +271,51 @@ function GeralTab({ initial }: Props) {
       setEnviandoFavicon(false);
       if (faviconRef.current) faviconRef.current.value = "";
     }
+  }
+
+  async function handleFundo(original: File) {
+    setEnviandoFundo(true);
+    try {
+      // Teto maior que o das capas. O fundo é esticado até a largura do
+      // monitor, e o padrão de 1600px vira imagem ampliada em monitor
+      // grande, que é o que faz a arte parecer sem qualidade.
+      const { file } = await normalizeImage(original, { ladoMaximo: 2560 });
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("slot", "fundo");
+
+      let result;
+      try {
+        result = await uploadLogoAction(fd);
+      } catch {
+        toast.error("Imagem grande demais para enviar");
+        return;
+      }
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setFundoUrl(result.data.url);
+      toast.success("Fundo atualizado");
+      router.refresh();
+    } finally {
+      setEnviandoFundo(false);
+      if (fundoRef.current) fundoRef.current.value = "";
+    }
+  }
+
+  function removerFundo() {
+    if (!confirm("Remover o fundo atual?")) return;
+    startTransition(async () => {
+      const result = await removeLogoAction("fundo");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setFundoUrl(null);
+      toast.success("Fundo removido");
+      router.refresh();
+    });
   }
 
   function removerFavicon() {
@@ -558,6 +609,81 @@ function GeralTab({ initial }: Props) {
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Remover ícone
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Fundo das telas de entrar e criar conta. A miniatura é deitada e
+          não quadrada como a do favicon: é assim que a imagem vai aparecer, e
+          um recorte quadrado aqui esconderia justamente o que o corte da tela
+          vai fazer com as bordas. */}
+      <div className="flex items-start gap-4 rounded-xl border bg-muted/30 p-4">
+        <input
+          ref={fundoRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFundo(file);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fundoRef.current?.click()}
+          disabled={enviandoFundo || isPending}
+          className={cn(
+            "group relative h-16 w-28 shrink-0 overflow-hidden rounded-lg border-2 border-dashed bg-black transition-colors",
+            fundoUrl
+              ? "border-transparent ring-1 ring-border"
+              : "border-border hover:border-primary"
+          )}
+          title="Enviar fundo"
+        >
+          {fundoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={fundoUrl}
+              alt="Fundo das telas de conta"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+              {enviandoFundo ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Camera className="h-5 w-5" />
+              )}
+            </span>
+          )}
+        </button>
+
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-semibold">
+            Fundo das telas de entrar e criar conta
+          </p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Ideal <strong className="text-foreground">2560 × 1600 px</strong>,
+            deitada. Menor que isso fica ampliado em monitor grande, e é o que
+            deixa a arte com cara de baixa qualidade. Acima de 2560px no lado
+            maior o envio reduz, então não adianta mandar mais. Arte escura
+            funciona melhor: o formulário fica por cima e há um véu
+            escurecendo. Deixe folga nas bordas, porque a imagem é cortada
+            para preencher a tela e telas estreitas comem as laterais.
+            {!fundoUrl && " Sem imagem, o fundo é um degradê escuro."}
+          </p>
+          {fundoUrl && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={removerFundo}
+              disabled={isPending}
+              className="h-7 px-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Remover fundo
             </Button>
           )}
         </div>

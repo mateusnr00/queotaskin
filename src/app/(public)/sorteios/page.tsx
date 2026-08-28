@@ -65,7 +65,7 @@ export default async function PublicRafflesListPage() {
             return (
               <Link
                 key={r.id}
-                href={`/s/${r.slug}`}
+                href={`/${r.slug}`}
                 className="block rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow"
               >
                 <div className="flex gap-3 p-3">

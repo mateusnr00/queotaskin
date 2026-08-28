@@ -6,6 +6,7 @@ import {
   Repeat,
   TrendingUp,
   UserPlus,
+  SearchX,
   Users,
   Wallet,
 } from "lucide-react";
@@ -38,6 +39,7 @@ export default async function AdminClientesPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    busca?: string;
     nome?: string;
     cpf?: string;
     email?: string;
@@ -51,6 +53,7 @@ export default async function AdminClientesPage({
   const sp = await searchParams;
 
   const filtros = {
+    busca: (sp.busca ?? "").trim(),
     nome: (sp.nome ?? "").trim(),
     cpf: (sp.cpf ?? "").trim(),
     email: (sp.email ?? "").trim(),
@@ -67,6 +70,7 @@ export default async function AdminClientesPage({
 
   function href(p: number) {
     const params = new URLSearchParams();
+    if (filtros.busca) params.set("busca", filtros.busca);
     if (filtros.nome) params.set("nome", filtros.nome);
     if (filtros.cpf) params.set("cpf", filtros.cpf);
     if (filtros.email) params.set("email", filtros.email);
@@ -76,6 +80,14 @@ export default async function AdminClientesPage({
     const qs = params.toString();
     return qs ? `/admin/clientes?${qs}` : "/admin/clientes";
   }
+
+  const temFiltro = Boolean(
+    filtros.busca ||
+      filtros.nome ||
+      filtros.cpf ||
+      filtros.email ||
+      filtros.telefone,
+  );
 
   const taxaRecorrencia =
     totals.clientes > 0
@@ -136,6 +148,10 @@ export default async function AdminClientesPage({
           value={formatBRL(totals.receita)}
           accent="money"
         />
+        {/* Ticket médio em cor neutra. Ele e a receita total ficam lado a
+            lado e, numa operação nova, são o mesmo número: dois valores
+            idênticos, verdes e do mesmo tamanho, lêem-se como repetição. O
+            verde fica só na receita, que é o dado que a cor promete. */}
         <StatCard
           icon={TrendingUp}
           label="Ticket médio"
@@ -147,7 +163,9 @@ export default async function AdminClientesPage({
           label="Compraram mais de uma vez"
           value={`${taxaRecorrencia}%`}
           hint={`${totals.recorrentes} de ${totals.clientes}`}
-          accent="growth"
+          // Cor de destaque só quando existe recorrência. Com 0%, o laranja
+          // dizia "olha que bom" no pior valor possível da métrica.
+          accent={taxaRecorrencia > 0 ? "growth" : "default"}
         />
       </div>
 
@@ -158,37 +176,79 @@ export default async function AdminClientesPage({
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
+                  {/* Duas colunas saíram. O "#" numerava a linha na página
+                      atual e reiniciava na seguinte, então o 1 da página 2
+                      não queria dizer nada; e o e-mail vinha vazio em 9 de 10
+                      linhas, porque cliente entra por nome e CPF. Os dois
+                      juntos gastavam 203px dos 1136 da tabela. O e-mail, que
+                      existe para a equipe, foi para baixo do nome. */}
                   <TableRow>
-                    <TableHead className="w-12 text-center">#</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>CPF</TableHead>
-                    <TableHead>E-mail</TableHead>
                     <TableHead>Patente</TableHead>
                     <TableHead className="text-right">Pedidos</TableHead>
                     <TableHead className="text-right">Números</TableHead>
                     <TableHead className="text-right">Gasto</TableHead>
                     <TableHead>Última compra</TableHead>
-                    <TableHead className="w-12 text-right">Zap</TableHead>
+                    <TableHead className="w-24 text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {customers.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={10}
-                        className="py-12 text-center text-sm text-muted-foreground"
-                      >
-                        Nenhum cliente encontrado com esses filtros.
+                      <TableCell colSpan={8} className="py-14">
+                        {/* Estado vazio com saída, e não só a frase que
+                            estava aqui. A regra de UX é essa: dizer o que
+                            houve e oferecer o que fazer. E os dois casos são
+                            diferentes, busca sem resultado e base vazia
+                            pedem coisas opostas. */}
+                        <div className="mx-auto max-w-sm space-y-3 text-center">
+                          <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                            <SearchX className="h-5 w-5" />
+                          </span>
+                          {temFiltro ? (
+                            <>
+                              <p className="text-sm font-semibold">
+                                Nenhum cliente com esses filtros
+                              </p>
+                              <p className="text-xs leading-relaxed text-muted-foreground">
+                                A busca aceita nome, CPF, telefone ou e-mail.
+                                Números procuram no CPF e no telefone ao mesmo
+                                tempo.
+                              </p>
+                              <Link
+                                href="/admin/clientes"
+                                className={buttonVariants({
+                                  variant: "outline",
+                                  size: "sm",
+                                })}
+                              >
+                                Limpar a busca
+                              </Link>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold">
+                                Nenhum cliente ainda
+                              </p>
+                              <p className="text-xs leading-relaxed text-muted-foreground">
+                                Quem criar conta no site aparece aqui, mesmo
+                                antes da primeira compra.
+                              </p>
+                              <Link
+                                href="/admin/usuarios/novo"
+                                className={buttonVariants({ size: "sm" })}
+                              >
+                                <UserPlus className="mr-1.5 h-4 w-4" />
+                                Cadastrar manualmente
+                              </Link>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    customers.map((c, i) => (
-                      <CustomerRow
-                        key={c.id}
-                        customer={c}
-                        position={(paginaAtual - 1) * 25 + i + 1}
-                      />
-                    ))
+                    customers.map((c) => <CustomerRow key={c.id} customer={c} />)
                   )}
                 </TableBody>
               </Table>

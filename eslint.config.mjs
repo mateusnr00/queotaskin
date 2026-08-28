@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Skills instaladas por `npx skills add`. São código de terceiro que
+    // orienta o agente, não fonte do projeto: os .cjs delas usam require(),
+    // que a regra do Next proíbe, e quinze erros alheios num lint que estava
+    // limpo escondem o próximo erro que for nosso.
+    ".agents/**",
+    ".claude/**",
   ]),
 ]);
 

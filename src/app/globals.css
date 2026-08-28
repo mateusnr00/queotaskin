@@ -385,6 +385,129 @@
   animation: confete-voa 820ms cubic-bezier(0.16, 0.7, 0.4, 1) both;
 }
 
+/* Botão de criar conta.
+ *
+ * Desenho do Uiverse, de Smit-Prajapati: grade fina no fundo, brilho radial
+ * no meio e as bordas de cima e de baixo desenhadas por border-image, que é
+ * o que faz elas desvanecerem nas pontas em vez de terminarem em quina. No
+ * hover a grade aperta de 15px para 10px, e é essa a animação.
+ *
+ * Duas adaptações, e as duas por necessidade:
+ *
+ * A cor original é um verde fixo. Aqui ela vem de --primary: verde num site
+ * inteiro laranja seria um botão de outro lugar. O original mudava de cor
+ * por hue-rotate, e trocar a variável faz o mesmo com menos rodeio.
+ *
+ * Tamanho e espaçamento entre letras não ficam aqui, e sim nas classes de
+ * quem usa. O original tem fonte de 1,5rem com 0,5rem entre letras, o que dá
+ * uns 470px só de texto para "CRIAR MINHA CONTA": não cabe num cartão de
+ * 448px, e muito menos no celular.
+ */
+.botao-de-grade {
+  /* Uma cor manda em tudo: texto, brilho do meio, grade e bordas saem dela.
+     No original eram três valores soltos, e trocar de cor exigia acertar os
+     três na mesma proporção. Com uma raiz só, o verde do clique é uma linha. */
+  --cor-do-botao: var(--primary);
+  --cor-principal: var(--cor-do-botao);
+  --cor-do-brilho: color-mix(in oklch, var(--cor-do-botao) 36%, transparent);
+  --cor-da-grade: color-mix(in oklch, var(--cor-do-botao) 9%, transparent);
+
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--cor-principal);
+  background:
+    radial-gradient(circle, var(--cor-do-brilho) 0%, rgba(0, 0, 0, 0) 95%),
+    linear-gradient(var(--cor-da-grade) 1px, transparent 1px),
+    linear-gradient(to right, var(--cor-da-grade) 1px, transparent 1px);
+  background-size:
+    cover,
+    15px 15px,
+    15px 15px;
+  background-position:
+    center center,
+    center center,
+    center center;
+  border-style: solid;
+  border-width: 1px 0 1px 0;
+  border-image: radial-gradient(
+      circle,
+      var(--cor-principal) 0%,
+      rgba(0, 0, 0, 0) 100%
+    )
+    1;
+  transition:
+    background-size 0.2s ease-in-out,
+    color 0.15s ease-out;
+}
+
+.botao-de-grade:hover:not(:disabled) {
+  background-size:
+    cover,
+    10px 10px,
+    10px 10px;
+}
+
+/* Verde no clique, por meio segundo.
+ *
+ * O desenho original girava a matiz enquanto o dedo estava em cima, o que
+ * sobre o laranja daí um roxo, e durava só o tempo do aperto. Aqui o verde
+ * é o do componente original, #2ed573, e quem conta o tempo é o componente:
+ * :active acabaria no instante em que a pessoa solta, e meio segundo é
+ * justamente para o clique ser percebido depois do dedo sair.
+ *
+ * A classe troca a raiz, então texto, brilho, grade e bordas viram verde
+ * juntos. */
+.botao-de-grade.esta-verde {
+  --cor-do-botao: #2ed573;
+}
+
+.botao-de-grade:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Entrada do selo de pagamento confirmado.
+ *
+ * Roda uma vez, no instante em que a tela abre, e é o único movimento da
+ * página. O selo é a resposta à pergunta que a pessoa trouxe ao abrir o
+ * link, "deu certo?", e chegar crescendo faz a resposta acontecer diante
+ * dela em vez de já estar ali.
+ *
+ * Curva com passo além de 1: ele cresce um pouco demais e volta, que é o
+ * que separa um selo que aparece de um selo que apenas surge.
+ */
+@keyframes confirmacao-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.confirmacao-entra {
+  animation: confirmacao-entra 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* O anel em volta do selo, que abre depois dele e se dissipa. */
+@keyframes confirmacao-anel {
+  from {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+.confirmacao-anel {
+  animation: confirmacao-anel 900ms ease-out 260ms both;
+}
+
 /* Quem pediu menos movimento no sistema não recebe nenhum. Não é detalhe de
  * acessibilidade distante: movimento repetido em laço causa desconforto real
  * em quem tem sensibilidade vestibular, e aqui ele é enfeite.
@@ -393,6 +516,163 @@
  * enfeite de fundo: ela treme e estoura, que é exatamente o tipo de
  * movimento que incomoda. O componente também pula a espera nesse caso, para
  * o prêmio aparecer na hora em vez de depois de um tempo parado. */
+/* ===================================================================
+   RASPADINHA PREMIADA
+   ===================================================================
+
+   O dourado nasce de gradiente, nunca de uma cor chapada. Ouro real nao
+   tem uma cor: tem uma faixa clara onde a luz bate, uma escura na sombra e
+   uma transicao entre as duas. Um amarelo unico le como plastico.
+
+   As variaveis ficam aqui e nao no Tailwind porque sao usadas tambem pelo
+   canvas, em JavaScript, e um unico lugar evita o dia em que a pelicula
+   desenhada e a borda pintada deixam de combinar. */
+:root {
+  --ouro-escuro: #6d5220;
+  --ouro-medio: #b8912f;
+  --ouro-claro: #f0d98a;
+  --ouro-brilho: #fff4d0;
+  --champanhe: #e8dcc0;
+  --grafite: #14161a;
+}
+
+/* A borda do bilhete: gradiente pintado ate a borda, cor do papel pintada
+   ate o miolo. Mesma tecnica do cartao de criar conta, e pelo mesmo motivo:
+   envelope com miolo por cima quebra nas quinas arredondadas. */
+.bilhete-dourado {
+  background:
+    linear-gradient(160deg, #1b1d22, #101216 60%, #191b20) padding-box,
+    linear-gradient(
+        135deg,
+        var(--ouro-escuro) 0%,
+        var(--ouro-claro) 18%,
+        var(--ouro-brilho) 26%,
+        var(--ouro-medio) 42%,
+        var(--ouro-escuro) 58%,
+        var(--ouro-claro) 78%,
+        var(--ouro-medio) 100%
+      )
+      border-box;
+  border: 1.5px solid transparent;
+}
+
+/* O serrilhado das pontas, como bilhete destacado de um talao. Feito com
+   radial-gradient repetido, e nao com elementos: sao dezenas de recortes e
+   dezenas de divs custariam caro numa grade de oito bilhetes. */
+.bilhete-serrilha {
+  --recorte: 7px;
+  mask-image:
+    radial-gradient(circle var(--recorte) at 0 50%, transparent 98%, #000 100%),
+    radial-gradient(circle var(--recorte) at 100% 50%, transparent 98%, #000 100%);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+/* O brilho que atravessa o bilhete em repouso. Bem lento e bem discreto:
+   e o que faz o papel parecer metalico sem virar letreiro. */
+@keyframes bilhete-reflexo {
+  0%,
+  100% {
+    transform: translateX(-120%) rotate(8deg);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.5;
+  }
+  55% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(220%) rotate(8deg);
+  }
+}
+.bilhete-reflexo {
+  animation: bilhete-reflexo 7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* A onda de luz da vitoria: uma passada so, rapida, quando o premio sai. */
+@keyframes bilhete-varredura {
+  from {
+    transform: translateX(-130%) rotate(8deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.95;
+  }
+  to {
+    transform: translateX(240%) rotate(8deg);
+    opacity: 0;
+  }
+}
+.bilhete-varredura {
+  animation: bilhete-varredura 900ms cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+/* O bilhete premiado sobe e cresce de leve. 1.02 e 8px porque o objetivo e
+   "ele reagiu", nao "ele pulou": o exagero aqui vira cassino. */
+@keyframes bilhete-premiado {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(-8px) scale(1.02);
+  }
+  100% {
+    transform: translateY(-4px) scale(1.015);
+  }
+}
+.bilhete-premiado {
+  animation: bilhete-premiado 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* O micro impacto do momento em que a raspagem chega no limite. */
+@keyframes bilhete-impacto {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.985);
+  }
+}
+.bilhete-impacto {
+  animation: bilhete-impacto 160ms ease-out 1;
+}
+
+/* A pelicula restante saindo sozinha. Escala e desfoque juntos dao a
+   sensacao de material se soltando, e nao de imagem desaparecendo. */
+@keyframes pelicula-dissolve {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(6px);
+  }
+}
+.pelicula-dissolve {
+  animation: pelicula-dissolve 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* O premio surgindo por tras da pelicula. */
+@keyframes premio-surge {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.premio-surge {
+  animation: premio-surge 420ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cta-pulsa,
   .selo-pulsa,
@@ -401,8 +681,34 @@
   .caixa-balanca,
   .caixa-abrindo,
   .tampa-fecha,
-  .tampa-abre {
+  .tampa-abre,
+  .confirmacao-entra,
+  .bilhete-reflexo,
+  .bilhete-varredura,
+  .bilhete-premiado,
+  .bilhete-impacto,
+  .premio-surge {
     animation: none;
+  }
+
+  /* A pelicula precisa sumir de qualquer jeito: sem animacao ela ficaria
+     por cima do premio para sempre, e o bilhete nunca se revelaria. */
+  .pelicula-dissolve {
+    animation: none;
+    opacity: 0;
+  }
+
+  /* Sem animação o anel ficaria parado em cima do selo, tapando o check.
+     Ele é puro enfeite: não some, deixa de existir. */
+  .confirmacao-anel {
+    animation: none;
+    display: none;
+  }
+
+  /* O botão de grade não tem animação em laço, tem transição no hover.
+     animation:none não o alcançaria; o que precisa parar é a transição. */
+  .botao-de-grade {
+    transition: none;
   }
 
   /* Sem animação, papel e clarão parariam empilhados no centro da caixa em

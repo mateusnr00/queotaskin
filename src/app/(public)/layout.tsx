@@ -16,6 +16,8 @@ export default async function PublicLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
+      {/* Fica no layout público: conta a visita a qualquer página do site,
+          e não do painel, onde só a equipe entra. */}
       <main className="flex-1">{children}</main>
       <footer className="border-t py-6 text-center text-sm text-muted-foreground">
         © {year} {appName}

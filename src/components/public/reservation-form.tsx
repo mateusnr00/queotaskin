@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { Minus, Plus, X } from "lucide-react";
 
 import { createReservationAction } from "@/server/actions/reservations";
+import { guardarOuRecuperarMarcas } from "@/lib/utm";
+import { eventoDaMeta } from "@/components/public/pixel-da-meta";
 import { AccountGateDialog } from "@/components/public/account-gate-dialog";
 import { formatBRL } from "@/lib/format";
 import { onlyDigits, formatCpf, formatPhone, isValidCpf } from "@/lib/cpf";
@@ -206,9 +208,17 @@ export function ReservationForm({
         ? { numbers: selectedNumbers }
         : { quantity };
 
+      // De onde esta pessoa veio. Lê a URL desta visita, ou o que ficou
+      // guardado da chegada: quem clica no anúncio cai no sorteio com as
+      // marcas na barra de endereço, navega, e só então reserva.
+      const origem = guardarOuRecuperarMarcas(
+        new URLSearchParams(window.location.search),
+      );
+
       const payload = {
         raffleId,
         ...base,
+        ...origem,
         participantCpf: values.participantCpf || "",
         participantPhone: values.participantPhone || "",
         participantEmail: values.participantEmail || "",
@@ -225,6 +235,15 @@ export function ReservationForm({
         return;
       }
       toast.success("Reserva criada!");
+      // Avisa a Meta que uma compra começou. É com este evento, e com o
+      // Purchase do comprovante, que ela aprende a quem mostrar o anúncio;
+      // só o PageView não distingue quem olhou de quem quis comprar.
+      eventoDaMeta("InitiateCheckout", {
+        value: effectiveQty * pricePerNumber,
+        currency: "BRL",
+        content_type: "product",
+        num_items: effectiveQty,
+      });
       router.push(`/comprovante/${result.data.reservationId}`);
     });
   }

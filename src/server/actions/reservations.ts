@@ -67,6 +67,7 @@ const optionalExtras = {
   utmSource: z.string().max(120).optional(),
   utmMedium: z.string().max(120).optional(),
   utmCampaign: z.string().max(120).optional(),
+  utmContent: z.string().max(120).optional(),
 };
 
 // União discriminada: ou {quantity} (sistema sorteia/pega sequencial),
@@ -216,6 +217,7 @@ export async function createReservationAction(
     utmSource: ("utmSource" in input && input.utmSource) || null,
     utmMedium: ("utmMedium" in input && input.utmMedium) || null,
     utmCampaign: ("utmCampaign" in input && input.utmCampaign) || null,
+    utmContent: ("utmContent" in input && input.utmContent) || null,
     affiliateCode: null,
   };
 

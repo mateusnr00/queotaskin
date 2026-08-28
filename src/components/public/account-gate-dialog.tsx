@@ -11,23 +11,27 @@
 // em que ela passa a ser necessária, ao confirmar a reserva. A escolha de
 // números fica guardada em memória e a reserva segue sozinha assim que o
 // login entra, sem recarregar a página nem perder o que foi selecionado.
+//
+// POR QUE ESTE ARQUIVO QUASE NÃO TEM FORMULÁRIO
+//
+// Ele tinha. Eram cópias do formulário de /registro e do de /login, e foi
+// justamente isso que quebrou: o registerSchema passou a exigir
+// phoneCountry, a página ganhou o seletor de país, e a cópia daqui continuou
+// mandando { name, cpf, phone }. O zod recusava apontando para um campo que
+// esta tela não desenhava, nenhuma mensagem aparecia, e o botão "Criar conta
+// e reservar" não fazia absolutamente nada.
+//
+// Agora o diálogo veste o mesmo cartão e usa os mesmos componentes,
+// RegisterForm e LoginForm, com `aoConcluir` no lugar da navegação. Não há
+// duas versões do cadastro para divergirem, e o desenho é o mesmo que a
+// pessoa veria em /registro, porque é literalmente o mesmo.
 
-import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { LogIn, UserPlus } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 
-import { loginAction, registerAction } from "@/server/actions/auth";
-import {
-  loginSchema,
-  registerSchema,
-  type LoginInput,
-  type RegisterInput,
-} from "@/lib/validations/auth";
-import { formatCpf, formatPhone } from "@/lib/cpf";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { RegisterForm } from "@/components/forms/register-form";
+import { LoginForm } from "@/components/forms/login-form";
+import { BORDA_DE_AUTH, HALO_DE_AUTH } from "@/components/auth/cartao-de-auth";
 import {
   Dialog,
   DialogContent,
@@ -35,14 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 
 export function AccountGateDialog({
   open,
@@ -61,204 +58,84 @@ export function AccountGateDialog({
   onAuthenticated: () => void;
 }) {
   const [modo, setModo] = useState<"criar" | "entrar">("criar");
+  const criando = modo === "criar";
+
+  // O que está em jogo entra na própria linha de apoio, e não num quadro
+  // separado: o cartão de /registro já diz "é rápido, três campos", e aqui
+  // essa frase pode terminar dizendo o que se ganha com a pressa.
+  const promessa =
+    quantidade > 0
+      ? `${quantidade} ${quantidade === 1 ? "número" : "números"} por ${total}`
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogHeader>
-          <DialogTitle>
-            {modo === "criar" ? "Crie sua conta para continuar" : "Entre na sua conta"}
+      {/* Veste o cartão de /registro: mesmo raio, mesma borda em gradiente,
+          mesmo halo. As classes de fundo e anel do diálogo são desligadas
+          porque o gradiente pinta o fundo por conta própria (padding-box) e
+          o anel apareceria por cima da borda.
+
+          max-h com rolagem porque este cartão é alto e, no celular com o
+          teclado aberto, a área útil cai para menos da metade da tela: sem
+          isso o botão fica fora de alcance. */}
+      <DialogContent
+        className={cn(
+          "max-h-[92dvh] gap-0 overflow-y-auto rounded-3xl border-transparent bg-transparent p-6 ring-0 sm:max-w-[430px] md:p-7",
+          HALO_DE_AUTH
+        )}
+        style={BORDA_DE_AUTH}
+      >
+        <DialogHeader className="space-y-1.5 text-left">
+          {/* pr-8 para o texto centrado não passar por baixo do X, que o
+              diálogo posiciona por cima no canto. */}
+          <p className="pr-8 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
+            Você está quase lá!
+          </p>
+          <DialogTitle className="pt-2 text-2xl font-bold tracking-tight md:text-3xl">
+            {criando ? "Crie sua conta" : "Entre na sua conta"}
           </DialogTitle>
-          <DialogDescription>
-            {quantidade > 0 ? (
-              <>
-                Falta só isso para garantir{" "}
-                <strong className="text-foreground">
-                  {quantidade} {quantidade === 1 ? "número" : "números"}
-                </strong>{" "}
-                por <strong className="text-foreground">{total}</strong>.
-                {modo === "criar" ? " Sem senha e sem e-mail." : ""}
-              </>
-            ) : modo === "criar" ? (
-              "É rápido, sem senha e sem e-mail."
-            ) : (
-              "Entre com o nome e o CPF do cadastro."
-            )}
+          <DialogDescription className="text-sm leading-relaxed">
+            {criando
+              ? promessa
+                ? `É rápido: três campos e seus ${promessa} ficam garantidos.`
+                : "É rápido: três campos e você já pode escolher seus números."
+              : promessa
+                ? `Entre com nome e CPF e seus ${promessa} ficam garantidos.`
+                : "Entre com o nome e o CPF do cadastro."}
           </DialogDescription>
         </DialogHeader>
 
-        {modo === "criar" ? (
-          <FormularioCriar onPronto={onAuthenticated} />
-        ) : (
-          <FormularioEntrar onPronto={onAuthenticated} />
-        )}
+        <div className="pt-5">
+          {criando ? (
+            <RegisterForm aoConcluir={onAuthenticated} />
+          ) : (
+            <LoginForm aoConcluir={onAuthenticated} />
+          )}
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setModo(modo === "criar" ? "entrar" : "criar")}
-          className="text-center text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-        >
-          {modo === "criar"
-            ? "Já tenho conta, quero entrar"
-            : "Ainda não tenho conta, quero criar"}
-        </button>
+        {/* Separador com rótulo no meio, igual ao de /registro. As duas barras
+            são irmãs do texto num flex, e não um pseudo-elemento por cima:
+            assim o "ou" fica sempre centrado, com qualquer largura. */}
+        <div className="flex items-center gap-3 pt-5">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">ou</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        {/* Botão, e não link: aqui a troca acontece dentro do diálogo, porque
+            sair para /login perderia os números já escolhidos. */}
+        <p className="pt-4 text-center text-sm text-muted-foreground">
+          {criando ? "Já possui uma conta?" : "Ainda não tem conta?"}{" "}
+          <button
+            type="button"
+            onClick={() => setModo(criando ? "entrar" : "criar")}
+            className="inline-flex items-center gap-1 rounded font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {criando ? "Entrar" : "Criar conta"}
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </p>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function FormularioCriar({ onPronto }: { onPronto: () => void }) {
-  const [isPending, startTransition] = useTransition();
-  const form = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { name: "", cpf: "", phone: "" },
-  });
-
-  function onSubmit(values: RegisterInput) {
-    startTransition(async () => {
-      const criada = await registerAction(values);
-      if (!criada.ok) {
-        toast.error(criada.error);
-        return;
-      }
-      // O cadastro não loga sozinho; o login vem logo em seguida com os
-      // mesmos dados (o fluxo é sem senha, por nome + CPF).
-      const entrou = await loginAction({
-        name: values.name,
-        cpf: values.cpf,
-      });
-      if (!entrou.ok) {
-        toast.error("Conta criada, mas o login falhou. Tente entrar.");
-        return;
-      }
-      toast.success("Conta criada!");
-      onPronto();
-    });
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3.5">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nome completo</FormLabel>
-              <FormControl>
-                <Input autoComplete="name" placeholder="Maria da Silva" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="cpf"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>CPF</FormLabel>
-              <FormControl>
-                <Input
-                  inputMode="numeric"
-                  placeholder="000.000.000-00"
-                  {...field}
-                  value={formatCpf(field.value ?? "")}
-                  onChange={(e) => field.onChange(e.target.value)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Celular</FormLabel>
-              <FormControl>
-                <Input
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="(11) 90000-0000"
-                  {...field}
-                  value={formatPhone(field.value ?? "")}
-                  onChange={(e) => field.onChange(e.target.value)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" disabled={isPending} className="h-11 w-full font-semibold">
-          <UserPlus className="mr-2 h-4 w-4" />
-          {isPending ? "Criando..." : "Criar conta e reservar"}
-        </Button>
-      </form>
-    </Form>
-  );
-}
-
-function FormularioEntrar({ onPronto }: { onPronto: () => void }) {
-  const [isPending, startTransition] = useTransition();
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { name: "", cpf: "" },
-  });
-
-  function onSubmit(values: LoginInput) {
-    startTransition(async () => {
-      const entrou = await loginAction(values);
-      if (!entrou.ok) {
-        toast.error(entrou.error);
-        return;
-      }
-      onPronto();
-    });
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3.5">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nome completo</FormLabel>
-              <FormControl>
-                <Input autoComplete="name" placeholder="Maria da Silva" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="cpf"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>CPF</FormLabel>
-              <FormControl>
-                <Input
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="000.000.000-00"
-                  {...field}
-                  value={formatCpf(field.value ?? "")}
-                  onChange={(e) => field.onChange(e.target.value)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" disabled={isPending} className="h-11 w-full font-semibold">
-          <LogIn className="mr-2 h-4 w-4" />
-          {isPending ? "Entrando..." : "Entrar e reservar"}
-        </Button>
-      </form>
-    </Form>
   );
 }

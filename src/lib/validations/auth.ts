@@ -19,6 +19,7 @@
 
 import { z } from "zod";
 import { isValidCpf, onlyDigits } from "@/lib/cpf";
+import { PAISES, telefoneValido } from "@/lib/telefone";
 
 // Nome completo: pelo menos 2 palavras, 2–120 chars no total.
 const nameField = z
@@ -31,15 +32,17 @@ const nameField = z
     "Informe nome e sobrenome"
   );
 
-// Celular brasileiro: DDD (2) + 8 ou 9 dígitos. Aceita máscara, só os
-// dígitos vão pro banco.
-const phoneField = z
+// País do telefone, em ISO. Só o que está na lista entra: o valor vem de um
+// seletor, e aceitar texto livre aqui deixaria o banco com país inventado.
+// Sem .default() de propósito: com default o tipo de ENTRADA do schema fica
+// opcional e o de SAÍDA obrigatório, e o formulário, que usa os dois lados,
+// deixa de compilar. O seletor sempre manda um valor, então o campo é
+// exigido aqui e o padrão mora no formulário.
+const phoneCountryField = z
   .string()
-  .transform(onlyDigits)
-  .refine(
-    (v) => v.length >= 10 && v.length <= 11,
-    "Celular inválido (DDD + número)"
-  );
+  .trim()
+  .toUpperCase()
+  .refine((v) => PAISES.some((p) => p.iso === v), "País inválido");
 
 // CPF validado por dígito verificador. Aceita máscara, só os dígitos vão
 // para o banco, que é como estão gravados.
@@ -82,14 +85,30 @@ export const changePasswordSchema = z
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
-// Cadastro pede os três: nome, CPF e celular. O celular é obrigatório,
-// é por ele que a operação fala com o cliente quando um pagamento trava ou
-// um prêmio precisa ser entregue.
-export const registerSchema = z.object({
-  name: nameField,
-  cpf: cpfField,
-  phone: phoneField,
-});
+// Cadastro pede nome, CPF e telefone. O telefone é obrigatório: é por ele
+// que a operação fala com o cliente quando um pagamento trava ou um prêmio
+// precisa ser entregue.
+//
+// A regra de tamanho do número depende do país, e por isso é validada no
+// objeto e não no campo: nove dígitos é telefone válido em Portugal e número
+// curto no Brasil. Com a regra brasileira valendo para todo mundo, cliente
+// de fora não conseguia terminar o cadastro.
+export const registerSchema = z
+  .object({
+    name: nameField,
+    cpf: cpfField,
+    phone: z.string().transform(onlyDigits),
+    phoneCountry: phoneCountryField,
+  })
+  .superRefine((dados, ctx) => {
+    if (!telefoneValido(dados.phone, dados.phoneCountry)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["phone"],
+        message: "Telefone inválido para o país escolhido",
+      });
+    }
+  });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 // Edição admin: continua aceitando CPF (campo legado), telefone e papel.
@@ -118,12 +137,15 @@ export const userEditSchema = z.object({
       (v) => v === "" || isValidCpf(v),
       "CPF inválido"
     ),
+  // Faixa larga porque aqui edita-se cliente de qualquer país: com a regra
+  // brasileira, salvar a ficha de um cliente de fora falhava sem que nada na
+  // tela explicasse por quê.
   phone: z
     .string()
     .transform(onlyDigits)
     .refine(
-      (v) => v === "" || (v.length >= 10 && v.length <= 11),
-      "Telefone inválido (DDD + número)"
+      (v) => v === "" || (v.length >= 6 && v.length <= 15),
+      "Telefone inválido"
     ),
   role: z.enum(["SUPER_ADMIN", "ADMIN", "AFFILIATE", "PARTICIPANT"]),
   showModBadge: z.boolean(),
@@ -158,8 +180,8 @@ export const userCreateSchema = z
       .string()
       .transform(onlyDigits)
       .refine(
-        (v) => v === "" || (v.length >= 10 && v.length <= 11),
-        "Telefone inválido (DDD + número)"
+        (v) => v === "" || (v.length >= 6 && v.length <= 15),
+        "Telefone inválido"
       ),
     role: z.enum(["SUPER_ADMIN", "ADMIN", "AFFILIATE", "PARTICIPANT"]),
   })

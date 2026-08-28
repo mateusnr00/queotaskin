@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cache do Python das skills. Nasce quando um script delas roda e não é
+# fonte de nada: entra no commit sem querer e muda a cada execução.
+__pycache__/
+*.pyc

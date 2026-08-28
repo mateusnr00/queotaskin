@@ -304,7 +304,7 @@ function FeaturedRaffleCard({
   const prize = raffle.prizes[0];
   return (
     <Link
-      href={`/s/${raffle.slug}`}
+      href={`/${raffle.slug}`}
       className="group block overflow-hidden rounded-2xl border bg-card transition-colors hover:border-primary/40"
     >
       <div className="relative">
@@ -373,7 +373,7 @@ function CompactRaffleCard({
   const prize = raffle.prizes[0];
   return (
     <Link
-      href={`/s/${raffle.slug}`}
+      href={`/${raffle.slug}`}
       className="group flex gap-3 overflow-hidden rounded-xl border bg-card p-3 transition-colors hover:border-primary/40"
     >
       <RaffleCover
@@ -459,7 +459,7 @@ function WinnerCard({
         <div className="min-w-0 flex-1 text-xs space-y-0.5">
           <div className="font-bold text-sm truncate">{winnerName}</div>
           <Link
-            href={`/s/${raffleSlug}`}
+            href={`/${raffleSlug}`}
             className="block text-muted-foreground line-clamp-1 hover:text-foreground"
           >
             {raffleTitle}
