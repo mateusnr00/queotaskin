@@ -22,6 +22,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { casasDoTitulo } from "@/lib/titulo";
+
 /** Altura de cada linha. Três visíveis: a de cima, a do meio e a de baixo. */
 const ALTURA = 62;
 const VISIVEIS = 3;
@@ -30,11 +32,6 @@ const PASSOS = 25;
 
 function preencher(numero: number, casas: number): string {
   return String(numero).padStart(casas, "0");
-}
-
-/** Quantos dígitos o painel mostra, pelo tamanho da campanha. */
-function casasDoPainel(totalNumbers: number): number {
-  return Math.max(2, String(Math.max(1, totalNumbers)).length);
 }
 
 function montarFita(amostra: readonly number[], total: number): number[] {
@@ -62,7 +59,7 @@ export function CarretelDeTitulos({
   numeroFinal: number | null;
   aoPassar?: () => void;
 }) {
-  const casas = casasDoPainel(totalNumbers);
+  const casas = casasDoTitulo(totalNumbers);
   const [fita] = useState(() => montarFita(amostra, totalNumbers));
   const [passo, setPasso] = useState(0);
   const [duracao, setDuracao] = useState(55);
@@ -167,7 +164,3 @@ export function CarretelDeTitulos({
   );
 }
 
-/** O mesmo formato do carretel, para o resto da tela falar a mesma língua. */
-export function numeroFormatado(numero: number, totalNumbers: number): string {
-  return preencher(numero, casasDoPainel(totalNumbers));
-}

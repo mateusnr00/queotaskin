@@ -24,6 +24,7 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
+import { numeroDoTitulo } from "@/lib/titulo";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
 
 function dataCompleta(iso: string): string {
@@ -47,7 +48,10 @@ export function CertificadoDoSorteio({
     { rotulo: "Realizado em", valor: dataCompleta(estado.drawExecutedAt) },
     {
       rotulo: "Número sorteado",
-      valor: String(estado.resultado.numero),
+      valor: numeroDoTitulo(
+        estado.resultado.numero,
+        estado.campanha.totalNumbers,
+      ),
       mono: true,
     },
     {

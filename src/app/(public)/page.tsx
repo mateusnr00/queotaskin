@@ -12,6 +12,7 @@ import {
 } from "@/components/public/cards-de-campanha";
 import { formatDate } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
+import { numeroDoTitulo } from "@/lib/titulo";
 import {
   NA_VITRINE,
   ORDEM_DA_VITRINE,
@@ -115,6 +116,7 @@ export default async function HomePage() {
               id: true,
               title: true,
               slug: true,
+              totalNumbers: true,
               images: { where: { isCover: true }, take: 1, select: { url: true } },
               prizes: {
                 orderBy: { position: "asc" },
@@ -138,6 +140,7 @@ export default async function HomePage() {
               title: true,
               slug: true,
               drawDate: true,
+              totalNumbers: true,
               images: { where: { isCover: true }, take: 1 },
             },
           },
@@ -259,6 +262,7 @@ export default async function HomePage() {
                       d.raffle.prizes[0]?.description ?? d.raffle.title
                     }
                     number={d.winningNumber!}
+                    totalNumbers={d.raffle.totalNumbers}
                     drawDate={d.drawExecutedAt}
                     // O nome congelado no sorteio manda: ele foi gravado no
                     // instante do resultado e não muda se a conta for
@@ -281,6 +285,7 @@ export default async function HomePage() {
                     coverUrl={a.raffle.images[0]?.url ?? null}
                     prizeDescription={a.prizeDescription}
                     number={a.number}
+                    totalNumbers={a.raffle.totalNumbers}
                     drawDate={a.raffle.drawDate}
                     winnerName={win?.name ?? "Ganhador"}
                     winnerPhone={win?.phone ?? null}
@@ -346,6 +351,7 @@ function WinnerCard({
   coverUrl,
   prizeDescription,
   number,
+  totalNumbers,
   drawDate,
   winnerName,
   winnerPhone,
@@ -357,6 +363,8 @@ function WinnerCard({
   coverUrl: string | null;
   prizeDescription: string;
   number: number;
+  /** O tamanho da campanha decide quantas casas o título tem. */
+  totalNumbers: number;
   drawDate: Date | null;
   winnerName: string;
   winnerPhone: string | null;
@@ -401,7 +409,7 @@ function WinnerCard({
           <div className="text-muted-foreground">
             Número da sorte:{" "}
             <strong className="text-foreground tabular-nums">
-              {String(number).padStart(4, "0")}
+              {numeroDoTitulo(number, totalNumbers)}
             </strong>
           </div>
           <div className="text-muted-foreground">

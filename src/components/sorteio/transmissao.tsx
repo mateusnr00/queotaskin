@@ -32,14 +32,12 @@ import {
   segundosAte,
   type EstadoDoSorteio,
 } from "@/lib/sorteio-ao-vivo";
+import { numeroDoTitulo } from "@/lib/titulo";
 import { cn } from "@/lib/utils";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
 import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CertificadoDoSorteio } from "@/components/sorteio/certificado";
-import {
-  CarretelDeTitulos,
-  numeroFormatado,
-} from "@/components/sorteio/carretel-de-titulos";
+import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
 import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
 import { useSom } from "@/components/sorteio/usar-som";
@@ -513,7 +511,7 @@ function Revelacao({
                       Título vencedor
                     </p>
                     <p className="font-mono text-lg font-black tabular-nums text-amber-300">
-                      {numeroFormatado(numero, estado.campanha.totalNumbers)}
+                      {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
                     </p>
                   </div>
                   <ShieldCheck

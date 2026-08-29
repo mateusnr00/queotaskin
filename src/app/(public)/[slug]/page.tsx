@@ -16,6 +16,7 @@ import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
+import { numeroDoTitulo, ordemEmbaralhada } from "@/lib/titulo";
 import { SeloDeCompromisso } from "@/components/sorteio/selo-de-compromisso";
 import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
@@ -319,8 +320,17 @@ export default async function PublicRaffleDetailPage({
   //
   // A ordem RANDOM não pode ser sorteada a cada render: a página é servidor,
   // e reembaralhar faria a lista trocar de posição a cada visita e a cada
-  // atualização, o que parece defeito. O embaralhamento sai do id do prêmio,
-  // então é estável para o mesmo conjunto e ainda assim não segue o cadastro.
+  // atualização, o que parece defeito.
+  //
+  // Ela ordenava pelo id, com um comentário afirmando que assim não seguia o
+  // cadastro. Seguia: o cuid do Prisma começa com o instante da criação, então
+  // ordenar por id é ordenar por data de cadastro com outro nome. Conferido no
+  // banco de produção, a ordem por id saiu IDÊNTICA à de cadastro nas sete
+  // linhas. O prêmio cadastrado primeiro ficava sempre no topo, e a lista
+  // fechada só mostra cinco.
+  //
+  // `ordemEmbaralhada` desfaz isso com um hash do id: estável para o mesmo
+  // conjunto, e sem relação nenhuma com a ordem de cadastro.
   const caixasPublicas = (() => {
     if (!raffle.surpriseBoxEnabled) return [];
     const itens = raffle.surpriseBoxPrizes.map((p) => ({
@@ -338,7 +348,7 @@ export default async function PublicRaffleDetailPage({
 
     if (raffle.surpriseBoxDisplayOrder === "DESC") return itens.reverse();
     if (raffle.surpriseBoxDisplayOrder === "ASC") return itens;
-    return [...itens].sort((a, b) => a.id.localeCompare(b.id));
+    return ordemEmbaralhada(itens, (i) => i.id);
   })();
 
   const combosPublicos = raffle.surpriseBoxEnabled
@@ -425,7 +435,8 @@ export default async function PublicRaffleDetailPage({
               🏆 Sorteio realizado
             </div>
             <p className="text-3xl font-black tabular-nums text-amber-700 dark:text-amber-300">
-              Título {raffle.winnerTicketNumber}
+              Título{" "}
+              {numeroDoTitulo(raffle.winnerTicketNumber, raffle.totalNumbers)}
             </p>
             {winnerParticipant ? (
               <p className="text-base font-semibold">
