@@ -17,8 +17,8 @@ import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { numeroDoTitulo, ordemEmbaralhada } from "@/lib/titulo";
-import { SeloDeCompromisso } from "@/components/sorteio/selo-de-compromisso";
 import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
+import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
 import { SeloDeLiberado } from "@/components/rank/selo-de-liberado";
@@ -201,24 +201,19 @@ export default async function PublicRaffleDetailPage({
   // estático de ganhador por um convite para assistir: entre o encerramento e
   // a revelação existem dez minutos em que a página precisa dizer para onde
   // ir, e antes disso ela não dizia nada.
-  const [sorteio, semente] = await Promise.all([
-    prisma.draw.findUnique({
-      where: { raffleId: raffle.id },
-      select: {
-        publicId: true,
-        status: true,
-        drawStartsAt: true,
-        eligibleTicketCount: true,
-      },
-    }),
-    // Só o HASH. A semente em si nunca é lida aqui: esta página entrega
-    // objetos inteiros para componentes de cliente, e uma leitura descuidada
-    // do segredo mandaria a chave do sorteio para o navegador de todo mundo.
-    prisma.drawSeed.findUnique({
-      where: { raffleId: raffle.id },
-      select: { serverSeedHash: true, committedAt: true },
-    }),
-  ]);
+  // A semente deixou de ser lida aqui junto com isto. Ela existia para o card
+  // "Sorteio verificável", que saiu da página: a prova inteira vive em
+  // /sorteio/<id>/verificar, e manter a consulta seria uma ida ao banco por
+  // visita para alimentar nada.
+  const sorteio = await prisma.draw.findUnique({
+    where: { raffleId: raffle.id },
+    select: {
+      publicId: true,
+      status: true,
+      drawStartsAt: true,
+      eligibleTicketCount: true,
+    },
+  });
 
   const isActive = raffle.status === "ACTIVE";
   const statusConfig = await getConfiguracaoDeStatus();
@@ -233,6 +228,11 @@ export default async function PublicRaffleDetailPage({
   // do título pra exibir no card. Não bloqueia, se ninguém comprou esse
   // número (edge case), mostra só o número.
   let winnerParticipant: string | null = null;
+  // A conta e o pedido de quem ganhou. O nome já era lido para o card; o id da
+  // conta é o que decide quem vê o botão de reivindicar, e o id do pedido é o
+  // que o suporte usa para achar a compra sem perguntar nada.
+  let winnerUserId: string | null = null;
+  let winnerReservationId: string | null = null;
   if (raffle.winnerTicketNumber != null) {
     const winnerTicket = await prisma.ticket.findFirst({
       where: {
@@ -241,12 +241,36 @@ export default async function PublicRaffleDetailPage({
         status: { in: ["PAID", "AWARDED"] },
       },
       select: {
-        reservation: { select: { participantName: true } },
+        reservation: {
+          select: { participantName: true, userId: true, id: true },
+        },
       },
     });
     winnerParticipant =
       winnerTicket?.reservation?.participantName?.trim() || null;
+    winnerUserId = winnerTicket?.reservation?.userId ?? null;
+    winnerReservationId = winnerTicket?.reservation?.id ?? null;
   }
+
+  // Quem está olhando é quem ganhou?
+  //
+  // Compara a CONTA, e não o nome: dois "João Silva" existem, e o botão abre
+  // uma conversa de entrega de skin. Compra feita sem login não tem conta
+  // ligada, e aí ninguém vê o botão, nem o próprio ganhador; é o preço de não
+  // arriscar mostrar a reivindicação para a pessoa errada.
+  const souOGanhador = winnerUserId != null && currentUser?.id === winnerUserId;
+
+  // O telefone só é buscado para quem vai mesmo ver o botão. Uma ida ao banco
+  // por visita para alimentar um botão que quase ninguém enxerga seria peso em
+  // toda a página para servir a uma pessoa por campanha.
+  const telefoneDoSuporte = souOGanhador
+    ? ((
+        await prisma.tenant.findUnique({
+          where: { id: tenant.id },
+          select: { supportPhone: true },
+        })
+      )?.supportPhone ?? null)
+    : null;
 
   // Backward-compat: lê requiredFields do JSON com defaults seguros.
   const rawRF = raffle.requiredFields as Partial<RequiredFields>;
@@ -667,23 +691,6 @@ export default async function PublicRaffleDetailPage({
 
         <SurpriseBoxesSection caixas={caixasPublicas} />
 
-        {/* A prova do sorteio, fechada, no fim, e SÓ ENQUANTO VENDE.
-            O critério é esse, e não "antes do sorteio", que era o que estava
-            aqui e deixava a prova aparecendo em campanha esgotada esperando a
-            hora do sorteio.
-
-            Ela existe para quem está decidindo comprar: dizer que a chave foi
-            travada antes da primeira venda só vale enquanto há venda. Fechada
-            a campanha, ninguém mais decide nada, e o que resta a mostrar é o
-            resultado. A prova inteira continua em /sorteio/<id>/verificar. */}
-        {semente && isActive && (
-          <SeloDeCompromisso
-            hash={semente.serverSeedHash}
-            desde={semente.committedAt.toISOString()}
-            publicId={sorteio?.publicId ?? null}
-          />
-        )}
-
         {raffle.showShareButtons && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -691,6 +698,42 @@ export default async function PublicRaffleDetailPage({
             </p>
             <SocialShare url={shareUrl} title={`Participe: ${raffle.title}`} />
           </div>
+        )}
+
+        {/* Reivindicação do prêmio, abaixo de tudo, e só para quem ganhou.
+            Ganhar e não saber o que fazer em seguida é o pior momento para
+            deixar a pessoa sozinha: a página dizia o nome dela e parava ali.
+            A mensagem já vai escrita com campanha, prêmio e número do pedido,
+            então o suporte abre a conversa sabendo o que entregar.
+
+            Sem telefone de suporte cadastrado o bloco inteiro não aparece.
+            Botão que abre conversa com ninguém promete atendimento e não
+            entrega, que é pior do que não ter botão. O número sai de
+            Configurações, em Telefone de suporte. */}
+        {souOGanhador && telefoneDoSuporte && (
+          <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.07] p-5 text-center">
+            <p className="text-[11px] font-bold tracking-[0.14em] text-emerald-600 uppercase dark:text-emerald-400">
+              Você ganhou
+            </p>
+            <p className="mt-1 text-lg font-black tracking-tight">
+              Título{" "}
+              {numeroDoTitulo(raffle.winnerTicketNumber!, raffle.totalNumbers)}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Fale com o suporte para combinar a entrega. A conversa já abre com
+              os dados da sua compra.
+            </p>
+            <BotaoReivindicar
+              className="mt-4 w-full sm:w-auto"
+              telefoneDoSuporte={telefoneDoSuporte}
+              nome={currentUser!.name}
+              premio={headlinePrize?.skinName || raffle.title}
+              campanha={raffle.title}
+              referencia={
+                winnerReservationId ?? String(raffle.winnerTicketNumber)
+              }
+            />
+          </section>
         )}
       </div>
     </div>

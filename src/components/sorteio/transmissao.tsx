@@ -515,17 +515,6 @@ function Revelacao({
             />
           </div>
 
-          {/* Quantos títulos estão no bolo, durante o sorteio.
-            Sem isto a tela mostra números correndo e um resultado, e nada diz
-            que a faixa inteira estava em jogo. Quem vê três resultados
-            seguidos na metade de cima conclui sozinho que o sorteio puxa para
-            o fim, e não tem como saber que não. */}
-          <p className="mt-3 text-xs text-white/55">
-            {estado.eligibleTicketCount > 0
-              ? `${estado.eligibleTicketCount.toLocaleString("pt-BR")} títulos no sorteio, todos com a mesma chance`
-              : "Todos os títulos com a mesma chance"}
-          </p>
-
           {numero != null && (
             <p className="sr-only" role="status">
               Número sorteado: {numero}.
