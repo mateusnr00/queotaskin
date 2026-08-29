@@ -23,6 +23,7 @@ import {
 } from "@/lib/storage";
 import type { ActionResult } from "@/server/actions/auth";
 import { MAX_IMAGES_PER_RAFFLE, MAX_IMAGE_BYTES } from "@/lib/raffle-images";
+import { dataDeSaoPauloParaUtc } from "@/lib/promocao-em-dobro";
 
 // =============================================================
 // IMAGENS
@@ -533,7 +534,7 @@ export async function setRafflePromotionsAction(
     const inicioDaPromocao = !doubleEnabled
       ? null
       : doubleFrom
-        ? new Date(doubleFrom)
+        ? dataDeSaoPauloParaUtc(doubleFrom)
         : atual?.promotionsDoubleEnabled && atual.promotionsDoubleFrom
           ? atual.promotionsDoubleFrom
           : new Date();
@@ -545,7 +546,9 @@ export async function setRafflePromotionsAction(
           promotionsEnabled: enabled,
           promotionsDoubleEnabled: doubleEnabled,
           promotionsDoubleFrom: inicioDaPromocao,
-          promotionsDoubleUntil: doubleUntil ? new Date(doubleUntil) : null,
+          promotionsDoubleUntil: doubleUntil
+            ? dataDeSaoPauloParaUtc(doubleUntil)
+            : null,
           promotionsAccumulative: accumulative,
         },
       }),

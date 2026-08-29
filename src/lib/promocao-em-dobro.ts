@@ -122,3 +122,50 @@ export function percentualRestante(
   const pct = (restante / total) * 100;
   return Math.min(100, Math.max(0, pct));
 }
+
+/** O fuso em que o painel pensa. O mesmo do resto do sistema. */
+const FUSO = "America/Sao_Paulo";
+
+/** Quanto o fuso está deslocado do UTC naquele instante, em milissegundos. */
+function deslocamentoDoFuso(instante: Date): number {
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: FUSO,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+    .formatToParts(instante)
+    .filter((p) => p.type !== "literal");
+  const v = Object.fromEntries(partes.map((p) => [p.type, Number(p.value)]));
+  const comoSeFosseUtc = Date.UTC(
+    v.year,
+    v.month - 1,
+    v.day,
+    v.hour % 24,
+    v.minute,
+    v.second,
+  );
+  return comoSeFosseUtc - instante.getTime();
+}
+
+/**
+ * Converte o texto do <input type="datetime-local"> para um instante real.
+ *
+ * O campo entrega "2026-08-29T21:11", sem fuso nenhum. Jogar isso direto no
+ * `new Date()` faz o servidor interpretar no fuso DELE, que na Vercel é UTC:
+ * o admin marcava 21:11 pensando em Brasília e o sistema guardava 21:11 em
+ * Londres. Uma janela de 24 horas nascia com 21, e o contador na página abria
+ * três horas adiantado. Aconteceu de verdade.
+ *
+ * Aqui o texto é lido como hora de São Paulo, sempre, seja qual for o fuso da
+ * máquina que roda o código.
+ */
+export function dataDeSaoPauloParaUtc(texto: string): Date {
+  const palpite = new Date(`${texto.slice(0, 16)}:00Z`);
+  if (Number.isNaN(palpite.getTime())) return palpite;
+  return new Date(palpite.getTime() - deslocamentoDoFuso(palpite));
+}

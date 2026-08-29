@@ -1,33 +1,30 @@
 "use client";
 
-// A faixa da promoção em dobro, na página da campanha.
+// A faixa da promoção em dobro, no formato que o dono do site pediu.
 //
-// O QUE ELA PRECISA DIZER, NESTA ORDEM
+// Eu tinha feito outra coisa: fundo escuro, texto à esquerda, relógio de um
+// lado e barra do outro. Ele mandou a referência e pediu praticamente
+// idêntica, então é isto: cartão laranja, tudo centralizado, e o relógio DENTRO
+// da barra, com ela esvaziando por trás do texto.
 //
-// O que você leva, quanto tempo tem, e o que fazer. O concorrente inverte:
-// abre com "🔥 Chance em dobro! 🔥", que é adjetivo, e só depois conta o que
-// acontece. Aqui a primeira linha é o mecanismo, "cada número vale 2", porque
-// é a informação que muda a decisão de comprar.
+// O relógio dentro da barra é a parte que faz diferença. Separados, são duas
+// informações que a pessoa precisa juntar; sobrepostos, o número e o quanto
+// falta chegam de uma vez só.
 //
-// A CONTA APARECE
+// CONTRASTE
 //
-// Dizer "o dobro" é abstrato. Mostrar "10 pagos → 20 números" é a mesma frase
-// com o resultado no lugar da promessa, e é o que faz a pessoa entender sem
-// precisar acreditar.
+// O texto é marrom bem escuro sobre o laranja, e não branco. Branco sobre
+// laranja fica em torno de 2:1, que é ilegível no sol do celular; o escuro
+// passa de 8:1 sobre os dois tons da barra, tanto na parte cheia quanto na
+// vazia. É o mesmo desenho da referência, sem o problema dela.
 //
-// SOBRE O RELÓGIO
+// SOBRE O MOVIMENTO
 //
-// Ele conta em horas, e não em dias: "encerra em 32:10:05" pressiona mais do
-// que "falta 1 dia", que soa adiável. Ele é `aria-hidden` e a mesma informação
-// é dita uma vez em texto, porque um número que muda a cada segundo dentro de
-// uma região viva faria o leitor de tela interromper a leitura sessenta vezes
-// por minuto.
-//
-// Só uma coisa se move: o pulso do ponto. O relógio troca o número, o resto
-// fica parado, e nada pisca para quem pediu menos movimento no sistema.
+// Só a barra e o número mudam. Nada pisca, nada pula, e a transição de largura
+// é linear de um segundo, do tamanho exato do tique do relógio, para a barra
+// deslizar em vez de saltar.
 
 import { useEffect, useState } from "react";
-import { Zap } from "lucide-react";
 
 import {
   contagemEmPalavras,
@@ -38,18 +35,29 @@ import {
 } from "@/lib/promocao-em-dobro";
 import { cn } from "@/lib/utils";
 
+/** "07/08/2026 às 15:59", no fuso oficial. */
+function dataPorExtenso(iso: string): string {
+  const f = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+  // O Intl entrega "07/08/2026, 15:59"; a referência usa "às".
+  return f.replace(", ", " às ");
+}
+
 export function FaixaDeDobro({
   /** Quando a promoção começou. É o que dá escala para a barra. */
   inicio,
   /** Quando a promoção acaba. Nulo quer dizer "sem prazo". */
   fim,
-  /** O que a pessoa tem selecionado agora, para a conta ficar concreta. */
-  quantidadeEscolhida,
   className,
 }: {
   inicio: string | null;
   fim: string | null;
-  quantidadeEscolhida?: number;
   className?: string;
 }) {
   const fimEmData = fim ? new Date(fim) : null;
@@ -67,133 +75,67 @@ export function FaixaDeDobro({
     : null;
   const restante = percentualRestante(inicioEmData, fimEmData, agora);
 
-  // Acabou enquanto a pessoa estava na página: a faixa some em vez de mentir.
+  // Acabou com a pessoa na página: a faixa some em vez de mentir.
   if (contagem && contagem.total <= 0) return null;
-
-  const pagas = quantidadeEscolhida && quantidadeEscolhida > 0 ? quantidadeEscolhida : null;
 
   return (
     <section
       aria-labelledby="dobro-titulo"
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-amber-400/40",
-        "bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-transparent",
+        "overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 p-4 text-center shadow-lg shadow-orange-500/20 md:p-5",
         className,
       )}
     >
-      {/* A barra lateral no lugar do fundo inteiro laranja: o bloco continua
-          gritando sem cobrir o texto de cor, que é o que derruba o contraste
-          na faixa do concorrente. */}
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-amber-400 to-orange-500"
-      />
+      <h2
+        id="dobro-titulo"
+        className="text-lg font-extrabold tracking-tight text-amber-950 md:text-xl"
+      >
+        🔥 Chance em dobro! 🔥
+      </h2>
 
-      <div className="p-4 pl-5 md:p-5 md:pl-6">
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-70 motion-reduce:hidden" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
-              </span>
-              Promoção no ar
-            </p>
-
-            <h2
-              id="dobro-titulo"
-              className="mt-1 text-xl font-extrabold leading-tight tracking-tight md:text-2xl"
-            >
-              Cada número vale{" "}
-              <span className="text-amber-600 dark:text-amber-400">2</span>
-            </h2>
-
-            {/* A conta, e não a promessa. */}
-            <p className="mt-1 text-sm text-muted-foreground">
-              {pagas ? (
-                <>
-                  Você escolheu{" "}
-                  <b className="font-semibold text-foreground">{pagas}</b> e vai
-                  receber{" "}
-                  <b className="font-semibold text-amber-600 dark:text-amber-400">
-                    {pagas * 2} números
-                  </b>
-                  , pagando pelos {pagas}.
-                </>
-              ) : (
-                <>
-                  Compre 10 e leve{" "}
-                  <b className="font-semibold text-amber-600 dark:text-amber-400">
-                    20
-                  </b>
-                  . O preço é o mesmo, os números dobram.
-                </>
-              )}
-            </p>
-          </div>
-
-          {contagem && (
-            /* Ocupa a linha inteira quando quebra, e vai para a direita 
-               quando cabe ao lado. Encolhido e alinhado à direita, o rótulo
-               "Encerra em" flutuava deslocado sobre o número. */
-            <div className="basis-full text-left sm:basis-auto sm:text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Encerra em
-              </p>
-              {/* O relógio é enfeite para quem ouve: a frase abaixo diz o
-                  mesmo, uma vez só. */}
-              <p
-                aria-hidden
-                className="font-mono text-2xl font-bold tabular-nums leading-none text-foreground md:text-3xl"
-              >
-                {formatarContagem(contagem)}
-              </p>
-              <p className="sr-only" role="status">
-                {contagemEmPalavras(contagem)}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* A barra esvaziando, que é o que transforma um número em pressão:
-            "24:48:29" sozinho não diz se é muito ou pouco, e a barra dá a
-            escala num relance. Ela mede a janela inteira da promoção, e é por
-            isso que o painel grava a hora em que ela foi ligada.
-
-            Só a largura muda, com transição curta, e a cor vira vermelha no
-            fim: uma barra âmbar em qualquer estágio some no fundo âmbar da
-            faixa justamente quando mais importa. */}
-        {restante != null && (
-          <div className="mt-3">
-            <div
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(restante)}
-              aria-label="Tempo restante da promoção"
-              className="h-2 w-full overflow-hidden rounded-full bg-foreground/10"
-            >
+      {contagem && (
+        <div className="mt-3">
+          {/* O relógio dentro da barra: a barra é o trilho, o texto fica por
+              cima, e o preenchimento passa por trás dele. */}
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={restante == null ? undefined : Math.round(restante)}
+            aria-label="Tempo restante da promoção"
+            className="relative h-9 w-full overflow-hidden rounded-lg bg-amber-950/25 md:h-10"
+          >
+            {restante != null && (
               <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-1000 ease-linear",
-                  restante <= 15
-                    ? "bg-gradient-to-r from-red-500 to-orange-500"
-                    : "bg-gradient-to-r from-amber-400 to-orange-500",
-                )}
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-300 to-amber-200 transition-[width] duration-1000 ease-linear"
                 style={{ width: `${restante}%` }}
               />
-            </div>
+            )}
+            <p
+              aria-hidden
+              className="relative flex h-full items-center justify-center text-base font-bold tabular-nums text-amber-950 md:text-lg"
+            >
+              Encerra em {formatarContagem(contagem)}
+            </p>
           </div>
-        )}
+          {/* O relógio pisca a cada segundo e é enfeite para quem ouve. A
+              frase abaixo diz a mesma coisa, uma vez só. */}
+          <p className="sr-only" role="status">
+            {contagemEmPalavras(contagem)}
+          </p>
+        </div>
+      )}
 
-        {/* items-start: em três linhas no telefone, o ícone centralizado
-            flutuava no meio do parágrafo em vez de marcar o começo dele. */}
-        <p className="mt-3 flex items-start gap-1.5 border-t border-amber-400/20 pt-3 text-xs text-muted-foreground">
-          <Zap aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-          Os números extras são sorteados na hora da compra e aparecem no seu
-          comprovante.
+      <p className="mt-3 text-base font-bold text-amber-950 md:text-lg">
+        Compre agora e ganhe o dobro!
+      </p>
+
+      {(inicio || fim) && (
+        <p className="mt-1 text-xs font-medium text-amber-950/80">
+          Válido{inicio ? ` de ${dataPorExtenso(inicio)}` : ""}
+          {fim ? ` até ${dataPorExtenso(fim)}` : ""}
         </p>
-      </div>
+      )}
     </section>
   );
 }

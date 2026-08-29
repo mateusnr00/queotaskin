@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bilhetesDe,
+  dataDeSaoPauloParaUtc,
   percentualRestante,
   contagemEmPalavras,
   contagemRegressiva,
@@ -150,5 +151,31 @@ describe("percentualRestante", () => {
     expect(
       percentualRestante(d("2026-08-29T14:00:00Z"), d("2026-08-29T10:00:00Z"), agora),
     ).toBeNull();
+  });
+});
+
+describe("dataDeSaoPauloParaUtc", () => {
+  it("lê o campo como hora de Brasília, e não do servidor", () => {
+    // O bug real: o admin marcou 21:11 pensando em Brasília, o servidor da
+    // Vercel roda em UTC e guardou 21:11 de Londres. A janela de 24 horas
+    // nasceu com 21, e o contador abriu adiantado.
+    expect(dataDeSaoPauloParaUtc("2026-08-29T21:11").toISOString()).toBe(
+      "2026-08-30T00:11:00.000Z",
+    );
+    expect(dataDeSaoPauloParaUtc("2026-08-28T21:11").toISOString()).toBe(
+      "2026-08-29T00:11:00.000Z",
+    );
+  });
+
+  it("mantém exatamente 24 horas entre começo e fim", () => {
+    const inicio = dataDeSaoPauloParaUtc("2026-08-28T21:11");
+    const fim = dataDeSaoPauloParaUtc("2026-08-29T21:11");
+    expect((fim.getTime() - inicio.getTime()) / 3_600_000).toBe(24);
+  });
+
+  it("aguarda o segundo que alguns navegadores mandam junto", () => {
+    expect(dataDeSaoPauloParaUtc("2026-08-29T21:11:00").toISOString()).toBe(
+      "2026-08-30T00:11:00.000Z",
+    );
   });
 });
