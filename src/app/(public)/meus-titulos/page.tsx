@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { formatBRL } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Meus títulos" };
 
@@ -17,13 +18,38 @@ export const metadata: Metadata = { title: "Meus títulos" };
 // Reservas EXPIRADAS/CANCELADAS continuam aparecendo: o histórico é parte
 // da experiência ("já tentei essa, não paguei a tempo"). Só PAGAS expõem
 // os números, porque PENDING libera no checkout e EXPIRED tem 0 tickets.
-export default async function MyTicketsPage() {
+/**
+ * As três situações em que uma reserva pode estar, do ponto de vista de quem
+ * comprou. São elas que viram as abas.
+ *
+ * "Participando" é a paga: é quando a pessoa está de fato no sorteio, com
+ * números valendo. "Aguardando" é a que ainda pede o Pix, e é a única com
+ * ação pendente. O resto é histórico.
+ */
+const ABAS = [
+  { chave: "todas", rotulo: "Todas" },
+  { chave: "participando", rotulo: "Participando" },
+  { chave: "aguardando", rotulo: "Aguardando pagamento" },
+  { chave: "encerradas", rotulo: "Expiradas" },
+] as const;
+
+type Aba = (typeof ABAS)[number]["chave"];
+
+export default async function MyTicketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ estado?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login?redirect=/meus-titulos");
   }
   const tenant = await getCurrentTenant();
   if (!tenant) notFound();
+
+  const { estado } = await searchParams;
+  const abaAtiva: Aba =
+    ABAS.find((a) => a.chave === estado)?.chave ?? "todas";
 
   // Filtra pelo tenant atual, o participante pode ter comprado em vários
   // tenants, mas "Meus títulos" no domínio do Mateus só lista os do Mateus.
@@ -38,6 +64,8 @@ export default async function MyTicketsPage() {
         select: {
           title: true,
           slug: true,
+          pricePerNumber: true,
+          isFree: true,
           images: { where: { isCover: true }, take: 1 },
         },
       },
@@ -52,6 +80,32 @@ export default async function MyTicketsPage() {
   // dentro do render dos componentes filhos.
   const now = new Date().getTime();
 
+  /**
+   * Em que aba a reserva cai.
+   *
+   * PENDING vencido conta como expirada mesmo que o cron ainda não tenha
+   * rodado: o que vale para quem olha é se ainda dá para pagar, e não o que
+   * está gravado na coluna.
+   */
+  const abaDa = (r: (typeof reservations)[number]): Exclude<Aba, "todas"> => {
+    if (r.status === "PAID") return "participando";
+    if (r.status === "PENDING" && r.expiresAt.getTime() > now)
+      return "aguardando";
+    return "encerradas";
+  };
+
+  const contagem = {
+    todas: reservations.length,
+    participando: reservations.filter((r) => abaDa(r) === "participando").length,
+    aguardando: reservations.filter((r) => abaDa(r) === "aguardando").length,
+    encerradas: reservations.filter((r) => abaDa(r) === "encerradas").length,
+  };
+
+  const visiveis =
+    abaAtiva === "todas"
+      ? reservations
+      : reservations.filter((r) => abaDa(r) === abaAtiva);
+
   return (
     <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
       <div className="flex items-baseline gap-2 px-1 mb-4">
@@ -59,9 +113,59 @@ export default async function MyTicketsPage() {
         <span className="text-xs text-muted-foreground">
           {reservations.length === 0
             ? "Você ainda não tem reservas"
-            : `${reservations.length} reserva${reservations.length === 1 ? "" : "s"}`}
+            : `${visiveis.length} de ${reservations.length} reserva${
+                reservations.length === 1 ? "" : "s"
+              }`}
         </span>
       </div>
+
+      {reservations.length > 0 && (
+        /* Abas como links, e não botões: o estado vive na URL, então dá para
+           voltar, recarregar e mandar o link sem perder o filtro. E a página
+           continua sendo server component, sem JavaScript para isso. */
+        <nav
+          aria-label="Filtrar por situação"
+          className="-mx-4 mb-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <ul className="flex w-max gap-2">
+            {ABAS.map((aba) => {
+              const ativa = aba.chave === abaAtiva;
+              const quantos = contagem[aba.chave];
+              return (
+                <li key={aba.chave}>
+                  <Link
+                    href={
+                      aba.chave === "todas"
+                        ? "/meus-titulos"
+                        : `/meus-titulos?estado=${aba.chave}`
+                    }
+                    aria-current={ativa ? "page" : undefined}
+                    className={cn(
+                      "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
+                      ativa
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {aba.rotulo}
+                    {/* O número ao lado responde "tem algo aqui?" antes do
+                        clique. Sem ele, a pessoa abre abas vazias para
+                        descobrir. */}
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 text-[10px] tabular-nums",
+                        ativa ? "bg-primary/15" : "bg-muted",
+                      )}
+                    >
+                      {quantos}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
 
       {reservations.length === 0 ? (
         <div className="rounded-xl border bg-card py-12 text-center px-4">
@@ -78,9 +182,17 @@ export default async function MyTicketsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {reservations.map((r) => (
-            <ReservationCard key={r.id} reservation={r} now={now} />
-          ))}
+          {visiveis.length === 0 ? (
+            /* A aba existe e está vazia. Dizer isso é melhor do que a lista
+               sumir sem explicação e parecer erro de carregamento. */
+            <p className="rounded-xl border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              Nenhuma reserva nesta situação.
+            </p>
+          ) : (
+            visiveis.map((r) => (
+              <ReservationCard key={r.id} reservation={r} now={now} />
+            ))
+          )}
         </div>
       )}
     </div>
@@ -93,6 +205,8 @@ type ReservationWithRaffle = Awaited<
   raffle: {
     title: string;
     slug: string;
+    pricePerNumber: unknown;
+    isFree: boolean;
     images: { url: string }[];
   };
   tickets: { number: number }[];
@@ -106,6 +220,14 @@ function ReservationCard({
   now: number;
 }) {
   const cover = reservation.raffle.images[0]?.url ?? null;
+  // A reserva expirada perde os bilhetes, então contar a tabela devolvia zero
+  // e a linha virava "- títulos". A quantidade continua existindo no valor
+  // pago, que é o mesmo caminho que o webhook atrasado usa para recriar os
+  // números.
+  const preco = Number(reservation.raffle.pricePerNumber);
+  const quantidade =
+    reservation.tickets.length ||
+    (preco > 0 ? Math.round(Number(reservation.totalAmount) / preco) : 0);
   const isPaid = reservation.status === "PAID";
   const isPending = reservation.status === "PENDING";
   // Pendente vira ativo só enquanto não expirou. Após expiresAt, mesmo que
@@ -144,10 +266,14 @@ function ReservationCard({
               status={reservation.status}
               stillPending={stillPending}
             />
-            <span className="text-muted-foreground">
-              {reservation.tickets.length || "-"} título
-              {reservation.tickets.length === 1 ? "" : "s"}
-            </span>
+            {/* Some quando não dá para saber, em vez de afirmar zero. Numa
+                campanha gratuita não há preço para dividir, e "0 títulos" numa
+                reserva que teve números é pior do que não dizer nada. */}
+            {quantidade > 0 && (
+              <span className="text-muted-foreground">
+                {quantidade} título{quantidade === 1 ? "" : "s"}
+              </span>
+            )}
             <span className="font-medium text-foreground">
               {formatBRL(Number(reservation.totalAmount))}
             </span>
