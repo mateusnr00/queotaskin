@@ -260,18 +260,103 @@
  * fica colado no título, então um anel crescendo em volta encostaria no
  * texto. Não some de todo, para de 0,45 para baixo o selo sumir de vez a
  * cada ciclo e a leitura ficar intermitente. */
+/* O selo de status: apaga de vez, volta com estalo, e solta um halo.
+ *
+ * Antes a opacidade ia de 1 a 0,45 e voltava, num vaivem de dois segundos.
+ * Nunca apagava, e um brilho que so diminui nao chama atencao: o olho para
+ * de registrar movimento sem comeco nem fim, e o selo virava parte do fundo.
+ *
+ * O QUE MUDOU, E POR QUE ASSIM
+ *
+ * O tempo e ASSIMETRICO. A pilula fica inteira 60% do ciclo, apaga em 130ms,
+ * segura apagada por 150ms e volta em 190ms com um estalo de escala. Blink
+ * simetrico (meio aceso, meio apagado) e o <blink> dos anos 90: cansa, e
+ * pior, some com o texto metade do tempo. Aqui a frase esta legivel em quase
+ * todo o ciclo, e o apagao e curto o bastante para ser um piscar, nao uma
+ * ausencia.
+ *
+ * O HALO sai no instante do retorno, de tras da pilula para fora. E ele que
+ * faz o trabalho de chamar atencao sem depender de o texto sumir: movimento
+ * que se expande e some e o gesto de farol, e o olho pega isso na periferia.
+ *
+ * Escala e opacidade nos dois, so. Sao as duas propriedades que o navegador
+ * anima sem recalcular layout, e este selo aparece em ate sete cards ao mesmo
+ * tempo na home.
+ *
+ * Piscadas: uma a cada 1,9s, ou 0,53 por segundo. O limite da WCAG 2.3.1 e
+ * tres por segundo, entao sobra folga de seis vezes.
+ */
 @keyframes pulso-selo {
   0%,
+  58% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  65% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  73% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  83% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
   100% {
     opacity: 1;
+    transform: scale(1);
   }
-  50% {
-    opacity: 0.45;
+}
+
+/* O halo. Nasce colado na pilula no momento em que ela reacende, cresce e
+ * some. Fora dessa janela fica invisivel, para nao virar um borrao permanente
+ * atras do selo. */
+@keyframes halo-selo {
+  0%,
+  73% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.65);
   }
 }
 
 .selo-pulsa {
-  animation: pulso-selo 2s ease-in-out infinite;
+  position: relative;
+  display: inline-flex;
+}
+
+.selo-pulsa-pilula {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background: var(--primary);
+  padding: 0.125rem 0.625rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--primary-foreground);
+  animation: pulso-selo 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.selo-pulsa-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--primary);
+  opacity: 0;
+  pointer-events: none;
+  animation: halo-selo 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 /* Abertura da caixa surpresa.
@@ -857,7 +942,8 @@
   .rank-meter-cresce > div,
   .selo-alvo::after,
   .cta-pulsa,
-  .selo-pulsa,
+  .selo-pulsa-pilula,
+  .selo-pulsa-halo,
   .card-popular-pulsa,
   .contorno-pulsa,
   .caixa-balanca,
