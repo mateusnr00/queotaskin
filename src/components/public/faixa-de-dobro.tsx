@@ -30,6 +30,7 @@ import {
   contagemEmPalavras,
   contagemRegressiva,
   formatarContagem,
+  percentualDecorrido,
   percentualRestante,
   type Contagem,
 } from "@/lib/promocao-em-dobro";
@@ -75,6 +76,10 @@ export function FaixaDeDobro({
     ? contagemRegressiva(fimEmData, agora)
     : null;
   const restante = percentualRestante(inicioEmData, fimEmData, agora);
+  // A barra enche com o que JÁ PASSOU, e não com o que resta. Do restante ela
+  // só poderia encolher, e a borda andaria da direita para a esquerda, que é o
+  // contrário de como se lê uma linha do tempo.
+  const decorrido = percentualDecorrido(inicioEmData, fimEmData, agora);
 
   // Acabou com a pessoa na página: a faixa some em vez de mentir.
   if (contagem && contagem.total <= 0) return null;
@@ -113,8 +118,10 @@ export function FaixaDeDobro({
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={restante == null ? undefined : Math.round(restante)}
-            aria-label="Tempo restante da promoção"
+            aria-valuenow={
+              decorrido == null ? undefined : Math.round(decorrido)
+            }
+            aria-label="Tempo já decorrido da promoção"
             className={cn(
               // O trilho é escurecido de leve, e não em 25%: o relógio é
               // escuro e fica por cima dele, e a 25% o contraste caía para
@@ -125,7 +132,7 @@ export function FaixaDeDobro({
               acabando && "barra-quente",
             )}
           >
-            {restante != null && (
+            {decorrido != null && (
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 overflow-hidden transition-[width] duration-1000 ease-linear",
@@ -133,7 +140,7 @@ export function FaixaDeDobro({
                     ? "bg-gradient-to-r from-red-400 to-red-300"
                     : "bg-gradient-to-r from-amber-300 to-amber-200",
                 )}
-                style={{ width: `${restante}%` }}
+                style={{ width: `${decorrido}%` }}
               >
                 {/* As listras são as mesmas da barra de vendas: a página fala
                     uma língua só para dizer "isto está correndo agora". */}

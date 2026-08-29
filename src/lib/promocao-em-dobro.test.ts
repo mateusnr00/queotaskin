@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   bilhetesDe,
   dataDeSaoPauloParaUtc,
+  percentualDecorrido,
   percentualRestante,
   contagemEmPalavras,
   contagemRegressiva,
@@ -177,5 +178,23 @@ describe("dataDeSaoPauloParaUtc", () => {
     expect(dataDeSaoPauloParaUtc("2026-08-29T21:11:00").toISOString()).toBe(
       "2026-08-30T00:11:00.000Z",
     );
+  });
+});
+
+describe("percentualDecorrido", () => {
+  it("é o espelho do restante, e é ele que cresce", () => {
+    const inicio = d("2026-08-29T10:00:00Z");
+    const fim = d("2026-08-29T14:00:00Z");
+    // A barra enche com o tempo: metade da janela, metade da barra.
+    expect(percentualDecorrido(inicio, fim, agora)).toBe(50);
+    expect(percentualDecorrido(inicio, fim, d("2026-08-29T11:00:00Z"))).toBe(25);
+    expect(percentualDecorrido(inicio, fim, d("2026-08-29T13:00:00Z"))).toBe(75);
+    // Antes de começar, vazia; depois de acabar, cheia.
+    expect(percentualDecorrido(inicio, fim, d("2026-08-29T08:00:00Z"))).toBe(0);
+    expect(percentualDecorrido(inicio, fim, d("2026-08-29T20:00:00Z"))).toBe(100);
+  });
+
+  it("devolve null quando não dá para saber", () => {
+    expect(percentualDecorrido(null, d("2026-08-29T14:00:00Z"), agora)).toBeNull();
   });
 });

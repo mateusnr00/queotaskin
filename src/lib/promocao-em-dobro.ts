@@ -169,3 +169,20 @@ export function dataDeSaoPauloParaUtc(texto: string): Date {
   if (Number.isNaN(palpite.getTime())) return palpite;
   return new Date(palpite.getTime() - deslocamentoDoFuso(palpite));
 }
+
+/**
+ * Quanto da janela já passou, de 0 a 100.
+ *
+ * É o complemento de `percentualRestante`, e existe porque a barra enche da
+ * esquerda para a direita: o que cresce com o tempo é o decorrido, não o
+ * restante. Uma barra do restante só pode encolher, e encolher da direita para
+ * a esquerda é o oposto de como se lê uma linha do tempo.
+ */
+export function percentualDecorrido(
+  inicio: Date | null,
+  fim: Date | null,
+  agora: Date,
+): number | null {
+  const restante = percentualRestante(inicio, fim, agora);
+  return restante == null ? null : 100 - restante;
+}
