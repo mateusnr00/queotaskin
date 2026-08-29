@@ -949,3 +949,89 @@ export const ROTULO_DO_STATUS: Record<DrawStatus, string> = {
   FINISHED: "Finalizado",
   ERROR: "Erro",
 };
+
+/**
+ * O que o ganhador precisa para reivindicar o prêmio na página do sorteio.
+ *
+ * Devolve nulo em qualquer caso que não seja "quem está olhando ganhou e há
+ * para onde mandar essa pessoa". São quatro portas, e todas fecham em silêncio:
+ * visitante deslogado, sorteio ainda não concluído, conta diferente da do
+ * ganhador, e site sem telefone de suporte cadastrado.
+ *
+ * A comparação é por CONTA, e não por nome: existem dois "João Silva", e isto
+ * abre uma conversa de entrega de skin. Compra feita sem login não tem conta
+ * ligada, e nesse caso ninguém vê o botão, nem quem ganhou; é o preço de não
+ * arriscar mostrar a reivindicação para a pessoa errada.
+ *
+ * Roda no servidor e o resultado nunca entra no endpoint público de estado: se
+ * entrasse, uma resposta guardada em cache entregaria o link de um ganhador
+ * para outra pessoa.
+ */
+export interface DadosDeReivindicacao {
+  telefoneDoSuporte: string;
+  nome: string;
+  premio: string;
+  campanha: string;
+  referencia: string;
+  titulo: number;
+  totalNumbers: number;
+}
+
+export async function dadosDeReivindicacao(
+  publicId: string,
+  userId: string | null | undefined,
+): Promise<DadosDeReivindicacao | null> {
+  if (!userId) return null;
+
+  const draw = await prisma.draw.findUnique({
+    where: { publicId },
+    select: {
+      status: true,
+      winningNumber: true,
+      raffle: {
+        select: {
+          id: true,
+          title: true,
+          totalNumbers: true,
+          tenantId: true,
+          prizes: { select: { description: true }, take: 1 },
+        },
+      },
+    },
+  });
+  if (!draw || draw.status !== "FINISHED" || draw.winningNumber == null) {
+    return null;
+  }
+
+  const bilhete = await prisma.ticket.findFirst({
+    where: {
+      raffleId: draw.raffle.id,
+      number: draw.winningNumber,
+      status: { in: ["PAID", "AWARDED"] },
+    },
+    select: {
+      reservation: { select: { id: true, userId: true, participantName: true } },
+    },
+  });
+  if (!bilhete?.reservation || bilhete.reservation.userId !== userId) {
+    return null;
+  }
+
+  const tenant = draw.raffle.tenantId
+    ? await prisma.tenant.findUnique({
+        where: { id: draw.raffle.tenantId },
+        select: { supportPhone: true },
+      })
+    : null;
+  if (!tenant?.supportPhone) return null;
+
+  return {
+    telefoneDoSuporte: tenant.supportPhone,
+    nome: bilhete.reservation.participantName,
+    premio: draw.raffle.prizes[0]?.description ?? draw.raffle.title,
+    campanha: draw.raffle.title,
+    referencia: bilhete.reservation.id,
+    titulo: draw.winningNumber,
+    totalNumbers: draw.raffle.totalNumbers,
+  };
+}

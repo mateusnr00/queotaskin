@@ -15,6 +15,7 @@
 // mesma ordem em que o servidor libera os dois.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import {
   RefreshCw,
@@ -34,13 +35,17 @@ import {
 } from "@/lib/sorteio-ao-vivo";
 import { numeroDoTitulo } from "@/lib/titulo";
 import { cn } from "@/lib/utils";
-import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
+import type {
+  DadosDeReivindicacao,
+  EstadoPublicoDoSorteio,
+} from "@/server/services/sorteio-ao-vivo";
 import { BORDA_DE_AUTH, HALO_DE_AUTH } from "@/components/auth/cartao-de-auth";
 import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
 import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
 import { useSom } from "@/components/sorteio/usar-som";
+import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 
 /** Os últimos segundos, quando a contagem troca de cara. */
 const SEGUNDOS_DE_TENSAO = 10;
@@ -62,12 +67,20 @@ function horaDeBrasilia(iso: string): string {
 
 export function TransmissaoDoSorteio({
   estadoInicial,
+  reivindicacao,
 }: {
   estadoInicial: EstadoPublicoDoSorteio;
+  /**
+   * Preenchido só quando quem está olhando é o ganhador e há telefone de
+   * suporte. Vem do servidor, resolvido por sessão, e por isso não pode ser
+   * derivado do estado público, que é igual para todo mundo.
+   */
+  reivindicacao: DadosDeReivindicacao | null;
 }) {
   const { estado, agora, conexao, recarregar } =
     useEstadoDoSorteio(estadoInicial);
   const som = useSom();
+  const router = useRouter();
 
   // A FASE VEM DO RELÓGIO, não da última resposta do servidor.
   //
@@ -102,6 +115,22 @@ export function TransmissaoDoSorteio({
           agora,
         );
 
+  // Quem assistiu AO VIVO recebeu esta página renderizada antes de existir
+  // ganhador, então `reivindicacao` chegou nula e continuaria nula para sempre:
+  // a fase muda no cliente, pelo relógio, sem passar pelo servidor de novo.
+  //
+  // Uma releitura, uma vez só, quando a transmissão termina. Os cinco segundos
+  // de espera deixam o confete e a revelação acontecerem antes: recarregar em
+  // cima do momento mais importante da tela seria trocar um botão por um
+  // solavanco.
+  const jaRelou = useRef(false);
+  useEffect(() => {
+    if (fase !== "FINISHED" || reivindicacao || jaRelou.current) return;
+    jaRelou.current = true;
+    const id = setTimeout(() => router.refresh(), 5000);
+    return () => clearTimeout(id);
+  }, [fase, reivindicacao, router]);
+
   const aoVivo =
     fase === "COUNTDOWN" || fase === "DRAWING" || fase === "REVEALING";
 
@@ -131,6 +160,33 @@ export function TransmissaoDoSorteio({
             sorteio" logo abaixo do nome do ganhador, e a página de conferência
             mostra os mesmos quatro hashes com a checagem rodando ao vivo. O
             card era a terceira cópia da mesma informação na mesma tela. */}
+
+        {/* Reivindicação do prêmio, no fim de tudo e só para quem ganhou.
+            Ganhar e não saber o que fazer em seguida é o pior momento para
+            deixar a pessoa sozinha: a tela dizia o nome dela e parava ali. */}
+        {fase === "FINISHED" && reivindicacao && (
+          <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.07] p-5 text-center">
+            <p className="text-[11px] font-bold tracking-[0.14em] text-emerald-400 uppercase">
+              Você ganhou
+            </p>
+            <p className="mt-1 text-lg font-black tracking-tight text-white">
+              Título{" "}
+              {numeroDoTitulo(reivindicacao.titulo, reivindicacao.totalNumbers)}
+            </p>
+            <p className="mt-1 text-sm text-white/60">
+              Fale com o suporte para combinar a entrega. A conversa já abre
+              com os dados da sua compra.
+            </p>
+            <BotaoReivindicar
+              className="mt-4 w-full sm:w-auto"
+              telefoneDoSuporte={reivindicacao.telefoneDoSuporte}
+              nome={reivindicacao.nome}
+              premio={reivindicacao.premio}
+              campanha={reivindicacao.campanha}
+              referencia={reivindicacao.referencia}
+            />
+          </section>
+        )}
 
         <EstadoDaConexao situacao={conexao} recarregar={recarregar} />
       </div>

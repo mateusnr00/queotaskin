@@ -18,7 +18,6 @@ import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { numeroDoTitulo, ordemEmbaralhada } from "@/lib/titulo";
 import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
-import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
 import { SeloDeLiberado } from "@/components/rank/selo-de-liberado";
@@ -228,11 +227,6 @@ export default async function PublicRaffleDetailPage({
   // do título pra exibir no card. Não bloqueia, se ninguém comprou esse
   // número (edge case), mostra só o número.
   let winnerParticipant: string | null = null;
-  // A conta e o pedido de quem ganhou. O nome já era lido para o card; o id da
-  // conta é o que decide quem vê o botão de reivindicar, e o id do pedido é o
-  // que o suporte usa para achar a compra sem perguntar nada.
-  let winnerUserId: string | null = null;
-  let winnerReservationId: string | null = null;
   if (raffle.winnerTicketNumber != null) {
     const winnerTicket = await prisma.ticket.findFirst({
       where: {
@@ -241,36 +235,12 @@ export default async function PublicRaffleDetailPage({
         status: { in: ["PAID", "AWARDED"] },
       },
       select: {
-        reservation: {
-          select: { participantName: true, userId: true, id: true },
-        },
+        reservation: { select: { participantName: true } },
       },
     });
     winnerParticipant =
       winnerTicket?.reservation?.participantName?.trim() || null;
-    winnerUserId = winnerTicket?.reservation?.userId ?? null;
-    winnerReservationId = winnerTicket?.reservation?.id ?? null;
   }
-
-  // Quem está olhando é quem ganhou?
-  //
-  // Compara a CONTA, e não o nome: dois "João Silva" existem, e o botão abre
-  // uma conversa de entrega de skin. Compra feita sem login não tem conta
-  // ligada, e aí ninguém vê o botão, nem o próprio ganhador; é o preço de não
-  // arriscar mostrar a reivindicação para a pessoa errada.
-  const souOGanhador = winnerUserId != null && currentUser?.id === winnerUserId;
-
-  // O telefone só é buscado para quem vai mesmo ver o botão. Uma ida ao banco
-  // por visita para alimentar um botão que quase ninguém enxerga seria peso em
-  // toda a página para servir a uma pessoa por campanha.
-  const telefoneDoSuporte = souOGanhador
-    ? ((
-        await prisma.tenant.findUnique({
-          where: { id: tenant.id },
-          select: { supportPhone: true },
-        })
-      )?.supportPhone ?? null)
-    : null;
 
   // Backward-compat: lê requiredFields do JSON com defaults seguros.
   const rawRF = raffle.requiredFields as Partial<RequiredFields>;
@@ -700,41 +670,6 @@ export default async function PublicRaffleDetailPage({
           </div>
         )}
 
-        {/* Reivindicação do prêmio, abaixo de tudo, e só para quem ganhou.
-            Ganhar e não saber o que fazer em seguida é o pior momento para
-            deixar a pessoa sozinha: a página dizia o nome dela e parava ali.
-            A mensagem já vai escrita com campanha, prêmio e número do pedido,
-            então o suporte abre a conversa sabendo o que entregar.
-
-            Sem telefone de suporte cadastrado o bloco inteiro não aparece.
-            Botão que abre conversa com ninguém promete atendimento e não
-            entrega, que é pior do que não ter botão. O número sai de
-            Configurações, em Telefone de suporte. */}
-        {souOGanhador && telefoneDoSuporte && (
-          <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.07] p-5 text-center">
-            <p className="text-[11px] font-bold tracking-[0.14em] text-emerald-600 uppercase dark:text-emerald-400">
-              Você ganhou
-            </p>
-            <p className="mt-1 text-lg font-black tracking-tight">
-              Título{" "}
-              {numeroDoTitulo(raffle.winnerTicketNumber!, raffle.totalNumbers)}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Fale com o suporte para combinar a entrega. A conversa já abre com
-              os dados da sua compra.
-            </p>
-            <BotaoReivindicar
-              className="mt-4 w-full sm:w-auto"
-              telefoneDoSuporte={telefoneDoSuporte}
-              nome={currentUser!.name}
-              premio={headlinePrize?.skinName || raffle.title}
-              campanha={raffle.title}
-              referencia={
-                winnerReservationId ?? String(raffle.winnerTicketNumber)
-              }
-            />
-          </section>
-        )}
       </div>
     </div>
   );
