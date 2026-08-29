@@ -34,6 +34,7 @@ import {
   type Contagem,
 } from "@/lib/promocao-em-dobro";
 import { cn } from "@/lib/utils";
+import { Chama } from "@/components/public/chama";
 
 /** "07/08/2026 às 15:59", no fuso oficial. */
 function dataPorExtenso(iso: string): string {
@@ -90,14 +91,13 @@ export function FaixaDeDobro({
         id="dobro-titulo"
         className="text-lg font-extrabold tracking-tight text-amber-950 md:text-xl"
       >
-        {/* aria-hidden nos dois: o leitor de tela anunciaria "fogo" duas
-            vezes, e o fogo aqui é entusiasmo, não informação. */}
-        <span aria-hidden className="fogo">
-          🔥
-        </span>{" "}
-        Chance em dobro!{" "}
-        <span aria-hidden className="fogo fogo-atrasado">
-          🔥
+        {/* As chamas ficam num flex com o texto para as três coisas
+            partilharem a mesma linha de base. Soltas no meio do texto, o
+            desenho de 30px empurrava a altura da linha. */}
+        <span className="inline-flex items-center justify-center gap-1.5">
+          <Chama />
+          Chance em dobro!
+          <Chama />
         </span>
       </h2>
 

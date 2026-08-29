@@ -913,67 +913,255 @@
 /* ============================================================
    O fogo da promoção em dobro.
 
-   Duas animações ao mesmo tempo, com durações que não se dividem uma pela
-   outra (0,42s e 0,8s): elas saem de fase sozinhas e a chama nunca repete o
-   mesmo desenho duas vezes seguidas. Com durações múltiplas, o olho pega o
-   ciclo em poucos segundos e o fogo vira um GIF.
+   Não é emoji: são quatro camadas desenhadas em CSS (esquerda, centro,
+   direita e a base borrada), cada uma com a própria animação e a própria
+   duração. É o que dá fluidez, porque nenhuma delas repete junto com a outra:
+   2s, 3s e 2s de brilho se cruzam num ciclo longo demais para o olho fechar.
 
-   A origem fica em 50% 90%, na base da chama. No centro, o emoji giraria
-   como um pêndulo; preso embaixo, ele lambe para cima, que é como fogo se
-   mexe.
+   ENCAIXAR NUM TÍTULO SEM PERDER A PROPORÇÃO
 
-   O brilho é filter e não text-shadow porque o emoji é uma imagem colorida,
-   não uma letra: text-shadow desenharia um borrão retangular atrás dela.
+   O desenho original vive num quadrado de 100px e usa medidas fixas dentro
+   dele: partículas de 10 e 15px, desfoque de 10px, sombra de 10px. Reduzir
+   isso mudando cada número, um por um, desmancharia a chama, porque as
+   proporções entre as camadas são o desenho.
+
+   Então o palco continua com 100px e é o palco inteiro que encolhe, com uma
+   escala só. Tudo dentro dele mantém a relação de tamanho, inclusive o
+   desfoque e as sombras, que também escalam.
    ============================================================ */
-.fogo {
+
+/* O medalhão escuro por trás.
+ *
+ * O desenho é laranja (#ef5a00) e a faixa da promoção também é laranja: um
+ * sobre o outro, o fogo simplesmente sumia, virava um borrão mais escuro no
+ * meio do título. Fogo precisa de fundo escuro para parecer fogo, e o disco
+ * dá isso sem obrigar a faixa inteira a mudar de cor.
+ *
+ * O disco é maior que o palco, então a chama respira dentro dele e as
+ * fagulhas sobem sem bater na borda. */
+.chama {
+  --escala: 0.19;
+  position: relative;
   display: inline-block;
-  line-height: 1;
-  transform-origin: 50% 90%;
-  will-change: transform, filter;
-  animation:
-    chama-treme 0.42s ease-in-out infinite alternate,
-    chama-brilha 0.8s ease-in-out infinite alternate;
+  /* 210 e não 100: as três chamas são giradas em 45 graus, então o desenho
+     pintado ocupa quase o dobro do quadrado do palco. Medi no navegador em vez
+     de deduzir, porque a rotação com scaleX não dá para calcular de cabeça:
+     o desenho vai de 15 a 207 na horizontal e de -27 a 127 na vertical. */
+  width: calc(210px * var(--escala));
+  height: calc(210px * var(--escala));
+  border-radius: 50%;
+  /* As fagulhas sobem até `top: -100%` e saíam do disco, virando pontinhos
+     soltos no meio da faixa laranja, com cara de sujeira na tela. Aparadas na
+     borda, elas somem dentro do fogo, que é onde faz sentido. */
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 62%, #3a1400 0%, #1a0d02 72%);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.35),
+    0 1px 3px rgb(0 0 0 / 0.3);
+  /* A massa visual do fogo fica embaixo, então o disco desce um pouco para a
+     base alinhar com a linha do texto em vez de flutuar acima dela. */
+  vertical-align: -0.42em;
 }
 
-/* A segunda chama entra fora de compasso da primeira. Em sincronia, as duas
-   parecem um único objeto piscando, e não duas chamas. */
-.fogo-atrasado {
-  animation-delay: -0.21s, -0.4s;
+/* O palco posicionado pelo CENTRO DO DESENHO, e não pelo centro da caixa.
+   O centro pintado fica em (110,7 / 50) nas coordenadas do palco, bem longe
+   do (50 / 50) da caixa: alinhar pela caixa jogava a chama para fora do disco
+   pela direita. Os números abaixo levam esse ponto para o meio do medalhão. */
+.chama-palco {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100px;
+  height: 100px;
+  transform-origin: 0 0;
+  transform: translate(calc(-5.7px * var(--escala)), calc(55px * var(--escala)))
+    scale(var(--escala));
 }
 
-@keyframes chama-treme {
-  0% {
-    transform: translateY(0) rotate(-4deg) scaleX(0.96) scaleY(1.02);
+@keyframes chama-cresce {
+  0%,
+  100% {
+    transform: scaleY(1) scaleX(1);
   }
-  25% {
-    transform: translateY(-2px) rotate(3deg) scaleX(1.03) scaleY(1.1);
-  }
-  50% {
-    transform: translateY(0) rotate(-2deg) scaleX(0.98) scaleY(1.05);
+  50%,
+  90% {
+    transform: scaleY(1.1);
   }
   75% {
-    transform: translateY(-3px) rotate(4deg) scaleX(1.05) scaleY(1.13);
+    transform: scaleY(0.95);
   }
-  100% {
-    transform: translateY(-1px) rotate(-3deg) scaleX(1) scaleY(1.08);
+  80% {
+    transform: scaleX(0.95);
   }
 }
 
-@keyframes chama-brilha {
+@keyframes chama-balanca {
+  0%,
+  100% {
+    transform: skewX(0) scale(1);
+  }
+  50% {
+    transform: skewX(5deg) scale(0.9);
+  }
+}
+
+@keyframes chama-fagulha {
   0% {
-    filter: brightness(1) saturate(1) drop-shadow(0 0 0 rgba(255, 110, 0, 0));
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
   }
   100% {
-    filter: brightness(1.15) saturate(1.15)
-      drop-shadow(0 0 8px rgba(255, 110, 0, 0.55))
-      drop-shadow(0 0 14px rgba(255, 180, 0, 0.25));
+    opacity: 0;
+    top: -100%;
+    transform: scale(0.5);
   }
 }
 
-/* Quem pediu menos movimento no sistema fica com o emoji parado. O fogo é
-   enfeite: nenhuma informação da faixa depende dele. */
+@keyframes chama-brasa {
+  0%,
+  100% {
+    background-color: #ff8c00;
+  }
+  50% {
+    background-color: #ffc21f;
+  }
+}
+
+.chama-centro {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  animation: chama-cresce 3s ease-out infinite both;
+}
+
+.chama-centro .chama-corpo {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(
+    farthest-corner at 10px 0,
+    #ffd447 0%,
+    #ff8c00 42%,
+    #e64a00 95%
+  );
+  transform: scaleX(0.8) rotate(45deg);
+  border-radius: 0 40% 60% 40%;
+  filter: drop-shadow(0 0 10px #d43322);
+}
+
+.chama-centro .chama-fagulha {
+  position: absolute;
+  top: 60%;
+  left: 45%;
+  width: 10px;
+  height: 10px;
+  background-color: #ffcc3d;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 10px #ff8c00);
+  animation: chama-fagulha 2s ease-out infinite both;
+}
+
+.chama-direita {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  animation: chama-balanca 2s ease-out infinite both;
+}
+
+.chama-direita .chama-corpo {
+  position: absolute;
+  top: 15%;
+  right: -25%;
+  width: 80%;
+  height: 80%;
+  background-color: #d13c00;
+  transform: scaleX(0.8) rotate(45deg);
+  border-radius: 0 40% 60% 40%;
+  filter: drop-shadow(0 0 10px #d43322);
+}
+
+.chama-direita .chama-fagulha {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: 15px;
+  height: 15px;
+  background-color: #ffcc3d;
+  transform: scaleX(0.8) rotate(45deg);
+  border-radius: 50%;
+  filter: drop-shadow(0 0 10px #ff8c00);
+  animation: chama-fagulha 2s ease-out infinite both;
+}
+
+/* Três segundos aqui contra dois na direita: as duas laterais nunca ficam na
+   mesma posição ao mesmo tempo, e é essa diferença que faz a chama parecer
+   viva em vez de espelhada. */
+.chama-esquerda {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  animation: chama-balanca 3s ease-out infinite both;
+}
+
+.chama-esquerda .chama-corpo {
+  position: absolute;
+  top: 15%;
+  left: -20%;
+  width: 80%;
+  height: 80%;
+  background-color: #d13c00;
+  transform: scaleX(0.8) rotate(45deg);
+  border-radius: 0 40% 60% 40%;
+  filter: drop-shadow(0 0 10px #d43322);
+}
+
+.chama-esquerda .chama-fagulha {
+  position: absolute;
+  top: 10%;
+  left: 20%;
+  width: 10%;
+  height: 10%;
+  background-color: #ffcc3d;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 10px #ff8c00);
+  animation: chama-fagulha 3s ease-out infinite both;
+}
+
+/* A base borrada é o que dá volume: sem ela as três chamas ficam recortadas
+   como adesivo colado no fundo. */
+.chama-base .chama-corpo {
+  position: absolute;
+  top: 30%;
+  left: 20%;
+  width: 75%;
+  height: 75%;
+  background-color: #ffb300;
+  transform: scaleX(0.8) rotate(45deg);
+  border-radius: 0 40% 100% 40%;
+  filter: blur(14px);
+  animation: chama-brasa 2s ease-out infinite both;
+}
+
+/* Quem pediu menos movimento fica com a chama parada. Ela continua desenhada,
+   e nenhuma informação da faixa depende do movimento dela. */
 @media (prefers-reduced-motion: reduce) {
-  .fogo {
+  .chama-centro,
+  .chama-direita,
+  .chama-esquerda,
+  .chama-centro .chama-fagulha,
+  .chama-direita .chama-fagulha,
+  .chama-esquerda .chama-fagulha,
+  .chama-base .chama-corpo {
     animation: none;
+  }
+  /* As fagulhas nascem invisíveis por causa do `both`: sem animação elas
+     ficariam três bolinhas soltas em cima da chama. */
+  .chama-fagulha {
+    display: none;
   }
 }
