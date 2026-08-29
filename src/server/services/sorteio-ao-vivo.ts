@@ -507,7 +507,18 @@ async function executarSorteio(draw: Draw): Promise<Draw> {
       data: {
         winnerTicketNumber: vencedor.number,
         winnerDrawnAt: executadoEm,
-        winnerNote: `Sorteio automático ${draw.publicId}. ${prova.ticketCount} títulos elegíveis, ${METODO_DE_SORTEIO}. Confira em /sorteio/${draw.publicId}/verificar`,
+        // winnerNote NÃO é preenchida aqui, e isso é intencional.
+        //
+        // Ela recebia um parágrafo automático com o código do sorteio, a
+        // contagem de títulos, o nome do método e um caminho de URL escrito
+        // como texto. Tudo isso já está na página do sorteio, em tabela, com
+        // link clicável. Repetido no card de ganhador da campanha virava
+        // quatro linhas de jargão embaixo do nome de quem levou a skin, que é
+        // o que a pessoa foi ali ver.
+        //
+        // O campo continua existindo para o que ele sempre foi: um recado
+        // escrito à mão pelo admin. Deixá-lo nulo aqui é o que devolve esse
+        // espaço a quem tem algo a dizer.
       },
     });
 

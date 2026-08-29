@@ -37,7 +37,6 @@ import { cn } from "@/lib/utils";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
 import { BORDA_DE_AUTH, HALO_DE_AUTH } from "@/components/auth/cartao-de-auth";
 import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
-import { CertificadoDoSorteio } from "@/components/sorteio/certificado";
 import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
 import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
@@ -124,7 +123,14 @@ export function TransmissaoDoSorteio({
           {fase === "ERROR" && <Falha estado={estado} />}
         </div>
 
-        <CertificadoDoSorteio estado={estado} />
+        {/* O certificado saiu daqui. Era um card com quatro hashes de 64
+            caracteres, cada um com sua legenda, aberto embaixo do resultado.
+            Quem chega nesta página vem ver quem ganhou.
+
+            Nada se perdeu, e sem link novo: a revelação já traz "Conferir o
+            sorteio" logo abaixo do nome do ganhador, e a página de conferência
+            mostra os mesmos quatro hashes com a checagem rodando ao vivo. O
+            card era a terceira cópia da mesma informação na mesma tela. */}
 
         <EstadoDaConexao situacao={conexao} recarregar={recarregar} />
       </div>

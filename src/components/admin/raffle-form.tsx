@@ -167,8 +167,9 @@ interface RaffleFormProps {
 // null, categoria vazia. O admin escolhe tudo conscientemente. Os únicos
 // campos sempre ON são name/phone/cpf em requiredFields (vêm do cadastro
 // obrigatório do usuário; admin não pode desligar na UI). Selects com
-// enum (privacy/modality/reservationModel/descriptionMode) ficam no
-// primeiro valor pra evitar estado indefinido, admin troca se quiser.
+// enum (privacy/modality/descriptionMode) ficam no primeiro valor pra evitar
+// estado indefinido, admin troca se quiser. reservationModel é a exceção: vem
+// em RANDOM_NUMBERS de propósito, não no primeiro valor do enum.
 const DEFAULT_VALUES: RaffleGeneralInput = {
   title: "",
   slug: "",
@@ -185,7 +186,10 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   allowReceiptDownload: false,
   showParticipantName: false,
   modality: "OWN_DRAW",
-  reservationModel: "MANUAL",
+  // Números aleatórios, e não escolha manual: é o padrão pedido, e é o que
+  // a maioria das campanhas usa. Quem quiser deixar o participante escolher
+  // troca no select logo ali.
+  reservationModel: "RANDOM_NUMBERS",
   requiredFields: {
     name: true,
     phone: true,

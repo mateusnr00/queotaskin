@@ -167,8 +167,7 @@ export default async function PublicRaffleDetailPage({
   // Estas quatro não dependem uma da outra: em série, cada uma paga a
   // latência de rede até o banco. Em paralelo, paga-se uma vez só, o que
   // pesa quando a função e o Postgres estão em regiões diferentes.
-  const [currentUser, soldCount, ocupados, takenTickets] =
-    await Promise.all([
+  const [currentUser, soldCount, ocupados, takenTickets] = await Promise.all([
     session?.user?.id
       ? prisma.user.findUnique({
           where: { id: session.user.id },
@@ -194,7 +193,7 @@ export default async function PublicRaffleDetailPage({
           select: { number: true },
         })
       : Promise.resolve([]),
-    ]);
+  ]);
 
   const takenNumbers = takenTickets.map((t) => t.number);
 
@@ -277,7 +276,7 @@ export default async function PublicRaffleDetailPage({
       inicio: raffle.promotionsDoubleFrom,
       fim: raffle.promotionsDoubleUntil,
     },
-    new Date()
+    new Date(),
   );
   // O oposto do portão: quem alcançou o rank precisa VER que alcançou, senão
   // a campanha exclusiva fica idêntica a qualquer outra e o que ele comprou
@@ -292,6 +291,15 @@ export default async function PublicRaffleDetailPage({
 
   // Pra cada título premiado, descobre se já foi comprado/contemplado e por
   // quem. Aparece como "VICTOR 🏆" no card; sem comprador = "Disponível".
+  // Sorteio concluído. Depois dele a página é um registro do que aconteceu,
+  // não uma vitrine de venda: some a caixa de compra, some a prova
+  // criptográfica e some a nota automática do resultado. O compromisso da
+  // chave continua aparecendo ENQUANTO vende, que é quando ele vale alguma
+  // coisa: publicá-lo antes é o que impede escolher a chave depois de saber
+  // quem ganharia. Depois do sorteio, quem quiser conferir vai na página do
+  // sorteio, que guarda tudo.
+  const sorteioConcluido = raffle.winnerTicketNumber != null;
+
   const showAwarded =
     raffle.awardedTicketsEnabled && raffle.awardedTicketsShowList;
   const awardedNumbers = raffle.awardedTickets.map((a) => a.number);
@@ -330,7 +338,7 @@ export default async function PublicRaffleDetailPage({
       skinRarity: a.skinRarity,
       participantName: participantByNumber.get(a.number) ?? null,
       participantTeamId: teamByNumber.get(a.number) ?? null,
-    })
+    }),
   );
   // ── Caixas surpresas na página pública ──
   //
@@ -357,11 +365,11 @@ export default async function PublicRaffleDetailPage({
       // nome: quem decide comprar quer ver o que já saiu, e isso não exige
       // expor quem levou.
       ganhador: raffle.surpriseBoxExibirGanhadores
-        ? p.claimedByBox?.reservation.participantName ?? null
+        ? (p.claimedByBox?.reservation.participantName ?? null)
         : null,
       // Segue a mesma chave do nome: sem "exibir ganhadores", nem o time sai.
       timeDoGanhador: raffle.surpriseBoxExibirGanhadores
-        ? p.claimedByBox?.reservation.user?.favoriteTeamId ?? null
+        ? (p.claimedByBox?.reservation.user?.favoriteTeamId ?? null)
         : null,
       aberto: Boolean(p.claimedAt),
     }));
@@ -418,9 +426,20 @@ export default async function PublicRaffleDetailPage({
         />
 
         <div className="space-y-1.5">
-          <SeloDeStatus
-            texto={statusDaCampanha(soldCount, raffle.totalNumbers, statusConfig)}
-          />
+          {/* O selo fala do estado da VENDA, e depois do sorteio não há
+              venda. Ele continuava dizendo "aguardando sorteio" numa página
+              que anuncia "sorteio realizado" logo abaixo, com o nome do
+              ganhador. Duas afirmações contrárias na mesma tela, e a de cima
+              era a errada. */}
+          {!sorteioConcluido && (
+            <SeloDeStatus
+              texto={statusDaCampanha(
+                soldCount,
+                raffle.totalNumbers,
+                statusConfig,
+              )}
+            />
+          )}
           <h1 className="text-xl font-bold leading-tight tracking-tight md:text-3xl">
             {raffle.title}
           </h1>
@@ -440,7 +459,7 @@ export default async function PublicRaffleDetailPage({
           />
         )}
 
-  {/* Card de ganhador: só aparece quando o admin declarou o resultado. */}
+        {/* Card de ganhador: só aparece quando o admin declarou o resultado. */}
         {raffle.winnerTicketNumber != null && (
           <div className="rounded-2xl border-2 border-amber-500/50 bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/20 p-5 text-center space-y-2">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow">
@@ -483,89 +502,96 @@ export default async function PublicRaffleDetailPage({
       {/* ---------- caixa de compra ---------- */}
       {/* Fixa na coluna da direita no desktop; no celular é só o bloco
           seguinte, logo abaixo do título. */}
-      <div className="mt-5 space-y-3 md:mt-6 md:space-y-4">
-        {liberadaPeloRank && (
-          <SeloDeLiberado
-            minLevel={raffle.minLevel!}
-            rank={rankFromXp(viewerXp)}
-            gratuita={raffle.isFree}
-          />
-        )}
-        {/* Preço antes da barra: é o que decide a compra, e a barra é
+      {/* A caixa de compra inteira, e não só a frase "não está mais
+          disponível para venda": depois do sorteio não há o que vender, e um
+          card vazio dizendo isso é ruído no lugar de informação. */}
+      {!sorteioConcluido && (
+        <div className="mt-5 space-y-3 md:mt-6 md:space-y-4">
+          {liberadaPeloRank && (
+            <SeloDeLiberado
+              minLevel={raffle.minLevel!}
+              rank={rankFromXp(viewerXp)}
+              gratuita={raffle.isFree}
+            />
+          )}
+          {/* Preço antes da barra: é o que decide a compra, e a barra é
             contexto para essa decisão. Com a barra em cima, quem abre a
             página lê primeiro quanto já foi vendido e só depois descobre o
             valor, que é a informação que ele veio buscar. */}
-        {raffle.isFree ? (
-          <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-4 text-center">
-            <span className="text-xl font-extrabold uppercase tracking-tight text-primary sm:text-2xl">
-              {raffle.freeLabel || "SORTEIO GRATUITO"}
-            </span>
-          </div>
-        ) : (
-          <PrecoDaCampanha
-            preco={formatBRL(Number(raffle.pricePerNumber))}
-          />
-        )}
-
-        {raffle.showProgressBar && (
-          <BarraDeProgresso
-            percent={Math.min(100, Math.max(0, soldPercent))}
-            soldCount={soldCount}
-            remaining={remaining}
-          />
-        )}
-
-        <div className="rounded-xl border bg-card p-4 md:rounded-2xl md:p-5">
-  {!isActive ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Este sorteio não está mais disponível para venda.
-            </p>
-          ) : remaining <= 0 ? (
-            // Sem esse ramo, o formulário aparecia normalmente e a reserva só
-            // falhava no submit, com uma mensagem genérica de erro, que faz
-            // parecer defeito e não campanha esgotada.
-            <div className="py-8 text-center">
-              <p className="text-sm font-semibold">Todos os números foram vendidos</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                O sorteio acontece na data marcada. Acompanhe o resultado aqui
-                mesmo.
-              </p>
+          {raffle.isFree ? (
+            <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-4 text-center">
+              <span className="text-xl font-extrabold uppercase tracking-tight text-primary sm:text-2xl">
+                {raffle.freeLabel || "SORTEIO GRATUITO"}
+              </span>
             </div>
-          ) : levelLocked ? (
-            <MinLevelGate
-              minLevel={raffle.minLevel!}
-              xp={viewerXp}
-              isLoggedIn={Boolean(currentUser)}
-              gratuita={raffle.isFree}
-              jaGarantiram={soldCount}
-            />
           ) : (
-            <>
-              {dobroValendo && (
-                <FaixaDeDobro
-                  inicio={raffle.promotionsDoubleFrom?.toISOString() ?? null}
-                  fim={raffle.promotionsDoubleUntil?.toISOString() ?? null}
-                  className="mb-4"
-                />
-              )}
-              <ReservationForm
-              raffleId={raffle.id}
-              totalNumbers={raffle.totalNumbers}
-              takenNumbers={takenNumbers}
-              minPurchase={raffle.minPurchase}
-              maxPurchase={raffle.maxPurchase ?? undefined}
-              initialQuantity={raffle.initialQuantity ?? undefined}
-              reservationModel={raffle.reservationModel}
-              requiredFields={requiredFields}
-              currentUser={currentUser}
-              pricePerNumber={Number(raffle.pricePerNumber)}
-              selectionCards={raffle.selectionCards ?? []}
-              selectionCardsBestseller={raffle.selectionCardsBestseller ?? -1}
-              />
-            </>
+            <PrecoDaCampanha preco={formatBRL(Number(raffle.pricePerNumber))} />
           )}
+
+          {raffle.showProgressBar && (
+            <BarraDeProgresso
+              percent={Math.min(100, Math.max(0, soldPercent))}
+              soldCount={soldCount}
+              remaining={remaining}
+            />
+          )}
+
+          <div className="rounded-xl border bg-card p-4 md:rounded-2xl md:p-5">
+            {!isActive ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Este sorteio não está mais disponível para venda.
+              </p>
+            ) : remaining <= 0 ? (
+              // Sem esse ramo, o formulário aparecia normalmente e a reserva só
+              // falhava no submit, com uma mensagem genérica de erro, que faz
+              // parecer defeito e não campanha esgotada.
+              <div className="py-8 text-center">
+                <p className="text-sm font-semibold">
+                  Todos os números foram vendidos
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  O sorteio acontece na data marcada. Acompanhe o resultado aqui
+                  mesmo.
+                </p>
+              </div>
+            ) : levelLocked ? (
+              <MinLevelGate
+                minLevel={raffle.minLevel!}
+                xp={viewerXp}
+                isLoggedIn={Boolean(currentUser)}
+                gratuita={raffle.isFree}
+                jaGarantiram={soldCount}
+              />
+            ) : (
+              <>
+                {dobroValendo && (
+                  <FaixaDeDobro
+                    inicio={raffle.promotionsDoubleFrom?.toISOString() ?? null}
+                    fim={raffle.promotionsDoubleUntil?.toISOString() ?? null}
+                    className="mb-4"
+                  />
+                )}
+                <ReservationForm
+                  raffleId={raffle.id}
+                  totalNumbers={raffle.totalNumbers}
+                  takenNumbers={takenNumbers}
+                  minPurchase={raffle.minPurchase}
+                  maxPurchase={raffle.maxPurchase ?? undefined}
+                  initialQuantity={raffle.initialQuantity ?? undefined}
+                  reservationModel={raffle.reservationModel}
+                  requiredFields={requiredFields}
+                  currentUser={currentUser}
+                  pricePerNumber={Number(raffle.pricePerNumber)}
+                  selectionCards={raffle.selectionCards ?? []}
+                  selectionCardsBestseller={
+                    raffle.selectionCardsBestseller ?? -1
+                  }
+                />
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ---------- conteúdo longo ---------- */}
       {/* Tudo que ajuda a decidir, mas não precisa vir antes do botão. */}
@@ -579,7 +605,7 @@ export default async function PublicRaffleDetailPage({
           />
         )}
 
-  {raffle.showDrawDate && raffle.drawDate && (
+        {raffle.showDrawDate && raffle.drawDate && (
           <div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">Sorteio em</span>
@@ -589,7 +615,7 @@ export default async function PublicRaffleDetailPage({
           </div>
         )}
 
-  {raffle.description &&
+        {raffle.description &&
           (raffle.descriptionMode === "EXPANDED" ? (
             <div className="rounded-xl border bg-card px-4 py-3 space-y-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -615,11 +641,11 @@ export default async function PublicRaffleDetailPage({
             </details>
           ))}
 
-  {raffle.prizesShow && raffle.prizes.length > 0 && (
+        {raffle.prizesShow && raffle.prizes.length > 0 && (
           <PrizesSection prizes={skinPrizes} />
         )}
 
-  {showAwarded && publicAwardedTickets.length > 0 && (
+        {showAwarded && publicAwardedTickets.length > 0 && (
           <AwardedTicketsSection
             tickets={publicAwardedTickets}
             totalNumbers={raffle.totalNumbers}
@@ -640,7 +666,7 @@ export default async function PublicRaffleDetailPage({
             celular entre o nome da campanha e o preço. Aqui embaixo ela
             continua pública antes da venda, que é o que dá valor a ela, sem
             atravessar o caminho de quem veio comprar. */}
-        {semente && (
+        {semente && !sorteioConcluido && (
           <SeloDeCompromisso
             hash={semente.serverSeedHash}
             desde={semente.committedAt.toISOString()}
@@ -648,15 +674,12 @@ export default async function PublicRaffleDetailPage({
           />
         )}
 
-  {raffle.showShareButtons && (
+        {raffle.showShareButtons && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Compartilhar
             </p>
-            <SocialShare
-              url={shareUrl}
-              title={`Participe: ${raffle.title}`}
-            />
+            <SocialShare url={shareUrl} title={`Participe: ${raffle.title}`} />
           </div>
         )}
       </div>

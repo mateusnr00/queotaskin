@@ -481,7 +481,10 @@ model Raffle {
   freeLabel            String?
   hasFee               Boolean          @default(false) // adicionar taxa por reserva
   feeAmount            Decimal?         @db.Decimal(10, 2)
-  reservationModel     ReservationModel @default(MANUAL)
+  /// Números aleatórios por padrão. O formulário do painel já vem nesse
+  /// valor, e o padrão do banco acompanha para quem criar campanha por outro
+  /// caminho não cair num modelo diferente do que a tela mostra.
+  reservationModel     ReservationModel @default(RANDOM_NUMBERS)
   modality             RaffleModality   @default(OWN_DRAW)
   drawDate             DateTime?
   salesStart           DateTime?

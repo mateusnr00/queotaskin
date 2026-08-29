@@ -69,7 +69,10 @@ export function SeloDeTransmissao({
           </p>
           <p className="mt-0.5 truncate text-sm font-bold text-white">
             {status === "FINISHED"
-              ? "Ver o resultado e o certificado"
+              ? // "e o certificado" prometia um card que não existe mais na
+                // página do sorteio. A conferência continua lá, atrás do botão
+                // que fica abaixo do ganhador.
+                "Ver quem ganhou"
               : aoVivo
                 ? "Assistir ao sorteio"
                   : faltam == null
