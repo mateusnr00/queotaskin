@@ -913,254 +913,264 @@
 /* ============================================================
    O fogo da promoção em dobro.
 
-   Não é emoji: são quatro camadas desenhadas em CSS (esquerda, centro,
-   direita e a base borrada), cada uma com a própria animação e a própria
-   duração. É o que dá fluidez, porque nenhuma delas repete junto com a outra:
-   2s, 3s e 2s de brilho se cruzam num ciclo longo demais para o olho fechar.
+   Quatro camadas desenhadas em CSS: esquerda, centro, direita e o brilho da
+   base, mais três fagulhas. A fluidez vem de nenhuma delas repetir junto com
+   outra: 1,8s no fôlego do centro, 0,52s no morph dele, 1,15s e 1,35s nos
+   balanços laterais, 0,44s e 0,50s nos morphs das laterais, 1s no brilho e
+   1,45s nas fagulhas. O ciclo completo é longo demais para o olho fechar.
+
+   O QUE FAZ ESTE PARECER FOGO E NÃO GOTA
+
+   O `border-radius` muda junto com o `transform`. A chama não só balança: ela
+   troca de contorno enquanto balança, que é o que separa fogo de um adesivo
+   girando. É o `centerMorph` e o `sideMorph`.
 
    ENCAIXAR NUM TÍTULO SEM PERDER A PROPORÇÃO
 
-   O desenho original vive num quadrado de 100px e usa medidas fixas dentro
-   dele: partículas de 10 e 15px, desfoque de 10px, sombra de 10px. Reduzir
-   isso mudando cada número, um por um, desmancharia a chama, porque as
-   proporções entre as camadas são o desenho.
+   Quase tudo aqui é porcentagem e escala sozinho, mas as fagulhas, os
+   desfoques e as sombras são medidas fixas pensadas para 72px. Mudar cada uma
+   à mão desmancharia o desenho, porque a relação entre elas é o desenho.
+   Então o palco continua com 72px e é o palco inteiro que encolhe.
 
-   Então o palco continua com 100px e é o palco inteiro que encolhe, com uma
-   escala só. Tudo dentro dele mantém a relação de tamanho, inclusive o
-   desfoque e as sombras, que também escalam.
+   O MEDALHÃO ESCURO
+
+   O fogo é laranja e a faixa da promoção também: um sobre o outro, ele some.
+   O disco escuro devolve o contraste sem obrigar a faixa a mudar de cor, e
+   apara as fagulhas, que sobem 58px e sairiam voando pela faixa.
    ============================================================ */
 
-/* O medalhão escuro por trás.
- *
- * O desenho é laranja (#ef5a00) e a faixa da promoção também é laranja: um
- * sobre o outro, o fogo simplesmente sumia, virava um borrão mais escuro no
- * meio do título. Fogo precisa de fundo escuro para parecer fogo, e o disco
- * dá isso sem obrigar a faixa inteira a mudar de cor.
- *
- * O disco é maior que o palco, então a chama respira dentro dele e as
- * fagulhas sobem sem bater na borda. */
 .chama {
-  --escala: 0.19;
+  --escala: 0.5;
   position: relative;
   display: inline-block;
-  /* 210 e não 100: as três chamas são giradas em 45 graus, então o desenho
-     pintado ocupa quase o dobro do quadrado do palco. Medi no navegador em vez
-     de deduzir, porque a rotação com scaleX não dá para calcular de cabeça:
-     o desenho vai de 15 a 207 na horizontal e de -27 a 127 na vertical. */
-  width: calc(210px * var(--escala));
-  height: calc(210px * var(--escala));
+  /* 120 e não 88: com as sombras, o desenho pintado passa dos 72px do palco e
+     encostava na borda do disco, aparado dos dois lados. Medi no navegador: o
+     desenho ocupa cerca de 92 unidades de largura. */
+  width: calc(120px * var(--escala));
+  height: calc(120px * var(--escala));
   border-radius: 50%;
-  /* As fagulhas sobem até `top: -100%` e saíam do disco, virando pontinhos
-     soltos no meio da faixa laranja, com cara de sujeira na tela. Aparadas na
-     borda, elas somem dentro do fogo, que é onde faz sentido. */
   overflow: hidden;
-  background: radial-gradient(circle at 50% 62%, #3a1400 0%, #1a0d02 72%);
+  background: radial-gradient(circle at 50% 62%, #3a1400 0%, #170b02 74%);
   box-shadow:
     inset 0 0 0 1px rgb(0 0 0 / 0.35),
     0 1px 3px rgb(0 0 0 / 0.3);
-  /* A massa visual do fogo fica embaixo, então o disco desce um pouco para a
-     base alinhar com a linha do texto em vez de flutuar acima dela. */
-  vertical-align: -0.42em;
+  /* A massa do fogo fica embaixo, então o disco desce um pouco para a base
+     assentar na linha do texto em vez de flutuar acima dela. */
+  vertical-align: -0.4em;
 }
 
-/* O palco posicionado pelo CENTRO DO DESENHO, e não pelo centro da caixa.
-   O centro pintado fica em (110,7 / 50) nas coordenadas do palco, bem longe
-   do (50 / 50) da caixa: alinhar pela caixa jogava a chama para fora do disco
-   pela direita. Os números abaixo levam esse ponto para o meio do medalhão. */
 .chama-palco {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100px;
-  height: 100px;
+  width: 72px;
+  height: 72px;
   transform-origin: 0 0;
-  transform: translate(calc(-5.7px * var(--escala)), calc(55px * var(--escala)))
+  transform: translate(calc(24px * var(--escala)), calc(24px * var(--escala)))
     scale(var(--escala));
 }
 
-@keyframes chama-cresce {
+.chama-parte {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+
+.chama-corpo {
+  position: absolute;
+  transform: rotate(45deg) scaleX(0.78);
+  border-radius: 0 46% 62% 42%;
+  will-change: transform, border-radius, opacity;
+}
+
+.chama-centro {
+  animation: chama-folego 1.8s ease-in-out infinite;
+}
+
+.chama-centro .chama-corpo {
+  width: 72%;
+  height: 82%;
+  left: 14%;
+  top: 10%;
+  background:
+    radial-gradient(circle at 35% 70%, #ffd36a 0 12%, transparent 28%),
+    radial-gradient(circle at 58% 72%, #ff8a00 0 20%, transparent 48%),
+    linear-gradient(135deg, #ff2e00 0%, #ff6400 45%, #ffa000 100%);
+  filter: drop-shadow(0 0 5px rgb(255 80 0 / 0.85))
+    drop-shadow(0 0 11px rgb(255 120 0 / 0.5));
+  animation: chama-morph-centro 0.52s ease-in-out infinite alternate;
+}
+
+.chama-esquerda {
+  animation: chama-balanca-esq 1.15s ease-in-out infinite alternate;
+}
+
+.chama-esquerda .chama-corpo {
+  width: 54%;
+  height: 64%;
+  left: 0;
+  top: 27%;
+  background: linear-gradient(135deg, #d92b00 0%, #ff5b00 50%, #ff8f00 100%);
+  filter: drop-shadow(0 0 7px rgb(220 55 0 / 0.65));
+  animation: chama-morph-lateral 0.44s ease-in-out infinite alternate;
+}
+
+.chama-direita {
+  animation: chama-balanca-dir 1.35s ease-in-out infinite alternate;
+}
+
+.chama-direita .chama-corpo {
+  width: 56%;
+  height: 66%;
+  right: -3%;
+  top: 24%;
+  background: linear-gradient(135deg, #d92b00 0%, #ff5b00 52%, #ff8f00 100%);
+  filter: drop-shadow(0 0 7px rgb(220 55 0 / 0.65));
+  animation: chama-morph-lateral 0.5s ease-in-out infinite alternate-reverse;
+}
+
+.chama-base .chama-corpo {
+  width: 66%;
+  height: 46%;
+  left: 17%;
+  top: 47%;
+  background: #ff7a00;
+  filter: blur(7px);
+  opacity: 0.75;
+  animation: chama-brilho 1s ease-in-out infinite alternate;
+}
+
+.chama-fagulha {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff7a00;
+  box-shadow: 0 0 8px #ff4a00;
+  opacity: 0;
+  animation: chama-fagulha 1.45s ease-out infinite;
+}
+
+.chama-fagulha-1 {
+  left: 27%;
+  top: 58%;
+}
+.chama-fagulha-2 {
+  left: 60%;
+  top: 62%;
+  width: 5px;
+  height: 5px;
+  animation-delay: 0.38s;
+}
+.chama-fagulha-3 {
+  left: 43%;
+  top: 52%;
+  width: 4px;
+  height: 4px;
+  animation-delay: 0.76s;
+}
+
+@keyframes chama-folego {
   0%,
   100% {
     transform: scaleY(1) scaleX(1);
   }
-  50%,
-  90% {
-    transform: scaleY(1.1);
+  35% {
+    transform: scaleY(1.08) scaleX(0.98);
   }
-  75% {
-    transform: scaleY(0.95);
-  }
-  80% {
-    transform: scaleX(0.95);
+  65% {
+    transform: scaleY(0.96) scaleX(1.03);
   }
 }
 
-@keyframes chama-balanca {
-  0%,
-  100% {
-    transform: skewX(0) scale(1);
+@keyframes chama-morph-centro {
+  0% {
+    transform: rotate(42deg) scaleX(0.76) scaleY(0.97);
+    border-radius: 0 43% 66% 38%;
   }
   50% {
-    transform: skewX(5deg) scale(0.9);
+    transform: rotate(47deg) scaleX(0.82) scaleY(1.08);
+    border-radius: 0 54% 57% 47%;
+  }
+  100% {
+    transform: rotate(43deg) scaleX(0.78) scaleY(1.03);
+    border-radius: 0 48% 68% 39%;
+  }
+}
+
+@keyframes chama-morph-lateral {
+  0% {
+    transform: rotate(42deg) scaleX(0.72) scaleY(0.94);
+    border-radius: 0 42% 65% 40%;
+  }
+  100% {
+    transform: rotate(48deg) scaleX(0.84) scaleY(1.08);
+    border-radius: 0 55% 58% 45%;
+  }
+}
+
+@keyframes chama-balanca-esq {
+  0% {
+    transform: skewX(-4deg) rotate(-2deg) scale(0.97);
+  }
+  100% {
+    transform: skewX(8deg) rotate(3deg) scale(1.03);
+  }
+}
+
+@keyframes chama-balanca-dir {
+  0% {
+    transform: skewX(5deg) rotate(3deg) scale(1.02);
+  }
+  100% {
+    transform: skewX(-7deg) rotate(-3deg) scale(0.96);
+  }
+}
+
+@keyframes chama-brilho {
+  from {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 0.9;
+    transform: scale(1.06);
   }
 }
 
 @keyframes chama-fagulha {
   0% {
     opacity: 0;
+    transform: translate(0, 0) scale(0.7);
   }
-  20% {
+  18% {
     opacity: 1;
   }
-  80% {
-    opacity: 1;
+  70% {
+    opacity: 0.9;
   }
   100% {
     opacity: 0;
-    top: -100%;
-    transform: scale(0.5);
+    transform: translate(10px, -58px) scale(0.25);
   }
-}
-
-@keyframes chama-brasa {
-  0%,
-  100% {
-    background-color: #ff8c00;
-  }
-  50% {
-    background-color: #ffc21f;
-  }
-}
-
-.chama-centro {
-  position: absolute;
-  height: 100%;
-  width: 100%;
-  animation: chama-cresce 3s ease-out infinite both;
-}
-
-.chama-centro .chama-corpo {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background-image: radial-gradient(
-    farthest-corner at 10px 0,
-    #ffd447 0%,
-    #ff8c00 42%,
-    #e64a00 95%
-  );
-  transform: scaleX(0.8) rotate(45deg);
-  border-radius: 0 40% 60% 40%;
-  filter: drop-shadow(0 0 10px #d43322);
-}
-
-.chama-centro .chama-fagulha {
-  position: absolute;
-  top: 60%;
-  left: 45%;
-  width: 10px;
-  height: 10px;
-  background-color: #ffcc3d;
-  border-radius: 50%;
-  filter: drop-shadow(0 0 10px #ff8c00);
-  animation: chama-fagulha 2s ease-out infinite both;
-}
-
-.chama-direita {
-  position: absolute;
-  height: 100%;
-  width: 100%;
-  animation: chama-balanca 2s ease-out infinite both;
-}
-
-.chama-direita .chama-corpo {
-  position: absolute;
-  top: 15%;
-  right: -25%;
-  width: 80%;
-  height: 80%;
-  background-color: #d13c00;
-  transform: scaleX(0.8) rotate(45deg);
-  border-radius: 0 40% 60% 40%;
-  filter: drop-shadow(0 0 10px #d43322);
-}
-
-.chama-direita .chama-fagulha {
-  position: absolute;
-  top: 45%;
-  left: 50%;
-  width: 15px;
-  height: 15px;
-  background-color: #ffcc3d;
-  transform: scaleX(0.8) rotate(45deg);
-  border-radius: 50%;
-  filter: drop-shadow(0 0 10px #ff8c00);
-  animation: chama-fagulha 2s ease-out infinite both;
-}
-
-/* Três segundos aqui contra dois na direita: as duas laterais nunca ficam na
-   mesma posição ao mesmo tempo, e é essa diferença que faz a chama parecer
-   viva em vez de espelhada. */
-.chama-esquerda {
-  position: absolute;
-  height: 100%;
-  width: 100%;
-  animation: chama-balanca 3s ease-out infinite both;
-}
-
-.chama-esquerda .chama-corpo {
-  position: absolute;
-  top: 15%;
-  left: -20%;
-  width: 80%;
-  height: 80%;
-  background-color: #d13c00;
-  transform: scaleX(0.8) rotate(45deg);
-  border-radius: 0 40% 60% 40%;
-  filter: drop-shadow(0 0 10px #d43322);
-}
-
-.chama-esquerda .chama-fagulha {
-  position: absolute;
-  top: 10%;
-  left: 20%;
-  width: 10%;
-  height: 10%;
-  background-color: #ffcc3d;
-  border-radius: 50%;
-  filter: drop-shadow(0 0 10px #ff8c00);
-  animation: chama-fagulha 3s ease-out infinite both;
-}
-
-/* A base borrada é o que dá volume: sem ela as três chamas ficam recortadas
-   como adesivo colado no fundo. */
-.chama-base .chama-corpo {
-  position: absolute;
-  top: 30%;
-  left: 20%;
-  width: 75%;
-  height: 75%;
-  background-color: #ffb300;
-  transform: scaleX(0.8) rotate(45deg);
-  border-radius: 0 40% 100% 40%;
-  filter: blur(14px);
-  animation: chama-brasa 2s ease-out infinite both;
 }
 
 /* Quem pediu menos movimento fica com a chama parada. Ela continua desenhada,
-   e nenhuma informação da faixa depende do movimento dela. */
+   e nenhuma informação da faixa depende do movimento dela. As fagulhas somem
+   porque, sem animação, ficariam três bolinhas paradas em cima do fogo. */
 @media (prefers-reduced-motion: reduce) {
+  /* Cada corpo listado com o pai junto, e não só `.chama-corpo`: as regras que
+     ligam a animação são `.chama-centro .chama-corpo`, de especificidade maior,
+     e venciam a desligada. O morph continuava rodando com o resto parado. */
   .chama-centro,
-  .chama-direita,
   .chama-esquerda,
-  .chama-centro .chama-fagulha,
-  .chama-direita .chama-fagulha,
-  .chama-esquerda .chama-fagulha,
+  .chama-direita,
+  .chama-centro .chama-corpo,
+  .chama-esquerda .chama-corpo,
+  .chama-direita .chama-corpo,
   .chama-base .chama-corpo {
     animation: none;
   }
-  /* As fagulhas nascem invisíveis por causa do `both`: sem animação elas
-     ficariam três bolinhas soltas em cima da chama. */
   .chama-fagulha {
     display: none;
   }
