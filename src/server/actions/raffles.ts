@@ -18,6 +18,8 @@ import {
 import { raffleGeneralSchema } from "@/lib/validations/raffle";
 import { garantirSlugLivre } from "@/server/services/raffles";
 import { toSlug } from "@/lib/slug";
+import { registrarLog } from "@/server/services/activity-log";
+import { diferencas } from "@/lib/activity-log-detalhes";
 import { desviarDeReservado, slugReservado } from "@/lib/rotas-reservadas";
 import type { ActionResult } from "@/server/actions/auth";
 
@@ -178,6 +180,13 @@ export async function createRaffleAction(
         return criado;
       });
 
+      await registrarLog({
+        acao: "sorteio.criado",
+        tenantId,
+        alvo: { tipo: "Raffle", id: raffle.id, rotulo: parsed.data.title },
+        detalhes: { slug: raffle.slug },
+      });
+
       revalidatePath("/admin/sorteios");
       revalidatePath("/sorteios");
       revalidatePath("/");
@@ -236,9 +245,52 @@ export async function updateRaffleAction(
 
     // Invalida a página da rifa antiga antes de mudar (slug muda → URL muda).
     // Também valida que a rifa pertence ao tenant atual.
+    //
+    // O select traz todos os campos que o formulário edita, e não só o slug,
+    // porque é este retrato que vira o lado "antes" do registro. Sem ele, o
+    // histórico diria que alguém editou o sorteio e nada sobre o preço que
+    // havia antes, que é a pergunta que motivou o registro inteiro.
     const oldRaffle = await prisma.raffle.findUnique({
       where: { id: parsed.data.id },
-      select: { slug: true, tenantId: true },
+      select: {
+        slug: true,
+        tenantId: true,
+        title: true,
+        shortDescription: true,
+        description: true,
+        descriptionMode: true,
+        category: true,
+        privacy: true,
+        showOnHome: true,
+        drawDate: true,
+        salesStart: true,
+        autoCloseOnDraw: true,
+        showDrawDate: true,
+        allowReceiptDownload: true,
+        showParticipantName: true,
+        statusText: true,
+        modality: true,
+        reservationModel: true,
+        requiredFields: true,
+        totalNumbers: true,
+        pricePerNumber: true,
+        isFree: true,
+        freeLabel: true,
+        hasFee: true,
+        feeAmount: true,
+        reservationTimeoutMinutes: true,
+        minPurchase: true,
+        maxPurchase: true,
+        initialQuantity: true,
+        maxPerBuyer: true,
+        minLevel: true,
+        showProgressBar: true,
+        showDailyRanking: true,
+        showOverallRanking: true,
+        showShareButtons: true,
+        selectionCards: true,
+        selectionCardsBestseller: true,
+      },
     });
     if (!oldRaffle) {
       return { ok: false, error: "Sorteio não encontrado" };
@@ -252,6 +304,107 @@ export async function updateRaffleAction(
         where: { id: parsed.data.id },
         data,
         select: { id: true, slug: true },
+      });
+
+      // Decimal do Prisma vira número dos dois lados antes de comparar. Ele
+      // chega como objeto, e a comparação por referência acusaria mudança de
+      // preço em todo salvamento, inclusive naquele em que ninguém tocou no
+      // preço.
+      const d = parsed.data.data;
+      const mudou = diferencas(
+        {
+          titulo: oldRaffle.title,
+          urlAmigavel: oldRaffle.slug,
+          modoDaDescricao: oldRaffle.descriptionMode,
+          categoria: oldRaffle.category,
+          privacidade: oldRaffle.privacy,
+          destaqueNaHome: oldRaffle.showOnHome,
+          dataDoSorteio: oldRaffle.drawDate,
+          inicioDasVendas: oldRaffle.salesStart,
+          fecharAoSortear: oldRaffle.autoCloseOnDraw,
+          mostrarDataDoSorteio: oldRaffle.showDrawDate,
+          permitirComprovante: oldRaffle.allowReceiptDownload,
+          mostrarNomeDoParticipante: oldRaffle.showParticipantName,
+          textoDeStatus: oldRaffle.statusText,
+          modalidade: oldRaffle.modality,
+          modeloDeReserva: oldRaffle.reservationModel,
+          camposObrigatorios: oldRaffle.requiredFields,
+          totalDeNumeros: oldRaffle.totalNumbers,
+          precoPorNumero: Number(oldRaffle.pricePerNumber),
+          gratuito: oldRaffle.isFree,
+          rotuloDeGratuito: oldRaffle.freeLabel,
+          temTaxa: oldRaffle.hasFee,
+          valorDaTaxa:
+            oldRaffle.feeAmount === null ? null : Number(oldRaffle.feeAmount),
+          minutosParaExpirar: oldRaffle.reservationTimeoutMinutes,
+          compraMinima: oldRaffle.minPurchase,
+          compraMaxima: oldRaffle.maxPurchase,
+          quantidadeInicial: oldRaffle.initialQuantity,
+          maximoPorComprador: oldRaffle.maxPerBuyer,
+          nivelMinimo: oldRaffle.minLevel,
+          mostrarBarraDeProgresso: oldRaffle.showProgressBar,
+          mostrarRankingDiario: oldRaffle.showDailyRanking,
+          mostrarRankingGeral: oldRaffle.showOverallRanking,
+          mostrarBotoesDeCompartilhar: oldRaffle.showShareButtons,
+          cardsDeSelecao: oldRaffle.selectionCards,
+          cardDestaque: oldRaffle.selectionCardsBestseller,
+        },
+        {
+          titulo: d.title,
+          // Slug vazio mantém o atual (ver montagem de `data` acima), então o
+          // lado "depois" é o slug que a rifa realmente ficou tendo.
+          urlAmigavel: raffle.slug,
+          modoDaDescricao: d.descriptionMode,
+          categoria: d.category ?? null,
+          privacidade: d.privacy,
+          destaqueNaHome: d.showOnHome,
+          dataDoSorteio: d.drawDate ?? null,
+          inicioDasVendas: d.salesStart ?? null,
+          fecharAoSortear: d.autoCloseOnDraw,
+          mostrarDataDoSorteio: d.showDrawDate,
+          permitirComprovante: d.allowReceiptDownload,
+          mostrarNomeDoParticipante: d.showParticipantName,
+          textoDeStatus: d.statusText ?? null,
+          modalidade: d.modality,
+          modeloDeReserva: d.reservationModel,
+          camposObrigatorios: d.requiredFields,
+          totalDeNumeros: d.totalNumbers,
+          precoPorNumero: d.pricePerNumber,
+          gratuito: d.isFree,
+          rotuloDeGratuito: d.freeLabel ?? null,
+          temTaxa: d.hasFee,
+          valorDaTaxa: d.feeAmount ?? null,
+          minutosParaExpirar: d.reservationTimeoutMinutes,
+          compraMinima: d.minPurchase,
+          compraMaxima: d.maxPurchase ?? null,
+          quantidadeInicial: d.initialQuantity ?? null,
+          maximoPorComprador: d.maxPerBuyer ?? null,
+          nivelMinimo: d.minLevel ?? null,
+          mostrarBarraDeProgresso: d.showProgressBar,
+          mostrarRankingDiario: d.showDailyRanking,
+          mostrarRankingGeral: d.showOverallRanking,
+          mostrarBotoesDeCompartilhar: d.showShareButtons,
+          cardsDeSelecao: d.selectionCards,
+          cardDestaque: d.selectionCardsBestseller,
+        }
+      );
+
+      // A descrição fica de fora do diff de propósito: são até 50 mil
+      // caracteres de HTML por lado, e ninguém audita texto longo lendo dois
+      // blocos lado a lado num histórico. O marcador diz que mudou, que é o que
+      // se procura; o conteúdo atual está no próprio sorteio.
+      if (oldRaffle.description !== (d.description ?? null)) {
+        mudou.depois.descricaoAlterada = true;
+      }
+      if (oldRaffle.shortDescription !== (d.shortDescription ?? null)) {
+        mudou.depois.descricaoCurtaAlterada = true;
+      }
+
+      await registrarLog({
+        acao: "sorteio.editado",
+        tenantId,
+        alvo: { tipo: "Raffle", id: parsed.data.id, rotulo: d.title },
+        detalhes: mudou,
       });
 
       revalidatePath("/admin/sorteios");
@@ -308,6 +461,18 @@ export async function updateRaffleHighlightAction(
       select: { showOnHome: true },
     });
 
+    // Escrita de painel que muda o que o cliente vê na home, então entra no
+    // histórico como qualquer outra alteração de conteúdo do sorteio.
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: parsed.data.id },
+      detalhes: {
+        o_que: "destaque",
+        depois: { destaqueNaHome: updated.showOnHome },
+      },
+    });
+
     revalidatePath("/admin/sorteios");
     revalidatePath("/");
     return { ok: true, data: { showOnHome: updated.showOnHome } };
@@ -335,6 +500,13 @@ export async function updateRaffleStatusAction(
     if (result.count === 0) {
       return { ok: false, error: "Sorteio não encontrado" };
     }
+
+    await registrarLog({
+      acao: "sorteio.status_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: parsed.data.id },
+      detalhes: { depois: { status: parsed.data.status } },
+    });
 
     revalidatePath("/admin/sorteios");
     revalidatePath("/sorteios");
@@ -414,6 +586,16 @@ export async function deleteRaffleAction(
     }
 
     await prisma.raffle.delete({ where: { id: raffle.id } });
+
+    // O rótulo é congelado a partir do título que estava no banco, lido antes
+    // do delete: depois dele a linha não existe mais para ser consultada. Não
+    // sai do que a pessoa digitou para confirmar, porque a conferência ignora
+    // caixa e espaços, e "SORTEIO da ak " viraria o nome no histórico.
+    await registrarLog({
+      acao: "sorteio.excluido",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffle.id, rotulo: raffle.title },
+    });
 
     revalidatePath("/admin/sorteios");
     revalidatePath(`/${raffle.slug}`);

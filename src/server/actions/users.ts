@@ -17,6 +17,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { registrarLog } from "@/server/services/activity-log";
+import { diferencas } from "@/lib/activity-log-detalhes";
 import bcrypt from "bcryptjs";
 
 import { userCreateSchema, userEditSchema } from "@/lib/validations/auth";
@@ -85,7 +87,12 @@ export async function updateUserAction(
       where: { id },
       select: {
         id: true,
+        name: true,
+        email: true,
+        cpf: true,
+        phone: true,
         role: true,
+        showModBadge: true,
         tenantId: true,
         reservations: {
           where: { raffle: { tenantId } },
@@ -179,6 +186,40 @@ export async function updateUserAction(
       throw err;
     }
 
+    // Papel alterado ganha ação própria mesmo quando outros campos mudaram
+    // junto. É o que alguém procura, e escondê-lo dentro de "editou os dados"
+    // apagaria a promoção no meio do barulho.
+    const mudou = diferencas(
+      {
+        nome: target.name,
+        email: target.email,
+        cpf: target.cpf,
+        telefone: target.phone,
+        papel: target.role,
+        seloDeMod: target.showModBadge,
+      },
+      {
+        nome: name,
+        email: email || null,
+        cpf: cpf || null,
+        telefone: phone || null,
+        papel: finalRole,
+        seloDeMod: showModBadge,
+      }
+    );
+    // Salvar sem mexer em nada não vira linha: o histórico é do que mudou.
+    if (Object.keys(mudou.depois).length > 0) {
+      await registrarLog({
+        acao:
+          mudou.depois.papel !== undefined
+            ? "usuario.papel_alterado"
+            : "usuario.editado",
+        tenantId,
+        alvo: { tipo: "User", id, rotulo: name },
+        detalhes: mudou,
+      });
+    }
+
     revalidatePath("/admin/usuarios");
     // Clientes é a lista onde essa edição costuma começar (alguém trocou de
     // número e pediu para atualizar); sem isto ela continuaria mostrando o
@@ -256,6 +297,16 @@ export async function criarUsuarioAction(
             : {}),
         },
         select: { id: true },
+      });
+
+      await registrarLog({
+        acao: "usuario.criado",
+        tenantId,
+        alvo: { tipo: "User", id: criado.id, rotulo: name },
+        // A senha em si nunca entra: ela aparece uma vez na tela de quem
+        // criou e o banco guarda só o hash. Registrar que a conta nasceu com
+        // acesso ao painel é o que interessa aqui.
+        detalhes: { papel: role, comAcessoAoPainel: Boolean(senhaTemporaria) },
       });
 
       revalidatePath("/admin/clientes");
@@ -343,6 +394,13 @@ export async function gerarSenhaDePainelAction(
         passwordHash: await bcrypt.hash(senhaTemporaria, 12),
         mustChangePassword: true,
       },
+    });
+
+    await registrarLog({
+      acao: "usuario.senha_gerada",
+      tenantId,
+      alvo: { tipo: "User", id: userId, rotulo: alvo.email },
+      detalhes: { papel: alvo.role },
     });
 
     revalidatePath(`/admin/usuarios/${userId}/editar`);

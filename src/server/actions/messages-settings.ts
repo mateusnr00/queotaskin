@@ -10,6 +10,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 const urlOrEmpty = z
@@ -84,6 +85,19 @@ export async function updateMessagesSettingsAction(
       halfwayPercent: Math.min(d.halfwayPercent, d.almostGonePercent),
       almostGonePercent: Math.max(d.halfwayPercent, d.almostGonePercent),
     },
+  });
+
+  // Os NOMES dos campos do schema, nunca os valores.
+  //
+  // "Enviados", não "alterados": os .default() do Zod preenchem o que o
+  // formulário não mandou, então a lista é sempre o schema inteiro, não só
+  // o que de fato mudou neste salvamento. Aqui não são credenciais, mas o
+  // nome do campo segue o mesmo padrão de payment-settings.ts.
+  await registrarLog({
+    acao: "config.mensagens_alterada",
+    tenantId,
+    alvo: { tipo: "Tenant", id: tenantId },
+    detalhes: { camposEnviados: Object.keys(parsed.data) },
   });
 
   revalidatePath("/admin/configuracoes/mensagens");

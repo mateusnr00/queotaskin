@@ -368,6 +368,7 @@ model Tenant {
   xpEntries XpEntry[]
   boostEntries BoostEntry[]
   progress  UserProgress[]
+  activityLogs ActivityLog[] @relation("TenantActivityLogs")
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -1566,4 +1567,61 @@ model SiteSettings {
   thankYouImageUrl String?
 
   updatedAt DateTime @updatedAt
+}
+
+/// De onde a ação partiu. Separado de quem agiu de propósito: a troca do link
+/// da Steam tem ator de sessão e origem PUBLICO ao mesmo tempo.
+enum LogOrigin {
+  PAINEL // alguém clicou no admin
+  SISTEMA // webhook de gateway, cron
+  PUBLICO // ação do participante no site
+}
+
+/// Registro append-only do que aconteceu. O código nunca dá update aqui, e a
+/// interface não oferece exclusão; a única escrita destrutiva é a limpeza por
+/// idade em activity-log-query.ts.
+model ActivityLog {
+  id String @id @default(cuid())
+
+  /// Painel a que o registro pertence. Nulo só em evento sem tenant
+  /// resolvido, como a varredura global do cron.
+  tenantId String?
+  tenant   Tenant? @relation("TenantActivityLogs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  origem LogOrigin @default(PAINEL)
+
+  /// Ator CONGELADO, não por relação, e essa é a decisão central do modelo.
+  /// Uma foreign key para User faria o histórico depender de a conta
+  /// continuar existindo e com o mesmo nome, quando o caso que mais interessa
+  /// é justamente o da conta removida ou renomeada depois do ato.
+  actorId    String?
+  actorName  String
+  actorRole  Role?
+  actorEmail String?
+
+  /// Chave do catálogo em src/lib/activity-log-actions.ts.
+  acao String
+
+  /// Alvo, para responder "tudo que aconteceu com este sorteio". O rótulo
+  /// também é congelado, pelo mesmo motivo do ator.
+  alvoTipo   String?
+  alvoId     String?
+  alvoRotulo String?
+
+  /// { antes, depois } dos campos que mudaram, ou payload curto do evento.
+  detalhes Json?
+
+  ip String?
+
+  criadoEm DateTime @default(now())
+
+  @@index([tenantId, criadoEm])
+  @@index([alvoTipo, alvoId])
+  @@index([acao, criadoEm])
+  @@index([actorId, criadoEm])
+  /// criadoEm sozinho, e não só como segunda coluna dos compostos: a limpeza
+  /// varre por data sem filtro nenhum, e a vista do dono da plataforma ordena
+  /// sem filtro de tenant. Postgres não faz skip scan, então índice composto
+  /// com criadoEm na segunda posição não serve para nenhum dos dois.
+  @@index([criadoEm])
 }

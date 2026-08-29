@@ -300,9 +300,11 @@ propósito. Auditoria que só o dono lê não resolve o caso mais comum aqui, qu
 ## Retenção
 
 365 dias, apagados pelo cron `expire-reservations`, que já roda a cada cinco
-minutos. A limpeza acontece no máximo uma vez por dia, guardada por uma
-consulta ao registro mais antigo, e apaga em lotes, para não segurar a rota de
-cron numa deleção grande.
+minutos. Antes de qualquer deleção vem uma consulta ao registro mais antigo:
+enquanto ele estiver dentro da retenção, a limpeza sai na hora, que é o que
+acontece em quase toda execução. Quando há o que apagar, apaga em lotes, com
+teto de lotes por execução, para não segurar a rota de cron numa deleção
+grande; o que sobrar fica para a execução seguinte.
 
 Um ano cobre o ciclo de disputa de pagamento e de chargeback com folga, e
 mantém a tabela num tamanho que o índice por `(tenantId, criadoEm)` resolve

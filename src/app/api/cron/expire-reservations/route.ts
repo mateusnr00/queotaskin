@@ -15,6 +15,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { registrarLog } from "@/server/services/activity-log";
+import { limparLogsAntigos } from "@/server/services/activity-log-query";
 import { expireReservations } from "@/server/services/reservations";
 
 export async function GET(req: NextRequest) {
@@ -37,7 +39,38 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await expireReservations();
-    return NextResponse.json({ ok: true, ...result });
+
+    // Uma linha por EXECUÇÃO, não por reserva, e só quando expirou alguma
+    // coisa. Uma linha por reserva somaria centenas de registros por dia
+    // sobre um evento que ninguém investiga individualmente, e uma linha a
+    // cada cinco minutos dizendo "expirei zero" seria pior ainda.
+    //
+    // Sem tenantId de propósito: o cron varre todos os painéis de uma vez,
+    // então não existe um tenant a atribuir. Como a consulta do histórico
+    // filtra por tenant, esse registro só aparece para o SUPER_ADMIN, e essa
+    // é a escolha certa, evento de manutenção da plataforma, não de um
+    // painel específico.
+    if (result.expired > 0) {
+      await registrarLog({
+        acao: "reservas.expiradas",
+        origem: "SISTEMA",
+        ator: { nome: "Rotina de expiração" },
+        detalhes: { quantidade: result.expired },
+      });
+    }
+
+    // A limpeza vai num catch próprio: a expiração acima já devolveu números
+    // ao estoque, e deixar uma falha de manutenção virar 500 faria a Vercel
+    // repetir um trabalho que já deu certo. Aqui o erro aparece no log da
+    // função e a resposta segue contando o que a expiração fez.
+    let logsApagados: number | null = null;
+    try {
+      logsApagados = (await limparLogsAntigos()).apagados;
+    } catch (err) {
+      console.error("[cron expire-reservations] limparLogsAntigos falhou:", err);
+    }
+
+    return NextResponse.json({ ok: true, ...result, logsApagados });
   } catch (err) {
     console.error("[cron expire-reservations]", err);
     return NextResponse.json(

@@ -58,13 +58,21 @@ export default async function EditUserPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/admin/usuarios"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Voltar
-        </Link>
+        <div className="flex items-center justify-between mb-2">
+          <Link
+            href="/admin/usuarios"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Voltar
+          </Link>
+          <Link
+            href={`/admin/logs?alvoTipo=User&alvoId=${user.id}`}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Ver histórico desta conta
+          </Link>
+        </div>
         <h1 className="text-2xl font-bold tracking-tight">{user.name}</h1>
         <p className="text-sm text-muted-foreground">
           {user._count.reservations} reserva(s) · cadastrado em{" "}

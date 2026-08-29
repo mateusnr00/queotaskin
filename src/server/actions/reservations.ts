@@ -23,6 +23,7 @@ import {
   ensurePixForReservation,
   pollPaymentStatusIfPending,
 } from "@/server/services/pix";
+import { registrarLog } from "@/server/services/activity-log";
 import { onlyDigits, isValidCpf } from "@/lib/cpf";
 import { DomainError, ReservationConflictError } from "@/lib/errors";
 import { getCurrentTenant, assertRaffleInActiveTenant } from "@/lib/tenant";
@@ -232,6 +233,18 @@ export async function createReservationAction(
         where: { id: reservation.id },
         data: { userId: user.id },
       });
+      // void, sem await: isto está no caminho que o cliente espera na tela, e
+      // a escrita do log não pode somar latência à compra.
+      void registrarLog({
+        acao: "reserva.criada",
+        tenantId: tenant.id,
+        origem: "PUBLICO",
+        alvo: { tipo: "Reservation", id: reservation.id },
+        detalhes: {
+          quantidade: input.numbers.length,
+          total: Number(reservation.totalAmount),
+        },
+      });
       // Cria a cobrança Pix (best-effort), mas só quando há valor a
       // cobrar. Reservas grátis já nascem PAID, gerar Pix nelas só causa
       // ruído.
@@ -289,6 +302,19 @@ export async function createReservationAction(
       await prisma.reservation.update({
         where: { id: reservation.id },
         data: { userId: user.id },
+      });
+
+      // void, sem await: isto está no caminho que o cliente espera na tela, e
+      // a escrita do log não pode somar latência à compra.
+      void registrarLog({
+        acao: "reserva.criada",
+        tenantId: tenant.id,
+        origem: "PUBLICO",
+        alvo: { tipo: "Reservation", id: reservation.id },
+        detalhes: {
+          quantidade: numbers.length,
+          total: Number(reservation.totalAmount),
+        },
       });
 
       if (Number(reservation.totalAmount) > 0) {
@@ -469,8 +495,13 @@ export async function markReservationPaidAction(
       return { ok: false, error: "Reserva não encontrada" };
     }
 
-    // Cross-tenant guard.
-    await assertRaffleInActiveTenant(reservation.raffleId, session.user);
+    // Cross-tenant guard. Capturamos o retorno porque o log de confirmação
+    // logo abaixo precisa do tenantId, e assertRaffleInActiveTenant já o
+    // resolveu, buscar de novo pagaria outra consulta à toa.
+    const tenantId = await assertRaffleInActiveTenant(
+      reservation.raffleId,
+      session.user
+    );
 
     if (reservation.status === "PAID") {
       return { ok: true, data: {} };
@@ -542,6 +573,32 @@ export async function markReservationPaidAction(
           })),
         });
       }
+    });
+
+    // A confirmação manual é o único caminho de pagamento com gente por trás,
+    // e por isso é o que uma disputa procura primeiro: quem marcou como paga,
+    // e quando. Os outros dois caminhos (webhook e consulta de status) são
+    // máquina, e vão com origem SISTEMA; aqui existe sessão de admin, então
+    // origem fica PAINEL (padrão de registrarLog) e SEM ator informado à
+    // mão, é a sessão quem resolve.
+    //
+    // O alvo é a reserva, não o pagamento, porque reserva de rifa grátis não
+    // tem Payment nenhum e ainda assim pode ser marcada como paga aqui.
+    //
+    // await, não void: diferente dos outros pontos desta task, aqui não há
+    // gateway nem cliente esperando resposta na tela, é um admin clicando
+    // num botão do painel, então vale esperar a escrita (como nas tasks 6 a
+    // 9). A guarda de idempotência já existe mais acima (`if
+    // (reservation.status === "PAID") return`), uma segunda tentativa sai
+    // antes de chegar aqui, então não duplica o registro.
+    await registrarLog({
+      acao: "pagamento.aprovado",
+      tenantId,
+      alvo: { tipo: "Reservation", id: reservation.id },
+      detalhes: {
+        caminho: "manual",
+        pagamentoId: reservation.payment?.id ?? null,
+      },
     });
 
     // Auto-upgrade tickets pra AWARDED quando o número for um título premiado.

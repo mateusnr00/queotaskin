@@ -374,11 +374,18 @@ describe("diferencas", () => {
     expect(d).toEqual({ antes: {}, depois: {} });
   });
 
-  it("trata null e string vazia como valores diferentes de verdade", () => {
-    // O formulário manda "" onde o banco tem null. Se isso contasse como
-    // mudança, salvar sem mexer em nada geraria registro toda vez.
+  it("valor igual dos dois lados não entra, nem quando é null", () => {
     const d = diferencas({ email: null }, { email: null });
     expect(d.depois).toEqual({});
+  });
+
+  it("string vazia e null CONTAM como mudança: normalizar é de quem chama", () => {
+    // O formulário manda "" onde o banco tem null, e aqui isso é mudança de
+    // verdade. Quem chama normaliza antes (`email || null` em users.ts),
+    // senão salvar sem mexer em nada geraria registro toda vez. Deixar a
+    // regra aqui esconderia o "" legítimo de quem apagou um campo.
+    const d = diferencas({ email: null }, { email: "" });
+    expect(d.depois).toEqual({ email: "" });
   });
 });
 
@@ -411,7 +418,7 @@ describe("sanitizarDetalhes", () => {
     }) as Record<string, Record<string, unknown>>;
 
     expect(limpo.antes.cpf).toBe("***.***.777-35");
-    expect(limpo.depois.cpf).toBe("***.***.472-5");
+    expect(limpo.depois.cpf).toBe("***.***.247-25");
   });
 
   it("preserva lista e valores simples", () => {
@@ -556,9 +563,9 @@ export function sanitizarDetalhes(
 - [ ] **Step 4: Rodar o teste e ver passar**
 
 Run: `npx vitest run src/lib/activity-log-detalhes.test.ts`
-Expected: PASS.
+Expected: PASS, 7 testes.
 
-Se o teste do CPF `52998224725` falhar, confira o que `formatCpf("52998224725").slice(8)` devolve na implementação de `src/lib/cpf.ts` e ajuste a expectativa do teste para o valor real: o contrato é "só o fim aparece", não um recorte específico.
+Os valores mascarados esperados foram conferidos contra a implementação real de `formatCpf`: `"111.444.777-35".slice(8)` é `"777-35"` e `"529.982.247-25".slice(8)` é `"247-25"`. Se divergirem, o defeito está na implementação nova, não na expectativa.
 
 - [ ] **Step 5: Rodar a guarda de travessão**
 
@@ -703,7 +710,6 @@ Crie `src/server/services/activity-log.ts`:
 import { headers } from "next/headers";
 import type { Prisma, Role } from "@prisma/client";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { sanitizarDetalhes } from "@/lib/activity-log-detalhes";
 import { ipDaRequisicao } from "@/server/services/login-throttle";
@@ -736,7 +742,20 @@ interface AtorResolvido {
   email: string | null;
 }
 
+/**
+ * Import tardio do `auth`, e isso não é preciosismo.
+ *
+ * O provider de senha em src/auth.ts chama registrarLog para gravar a entrada
+ * no painel. Um import estático aqui fecharia o ciclo auth -> activity-log ->
+ * auth, e módulo em ciclo pode ser lido meio inicializado, dependendo de como
+ * o bundler resolve a ordem. O import dentro da função só acontece quando
+ * alguém realmente precisa da sessão, e nesse ponto tudo já subiu.
+ *
+ * Quem chama de dentro do auth.ts sempre informa o ator, então nem passa por
+ * aqui.
+ */
 async function atorDaSessao(): Promise<AtorResolvido> {
+  const { auth } = await import("@/auth");
   const session = await auth();
   const u = session?.user;
   if (!u?.id) {
@@ -1122,7 +1141,7 @@ git commit -m "feat: consulta paginada por cursor e limpeza por retencao dos log
 
 **Files:**
 - Modify: `src/server/actions/users.ts`
-- Test: `src/server/actions/users.integration.test.ts` (criar)
+- Test: `src/server/actions/users.test.ts` (criar)
 
 **Interfaces:**
 - Consumes: `registrarLog` da Task 4, `diferencas` da Task 3.
@@ -1130,121 +1149,147 @@ git commit -m "feat: consulta paginada por cursor e limpeza por retencao dos log
 
 Esta é a task de maior valor do plano: é a área que decide quem opera o painel.
 
-- [ ] **Step 1: Escrever o teste de integração que falha**
+O teste é de unidade, com o banco e os helpers de sessão trocados por dublês, e não de integração. Assim ele roda em qualquer máquina: um teste que pula é um teste que não protege nada, e nesta máquina não existe Postgres local.
 
-Crie `src/server/actions/users.integration.test.ts`:
+- [ ] **Step 1: Escrever o teste que falha**
+
+Crie `src/server/actions/users.test.ts`:
 
 ```ts
-// Integração das server actions de usuário com o registro de atividade.
+// O que as actions de usuário registram.
 //
-// Pulado quando DATABASE_URL não aponta para um Postgres local: as actions
-// escrevem de verdade, e apontar para produção encheria o banco real de lixo.
+// Banco e sessão entram como dublês: o que está sob teste é a decisão de
+// registrar (qual ação, com que antes e depois), não a escrita no Postgres.
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/db";
+const registrarLog = vi.fn();
+const findUnique = vi.fn();
+const update = vi.fn();
+const create = vi.fn();
 
-function bancoLocal(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  try {
-    const { hostname } = new URL(url);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    return false;
-  }
+vi.mock("@/server/services/activity-log", () => ({
+  registrarLog: (e: unknown) => registrarLog(e),
+}));
+vi.mock("@/lib/auth-helpers", () => ({
+  getAdminOrThrow: async () => ({
+    user: { id: "admin1", name: "Dono", role: "ADMIN", tenantId: "t1" },
+  }),
+}));
+vi.mock("@/lib/tenant", () => ({
+  getActiveTenantIdForAdmin: async () => "t1",
+}));
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    user: {
+      findUnique: (a: unknown) => findUnique(a),
+      update: (a: unknown) => update(a),
+      create: (a: unknown) => create(a),
+    },
+  },
+}));
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
+const { updateUserAction, criarUsuarioAction } = await import("./users");
+
+const ALVO = "cjld2cyuq0000t3rmniod1foy";
+
+function alvoNoBanco(over: Record<string, unknown> = {}) {
+  return {
+    id: ALVO,
+    name: "Maria Silva",
+    email: null,
+    cpf: null,
+    phone: null,
+    role: "PARTICIPANT",
+    showModBadge: false,
+    tenantId: "t1",
+    reservations: [],
+    ...over,
+  };
 }
 
-const suite = bancoLocal() ? describe : describe.skip;
+const FORM_BASE = {
+  id: ALVO,
+  name: "Maria Silva",
+  email: "",
+  cpf: "",
+  phone: "",
+  showModBadge: false,
+};
 
-suite("log das actions de usuário (integração)", () => {
-  let tenantId: string;
-  let adminId: string;
-  let alvoId: string;
+describe("updateUserAction", () => {
+  beforeEach(() => {
+    registrarLog.mockReset();
+    findUnique.mockReset().mockResolvedValue(alvoNoBanco());
+    update.mockReset().mockResolvedValue({ id: ALVO });
+  });
 
-  beforeAll(async () => {
-    const dono = await prisma.user.create({
-      data: { name: "Dono Teste", email: `dono-${Date.now()}@x.com`, role: "ADMIN" },
-    });
-    const tenant = await prisma.tenant.create({
-      data: { name: "Tenant Log", slug: `log-${Date.now()}`, ownerId: dono.id },
-    });
-    tenantId = tenant.id;
-    adminId = dono.id;
-    await prisma.user.update({
-      where: { id: dono.id },
-      data: { tenantId },
-    });
-    const alvo = await prisma.user.create({
-      data: { name: "Cliente Teste", role: "PARTICIPANT", tenantId },
-    });
-    alvoId = alvo.id;
+  it("promover registra papel_alterado com o antes e o depois", async () => {
+    const r = await updateUserAction({ ...FORM_BASE, role: "ADMIN" });
+    expect(r.ok).toBe(true);
 
-    vi.mock("@/lib/auth-helpers", async (original) => {
-      const real = (await original()) as Record<string, unknown>;
-      return {
-        ...real,
-        getAdminOrThrow: async () => ({
-          user: { id: adminId, name: "Dono Teste", role: "ADMIN", tenantId },
-        }),
-      };
+    const entrada = registrarLog.mock.calls[0]![0];
+    expect(entrada.acao).toBe("usuario.papel_alterado");
+    expect(entrada.detalhes.antes.papel).toBe("PARTICIPANT");
+    expect(entrada.detalhes.depois.papel).toBe("ADMIN");
+    expect(entrada.alvo).toEqual({
+      tipo: "User",
+      id: ALVO,
+      rotulo: "Maria Silva",
     });
   });
 
-  afterAll(async () => {
-    await prisma.activityLog.deleteMany({ where: { tenantId } });
-    await prisma.user.deleteMany({ where: { tenantId } });
-    await prisma.tenant.delete({ where: { id: tenantId } });
-  });
-
-  it("promover grava papel_alterado com o antes e o depois", async () => {
-    const { updateUserAction } = await import("./users");
-
+  it("mudar só o nome registra editado, não papel_alterado", async () => {
     await updateUserAction({
-      id: alvoId,
-      name: "Cliente Teste",
-      email: "",
+      ...FORM_BASE,
+      name: "Maria Souza",
+      role: "PARTICIPANT",
+    });
+
+    expect(registrarLog.mock.calls[0]![0].acao).toBe("usuario.editado");
+  });
+
+  it("salvar sem mexer em nada não vira linha no histórico", async () => {
+    // O formulário manda "" onde o banco tem null. Sem a normalização do
+    // lado "depois", todo salvamento geraria um registro de mudança
+    // fantasma, e o histórico viraria ruído em uma semana.
+    await updateUserAction({ ...FORM_BASE, role: "PARTICIPANT" });
+
+    expect(registrarLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("criarUsuarioAction", () => {
+  beforeEach(() => {
+    registrarLog.mockReset();
+    create.mockReset().mockResolvedValue({ id: ALVO });
+  });
+
+  it("registra a criação sem deixar a senha temporária vazar", async () => {
+    const r = await criarUsuarioAction({
+      name: "Novo Admin",
+      email: "novo@x.com",
       cpf: "",
       phone: "",
       role: "ADMIN",
-      showModBadge: false,
     });
 
-    const log = await prisma.activityLog.findFirst({
-      where: { alvoId, acao: "usuario.papel_alterado" },
-      orderBy: { criadoEm: "desc" },
-    });
-
-    expect(log).not.toBeNull();
-    const detalhes = log!.detalhes as {
-      antes: Record<string, unknown>;
-      depois: Record<string, unknown>;
-    };
-    expect(detalhes.antes.papel).toBe("PARTICIPANT");
-    expect(detalhes.depois.papel).toBe("ADMIN");
-  });
-
-  it("a senha temporária nunca aparece no registro", async () => {
-    const { gerarSenhaDePainelAction } = await import("./users");
-
-    const r = await gerarSenhaDePainelAction(alvoId);
-    const log = await prisma.activityLog.findFirst({
-      where: { alvoId, acao: "usuario.senha_gerada" },
-      orderBy: { criadoEm: "desc" },
-    });
-
-    expect(log).not.toBeNull();
-    if (r.ok) {
-      expect(JSON.stringify(log!.detalhes)).not.toContain(r.data.senhaTemporaria);
+    expect(r.ok).toBe(true);
+    const entrada = registrarLog.mock.calls[0]![0];
+    expect(entrada.acao).toBe("usuario.criado");
+    expect(entrada.detalhes.comAcessoAoPainel).toBe(true);
+    if (r.ok && r.data.senhaTemporaria) {
+      expect(JSON.stringify(entrada)).not.toContain(r.data.senhaTemporaria);
     }
   });
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que pula ou falha**
+- [ ] **Step 2: Rodar o teste e ver falhar**
 
-Run: `npx vitest run src/server/actions/users.integration.test.ts`
-Expected: nesta máquina, `2 skipped`. Com Postgres local, FAIL, porque nenhum log é gravado ainda.
+Run: `npx vitest run src/server/actions/users.test.ts`
+Expected: FAIL, `registrarLog` nunca é chamado, porque nada registra ainda.
 
 - [ ] **Step 3: Ampliar o `select` do alvo em `updateUserAction`**
 
@@ -1348,13 +1393,15 @@ O `tenantId` já existe nesse escopo desde o commit que prendeu a action ao pain
 
 - [ ] **Step 7: Typecheck e testes**
 
-Run: `npm run typecheck && npx vitest run`
-Expected: typecheck limpo, suíte verde (a de integração pula).
+Run: `npm run typecheck && npx vitest run src/server/actions/users.test.ts`
+Expected: typecheck limpo, 4 testes passando.
+
+Depois rode a suíte inteira: `npx vitest run`.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/server/actions/users.ts src/server/actions/users.integration.test.ts
+git add src/server/actions/users.ts src/server/actions/users.test.ts
 git commit -m "feat: registra criacao, edicao, promocao e reset de senha de conta"
 ```
 

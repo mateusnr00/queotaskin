@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { registrarLog } from "@/server/services/activity-log";
 import { extractWebhookInfo } from "@/lib/codepay";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
@@ -65,6 +66,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           raffleId: true,
           status: true,
           _count: { select: { tickets: true } },
+          raffle: { select: { tenantId: true } },
         },
       },
     },
@@ -124,6 +126,28 @@ export async function POST(req: Request, { params }: RouteParams) {
         });
       }
     });
+    // A chamada fica DENTRO do `if (resolved === "APPROVED" && payment.status
+    // !== "APPROVED")`: é a mesma guarda de idempotência que impede este
+    // bloco de rodar de novo num reenvio do gateway. Fora dela, cada reenvio
+    // do mesmo evento apareceria como uma confirmação de pagamento nova na
+    // tela de histórico. Vale para reenvio em série, que é como o gateway
+    // repete na prática; duas entregas verdadeiramente simultâneas leem o
+    // mesmo `payment.status` antes de qualquer escrita e passariam as duas,
+    // uma corrida que fechar exigiria transição atômica no update.
+    // void, sem await: o gateway está esperando a resposta HTTP deste
+    // webhook, e a escrita do log não pode atrasar essa resposta.
+    void registrarLog({
+      acao: "pagamento.aprovado",
+      tenantId: payment.reservation?.raffle.tenantId ?? null,
+      origem: "SISTEMA",
+      ator: { nome: "Webhook CodePay" },
+      // O alvo é a reserva, não o pagamento, nos três caminhos de confirmação.
+      // Uma compra vira várias linhas (reserva, Pix, confirmação), e partir a
+      // trilha entre dois tipos de alvo faria nenhum id sozinho contar a
+      // história inteira, que é justamente o que se procura numa disputa.
+      alvo: { tipo: "Reservation", id: payment.reservationId },
+      detalhes: { pagamentoId: payment.id, caminho: "webhook" },
+    });
     await autoAwardTicketsForReservation(payment.reservationId).catch((err) =>
       console.error("[codepay webhook] autoAwardTickets falhou:", err)
     );
@@ -138,6 +162,19 @@ export async function POST(req: Request, { params }: RouteParams) {
     await prisma.payment.update({
       where: { id: payment.id },
       data: { status: "REJECTED" },
+    });
+    // Mesma guarda do ramo APPROVED acima (`payment.status === "PENDING"`
+    // neste else-if): reenvio do gateway pra um pagamento já recusado cai
+    // fora deste bloco e não duplica o registro. Mesma ressalva: vale para
+    // reenvio em série, não para duas entregas simultâneas lendo o mesmo
+    // status antes de qualquer uma escrever.
+    void registrarLog({
+      acao: "pagamento.recusado",
+      tenantId: payment.reservation?.raffle.tenantId ?? null,
+      origem: "SISTEMA",
+      ator: { nome: "Webhook CodePay" },
+      alvo: { tipo: "Reservation", id: payment.reservationId },
+      detalhes: { pagamentoId: payment.id, caminho: "webhook" },
     });
   }
 

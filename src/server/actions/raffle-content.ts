@@ -21,9 +21,21 @@ import {
   isStorageConfigured,
   uploadRaffleImage,
 } from "@/lib/storage";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 import { MAX_IMAGES_PER_RAFFLE, MAX_IMAGE_BYTES } from "@/lib/raffle-images";
 import { dataDeSaoPauloParaUtc } from "@/lib/promocao-em-dobro";
+
+// Todas as actions abaixo entram no histórico como uma ação só,
+// sorteio.conteudo_alterado, com detalhes.o_que nomeando a parte que mudou.
+// Uma chave por action (são doze) encheria o catálogo e o filtro da tela sem
+// responder nada que o_que já não responda; ganhador é a exceção, porque
+// decide quem recebe uma skin (ver setRaffleWinnerAction mais abaixo).
+//
+// assertRaffleInActiveTenant devolve o tenantId que ela mesma resolveu pra
+// autorizar; cada ponto de registro reaproveita esse valor em vez de buscar
+// de novo, o que evita uma consulta a mais e uma segunda chamada que poderia
+// lançar já depois da escrita ter dado certo.
 
 // =============================================================
 // IMAGENS
@@ -56,7 +68,7 @@ export async function uploadRaffleImageAction(
     if (!(file instanceof File)) {
       return { ok: false, error: "Arquivo inválido" };
     }
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
     const pareceImagem =
       file.type.startsWith("image/") || IMAGE_EXT.test(file.name);
     if (!pareceImagem) {
@@ -88,6 +100,13 @@ export async function uploadRaffleImageAction(
         isCover: existing === 0,
       },
       select: { id: true, url: true },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "imagem adicionada" },
     });
 
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
@@ -138,7 +157,7 @@ export async function addRaffleImageByUrlAction(
     }
 
     const { raffleId, url } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     const existing = await prisma.raffleImage.count({ where: { raffleId } });
     if (existing >= MAX_IMAGES_PER_RAFFLE) {
@@ -156,6 +175,13 @@ export async function addRaffleImageByUrlAction(
         isCover: existing === 0,
       },
       select: { id: true, url: true },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "imagem por URL" },
     });
 
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
@@ -185,7 +211,7 @@ export async function deleteRaffleImageAction(
       select: { url: true, raffleId: true, isCover: true },
     });
     if (!img) return { ok: false, error: "Imagem não encontrada" };
-    await assertRaffleInActiveTenant(img.raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(img.raffleId, session.user);
 
     await prisma.raffleImage.delete({ where: { id: parsed.data.id } });
 
@@ -215,6 +241,13 @@ export async function deleteRaffleImageAction(
       }
     }
 
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: img.raffleId },
+      detalhes: { o_que: "imagem removida" },
+    });
+
     revalidatePath(`/admin/sorteios/${img.raffleId}/editar`);
     revalidatePath("/admin/sorteios");
     revalidatePath("/sorteios");
@@ -237,7 +270,10 @@ export async function setRaffleCoverAction(
     const session = await getAdminOrThrow();
     const parsed = setCoverSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, error: "Dados inválidos" };
-    await assertRaffleInActiveTenant(parsed.data.raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(
+      parsed.data.raffleId,
+      session.user
+    );
 
     await prisma.$transaction(async (tx) => {
       await tx.raffleImage.updateMany({
@@ -252,6 +288,13 @@ export async function setRaffleCoverAction(
         data: { isCover: true },
       });
       if (count === 0) throw new Error("IMAGEM_FORA_DO_SORTEIO");
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: parsed.data.raffleId },
+      detalhes: { o_que: "capa" },
     });
 
     revalidatePath(`/admin/sorteios/${parsed.data.raffleId}/editar`);
@@ -388,7 +431,7 @@ export async function setRafflePrizesAction(
       ebookUrl,
       ebookButtonText,
     } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     const norm = (v: string) => (v.trim() ? v.trim() : null);
 
@@ -424,6 +467,13 @@ export async function setRafflePrizesAction(
         })),
       }),
     ]);
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "prêmios" },
+    });
 
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
     revalidatePath("/admin/sorteios");
@@ -482,11 +532,18 @@ export async function setRafflePaymentProviderAction(
       };
     }
     const { raffleId, paymentProvider } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     await prisma.raffle.update({
       where: { id: raffleId },
       data: { paymentProvider },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "gateway do sorteio" },
     });
 
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
@@ -520,7 +577,7 @@ export async function setRafflePromotionsAction(
       accumulative,
     } =
       parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     // O comeco da promocao existe para a BARRA poder ser honesta: sem ele nao
     // existe "quanto ja passou", so "quanto falta", e a barra viraria chute.
@@ -563,6 +620,13 @@ export async function setRafflePromotionsAction(
         })),
       }),
     ]);
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "promoções" },
+    });
 
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
     revalidatePath(`/sorteios`);
@@ -620,7 +684,7 @@ export async function setRaffleAwardedTicketsAction(
       loserTitle,
       loserText,
     } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     // Valida limite: números devem estar dentro do intervalo da rifa.
     const raffle = await prisma.raffle.findUnique({
@@ -688,6 +752,13 @@ export async function setRaffleAwardedTicketsAction(
       }),
     ]);
 
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "títulos premiados" },
+    });
+
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
     revalidatePath("/[slug]", "page");
     return { ok: true, data: undefined };
@@ -744,7 +815,7 @@ export async function setRaffleSurpriseBoxCombosAction(
       exibirGanhadores,
       displayOrder,
     } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     const dedupe = new Map<
       number,
@@ -780,6 +851,13 @@ export async function setRaffleSurpriseBoxCombosAction(
         })),
       }),
     ]);
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "combos de caixa surpresa" },
+    });
 
     revalidatePath(`/admin/sorteios/${raffleId}/compras`);
     revalidatePath(`/admin/sorteios/${raffleId}/editar`);
@@ -823,11 +901,10 @@ export async function createSurpriseBoxPrizesAction(
       };
     }
     const { raffleId, title, prize, quantity, mode, odds, locked } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
-    const raffle = await prisma.raffle.findUniqueOrThrow({
-      where: { id: raffleId },
-      select: { tenantId: true },
-    });
+    // O tenant vem da própria checagem, que passou a devolvê-lo: buscar o
+    // sorteio outra vez só para ler o tenantId seria a mesma consulta duas
+    // vezes.
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     // Mesma regra dos Títulos Premiados: a raridade sai do nome conferido
     // contra o catálogo, e prêmio que não é skin fica sem cor.
@@ -836,7 +913,7 @@ export async function createSurpriseBoxPrizesAction(
       new Map(
         (
           await prisma.skinTemplate.findMany({
-            where: { tenantId: raffle.tenantId },
+            where: { tenantId },
             select: { name: true, skinRarity: true },
           })
         ).map((sk) => [chaveDoNome(sk.name), sk.skinRarity]),
@@ -854,6 +931,13 @@ export async function createSurpriseBoxPrizesAction(
         odds: mode === "PERCENT" && odds != null ? odds : null,
         locked,
       })),
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "prêmios de caixa surpresa" },
     });
 
     revalidatePath(`/admin/sorteios/${raffleId}/compras`);
@@ -884,7 +968,10 @@ export async function toggleSurpriseBoxPrizeLockAction(
       select: { raffleId: true, locked: true, claimedAt: true },
     });
     if (!prize) return { ok: false, error: "Prêmio não encontrado" };
-    await assertRaffleInActiveTenant(prize.raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(
+      prize.raffleId,
+      session.user
+    );
     if (prize.claimedAt) {
       return { ok: false, error: "Prêmio já foi sorteado, não pode ser bloqueado" };
     }
@@ -892,6 +979,13 @@ export async function toggleSurpriseBoxPrizeLockAction(
     await prisma.surpriseBoxPrize.update({
       where: { id: parsed.data.prizeId },
       data: { locked: !prize.locked },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: prize.raffleId },
+      detalhes: { o_que: "trava de prêmio de caixa" },
     });
 
     revalidatePath(`/admin/sorteios/${prize.raffleId}/compras`);
@@ -1035,13 +1129,23 @@ export async function deleteSurpriseBoxPrizeAction(
       select: { raffleId: true, claimedAt: true },
     });
     if (!prize) return { ok: false, error: "Prêmio não encontrado" };
-    await assertRaffleInActiveTenant(prize.raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(
+      prize.raffleId,
+      session.user
+    );
     if (prize.claimedAt) {
       return { ok: false, error: "Prêmio já foi sorteado, não pode ser excluído" };
     }
 
     await prisma.surpriseBoxPrize.delete({
       where: { id: parsed.data.prizeId },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: prize.raffleId },
+      detalhes: { o_que: "prêmio de caixa removido" },
     });
 
     revalidatePath(`/admin/sorteios/${prize.raffleId}/compras`);
@@ -1089,7 +1193,7 @@ export async function setRaffleWinnerAction(
       };
     }
     const { raffleId, ticketNumber, note, finish } = parsed.data;
-    await assertRaffleInActiveTenant(raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     const raffle = await prisma.raffle.findUnique({
       where: { id: raffleId },
@@ -1134,6 +1238,13 @@ export async function setRaffleWinnerAction(
       },
     });
 
+    await registrarLog({
+      acao: "sorteio.ganhador_definido",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { numero: ticketNumber },
+    });
+
     revalidatePath(`/admin/sorteios/${raffleId}/compras`);
     revalidatePath(`/admin/sorteios`);
     revalidatePath(`/sorteios`);
@@ -1172,7 +1283,10 @@ export async function clearRaffleWinnerAction(
     const session = await getAdminOrThrow();
     const parsed = clearWinnerSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, error: "Dados inválidos" };
-    await assertRaffleInActiveTenant(parsed.data.raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(
+      parsed.data.raffleId,
+      session.user
+    );
 
     await prisma.raffle.update({
       where: { id: parsed.data.raffleId },
@@ -1182,6 +1296,12 @@ export async function clearRaffleWinnerAction(
         winnerNote: null,
         status: "ACTIVE",
       },
+    });
+
+    await registrarLog({
+      acao: "sorteio.ganhador_removido",
+      tenantId,
+      alvo: { tipo: "Raffle", id: parsed.data.raffleId },
     });
 
     revalidatePath(`/admin/sorteios/${parsed.data.raffleId}/compras`);

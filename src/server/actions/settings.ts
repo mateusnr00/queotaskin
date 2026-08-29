@@ -20,6 +20,7 @@ import {
   uploadRaffleImage,
 } from "@/lib/storage";
 import { THEME_PRESET_KEYS } from "@/lib/theme-presets";
+import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 // Schema único pra preferências visuais de tema. Todos opcionais.
@@ -168,6 +169,13 @@ export async function updateThemeAction(
       data,
     });
 
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: "tema" },
+    });
+
     revalidatePath("/", "layout");
     return { ok: true, data: undefined };
   } catch (err) {
@@ -274,6 +282,13 @@ export async function updateSiteAction(
       data: update,
     });
 
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: "identidade do site" },
+    });
+
     revalidatePath("/", "layout");
     return { ok: true, data: undefined };
   } catch (err) {
@@ -367,6 +382,13 @@ export async function uploadLogoAction(
       data: { [coluna]: url },
     });
 
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: "logo" },
+    });
+
     revalidatePath("/", "layout");
     return { ok: true, data: { url } };
   } catch (err) {
@@ -426,6 +448,13 @@ export async function setLogoByUrlAction(
       data: { [coluna]: parsed.data.url },
     });
 
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: "logo" },
+    });
+
     revalidatePath("/", "layout");
     return { ok: true, data: { url: parsed.data.url } };
   } catch (err) {
@@ -453,6 +482,12 @@ export async function removeLogoAction(
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { [coluna]: null },
+    });
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: "logo" },
     });
     revalidatePath("/", "layout");
     return { ok: true, data: undefined };
