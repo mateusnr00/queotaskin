@@ -33,7 +33,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { casasDoTitulo } from "@/lib/titulo";
+import { casasDoTitulo, tituloDaFita } from "@/lib/titulo";
 
 /** Altura de cada linha. Três visíveis: a de cima, a do meio e a de baixo. */
 const ALTURA = 62;
@@ -61,16 +61,13 @@ function preencher(numero: number, casas: number): string {
   return String(numero).padStart(casas, "0");
 }
 
-/** Um título qualquer da amostra, para a fita ter números de verdade. */
-function sortear(amostra: readonly number[], total: number): number {
-  if (amostra.length > 0) {
-    return amostra[Math.floor(Math.random() * amostra.length)];
-  }
-  return 1 + Math.floor(Math.random() * Math.max(1, total));
-}
-
 export function CarretelDeTitulos({
   totalNumbers,
+  /**
+   * O código do sorteio. É a semente da fita: com ele, a mesma transmissão
+   * mostra a MESMA sequência em toda visita, para todo mundo.
+   */
+  semente,
   /** Amostra de títulos que disputaram, para a fita não ser inventada. */
   amostra,
   /** O vencedor. Enquanto nulo, a fita corre sem alvo. */
@@ -79,6 +76,7 @@ export function CarretelDeTitulos({
   aoPassar,
 }: {
   totalNumbers: number;
+  semente: string;
   amostra: readonly number[];
   numeroFinal: number | null;
   aoPassar?: () => void;
@@ -87,10 +85,13 @@ export function CarretelDeTitulos({
 
   // A janela mostra três linhas: a que saiu, a do meio e a que entra. Guardar
   // só essas três, e não a fita inteira, é o que permite a fita ser infinita.
+  // As três primeiras posições da fita. Determinísticas como o resto: se
+  // fossem sorteadas aqui, o servidor e o navegador desenhariam números
+  // diferentes e a hidratação brigaria.
   const [linhas, setLinhas] = useState<number[]>(() => [
-    sortear(amostra, totalNumbers),
-    sortear(amostra, totalNumbers),
-    sortear(amostra, totalNumbers),
+    tituloDaFita(semente, 0, amostra, totalNumbers),
+    tituloDaFita(semente, 1, amostra, totalNumbers),
+    tituloDaFita(semente, 2, amostra, totalNumbers),
   ]);
   const [duracao, setDuracao] = useState(PASSO_GIRANDO);
   const [parado, setParado] = useState(false);
@@ -120,6 +121,8 @@ export function CarretelDeTitulos({
     // Nulo enquanto gira; vira 0 no passo em que o vencedor aparece e conta
     // até PASSOS_DA_FREADA, quando a fita para nele.
     let freando: number | null = null;
+    // A posição na fita. As três primeiras já estão na tela.
+    let posicao = 3;
 
     const andar = () => {
       if (cancelado) return;
@@ -133,7 +136,7 @@ export function CarretelDeTitulos({
       const ultimo = naFreada && freando! >= PASSOS_DA_FREADA;
       const entrando = ultimo
         ? vencedorRef.current!
-        : sortear(amostra, totalNumbers);
+        : tituloDaFita(semente, posicao++, amostra, totalNumbers);
 
       setLinhas((antes) => [antes[1], antes[2], entrando]);
       setDuracao(naFreada ? intervaloDaFreada(freando!) : PASSO_GIRANDO);
@@ -144,7 +147,11 @@ export function CarretelDeTitulos({
         // centro da janela, e aí a fita morre nele.
         id = setTimeout(() => {
           if (cancelado) return;
-          setLinhas((antes) => [antes[1], antes[2], sortear(amostra, totalNumbers)]);
+          setLinhas((antes) => [
+            antes[1],
+            antes[2],
+            tituloDaFita(semente, posicao++, amostra, totalNumbers),
+          ]);
           id = setTimeout(() => {
             if (cancelado) return;
             setParado(true);

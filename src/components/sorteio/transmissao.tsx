@@ -502,6 +502,7 @@ function Revelacao({
           <div className="mx-auto mt-4 w-full max-w-[340px]">
             <CarretelDeTitulos
               totalNumbers={estado.campanha.totalNumbers}
+              semente={estado.publicId}
               amostra={estado.amostraDeTitulos}
               numeroFinal={numero}
               aoPassar={() => som.tocar("rolagem")}

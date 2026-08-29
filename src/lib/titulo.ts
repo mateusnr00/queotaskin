@@ -66,3 +66,35 @@ export function ordemEmbaralhada<T>(
     return ha === hb ? chave(a).localeCompare(chave(b)) : ha - hb;
   });
 }
+
+/**
+ * O título que a fita do carretel mostra numa dada posição.
+ *
+ * Determinístico de propósito, e isso é questão de confiança, não de estilo.
+ *
+ * A fita sorteava cada número com `Math.random()`, então a mesma transmissão,
+ * reaberta, mostrava uma sequência diferente. O resultado era sempre o mesmo,
+ * mas quem assistia duas vezes via os números do meio mudarem, e a leitura
+ * natural disso é que a coisa toda é improvisada na hora. Foi exatamente essa
+ * a reclamação, e ela é justa: numa página cujo argumento é "confira você
+ * mesmo", nada pode mudar entre uma visita e outra.
+ *
+ * Agora a posição e o código do sorteio decidem o número. Mesmo sorteio, mesma
+ * fita, para todo mundo e em toda visita. O replay é idêntico ao ao vivo.
+ *
+ * Isso também conserta dois defeitos silenciosos: `Math.random()` durante a
+ * renderização faz o servidor e o navegador desenharem números diferentes, e a
+ * hidratação briga; e é impuro, o que o compilador do React recusa.
+ *
+ * @param bolo   Os títulos que disputaram. Vazio cai no intervalo da campanha.
+ */
+export function tituloDaFita(
+  semente: string,
+  posicao: number,
+  bolo: readonly number[],
+  totalNumbers: number,
+): number {
+  const h = embaralhamentoEstavel(`${semente}:${posicao}`);
+  if (bolo.length > 0) return bolo[h % bolo.length];
+  return 1 + (h % Math.max(1, Math.floor(totalNumbers)));
+}

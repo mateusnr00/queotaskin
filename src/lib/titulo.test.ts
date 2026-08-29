@@ -5,6 +5,7 @@ import {
   embaralhamentoEstavel,
   numeroDoTitulo,
   ordemEmbaralhada,
+  tituloDaFita,
 } from "@/lib/titulo";
 
 describe("numeroDoTitulo", () => {
@@ -104,5 +105,62 @@ describe("ordemEmbaralhada", () => {
   it("aguenta lista vazia e de um item", () => {
     expect(ordemEmbaralhada([], (x: string) => x)).toEqual([]);
     expect(ordemEmbaralhada(["um"], (x) => x)).toEqual(["um"]);
+  });
+});
+
+describe("tituloDaFita", () => {
+  const bolo = [3, 14, 15, 92, 65, 35, 89, 79, 32, 38];
+
+  it("mesma posição e mesmo sorteio dão sempre o mesmo título", () => {
+    // O contrato: reabrir a transmissão mostra a MESMA fita. Era o que
+    // faltava, e a falta disso passava a impressão de sorteio improvisado.
+    for (const i of [0, 1, 7, 42, 1000]) {
+      expect(tituloDaFita("DRW-20260829-0MJ5", i, bolo, 100)).toBe(
+        tituloDaFita("DRW-20260829-0MJ5", i, bolo, 100),
+      );
+    }
+  });
+
+  it("sorteios diferentes têm fitas diferentes", () => {
+    const a = Array.from({ length: 12 }, (_, i) =>
+      tituloDaFita("DRW-20260829-AAAA", i, bolo, 100),
+    );
+    const b = Array.from({ length: 12 }, (_, i) =>
+      tituloDaFita("DRW-20260829-BBBB", i, bolo, 100),
+    );
+    expect(a).not.toEqual(b);
+  });
+
+  it("só mostra título que disputou", () => {
+    for (let i = 0; i < 200; i++) {
+      expect(bolo).toContain(tituloDaFita("x", i, bolo, 100));
+    }
+  });
+
+  it("sem lista, fica dentro do intervalo da campanha", () => {
+    for (let i = 0; i < 200; i++) {
+      const n = tituloDaFita("x", i, [], 100);
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("não trava num número só: a fita varia ao longo das posições", () => {
+    const vistos = new Set(
+      Array.from({ length: 40 }, (_, i) => tituloDaFita("x", i, bolo, 100)),
+    );
+    expect(vistos.size).toBeGreaterThan(5);
+  });
+
+  it("posições seguidas não repetem o mesmo número", () => {
+    // Fita que mostra 07, 07, 07 parece travada. Não é garantia absoluta com
+    // bolo pequeno, mas com dez títulos a chance de três iguais é remota.
+    let repetidos = 0;
+    for (let i = 1; i < 60; i++) {
+      if (tituloDaFita("x", i, bolo, 100) === tituloDaFita("x", i - 1, bolo, 100)) {
+        repetidos++;
+      }
+    }
+    expect(repetidos).toBeLessThan(12);
   });
 });

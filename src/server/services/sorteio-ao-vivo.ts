@@ -865,7 +865,10 @@ const amostraPorSorteio = new Map<string, number[]>();
  * vez, e isto não podia ser por requisição.
  */
 async function amostraParaOCarretel(draw: Draw): Promise<number[]> {
-  if (draw.status !== "COUNTDOWN" && draw.status !== "DRAWING") return [];
+  // Antes só na contagem e no sorteio. Agora também depois: quem reabre um
+  // sorteio encerrado vê a fita frear até o vencedor, e ela precisa correr
+  // com títulos que disputaram de verdade, não com números do intervalo.
+  if (draw.status === "WAITING_DRAW") return [];
   const guardada = amostraPorSorteio.get(draw.id);
   if (guardada) return guardada;
 
