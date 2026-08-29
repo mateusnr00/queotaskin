@@ -536,60 +536,66 @@ export default async function PublicRaffleDetailPage({
             />
           )}
 
-          <div className="rounded-xl border bg-card p-4 md:rounded-2xl md:p-5">
-            {!isActive ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Este sorteio não está mais disponível para venda.
-              </p>
-            ) : remaining <= 0 ? (
-              // Sem esse ramo, o formulário aparecia normalmente e a reserva só
-              // falhava no submit, com uma mensagem genérica de erro, que faz
-              // parecer defeito e não campanha esgotada.
-              <div className="py-8 text-center">
-                <p className="text-sm font-semibold">
-                  Todos os números foram vendidos
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  O sorteio acontece na data marcada. Acompanhe o resultado aqui
-                  mesmo.
-                </p>
-              </div>
-            ) : levelLocked ? (
-              <MinLevelGate
-                minLevel={raffle.minLevel!}
-                xp={viewerXp}
-                isLoggedIn={Boolean(currentUser)}
-                gratuita={raffle.isFree}
-                jaGarantiram={soldCount}
-              />
-            ) : (
-              <>
-                {dobroValendo && (
-                  <FaixaDeDobro
-                    inicio={raffle.promotionsDoubleFrom?.toISOString() ?? null}
-                    fim={raffle.promotionsDoubleUntil?.toISOString() ?? null}
-                    className="mb-4"
-                  />
-                )}
-                <ReservationForm
-                  raffleId={raffle.id}
-                  totalNumbers={raffle.totalNumbers}
-                  takenNumbers={takenNumbers}
-                  minPurchase={raffle.minPurchase}
-                  maxPurchase={raffle.maxPurchase ?? undefined}
-                  initialQuantity={raffle.initialQuantity ?? undefined}
-                  reservationModel={raffle.reservationModel}
-                  requiredFields={requiredFields}
-                  currentUser={currentUser}
-                  pricePerNumber={Number(raffle.pricePerNumber)}
-                  selectionCards={raffle.selectionCards ?? []}
-                  selectionCardsBestseller={
-                    raffle.selectionCardsBestseller ?? -1
-                  }
+          {/* Campanha fechada não desenha card nenhum aqui.
+              Havia um, com uma única frase no meio: "este sorteio não está
+              mais disponível para venda". Uma moldura inteira para dizer que
+              não há nada dentro dela. E dizer isso nem era preciso: o selo de
+              status, a barra em 100% e o aviso da transmissão já contam o que
+              aconteceu com a campanha, cada um com informação de verdade. */}
+          {isActive && (
+            <div className="rounded-xl border bg-card p-4 md:rounded-2xl md:p-5">
+              {remaining <= 0 ? (
+                // Sem esse ramo, o formulário aparecia normalmente e a reserva só
+                // falhava no submit, com uma mensagem genérica de erro, que faz
+                // parecer defeito e não campanha esgotada.
+                <div className="py-8 text-center">
+                  <p className="text-sm font-semibold">
+                    Todos os números foram vendidos
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    O sorteio acontece na data marcada. Acompanhe o resultado
+                    aqui mesmo.
+                  </p>
+                </div>
+              ) : levelLocked ? (
+                <MinLevelGate
+                  minLevel={raffle.minLevel!}
+                  xp={viewerXp}
+                  isLoggedIn={Boolean(currentUser)}
+                  gratuita={raffle.isFree}
+                  jaGarantiram={soldCount}
                 />
-              </>
-            )}
-          </div>
+              ) : (
+                <>
+                  {dobroValendo && (
+                    <FaixaDeDobro
+                      inicio={
+                        raffle.promotionsDoubleFrom?.toISOString() ?? null
+                      }
+                      fim={raffle.promotionsDoubleUntil?.toISOString() ?? null}
+                      className="mb-4"
+                    />
+                  )}
+                  <ReservationForm
+                    raffleId={raffle.id}
+                    totalNumbers={raffle.totalNumbers}
+                    takenNumbers={takenNumbers}
+                    minPurchase={raffle.minPurchase}
+                    maxPurchase={raffle.maxPurchase ?? undefined}
+                    initialQuantity={raffle.initialQuantity ?? undefined}
+                    reservationModel={raffle.reservationModel}
+                    requiredFields={requiredFields}
+                    currentUser={currentUser}
+                    pricePerNumber={Number(raffle.pricePerNumber)}
+                    selectionCards={raffle.selectionCards ?? []}
+                    selectionCardsBestseller={
+                      raffle.selectionCardsBestseller ?? -1
+                    }
+                  />
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
