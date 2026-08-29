@@ -137,7 +137,14 @@ export default async function PublicRaffleDetailPage({
             claimedAt: true,
             claimedByBox: {
               select: {
-                reservation: { select: { participantName: true } },
+                reservation: {
+                  select: {
+                    participantName: true,
+                    // A reserva pode nao ter conta (compra sem login), entao
+                    // o time so existe quando existe usuario ligado.
+                    user: { select: { favoriteTeamId: true } },
+                  },
+                },
               },
             },
           },
@@ -298,14 +305,22 @@ export default async function PublicRaffleDetailPage({
           },
           select: {
             number: true,
-            reservation: { select: { participantName: true } },
+            reservation: {
+              select: {
+                participantName: true,
+                user: { select: { favoriteTeamId: true } },
+              },
+            },
           },
         })
       : [];
   const participantByNumber = new Map<number, string>();
+  const teamByNumber = new Map<number, string>();
   for (const t of claimedTickets) {
     if (t.reservation?.participantName) {
       participantByNumber.set(t.number, t.reservation.participantName);
+      const time = t.reservation.user?.favoriteTeamId;
+      if (time) teamByNumber.set(t.number, time);
     }
   }
   const publicAwardedTickets: PublicAwardedTicket[] = raffle.awardedTickets.map(
@@ -314,6 +329,7 @@ export default async function PublicRaffleDetailPage({
       prizeDescription: a.prizeDescription,
       skinRarity: a.skinRarity,
       participantName: participantByNumber.get(a.number) ?? null,
+      participantTeamId: teamByNumber.get(a.number) ?? null,
     })
   );
   // ── Caixas surpresas na página pública ──
@@ -342,6 +358,10 @@ export default async function PublicRaffleDetailPage({
       // expor quem levou.
       ganhador: raffle.surpriseBoxExibirGanhadores
         ? p.claimedByBox?.reservation.participantName ?? null
+        : null,
+      // Segue a mesma chave do nome: sem "exibir ganhadores", nem o time sai.
+      timeDoGanhador: raffle.surpriseBoxExibirGanhadores
+        ? p.claimedByBox?.reservation.user?.favoriteTeamId ?? null
         : null,
       aberto: Boolean(p.claimedAt),
     }));

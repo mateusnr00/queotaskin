@@ -31,6 +31,8 @@ import { Trophy } from "lucide-react";
 
 import { RARITY_TEXT_VAR } from "@/lib/cs2";
 import { nomeCurto } from "@/lib/nome-curto";
+import { timePorId } from "@/lib/times-cs2";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { separarDesgaste } from "@/lib/premio-nome";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +41,7 @@ export function LinhaDePremio({
   premio,
   raridade,
   ganhador,
+  timeDoGanhador,
   rotuloVago,
 }: {
   /** Ja formatado com os zeros a esquerda. Ausente nas caixas surpresas. */
@@ -47,10 +50,16 @@ export function LinhaDePremio({
   /** Preenchida quando o premio veio do catalogo. Pinta o nome. */
   raridade?: SkinRarity | null;
   ganhador: string | null;
+  /**
+   * O id do time para quem o ganhador torce. Opcional: caixa surpresa nem
+   * sempre tem conta ligada, e a linha existe sem isto desde antes.
+   */
+  timeDoGanhador?: string | null;
   /** O que dizer quando ainda nao tem dono. */
   rotuloVago: string;
 }) {
   const temDono = Boolean(ganhador);
+  const time = timePorId(timeDoGanhador);
   const { nome, desgaste } = separarDesgaste(premio);
 
   return (
@@ -98,6 +107,10 @@ export function LinhaDePremio({
             <span className="[overflow-wrap:anywhere]">
               {nomeCurto(ganhador!)}
             </span>
+            {/* O emblema depois do nome, e nao antes: quem varre esta lista
+                procura o proprio nome, e um escudo na frente atrasa a leitura
+                de cada linha. */}
+            {time && <EmblemaDoTime time={time} tamanho="sm" />}
           </p>
         ) : (
           <p className="mt-1 text-xs font-semibold text-primary">{rotuloVago}</p>

@@ -31,6 +31,8 @@ export interface CaixaPublica {
   raridade: SkinRarity | null;
   /** Nome de quem levou, quando já foi aberta. */
   ganhador: string | null;
+  /** Time do ganhador, quando a compra estava ligada a uma conta. */
+  timeDoGanhador: string | null;
 }
 
 export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
@@ -69,6 +71,7 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
             premio={c.premio}
             raridade={c.raridade}
             ganhador={c.ganhador}
+            timeDoGanhador={c.timeDoGanhador}
             rotuloVago="Disponível"
           />
         ))}

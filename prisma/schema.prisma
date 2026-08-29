@@ -194,6 +194,15 @@ model User {
   role         Role    @default(PARTICIPANT)
   image        String?
 
+  /// O time de CS2 para quem a pessoa torce, exibido ao lado do nome dela.
+  ///
+  /// Guarda o id da lista de src/lib/times-cs2.ts, e não uma chave estrangeira:
+  /// os times moram em código porque são uma lista curta e estável que ninguém
+  /// cadastra pelo painel. Sem FK, um time que saia da lista deixa aqui um id
+  /// órfão, e é de propósito: `timePorId` devolve nulo e a pessoa só deixa de
+  /// exibir time, em vez de a página quebrar.
+  favoriteTeamId String?
+
   // Link de troca da Steam, é por ele que a skin ganha é entregue.
   // Formato: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...
   steamTradeUrl String?

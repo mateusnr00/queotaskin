@@ -30,6 +30,8 @@ export interface PublicAwardedTicket {
   prizeDescription: string;
   skinRarity: SkinRarity | null;
   participantName: string | null;
+  /** Time do ganhador, quando o titulo esta ligado a uma conta. */
+  participantTeamId: string | null;
 }
 
 interface Props {
@@ -66,6 +68,7 @@ export function AwardedTicketsSection({
           premio={t.prizeDescription}
           raridade={t.skinRarity}
           ganhador={t.participantName}
+          timeDoGanhador={t.participantTeamId}
           rotuloVago="Em jogo"
         />
       ))}
