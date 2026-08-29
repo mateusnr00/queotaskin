@@ -260,103 +260,52 @@
  * fica colado no título, então um anel crescendo em volta encostaria no
  * texto. Não some de todo, para de 0,45 para baixo o selo sumir de vez a
  * cada ciclo e a leitura ficar intermitente. */
-/* O selo de status: apaga de vez, volta com estalo, e solta um halo.
+/* O selo de status: um respiro que fecha ate o fim.
  *
- * Antes a opacidade ia de 1 a 0,45 e voltava, num vaivem de dois segundos.
- * Nunca apagava, e um brilho que so diminui nao chama atencao: o olho para
- * de registrar movimento sem comeco nem fim, e o selo virava parte do fundo.
+ * Tres versoes ate chegar aqui, e as duas primeiras erraram para lados
+ * opostos.
  *
- * O QUE MUDOU, E POR QUE ASSIM
+ * A original ia de opacidade 1 a 0,45 e voltava. Nunca apagava, e um brilho
+ * que so diminui o olho para de registrar: o selo virava parte do fundo.
  *
- * O tempo e ASSIMETRICO. A pilula fica inteira 60% do ciclo, apaga em 130ms,
- * segura apagada por 150ms e volta em 190ms com um estalo de escala. Blink
- * simetrico (meio aceso, meio apagado) e o <blink> dos anos 90: cansa, e
- * pior, some com o texto metade do tempo. Aqui a frase esta legivel em quase
- * todo o ciclo, e o apagao e curto o bastante para ser um piscar, nao uma
- * ausencia.
+ * A segunda apagava de vez, mas com estalo de escala e um halo saindo de tras
+ * no retorno. Apagar era o certo; o resto era energia demais. Escala fazia o
+ * selo pular, halo era um segundo movimento competindo com o primeiro, e as
+ * transicoes de 130ms davam o corte seco de interruptor. Junto, aquilo nao
+ * chamava atencao, agitava.
  *
- * O HALO sai no instante do retorno, de tras da pilula para fora. E ele que
- * faz o trabalho de chamar atencao sem depender de o texto sumir: movimento
- * que se expande e some e o gesto de farol, e o olho pega isso na periferia.
+ * Esta e a original com a amplitude que faltava. So opacidade, nenhuma escala,
+ * nenhum halo. O que muda em relacao a segunda tentativa:
  *
- * Escala e opacidade nos dois, so. Sao as duas propriedades que o navegador
- * anima sem recalcular layout, e este selo aparece em ate sete cards ao mesmo
- * tempo na home.
+ * - As descidas e subidas levam 360ms cada, quase o triplo dos 130ms de antes.
+ *   Fade longo e respiro; fade curto e piscada de lampada queimada.
+ * - O ciclo passou de 1,9s para 3s. Uma piscada a cada tres segundos, contra
+ *   uma a cada dois.
+ * - Fica apagado 240ms, o suficiente para o sumico ser percebido como sumico,
+ *   e curto demais para alguem sentir falta do texto.
  *
- * Piscadas: uma a cada 1,9s, ou 0,53 por segundo. O limite da WCAG 2.3.1 e
- * tres por segundo, entao sobra folga de seis vezes.
+ * ease-in-out nas duas pontas: a curva sai devagar, atravessa rapido e chega
+ * devagar, que e como uma coisa respira. Linear seria o corte seco de novo.
+ *
+ * Piscadas: 0,33 por segundo. O limite da WCAG 2.3.1 e tres por segundo.
  */
 @keyframes pulso-selo {
   0%,
-  58% {
+  40% {
     opacity: 1;
-    transform: scale(1);
   }
-  65% {
+  52%,
+  60% {
     opacity: 0;
-    transform: scale(0.94);
   }
-  73% {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  83% {
-    opacity: 1;
-    transform: scale(1.07);
-  }
+  72%,
   100% {
     opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* O halo. Nasce colado na pilula no momento em que ela reacende, cresce e
- * some. Fora dessa janela fica invisivel, para nao virar um borrao permanente
- * atras do selo. */
-@keyframes halo-selo {
-  0%,
-  73% {
-    opacity: 0;
-    transform: scale(1);
-  }
-  80% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.65);
   }
 }
 
 .selo-pulsa {
-  position: relative;
-  display: inline-flex;
-}
-
-.selo-pulsa-pilula {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 9999px;
-  background: var(--primary);
-  padding: 0.125rem 0.625rem;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--primary-foreground);
-  animation: pulso-selo 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-.selo-pulsa-halo {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  background: var(--primary);
-  opacity: 0;
-  pointer-events: none;
-  animation: halo-selo 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation: pulso-selo 3s ease-in-out infinite;
 }
 
 /* Abertura da caixa surpresa.
@@ -942,8 +891,7 @@
   .rank-meter-cresce > div,
   .selo-alvo::after,
   .cta-pulsa,
-  .selo-pulsa-pilula,
-  .selo-pulsa-halo,
+  .selo-pulsa,
   .card-popular-pulsa,
   .contorno-pulsa,
   .caixa-balanca,

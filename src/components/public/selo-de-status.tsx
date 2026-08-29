@@ -11,21 +11,11 @@ import { cn } from "@/lib/utils";
  * O texto vem de statusDaCampanha e é automático nas quatro faixas de venda.
  * Este componente só desenha.
  *
- * SÃO TRÊS ELEMENTOS, E NÃO UM
- *
- * O selo era um `span` só, com a opacidade indo de 1 a 0,45 e voltando. Nunca
- * apagava, e um brilho que só diminui não chama atenção: o olho para de
- * registrar movimento que não tem começo nem fim.
- *
- * Agora a pílula apaga de vez e volta, e um halo sai de trás dela no instante
- * do retorno. O halo precisa ficar FORA do elemento que apaga, senão ele
- * apagaria junto e não haveria halo nenhum. Daí a casca por fora: ela não
- * anima, segura o halo atrás e a pílula na frente.
- *
- * As duas ficam `relative` de propósito. Elemento posicionado pinta depois de
- * conteúdo em linha, então um halo absoluto ao lado de uma pílula estática
- * cobriria o texto; posicionando as duas, quem manda é a ordem no HTML, e a
- * pílula vem depois.
+ * Um elemento só, de novo. Chegou a ser três, para um halo poder sair de trás
+ * da pílula sem apagar junto com ela. O halo saiu: ele era um segundo
+ * movimento competindo com o piscar, e a soma dos dois agitava em vez de
+ * chamar atenção. Sem halo, a casca e a camada extra não têm mais o que fazer.
+ * O respiro inteiro vive no CSS, em `.selo-pulsa`.
  */
 export function SeloDeStatus({
   texto,
@@ -35,9 +25,13 @@ export function SeloDeStatus({
   className?: string;
 }) {
   return (
-    <span className={cn("selo-pulsa", className)}>
-      <span aria-hidden className="selo-pulsa-halo" />
-      <span className="selo-pulsa-pilula">{texto}</span>
+    <span
+      className={cn(
+        "selo-pulsa inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold tracking-wider text-primary-foreground uppercase",
+        className
+      )}
+    >
+      {texto}
     </span>
   );
 }
