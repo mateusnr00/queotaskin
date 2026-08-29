@@ -5,9 +5,9 @@
 // dizia o prêmio sem dizer como recebê-lo. Quem sabia procurava o WhatsApp
 // da marca por fora; quem não sabia ficava esperando.
 //
-// A mensagem já vai escrita e leva a referência do pedido, então o suporte
-// abre a conversa sabendo quem é, o que ganhou e em qual campanha, sem a ida
-// e volta de perguntas antes de conseguir entregar.
+// A mensagem já vai escrita com quem é, o que ganhou e o link de troca, que é
+// para onde a skin vai. Sem ela o atendimento começava perguntando as três
+// coisas antes de conseguir entregar qualquer coisa.
 //
 // Sem número de suporte cadastrado o botão não aparece. Um botão que abre
 // conversa com ninguém é pior do que botão nenhum: promete atendimento e não
@@ -21,23 +21,22 @@ export function BotaoReivindicar({
   telefoneDoSuporte,
   nome,
   premio,
-  campanha,
-  referencia,
+  tradeUrl,
   className,
   variante = "solido",
 }: {
   telefoneDoSuporte: string | null;
   nome: string;
   premio: string;
-  campanha: string;
-  referencia: string;
+  /** Link de troca da Steam. Nulo quando a pessoa ainda não cadastrou. */
+  tradeUrl: string | null;
   className?: string;
   /** "claro" para quando o botão fica sobre a faixa laranja da caixa. */
   variante?: "solido" | "claro";
 }) {
   const link = linkDoWhatsapp(
     telefoneDoSuporte,
-    mensagemDeReivindicacao({ nome, premio, campanha, referencia }),
+    mensagemDeReivindicacao({ nome, premio, tradeUrl }),
   );
   if (!link) return null;
 

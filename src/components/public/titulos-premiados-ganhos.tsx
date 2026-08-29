@@ -25,8 +25,7 @@ export function TitulosPremiadosGanhos({
   premiados,
   telefoneDoSuporte,
   nomeDoGanhador,
-  nomeDaCampanha,
-  referencia,
+  tradeUrl,
   texto,
 }: {
   premiados: {
@@ -36,8 +35,8 @@ export function TitulosPremiadosGanhos({
   }[];
   telefoneDoSuporte: string | null;
   nomeDoGanhador: string;
-  nomeDaCampanha: string;
-  referencia: string;
+  /** Link de troca da Steam, que vai na mensagem para o suporte. */
+  tradeUrl: string | null;
   /** Texto configurado no painel. Vazio usa o padrão. */
   texto: string | null;
 }) {
@@ -89,8 +88,7 @@ export function TitulosPremiadosGanhos({
                 telefoneDoSuporte={telefoneDoSuporte}
                 nome={nomeDoGanhador}
                 premio={p.prizeDescription}
-                campanha={nomeDaCampanha}
-                referencia={referencia}
+                tradeUrl={tradeUrl}
                 className="mt-3 w-full"
               />
             </li>

@@ -182,8 +182,7 @@ export function TransmissaoDoSorteio({
               telefoneDoSuporte={reivindicacao.telefoneDoSuporte}
               nome={reivindicacao.nome}
               premio={reivindicacao.premio}
-              campanha={reivindicacao.campanha}
-              referencia={reivindicacao.referencia}
+              tradeUrl={reivindicacao.tradeUrl}
             />
           </section>
         )}

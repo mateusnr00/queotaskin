@@ -971,8 +971,8 @@ export interface DadosDeReivindicacao {
   telefoneDoSuporte: string;
   nome: string;
   premio: string;
-  campanha: string;
-  referencia: string;
+  /** Link de troca da Steam. Nulo quando a pessoa ainda não cadastrou. */
+  tradeUrl: string | null;
   titulo: number;
   totalNumbers: number;
 }
@@ -1010,7 +1010,15 @@ export async function dadosDeReivindicacao(
       status: { in: ["PAID", "AWARDED"] },
     },
     select: {
-      reservation: { select: { id: true, userId: true, participantName: true } },
+      reservation: {
+        select: {
+          userId: true,
+          participantName: true,
+          // O link de troca vem junto: é para onde a skin sai, e é a única
+          // coisa que o suporte não consegue descobrir sozinho.
+          user: { select: { steamTradeUrl: true } },
+        },
+      },
     },
   });
   if (!bilhete?.reservation || bilhete.reservation.userId !== userId) {
@@ -1029,8 +1037,7 @@ export async function dadosDeReivindicacao(
     telefoneDoSuporte: tenant.supportPhone,
     nome: bilhete.reservation.participantName,
     premio: draw.raffle.prizes[0]?.description ?? draw.raffle.title,
-    campanha: draw.raffle.title,
-    referencia: bilhete.reservation.id,
+    tradeUrl: bilhete.reservation.user?.steamTradeUrl ?? null,
     titulo: draw.winningNumber,
     totalNumbers: draw.raffle.totalNumbers,
   };
