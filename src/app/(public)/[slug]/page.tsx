@@ -667,12 +667,16 @@ export default async function PublicRaffleDetailPage({
 
         <SurpriseBoxesSection caixas={caixasPublicas} />
 
-        {/* A prova do sorteio, fechada, no fim.
-            Ela ficava aberta logo abaixo do título e comia quase uma tela de
-            celular entre o nome da campanha e o preço. Aqui embaixo ela
-            continua pública antes da venda, que é o que dá valor a ela, sem
-            atravessar o caminho de quem veio comprar. */}
-        {semente && !sorteioConcluido && (
+        {/* A prova do sorteio, fechada, no fim, e SÓ ENQUANTO VENDE.
+            O critério é esse, e não "antes do sorteio", que era o que estava
+            aqui e deixava a prova aparecendo em campanha esgotada esperando a
+            hora do sorteio.
+
+            Ela existe para quem está decidindo comprar: dizer que a chave foi
+            travada antes da primeira venda só vale enquanto há venda. Fechada
+            a campanha, ninguém mais decide nada, e o que resta a mostrar é o
+            resultado. A prova inteira continua em /sorteio/<id>/verificar. */}
+        {semente && isActive && (
           <SeloDeCompromisso
             hash={semente.serverSeedHash}
             desde={semente.committedAt.toISOString()}
