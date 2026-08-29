@@ -26,9 +26,11 @@ import {
 } from "lucide-react";
 
 import {
+  faseDoSorteio,
   formatarContagemCurta,
   percentualDaContagem,
   segundosAte,
+  type EstadoDoSorteio,
 } from "@/lib/sorteio-ao-vivo";
 import { cn } from "@/lib/utils";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
@@ -68,29 +70,58 @@ export function TransmissaoDoSorteio({
   const { estado, agora, conexao, recarregar } = useEstadoDoSorteio(estadoInicial);
   const som = useSom();
 
+  // A FASE VEM DO RELÓGIO, não da última resposta do servidor.
+  //
+  // Era o contrário, e a contagem ficava parada no zero por meio segundo ou
+  // mais: a tela só trocava quando a resposta da próxima consulta chegava, e
+  // essa consulta sai um pouco depois da hora de propósito (o respiro que
+  // espalha o pico de milhares de espectadores pedindo ao mesmo tempo). Somado
+  // à ida e volta da rede, dava quase um segundo de "00" na cara de quem
+  // estava esperando o clímax.
+  //
+  // Não precisa esperar ninguém: o cronograma inteiro está na mão do
+  // navegador desde a primeira resposta, e a fase é uma função dele com o
+  // instante atual. Esta é a MESMA função que o servidor usa para decidir, com
+  // os mesmos carimbos, então os dois chegam à mesma conclusão. A consulta
+  // continua saindo, porque ela é que traz o número; o que ela deixou de fazer
+  // é segurar a virada da tela.
+  //
+  // `temResultado` é o freio: sem número escolhido, a função para em DRAWING
+  // por mais tarde que seja. O relógio adianta a troca de cena, nunca a
+  // revelação.
+  const fase =
+    estado.status === "ERROR"
+      ? "ERROR"
+      : faseDoSorteio(
+          {
+            drawScheduledAt: new Date(estado.drawScheduledAt),
+            drawStartsAt: new Date(estado.drawStartsAt),
+            revealAt: new Date(estado.revealAt),
+            winnerRevealAt: new Date(estado.winnerRevealAt),
+            temResultado: estado.resultado != null,
+          },
+          agora,
+        );
+
   const aoVivo =
-    estado.status === "COUNTDOWN" ||
-    estado.status === "DRAWING" ||
-    estado.status === "REVEALING";
+    fase === "COUNTDOWN" || fase === "DRAWING" || fase === "REVEALING";
 
   return (
     <div className="palco-do-sorteio">
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
-        <Cabecalho estado={estado} aoVivo={aoVivo} som={som} />
+        <Cabecalho estado={estado} fase={fase} aoVivo={aoVivo} som={som} />
 
         <div className="mt-5">
-          {estado.status === "WAITING_DRAW" && (
-            <Espera estado={estado} agora={agora} />
-          )}
-          {estado.status === "COUNTDOWN" && (
+          {fase === "WAITING_DRAW" && <Espera estado={estado} agora={agora} />}
+          {fase === "COUNTDOWN" && (
             <Contagem estado={estado} agora={agora} som={som} />
           )}
-          {(estado.status === "DRAWING" ||
-            estado.status === "REVEALING" ||
-            estado.status === "FINISHED") && (
-            <Revelacao estado={estado} som={som} />
+          {(fase === "DRAWING" ||
+            fase === "REVEALING" ||
+            fase === "FINISHED") && (
+            <Revelacao estado={estado} agora={agora} som={som} />
           )}
-          {estado.status === "ERROR" && <Falha estado={estado} />}
+          {fase === "ERROR" && <Falha estado={estado} />}
         </div>
 
         <CertificadoDoSorteio estado={estado} />
@@ -105,10 +136,12 @@ export function TransmissaoDoSorteio({
 
 function Cabecalho({
   estado,
+  fase,
   aoVivo,
   som,
 }: {
   estado: EstadoPublicoDoSorteio;
+  fase: EstadoDoSorteio;
   aoVivo: boolean;
   som: ReturnType<typeof useSom>;
 }) {
@@ -123,9 +156,7 @@ function Cabecalho({
             </span>
           ) : (
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-emerald-300 uppercase">
-              {estado.status === "FINISHED"
-                ? "Sorteio finalizado"
-                : "Sorteio confirmado"}
+              {fase === "FINISHED" ? "Sorteio finalizado" : "Sorteio confirmado"}
             </span>
           )}
           <h1 className="text-balance text-xl leading-tight font-extrabold tracking-tight text-white sm:text-2xl">
@@ -360,14 +391,30 @@ function Contagem({
 
 // --------------------------------------------------------------- revelação
 
+/**
+ * Quanto o número pode atrasar antes de a tela admitir que algo saiu errado.
+ *
+ * Existe porque a cena agora entra pelo relógio, sem esperar o servidor: se o
+ * motor não rodar (o sistema fora do ar bem na hora), o carretel giraria para
+ * sempre e a página passaria a impressão de que está tudo bem. O cron recupera
+ * em até um minuto, então quarenta e cinco segundos de tolerância cobrem o
+ * caso normal e ainda dizem a verdade quando não é normal.
+ */
+const TOLERANCIA_DO_ATRASO_MS = 45_000;
+
 function Revelacao({
   estado,
+  agora,
   som,
 }: {
   estado: EstadoPublicoDoSorteio;
+  agora: Date;
   som: ReturnType<typeof useSom>;
 }) {
   const numero = estado.resultado?.numero ?? null;
+  const atrasado =
+    numero == null &&
+    agora.getTime() - Date.parse(estado.revealAt) > TOLERANCIA_DO_ATRASO_MS;
   const ganhador = estado.resultado?.ganhador ?? null;
 
   // Um toque quando o número finalmente aparece. Dispara uma vez: a
@@ -392,6 +439,13 @@ function Revelacao({
         <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
           {numero == null ? "Sorteando..." : "Número sorteado"}
         </p>
+
+        {atrasado && (
+          <p role="status" className="mt-2 text-xs leading-relaxed text-amber-300">
+            O sorteio está demorando mais que o previsto. O resultado aparece
+            aqui sozinho assim que sair, e ninguém precisa recarregar a página.
+          </p>
+        )}
 
         <div className="mx-auto mt-4 w-full max-w-[340px]">
           <CarretelDeTitulos

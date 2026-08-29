@@ -131,6 +131,45 @@ export function useEstadoDoSorteio(
     return () => clearInterval(id);
   }, [estado.status]);
 
+  // Um despertador para a virada de fase.
+  //
+  // O relógio da tela bate de 250 em 250 ms, e a troca de cena espera o
+  // próximo tique: no pior caso, um quarto de segundo de contagem zerada antes
+  // de o carretel entrar. Medido, dava entre 25 e 238 ms.
+  //
+  // Este efeito marca um despertador para o instante EXATO da próxima virada.
+  // Não é polimento à toa: a troca acontece no clímax, com a pessoa olhando
+  // para o número, e um quarto de segundo parado ali é a diferença entre
+  // "virou na hora" e "travou".
+  useEffect(() => {
+    if (estado.status === "FINISHED" || estado.status === "ERROR") return;
+
+    const agoraEfetivo = new Date(Date.now() + deslocamento.current);
+    const virada = proximaVirada(
+      {
+        drawScheduledAt: new Date(estado.drawScheduledAt),
+        drawStartsAt: new Date(estado.drawStartsAt),
+        revealAt: new Date(estado.revealAt),
+        winnerRevealAt: new Date(estado.winnerRevealAt),
+        temResultado: estado.resultado != null,
+      },
+      agoraEfetivo,
+    );
+    if (!virada) return;
+
+    // Quinze milissegundos depois da hora, e não em cima: o despertador
+    // acordando um fio antes da virada mostraria a cena antiga e teria que
+    // esperar o tique seguinte, que é justamente o que ele veio evitar.
+    const espera = virada.getTime() - agoraEfetivo.getTime() + 15;
+    if (espera <= 0 || espera > 3_600_000) return;
+
+    const id = setTimeout(
+      () => setAgora(new Date(Date.now() + deslocamento.current)),
+      espera,
+    );
+    return () => clearTimeout(id);
+  }, [estado]);
+
   // A agenda de buscas.
   //
   // Um laço que SEMPRE se rearma, e não um temporizador único por estado. A
