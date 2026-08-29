@@ -411,14 +411,6 @@ export default async function PublicRaffleDetailPage({
           )}
         </div>
 
-        {semente && (
-          <SeloDeCompromisso
-            hash={semente.serverSeedHash}
-            desde={semente.committedAt.toISOString()}
-            publicId={sorteio?.publicId ?? null}
-          />
-        )}
-
         {sorteio && (
           <SeloDeTransmissao
             publicId={sorteio.publicId}
@@ -622,6 +614,19 @@ export default async function PublicRaffleDetailPage({
         />
 
         <SurpriseBoxesSection caixas={caixasPublicas} />
+
+        {/* A prova do sorteio, fechada, no fim.
+            Ela ficava aberta logo abaixo do título e comia quase uma tela de
+            celular entre o nome da campanha e o preço. Aqui embaixo ela
+            continua pública antes da venda, que é o que dá valor a ela, sem
+            atravessar o caminho de quem veio comprar. */}
+        {semente && (
+          <SeloDeCompromisso
+            hash={semente.serverSeedHash}
+            desde={semente.committedAt.toISOString()}
+            publicId={sorteio?.publicId ?? null}
+          />
+        )}
 
   {raffle.showShareButtons && (
           <div className="space-y-2">
