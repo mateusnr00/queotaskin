@@ -33,8 +33,8 @@ export function XpGanho({
   const antes = rankProgress(Math.max(0, total - ganho), xpPerBrl);
 
   // O rótulo é o que a pessoa lê na tela, e comparar por ele cobre os dois
-  // tipos de degrau numa checagem só: "Nível 5" vira "Nível 6", e "Nível 21"
-  // vira "MVP".
+  // tipos de degrau numa checagem só: "Prata Elite" vira "Ouro I", e "Lenda
+  // Global" vira "MVP".
   const subiu = antes.rank.label !== depois.rank.label;
 
   return (
@@ -43,7 +43,7 @@ export function XpGanho({
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold">
-            {subiu ? "Você subiu de nível" : "Sua conta avançou"}
+            {subiu ? "Você subiu de patente" : "Sua conta avançou"}
           </span>
         </div>
         <span className="text-lg font-extrabold tabular-nums text-primary">

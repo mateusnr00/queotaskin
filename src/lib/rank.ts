@@ -122,20 +122,81 @@ export interface Tier {
 }
 
 /**
- * Faixas dos níveis 0–21, nomeadas como as patentes do competitivo do CS.
+ * O nome de cada nível, do 0 ao 21.
  *
- * A cor é o único elemento cromático de cada componente de rank, por isso é
- * dessaturada de propósito. Uma lista de ranking com sete cores neon vira
- * ruído; puxada para o sóbrio, ela informa sem gritar.
+ * Fonte única: nenhum componente escreve nome de patente à mão. Trocar aqui
+ * troca no site inteiro, e é por isso que a lista vive no mesmo arquivo das
+ * regras em vez de virar string espalhada.
+ *
+ * O vocabulário é o do competitivo brasileiro de CS, e não a tradução oficial
+ * da Valve. Quem joga fala "AK Cruzada" e "Xerife", não "Mestre Guardião"
+ * nem "Nova de Ouro": a lista abaixo é a que o jogador reconhece sem ler
+ * duas vezes.
+ */
+export const NOMES_DE_NIVEL: readonly string[] = [
+  "Recruta", // 0
+  "Prata I",
+  "Prata II",
+  "Prata III",
+  "Prata IV",
+  "Prata Elite", // 5
+  "Ouro I",
+  "Ouro II",
+  "Ouro III",
+  "Ouro Mestre", // 9
+  "AK I",
+  "AK II",
+  "AK Elite",
+  "AK Cruzada", // 13
+  "Xerife", // 14
+  "Águia",
+  "Águia Mestre", // 16
+  "Supremo", // 17
+  "Global",
+  "Global Elite",
+  "Lendário",
+  "Lenda Global", // 21
+] as const;
+
+/** O nome do nível, protegido contra valor fora da escada. */
+export function nomeDoNivel(level: number): string {
+  const L = Math.max(0, Math.min(MAX_LEVEL, Math.floor(level)));
+  return NOMES_DE_NIVEL[L];
+}
+
+/**
+ * As cores dos níveis, por faixa.
+ *
+ * Separado dos grupos DE PROPÓSITO. Os grupos mudaram de recorte quando as
+ * patentes foram renomeadas, mas a paleta é a mesma de antes e cada nível
+ * continua exatamente com a cor que sempre teve. Fundir as duas coisas de
+ * novo faria a renomeação repintar a escada inteira de tabela.
+ */
+const FAIXAS_DE_COR: readonly { from: number; color: string }[] = [
+  { from: 0, color: "#7d8894" },
+  { from: 1, color: "#5b8fc7" },
+  { from: 4, color: "#6d7fd6" },
+  { from: 8, color: "#9a72d1" },
+  { from: 12, color: "#c06ab8" },
+  { from: 16, color: "#d4694f" },
+  { from: 20, color: "#d8a53c" },
+] as const;
+
+/**
+ * Os grupos da escada, como aparecem na tela de patentes.
+ *
+ * Recruta, Prata, Ouro, AK, Xerife, Águia, Supremo e Global: é a progressão
+ * que um jogador de CS lê de cima a baixo sem precisar de legenda.
  */
 export const TIERS: readonly Tier[] = [
-  { from: 0, name: "Prata", color: "#7d8894" },
-  { from: 1, name: "Prata Elite", color: "#5b8fc7" },
-  { from: 4, name: "Nova de Ouro", color: "#6d7fd6" },
-  { from: 8, name: "Mestre Guardião", color: "#9a72d1" },
-  { from: 12, name: "Águia Lendária", color: "#c06ab8" },
-  { from: 16, name: "Supremo", color: "#d4694f" },
-  { from: 20, name: "Global Elite", color: "#d8a53c" },
+  { from: 0, name: "Recruta", color: "#7d8894" },
+  { from: 1, name: "Prata", color: "#5b8fc7" },
+  { from: 6, name: "Ouro", color: "#6d7fd6" },
+  { from: 10, name: "AK", color: "#9a72d1" },
+  { from: 14, name: "Xerife", color: "#c06ab8" },
+  { from: 15, name: "Águia", color: "#c06ab8" },
+  { from: 17, name: "Supremo", color: "#d4694f" },
+  { from: 18, name: "Global", color: "#d8a53c" },
 ] as const;
 
 export function tierForLevel(level: number): Tier {
@@ -147,8 +208,17 @@ export function tierForLevel(level: number): Tier {
   return found;
 }
 
+/**
+ * A cor do nível. Vem de FAIXAS_DE_COR, e não do grupo: assim os grupos podem
+ * ser recortados por nome sem repintar a escada.
+ */
 export function levelColor(level: number): string {
-  return tierForLevel(level).color;
+  const L = Math.max(0, Math.min(MAX_LEVEL, Math.floor(level)));
+  let cor = FAIXAS_DE_COR[0].color;
+  for (const faixa of FAIXAS_DE_COR) {
+    if (L >= faixa.from) cor = faixa.color;
+  }
+  return cor;
 }
 
 // ---------------------------------------------------------------- rank
@@ -158,9 +228,9 @@ export interface Rank {
   level: number;
   /** Patente de prestígio alcançada, ou null se ainda está na escada 0–21. */
   prestige: PrestigeRank | null;
-  /** Nome exibido: "Nível 14" ou "Campeão de Major". */
+  /** Nome exibido: "Xerife" ou "Campeão de Major". */
   label: string;
-  /** Faixa do nível ("Águia Lendária"), ou o nome da patente no prestígio. */
+  /** Grupo do nível ("AK"), ou o nome da patente no prestígio. */
   tierName: string;
   /** Conteúdo do selo: "14" nos níveis, romano ("III") nas patentes. */
   numeral: string;
@@ -213,12 +283,14 @@ export function rankFromXp(xp: number, totalSpent = 0): Rank {
   return {
     level,
     prestige: null,
-    label: `Nível ${level}`,
+    label: nomeDoNivel(level),
     tierName: tier.name,
     // Um dígito só, como nos desenhos: o selo é o mesmo do "0" ao "9", e o
     // zero à esquerda encolhia a fonte de 82 para 74 sem ganhar nada.
     numeral: String(level),
-    color: tier.color,
+    // A cor vem do nível, e não do grupo: os grupos foram recortados de novo
+    // na renomeação, e a paleta por nível continua a mesma de sempre.
+    color: levelColor(level),
     xp: total,
   };
 }
@@ -353,7 +425,7 @@ export const MAX_MIN_LEVEL = NIVEL_DE_PRESTIGIO.GOAT;
 export interface DegrauDaEscada {
   /** O que vai gravado em Raffle.minLevel. */
   valor: number;
-  /** "Nível 14" ou "GOAT". */
+  /** "Xerife" ou "GOAT". */
   label: string;
   /** XP acumulado necessário para alcançar este degrau. */
   xp: number;
@@ -369,9 +441,9 @@ export interface DegrauDaEscada {
 export const ESCADA_DE_RANK: readonly DegrauDaEscada[] = [
   ...XP_POR_NIVEL.map((xp, nivel) => ({
     valor: nivel,
-    label: `Nível ${nivel}`,
+    label: nomeDoNivel(nivel),
     xp,
-    color: tierForLevel(nivel).color,
+    color: levelColor(nivel),
   })).slice(1),
   ...PRESTIGE_RANKS.map((p) => ({
     valor: NIVEL_DE_PRESTIGIO[p.key],

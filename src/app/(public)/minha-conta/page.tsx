@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { AlertTriangle, ChevronDown, TicketCheck } from "lucide-react";
+import { AlertTriangle, TicketCheck } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
@@ -216,30 +216,13 @@ export default async function MyAccountPage() {
         </section>
       )}
 
-      {/* A escada fechada por padrão.
-          São vinte e dois níveis mais três patentes, e ela era o bloco mais
-          alto da página inteira para uma informação que se consulta de vez em
-          quando, não todo dia. Fechada, ela continua a um clique e para de
-          empurrar o resto para fora da tela. */}
-      {rankOn && (
-        <details className="group rounded-xl border bg-card">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
-            <span>
-              <span className="block text-base font-bold">A escada</span>
-              <span className="block text-sm text-muted-foreground">
-                Vinte e dois níveis, sete patentes. Acima do 21, o prestígio.
-              </span>
-            </span>
-            <ChevronDown
-              aria-hidden
-              className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-            />
-          </summary>
-          <div className="border-t px-4 pb-4 pt-4">
-            <RankLadder xp={xp} />
-          </div>
-        </details>
-      )}
+      {/* Sem sanfona, e essa foi uma correção.
+          Eu tinha colapsado a escada para a página não ficar alta, e com isso
+          escondi a única coisa que EXPLICA o sistema: fechada, o site pedia
+          para a pessoa subir de patente sem nunca mostrar quais são nem para
+          que servem. Ela volta aberta, com o cabeçalho do próprio componente
+          em vez de um resumo repetido por fora. */}
+      {rankOn && <RankLadder xp={xp} />}
     </div>
   );
 }

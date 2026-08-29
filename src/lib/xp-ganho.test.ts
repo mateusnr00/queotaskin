@@ -40,7 +40,7 @@ describe("subir de degrau com a compra", () => {
     // "Nível N" e passa a ser o nome dela. É o caso que mais vale anunciar.
     const antesDaPatente = rankProgress(340_000, 10);
     const naPatente = rankProgress(360_000, 10);
-    expect(antesDaPatente.rank.label).toBe("Nível 21");
+    expect(antesDaPatente.rank.label).toBe("Lenda Global");
     expect(naPatente.rank.label).toBe("MVP");
     expect(subiuDeDegrau(360_000, 20_000)).toBe(true);
   });

@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_LEVEL,
   PRESTIGE_RANKS,
+  levelColor,
   levelFromXp,
   meetsMinLevel,
+  nomeDoNivel,
+  NOMES_DE_NIVEL,
   prestigeFromXp,
   rankFromXp,
   rankProgress,
@@ -124,11 +127,23 @@ describe("prestigeFromXp", () => {
 });
 
 describe("rankFromXp", () => {
-  it("rotula níveis numéricos", () => {
+  it("rotula o nível com o nome da patente, e não com o número", () => {
     const rank = rankFromXp(47_000); // R$ 4.700 = nível 10
     expect(rank.level).toBe(10);
-    expect(rank.label).toBe("Nível 10");
+    expect(rank.label).toBe("AK I");
     expect(rank.prestige).toBeNull();
+  });
+
+  it("todo nível da escada tem nome", () => {
+    // Sem isto, um nível novo entraria com "undefined" no lugar do nome e só
+    // apareceria na tela de alguém.
+    for (let level = 0; level <= MAX_LEVEL; level++) {
+      expect(nomeDoNivel(level), `nível ${level}`).toBeTruthy();
+    }
+    expect(NOMES_DE_NIVEL).toHaveLength(MAX_LEVEL + 1);
+    // Fora da escada, não estoura: prende nas pontas.
+    expect(nomeDoNivel(-3)).toBe("Recruta");
+    expect(nomeDoNivel(99)).toBe("Lenda Global");
   });
 
   it("no prestígio, o rótulo vira a patente e o nível fica em 21", () => {
@@ -147,11 +162,11 @@ describe("rankFromXp", () => {
     expect(rankFromXp(350_000).numeral).toBe("MVP");
   });
 
-  it("nomeia a faixa com o vocabulário das patentes do CS", () => {
-    expect(rankFromXp(0).tierName).toBe("Prata");
-    expect(rankFromXp(xpForLevel(5)).tierName).toBe("Nova de Ouro");
-    expect(rankFromXp(xpForLevel(14)).tierName).toBe("Águia Lendária");
-    expect(rankFromXp(xpForLevel(21)).tierName).toBe("Global Elite");
+  it("agrupa a escada com o vocabulário do competitivo brasileiro", () => {
+    expect(rankFromXp(0).tierName).toBe("Recruta");
+    expect(rankFromXp(xpForLevel(5)).tierName).toBe("Prata");
+    expect(rankFromXp(xpForLevel(14)).tierName).toBe("Xerife");
+    expect(rankFromXp(xpForLevel(21)).tierName).toBe("Global");
     // No prestígio, a faixa é a própria patente.
     expect(rankFromXp(500_000, 50_000).tierName).toBe("GOAT");
   });
@@ -232,11 +247,25 @@ describe("tierForLevel", () => {
     }
   });
 
-  it("troca de faixa exatamente no nível de corte", () => {
-    expect(tierForLevel(3).name).toBe("Prata Elite");
-    expect(tierForLevel(4).name).toBe("Nova de Ouro");
-    expect(tierForLevel(19).name).toBe("Supremo");
-    expect(tierForLevel(20).name).toBe("Global Elite");
+  it("troca de grupo exatamente no nível de corte", () => {
+    expect(tierForLevel(5).name).toBe("Prata");
+    expect(tierForLevel(6).name).toBe("Ouro");
+    expect(tierForLevel(13).name).toBe("AK");
+    expect(tierForLevel(14).name).toBe("Xerife");
+    expect(tierForLevel(17).name).toBe("Supremo");
+    expect(tierForLevel(18).name).toBe("Global");
+  });
+
+  it("a cor de cada nível continua a mesma da escada antiga", () => {
+    // A renomeação recortou os grupos, e a paleta NÃO podia andar junto: a
+    // cor é do nível, não do grupo, e cada faixa abaixo é a de sempre.
+    expect(levelColor(0)).toBe("#7d8894");
+    expect(levelColor(3)).toBe("#5b8fc7");
+    expect(levelColor(4)).toBe("#6d7fd6");
+    expect(levelColor(8)).toBe("#9a72d1");
+    expect(levelColor(12)).toBe("#c06ab8");
+    expect(levelColor(16)).toBe("#d4694f");
+    expect(levelColor(21)).toBe("#d8a53c");
   });
 });
 

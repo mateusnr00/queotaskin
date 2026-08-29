@@ -2,6 +2,7 @@ import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
 import {
   MAX_LEVEL,
   PRESTIGE_RANKS,
+  nomeDoNivel,
   TIERS,
   rankFromXp,
   rankProgress,
@@ -74,7 +75,11 @@ export function RankCard({
           <RankBadge rank={rank} size="lg" />
 
           <div className="min-w-0">
-            <h2 className="text-xl leading-tight font-bold tracking-tight sm:text-2xl">
+            {/* Um ponto menor no celular do que era: o título passou de
+                "Nível 13" para nomes de duas palavras ("Águia Mestre", "AK
+                Cruzada"), e a 20px eles quebravam em duas linhas num
+                telefone de 360, levando junto o rótulo do XP ao lado. */}
+            <h2 className="text-lg leading-tight font-bold tracking-tight sm:text-2xl">
               {rank.label}
             </h2>
             <p
@@ -82,14 +87,29 @@ export function RankCard({
               style={{ color: rank.color }}
             >
               {/* No prestígio o nome já é o título, repetir a faixa embaixo
-                  seria eco. Ali cabe melhor o que a patente significa. */}
-              {rank.prestige ? rank.prestige.description : rank.tierName}
+                  seria eco. Ali cabe melhor o que a patente significa.
+                  Fora do prestígio vai o número do nível: agora que o título
+                  é o nome da patente ("Xerife"), repetir o grupo embaixo
+                  seria eco também nos grupos de um nível só, e o número é o
+                  que as campanhas exclusivas usam como requisito. */}
+              {rank.prestige
+                ? rank.prestige.description
+                : `Nível ${rank.level}`}
             </p>
           </div>
 
-          <div className="ml-auto text-right">
+          {/* shrink-0 no XP: sem isso o flex espremia "XP acumulado" em duas
+              linhas para dar espaço ao nome, e as duas colunas brigavam pela
+              mesma sobra. Aqui o número tem largura fixa e o nome fica com o
+              resto. */}
+          <div className="ml-auto shrink-0 text-right">
             <p className="text-[9.5px] font-bold tracking-[0.16em] text-muted-foreground uppercase">
-              XP acumulado
+              {/* "XP" no celular. O rótulo inteiro custa uns sessenta pixels
+                  da mesma linha em que agora mora um nome de duas palavras, e
+                  o número embaixo já diz o que ele é. No desktop sobra
+                  espaço, e lá ele volta por extenso. */}
+              <span className="sm:hidden">XP</span>
+              <span className="hidden sm:inline">XP acumulado</span>
             </p>
             <p className="font-mono text-lg font-bold tracking-tight tabular-nums sm:text-xl">
               {xp.toLocaleString("pt-BR")}
@@ -156,9 +176,18 @@ export function RankLadder({ xp }: { xp: number }) {
 
   return (
     <section className="rounded-lg border border-[#232730] bg-[#141619] p-5">
-      <h2 className="text-sm font-bold">A escada</h2>
-      <p className="mt-0.5 mb-4 text-xs text-muted-foreground">
-        Vinte e dois níveis, sete patentes. Acima do 21, o prestígio.
+      <h2 className="text-sm font-bold tracking-wide">PATENTES</h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        22 níveis. Uma missão: chegar ao Global. Depois disso, começa o
+        prestígio.
+      </p>
+      {/* Para que serve, e não só quais são. A escada estava listando patentes
+          sem dizer o que a pessoa ganha ao subir, e patente sem prêmio é só
+          enfeite. */}
+      <p className="mt-2 mb-4 text-xs leading-relaxed text-muted-foreground">
+        Cada compra soma XP e te faz subir de patente. Patente alta libera
+        campanha exclusiva, inclusive sorteio grátis reservado para quem já
+        chegou lá.
       </p>
 
       <ol className="space-y-2.5">
@@ -172,7 +201,7 @@ export function RankLadder({ xp }: { xp: number }) {
           return (
             <li key={tier.name} className="flex items-center gap-3">
               <span
-                className="w-32 shrink-0 text-[11px] font-bold tracking-[0.08em] uppercase"
+                className="w-20 shrink-0 text-[11px] font-bold uppercase leading-tight tracking-[0.08em] sm:w-24"
                 style={{ color: active ? tier.color : undefined }}
                 data-active={active}
               >
@@ -189,6 +218,7 @@ export function RankLadder({ xp }: { xp: number }) {
                   return (
                     <span
                       key={level}
+                      title={`${nomeDoNivel(level)} · nível ${level}`}
                       className={
                         isCurrent
                           ? "rounded-full ring-2 ring-offset-2 ring-offset-[#141619]"

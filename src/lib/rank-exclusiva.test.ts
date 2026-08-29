@@ -16,7 +16,9 @@ const XP_GOAT = 500_000;
 
 describe("escada de exigência", () => {
   it("vai do nível 1 ao GOAT", () => {
-    expect(ESCADA_DE_RANK[0]).toMatchObject({ valor: 1, label: "Nível 1" });
+    // O degrau se chama pelo nome da patente, e não pelo número: é assim que
+    // ele aparece no seletor do painel e no aviso da campanha exclusiva.
+    expect(ESCADA_DE_RANK[0]).toMatchObject({ valor: 1, label: "Prata I" });
     expect(ESCADA_DE_RANK.at(-1)).toMatchObject({
       valor: MAX_MIN_LEVEL,
       label: "GOAT",
@@ -37,7 +39,7 @@ describe("escada de exigência", () => {
   });
 
   it("dá o degrau pelo valor gravado", () => {
-    expect(degrauDoRank(10)?.label).toBe("Nível 10");
+    expect(degrauDoRank(10)?.label).toBe("AK I");
     expect(degrauDoRank(NIVEL_DE_PRESTIGIO.GOAT)?.label).toBe("GOAT");
     expect(degrauDoRank(null)).toBeNull();
     expect(degrauDoRank(0)).toBeNull();
