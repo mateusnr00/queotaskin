@@ -1195,6 +1195,23 @@ export async function setRaffleWinnerAction(
     const { raffleId, ticketNumber, note, finish } = parsed.data;
     const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
+    // Campanha com sorteio ao vivo não aceita ganhador digitado. O resultado
+    // dela é decidido pelo servidor, com carimbo de hora e impressão digital
+    // do universo sorteado, e deixar o painel sobrescrever isso apagaria a
+    // única coisa que dá valor ao comprovante público. O caminho manual
+    // continua valendo para campanha sem sorteio automático (Loteria Federal,
+    // sorteio gravado em vídeo, resultado antigo).
+    const sorteio = await prisma.draw.findUnique({
+      where: { raffleId },
+      select: { publicId: true, status: true },
+    });
+    if (sorteio) {
+      return {
+        ok: false,
+        error: `Esta campanha tem sorteio automático (${sorteio.publicId}). O ganhador é definido pelo sistema e não pode ser digitado.`,
+      };
+    }
+
     const raffle = await prisma.raffle.findUnique({
       where: { id: raffleId },
       select: { totalNumbers: true, tenantId: true },
@@ -1287,6 +1304,20 @@ export async function clearRaffleWinnerAction(
       parsed.data.raffleId,
       session.user
     );
+
+    // Mesma trava do lado de cá: apagar o ganhador de um sorteio automático
+    // reabriria para venda uma campanha cujo resultado já foi transmitido e
+    // certificado em público.
+    const sorteio = await prisma.draw.findUnique({
+      where: { raffleId: parsed.data.raffleId },
+      select: { publicId: true },
+    });
+    if (sorteio) {
+      return {
+        ok: false,
+        error: `O resultado do sorteio ${sorteio.publicId} é definitivo e não pode ser removido.`,
+      };
+    }
 
     await prisma.raffle.update({
       where: { id: parsed.data.raffleId },

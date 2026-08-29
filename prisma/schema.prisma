@@ -81,6 +81,16 @@ enum RaffleModality {
   OWN_DRAW // sorteio próprio com semente verificável
 }
 
+/// Fases do sorteio ao vivo. A ordem aqui é a ordem em que acontecem.
+enum DrawStatus {
+  WAITING_DRAW // campanha encerrada, esperando a hora marcada
+  COUNTDOWN // os segundos finais, contando na tela
+  DRAWING // o motor escolheu (ou está escolhendo) o número
+  REVEALING // o número é público, o nome ainda não
+  FINISHED // resultado completo e permanente
+  ERROR // não foi possível sortear; exige olho humano
+}
+
 enum TicketStatus {
   RESERVED // reservado, aguardando pagamento
   PAID // pago
@@ -166,23 +176,23 @@ model User {
   /// Interruptor por pessoa, e não algo derivado do papel, porque cargo e
   /// aparência pública são decisões separadas: existe admin que precisa
   /// passar por cliente comum, e pode existir moderador que não é admin.
-  showModBadge       Boolean   @default(false)
-  name               String
+  showModBadge Boolean @default(false)
+  name         String
   // CPF não é mais usado pra login (passou a ser nome+celular). Continua
   // como campo opcional pra dados antigos e edição via admin. Múltiplos
   // NULLs são OK no @unique.
-  cpf                String?   @unique
+  cpf          String? @unique
   // Celular é o identificador único do login (combinado com nome). Armazenado
   // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
   // novos sempre cadastram.
-  phone              String?   @unique
+  phone        String? @unique
   // País do telefone, em ISO 3166-1 alfa-2. O número continua guardado só em
   // dígitos e sem o código do país: assim as contas que já existem seguem
   // válidas sem migração de dados, e a formatação sabe de que país o número
   // é na hora de exibir.
-  phoneCountry       String    @default("BR")
-  role               Role      @default(PARTICIPANT)
-  image              String?
+  phoneCountry String  @default("BR")
+  role         Role    @default(PARTICIPANT)
+  image        String?
 
   // Link de troca da Steam, é por ele que a skin ganha é entregue.
   // Formato: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...
@@ -205,7 +215,7 @@ model User {
   sessions       Session[]
   reservations   Reservation[]
   xpEntries      XpEntry[]
-  boostEntries      BoostEntry[]
+  boostEntries   BoostEntry[]
   progress       UserProgress[]
   affiliate      Affiliate?
   createdRaffles Raffle[]       @relation("CreatedRaffles")
@@ -232,12 +242,12 @@ model Tenant {
   // gravadas encriptadas (AES-256-GCM com chave em PAYMENT_SECRET_ENCRYPTION_KEY).
   // Quando o campo aqui está NULL, o lib client cai pro env var legado
   // (SYNCPAY_CLIENT_ID/SECRET), backwards compat com o setup atual.
-  paymentProvider        PaymentProvider @default(SYNCPAY)
-  syncpayClientId        String?
-  syncpayClientSecretEnc String?
-  syncpayBaseUrl         String?
-  codepayClientId        String?
-  codepayPasswordEnc     String?
+  paymentProvider          PaymentProvider @default(SYNCPAY)
+  syncpayClientId          String?
+  syncpayClientSecretEnc   String?
+  syncpayBaseUrl           String?
+  codepayClientId          String?
+  codepayPasswordEnc       String?
   sigilopayClientId        String?
   sigilopayClientSecretEnc String?
   sigilopayBaseUrl         String?
@@ -362,13 +372,13 @@ model Tenant {
   rankEnabled                       Boolean   @default(true)
   rankShowOnHome                    Boolean   @default(true)
 
-  hosts     TenantHost[]
-  raffles   Raffle[]
-  members   User[]         @relation("TenantMembers")
-  xpEntries XpEntry[]
+  hosts        TenantHost[]
+  raffles      Raffle[]
+  members      User[]         @relation("TenantMembers")
+  xpEntries    XpEntry[]
   boostEntries BoostEntry[]
-  progress  UserProgress[]
-  activityLogs ActivityLog[] @relation("TenantActivityLogs")
+  progress     UserProgress[]
+  activityLogs ActivityLog[]  @relation("TenantActivityLogs")
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -382,7 +392,7 @@ model Tenant {
   /// Google Analytics 4, no formato "G-XXXXXXXXXX". Vazio desliga.
   googleAnalyticsId String?
   /// Pixel do TikTok Ads. Vazio desliga.
-  tiktokPixelId String?
+  tiktokPixelId     String?
 }
 
 // Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts
@@ -442,34 +452,34 @@ model VerificationToken {
 // =====================================================================
 
 model Raffle {
-  id                        String           @id @default(cuid())
+  id                   String           @id @default(cuid())
   // Slug é único POR TENANT, Mateus e André podem ter um "iphone-15".
   // O índice composto está em @@unique abaixo. Não pode ser @unique global.
-  slug                      String
-  title                     String
-  shortDescription          String?
-  description               String?          @db.Text // HTML do Tiptap (sanitizado no servidor)
-  descriptionMode           DescriptionMode  @default(COLLAPSED)
-  status                    RaffleStatus     @default(DRAFT)
-  privacy                   RafflePrivacy    @default(PUBLIC)
-  category                  String?
-  totalNumbers              Int // ex: 100, 1000, 100000
-  pricePerNumber            Decimal          @db.Decimal(10, 2)
-  isFree                    Boolean          @default(false) // campanha gratuita
+  slug                 String
+  title                String
+  shortDescription     String?
+  description          String?          @db.Text // HTML do Tiptap (sanitizado no servidor)
+  descriptionMode      DescriptionMode  @default(COLLAPSED)
+  status               RaffleStatus     @default(DRAFT)
+  privacy              RafflePrivacy    @default(PUBLIC)
+  category             String?
+  totalNumbers         Int // ex: 100, 1000, 100000
+  pricePerNumber       Decimal          @db.Decimal(10, 2)
+  isFree               Boolean          @default(false) // campanha gratuita
   // Texto exibido no card de preço quando isFree=true. Vazio = usa default
   // ("SORTEIO GRATUITO"). Admin pode personalizar pra "PARTICIPAÇÃO LIVRE",
   // "ENTRADA GRÁTIS", etc.
-  freeLabel                 String?
-  hasFee                    Boolean          @default(false) // adicionar taxa por reserva
-  feeAmount                 Decimal?         @db.Decimal(10, 2)
-  reservationModel          ReservationModel @default(MANUAL)
-  modality                  RaffleModality   @default(OWN_DRAW)
-  drawDate                  DateTime?
-  salesStart                DateTime?
-  autoCloseOnDraw           Boolean          @default(true)
-  showDrawDate              Boolean          @default(true)
-  allowReceiptDownload      Boolean          @default(true)
-  showOnHome                Boolean          @default(false) // destacar na home
+  freeLabel            String?
+  hasFee               Boolean          @default(false) // adicionar taxa por reserva
+  feeAmount            Decimal?         @db.Decimal(10, 2)
+  reservationModel     ReservationModel @default(MANUAL)
+  modality             RaffleModality   @default(OWN_DRAW)
+  drawDate             DateTime?
+  salesStart           DateTime?
+  autoCloseOnDraw      Boolean          @default(true)
+  showDrawDate         Boolean          @default(true)
+  allowReceiptDownload Boolean          @default(true)
+  showOnHome           Boolean          @default(false) // destacar na home
 
   /// A campanha principal do site: a que vira o card grande no topo da home e
   /// da lista de campanhas. Só uma por tenant, garantido por índice parcial na
@@ -481,28 +491,28 @@ model Raffle {
   /// é o comportamento antigo. Existe porque a ordem era só a data de
   /// criação: para subir uma campanha antiga não havia nada a fazer além de
   /// recriá-la.
-  ordem Int @default(0)
-  showProgressBar           Boolean          @default(true)
-  showParticipantName       Boolean          @default(false) // exibe nome de quem comprou
-  showDailyRanking          Boolean          @default(false)
-  showOverallRanking        Boolean          @default(false)
-  showShareButtons          Boolean          @default(true)
+  ordem                     Int     @default(0)
+  showProgressBar           Boolean @default(true)
+  showParticipantName       Boolean @default(false) // exibe nome de quem comprou
+  showDailyRanking          Boolean @default(false)
+  showOverallRanking        Boolean @default(false)
+  showShareButtons          Boolean @default(true)
   // Quick-picks da seleção de quantidade na página pública. Até 6 valores
   // (ex: [5, 10, 100, 500, 1000, 5000]); array vazio = sem quick-picks.
   // bestseller: índice 0-5 que ganha destaque "MAIS POPULAR" (-1 = nenhum).
-  selectionCards            Int[]            @default([])
-  selectionCardsBestseller  Int              @default(-1)
+  selectionCards            Int[]   @default([])
+  selectionCardsBestseller  Int     @default(-1)
   statusText                String?
   // JSON: { name, phone, cpf, email, socialName, birthDate } -> bool.
   // Tudo OFF por padrão: identidade vem da conta logada. Admin liga
   // qualquer um pra forçar o campo a aparecer na "Dados adicionais" da
   // reserva, útil pra reconfirmar telefone/email em rifas específicas.
-  requiredFields            Json             @default("{\"name\":false,\"phone\":false,\"cpf\":false,\"email\":false,\"socialName\":false,\"birthDate\":false}")
-  minPurchase               Int              @default(1)
+  requiredFields            Json    @default("{\"name\":false,\"phone\":false,\"cpf\":false,\"email\":false,\"socialName\":false,\"birthDate\":false}")
+  minPurchase               Int     @default(1)
   maxPurchase               Int?
   initialQuantity           Int? // quantidade pré-selecionada no input
   maxPerBuyer               Int? // cap cumulativo por CPF (todas as reservas)
-  reservationTimeoutMinutes Int              @default(5)
+  reservationTimeoutMinutes Int     @default(5)
 
   // Quando setado, sobrescreve o tenant.paymentProvider só nesse sorteio
   // (credenciais continuam vindo do tenant). NULL = herda o padrão do
@@ -521,9 +531,9 @@ model Raffle {
 
   // Config das Promoções (combos de cotas com desconto). As entradas
   // ficam em Promotion; aqui só os toggles e flags de exibição.
-  promotionsEnabled       Boolean @default(false)
+  promotionsEnabled       Boolean   @default(false)
   // "Promoção em Dobro": cliente recebe 2x os números pelo mesmo valor.
-  promotionsDoubleEnabled Boolean @default(false)
+  promotionsDoubleEnabled Boolean   @default(false)
   /// Janela da promocao. As duas nulas quer dizer "enquanto estiver ligada",
   /// sem prazo. So a de fim preenchida e o caso comum: comeca agora e tem
   /// hora para acabar, que e o que da urgencia.
@@ -531,7 +541,7 @@ model Raffle {
   promotionsDoubleUntil   DateTime?
   // Quando true, várias promoções podem somar/acumular num mesmo pedido
   // (semântica controlada na lógica de checkout, hoje só persistido).
-  promotionsAccumulative  Boolean @default(false)
+  promotionsAccumulative  Boolean   @default(false)
 
   // Config dos Prêmios (lista em Prize). Toggle de visibilidade pro
   // público + bloco de E-book entregue após pagamento (estilo SkinsLendarias).
@@ -598,21 +608,26 @@ model Raffle {
   surpriseBoxes     SurpriseBox[]
 
   /// Raspadinha Premiada. Mesma ideia da Caixa Surpresa, experiencia outra.
-  raspadinhaEnabled      Boolean @default(false)
+  raspadinhaEnabled     Boolean            @default(false)
   /// Deixa raspar todas de uma vez, em vez de uma a uma.
-  raspadinhaRasparTodas  Boolean @default(false)
-  raspadinhaCombos  RaspadinhaCombo[]
-  raspadinhaPremios RaspadinhaPremio[]
-  raspadinhas       Raspadinha[]
+  raspadinhaRasparTodas Boolean            @default(false)
+  raspadinhaCombos      RaspadinhaCombo[]
+  raspadinhaPremios     RaspadinhaPremio[]
+  raspadinhas           Raspadinha[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  /// O sorteio ao vivo desta campanha. No máximo um, garantido pelo @unique
+  /// do lado do Draw: dois sorteios oficiais para a mesma campanha seriam
+  /// dois ganhadores para o mesmo prêmio.
+  draw Draw?
+
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  visitasDeCampanha VisitaDeCampanha[]
 
   @@unique([tenantId, slug])
   @@index([status, privacy])
   @@index([createdById])
   @@index([tenantId])
-  visitasDeCampanha VisitaDeCampanha[]
 }
 
 model RaffleImage {
@@ -882,7 +897,7 @@ model XpEntry {
   /// Detalhe complementar: faixa da compra, bônus de sorte, evento.
   metadata   Json?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -899,10 +914,10 @@ model XpEntry {
 /// Progresso do participante em um tenant. O rank é por operador: comprar no
 /// site de outro não pode levantar o nível aqui.
 model UserProgress {
-  id        String   @id @default(cuid())
-  userId    String
-  tenantId  String
-  xp        Int      @default(0)
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  xp       Int    @default(0)
 
   /// Gasto acumulado em compras pagas, em reais.
   ///
@@ -1118,18 +1133,18 @@ enum SurpriseBoxStatus {
 // - odds: usado só em PERCENT. 0-100. Soma dos PERCENT pode ser < 100,
 //   resto vira chance de caixa vazia.
 model SurpriseBoxPrize {
-  id        String               @id @default(cuid())
-  raffleId  String
-  title     String // agrupador/categoria do prêmio (ex: "Skins Lendárias")
-  prize     String // descrição do que sai pro ganhador
+  id       String @id @default(cuid())
+  raffleId String
+  title    String // agrupador/categoria do prêmio (ex: "Skins Lendárias")
+  prize    String // descrição do que sai pro ganhador
 
   /// Mesma coisa do AwardedTicket: raridade quando veio do catálogo, nula
   /// quando é texto livre.
   skinRarity SkinRarity?
-  mode      SurpriseBoxPrizeMode @default(RANDOM)
-  odds      Decimal?             @db.Decimal(5, 2) // só em PERCENT
-  locked    Boolean              @default(false)
-  claimedAt DateTime? // setado atomicamente quando uma caixa abre e leva esse item
+  mode       SurpriseBoxPrizeMode @default(RANDOM)
+  odds       Decimal?             @db.Decimal(5, 2) // só em PERCENT
+  locked     Boolean              @default(false)
+  claimedAt  DateTime? // setado atomicamente quando uma caixa abre e leva esse item
 
   raffle       Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   claimedByBox SurpriseBox?
@@ -1194,11 +1209,11 @@ model RaspadinhaPremio {
   id       String @id @default(cuid())
   raffleId String
 
-  tipo  TipoDePremioDaRaspadinha @default(PIX)
+  tipo   TipoDePremioDaRaspadinha @default(PIX)
   /// O que aparece para quem ganhou: "R$ 250 no PIX", "Karambit Doppler".
   rotulo String
   /// Em reais, quando o tipo e PIX. Serve para somar quanto ja foi dado.
-  valor Decimal? @db.Decimal(10, 2)
+  valor  Decimal?                 @db.Decimal(10, 2)
 
   /// Chance em porcentagem. Nulo entra no sorteio uniforme entre os que
   /// tambem nao tem chance definida, igual ao modo RANDOM da caixa.
@@ -1211,7 +1226,7 @@ model RaspadinhaPremio {
   /// Quando foi levado. Nulo = ainda disponivel.
   claimedAt DateTime?
 
-  raffle          Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  raffle             Raffle      @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   raspadinhaQueLevou Raspadinha?
 
   createdAt DateTime @default(now())
@@ -1282,16 +1297,16 @@ model Reservation {
   participantSocialName String?
   participantBirthDate  DateTime?
 
-  totalAmount Decimal           @db.Decimal(10, 2)
+  totalAmount   Decimal           @db.Decimal(10, 2)
   /// A reserva saiu com a promocao em dobro valendo.
   ///
   /// Guardado na reserva, e nao recalculado depois: a promocao acaba, e sem
   /// esta marca uma reserva feita durante a janela seria reconstruida com
   /// metade dos numeros se o webhook chegasse atrasado.
-  dobroAplicado Boolean @default(false)
-  status      ReservationStatus @default(PENDING)
-  expiresAt   DateTime
-  paidAt      DateTime?
+  dobroAplicado Boolean           @default(false)
+  status        ReservationStatus @default(PENDING)
+  expiresAt     DateTime
+  paidAt        DateTime?
 
   affiliateId String?
   utmSource   String?
@@ -1312,14 +1327,14 @@ model Reservation {
   commission    AffiliateCommission?
   surpriseBoxes SurpriseBox[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  raspadinhas Raspadinha[]
 
   @@index([raffleId, status])
   @@index([userId])
   @@index([affiliateId])
   @@index([status, expiresAt]) // job de expiração busca por aqui
-  raspadinhas   Raspadinha[]
 }
 
 model Payment {
@@ -1624,4 +1639,91 @@ model ActivityLog {
   /// sem filtro de tenant. Postgres não faz skip scan, então índice composto
   /// com criadoEm na segunda posição não serve para nenhum dos dois.
   @@index([criadoEm])
+}
+
+/// O sorteio ao vivo de uma campanha.
+///
+/// Existe porque o resultado passou a ser decidido pelo sistema, e não mais
+/// digitado no painel. A linha guarda três coisas que antes não existiam em
+/// lugar nenhum: o CRONOGRAMA (quando cada fase acontece), o RESULTADO
+/// (número, dono, e a hora em que o motor escolheu) e a PROVA (quantos
+/// bilhetes disputaram, o método de sorteio e a impressão digital do universo
+/// que disputou).
+///
+/// O cronograma é gravado inteiro no instante do encerramento, e não fase a
+/// fase. É isso que dispensa um servidor de eventos: quem abre a página não
+/// precisa ser avisado de que a contagem começou, ele já tem a hora e conta
+/// sozinho. E é isso que faz o sistema sobreviver a um restart no meio da
+/// transmissão: o estado não estava na memória de ninguém.
+model Draw {
+  id String @id @default(cuid())
+
+  /// O código que aparece no comprovante e na URL: DRW-20260829-8F2C. Público
+  /// de propósito: é ele que a pessoa compartilha, e por isso o `id` interno
+  /// nunca aparece na tela.
+  publicId String @unique
+
+  /// Um sorteio oficial por campanha, garantido aqui. Dois seriam dois
+  /// ganhadores para o mesmo prêmio, e a corrida que cria o segundo é
+  /// exatamente o que acontece quando dois workers acordam juntos.
+  raffleId String @unique
+  raffle   Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  status DrawStatus @default(WAITING_DRAW)
+
+  // ----------------------------------------------------- cronograma
+  /// Quando a campanha encerrou. A origem de todo o resto.
+  raffleEndedAt   DateTime
+  /// Quando a contagem regressiva começa.
+  drawScheduledAt DateTime
+  /// Quando a contagem zera e o motor sorteia.
+  drawStartsAt    DateTime
+  /// Quando o número pode ser mostrado.
+  revealAt        DateTime
+  /// Quando o nome do ganhador pode ser mostrado.
+  winnerRevealAt  DateTime
+
+  // ------------------------------------------------- o que de fato ocorreu
+  /// Primeira vez que alguém observou a contagem em curso. Fica nulo se o
+  /// sistema esteve fora do ar durante os sessenta segundos, e essa ausência
+  /// é informação: diz que ninguém viu a contagem.
+  countdownStartedAt DateTime?
+  /// O instante em que o número foi escolhido. É o carimbo do resultado.
+  drawExecutedAt     DateTime?
+  /// O instante em que o ganhador virou público.
+  winnerRevealedAt   DateTime?
+  finishedAt         DateTime?
+
+  // ----------------------------------------------------------- resultado
+  winningNumber  Int?
+  winnerTicketId String?
+  winnerUserId   String?
+  /// Nome CONGELADO do ganhador, pelo mesmo motivo do ActivityLog: o
+  /// comprovante precisa continuar dizendo quem ganhou mesmo que a conta seja
+  /// renomeada ou apagada depois. Guardado já encurtado, no formato que vai
+  /// para a tela; nome completo não é dado de vitrine.
+  winnerName     String?
+
+  // -------------------------------------------------------------- prova
+  /// Quantos bilhetes disputaram. É o denominador da chance de cada um.
+  eligibleTicketCount Int     @default(0)
+  /// Como o número foi escolhido, escrito por extenso no comprovante.
+  rngMethod           String  @default("node:crypto.randomInt")
+  /// SHA-256 do universo que disputou. Serve para provar depois que a lista
+  /// de bilhetes elegíveis não foi mexida entre o encerramento e o sorteio.
+  snapshotHash        String?
+  /// Versão do motor. Um dia a regra muda, e um sorteio antigo precisa
+  /// continuar explicável pela regra que valia quando ele rodou.
+  drawVersion         Int     @default(1)
+
+  /// Por que falhou, quando falhou. Só preenchido em ERROR.
+  errorReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// O worker procura por "o que está pendente e já passou da hora". Este é
+  /// o índice dessa pergunta.
+  @@index([status, drawScheduledAt])
+  @@index([status, drawStartsAt])
 }

@@ -25,6 +25,7 @@ const ROTAS_DO_SITE = [
   "minha-conta",
   "registro",
   "s", // o redirect de compatibilidade; ver next.config.ts
+  "sorteio", // a transmissão ao vivo: /sorteio/DRW-20260829-8F2C
   "sorteios",
   "trocar-senha",
 ] as const;

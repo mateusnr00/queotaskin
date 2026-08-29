@@ -52,8 +52,13 @@ suite("serviço de XP (integração)", () => {
       data: { rankEnabled: true, xpPerBrl: 10 },
     });
 
+    // Ordenado, e não "a primeira que vier". Sem ordem explícita o Postgres
+    // devolve qualquer linha, e outro arquivo de teste rodando em paralelo
+    // (o do sorteio ao vivo cria e apaga campanhas) podia entregar uma
+    // campanha que sumia no meio desta suíte. A mais antiga é a do seed.
     const raffle = await prisma.raffle.findFirst({
       where: { tenantId },
+      orderBy: { createdAt: "asc" },
       select: { id: true },
     });
     if (!raffle) throw new Error("Nenhuma campanha no tenant de teste.");

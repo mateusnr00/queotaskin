@@ -16,6 +16,7 @@ import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
+import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
 import { SeloDeLiberado } from "@/components/rank/selo-de-liberado";
@@ -187,6 +188,20 @@ export default async function PublicRaffleDetailPage({
     ]);
 
   const takenNumbers = takenTickets.map((t) => t.number);
+
+  // O sorteio ao vivo desta campanha, quando já existe. É o que troca o card
+  // estático de ganhador por um convite para assistir: entre o encerramento e
+  // a revelação existem dez minutos em que a página precisa dizer para onde
+  // ir, e antes disso ela não dizia nada.
+  const sorteio = await prisma.draw.findUnique({
+    where: { raffleId: raffle.id },
+    select: {
+      publicId: true,
+      status: true,
+      drawStartsAt: true,
+      eligibleTicketCount: true,
+    },
+  });
 
   const isActive = raffle.status === "ACTIVE";
   const statusConfig = await getConfiguracaoDeStatus();
@@ -375,6 +390,15 @@ export default async function PublicRaffleDetailPage({
             </p>
           )}
         </div>
+
+        {sorteio && (
+          <SeloDeTransmissao
+            publicId={sorteio.publicId}
+            status={sorteio.status}
+            drawStartsAt={sorteio.drawStartsAt.toISOString()}
+            elegiveis={sorteio.eligibleTicketCount}
+          />
+        )}
 
   {/* Card de ganhador: só aparece quando o admin declarou o resultado. */}
         {raffle.winnerTicketNumber != null && (

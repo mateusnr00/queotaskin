@@ -215,6 +215,82 @@ linha mostra. A barra fica no perfil, onde significa algo.
   `balance` (gastável, resgatável). Aqui só existe o XP. O extrato já
   comporta a segunda moeda quando fizer sentido.
 
+## Sorteio ao vivo
+
+O resultado deixou de ser digitado no painel. Quando a campanha encerra
+sozinha, o sistema cria um `Draw`, transmite a contagem e o sorteio numa
+página pública, e grava o ganhador com comprovante. Ninguém escolhe o número:
+`setRaffleWinnerAction` passa a recusar campanha que tenha `Draw`.
+
+**A ideia que sustenta tudo:** no instante do encerramento, o cronograma
+INTEIRO é calculado e gravado. Quando a contagem começa, quando ela zera,
+quando o número pode aparecer e quando o nome pode aparecer, tudo em colunas
+`TIMESTAMP`. Daí saem três propriedades de graça:
+
+- **Sobrevive a restart, deploy e autoscale.** O estado não mora na memória
+  de ninguém; qualquer processo que acorde reconstrói a fase pelos carimbos.
+- **Dispensa servidor de eventos.** A página recebe o cronograma na primeira
+  resposta e conta sozinha. São de três a cinco requisições por espectador na
+  transmissão inteira (medido), uma por virada de fase.
+- **Todo mundo vê a mesma coisa.** A contagem é calculada contra o relógio do
+  SERVIDOR, reconstruído no cliente pela diferença medida na ida e volta.
+
+### As peças
+
+| Onde | O quê |
+| --- | --- |
+| `src/lib/sorteio-ao-vivo.ts` | A linha do tempo, pura e testada. Fases, marcos, formatação, código público. |
+| `src/server/services/sorteio-ao-vivo.ts` | O motor: agenda, sorteia, avança fase, monta o estado público. |
+| `src/app/api/sorteio/[publicId]/estado` | O estado. Chamada nas viradas de fase; avança a máquina de quebra. |
+| `src/app/api/cron/sorteios` | A rede de proteção, de minuto em minuto. |
+| `src/app/(public)/sorteio/[publicId]` | A transmissão e, depois, o comprovante permanente. |
+| `src/app/(admin)/admin/sorteios/[id]/sorteio` | O acompanhamento, só de leitura. |
+
+### Quando uma campanha encerra
+
+Duas condições, checadas pelo cron: vendeu todos os títulos, ou passou da
+`drawDate` com `autoCloseOnDraw` ligado. Campanha sem uma venda sequer não
+gera sorteio, e continua `ACTIVE`. No mesmo instante em que o `Draw` nasce, a
+campanha vira `FINISHED` na MESMA transação, e é isso que congela o universo:
+`createReservation` já recusa campanha que não esteja `ACTIVE`.
+
+### O número
+
+`crypto.randomInt` sorteando um índice entre os bilhetes VENDIDOS (`PAID` e
+`AWARDED`, a mesma definição que a barra de progresso usa). Sortear no
+intervalo cheio cairia em número sem dono numa campanha que encerrou pela
+data com metade vendida. Junto do resultado vai o SHA-256 da lista que
+disputou, que é o que permite conferir depois que ela não foi mexida.
+
+O resultado é gravado antes de a animação começar. A rolagem de números na
+tela é enfeite: `RolagemDeNumeros` gira enquanto `numeroFinal` é nulo e para
+quando ele chega. Não existe caminho em que o que está na tela vire o
+resultado.
+
+### Idempotência
+
+Nenhuma transição é "ler, decidir, escrever". Toda mudança de fase é um
+`UPDATE ... WHERE status = <anterior>`, e quem consegue mudar a linha é quem
+faz o trabalho. `Draw.raffleId` é único, então dois workers que acordem juntos
+produzem um sorteio só, o segundo levando erro de chave duplicada. Há teste de
+integração para as duas corridas.
+
+### Tempos
+
+Server-side, sem prefixo `NEXT_PUBLIC_`: o navegador não vê e não tem como
+encurtar a própria contagem.
+
+| Variável | Produção | Para testar |
+| --- | --- | --- |
+| `DRAW_WAIT_SECONDS` | 600 | 10 |
+| `DRAW_COUNTDOWN_SECONDS` | 60 | 10 |
+| `DRAW_ROLLING_SECONDS` | 9 | 5 |
+| `DRAW_WINNER_SECONDS` | 4 | 2 |
+
+Localmente: suba com os valores curtos, venda todos os títulos de uma
+campanha e chame `GET /api/cron/sorteios` uma vez. Em produção o cron da
+Vercel faz isso sozinho a cada minuto, autenticado por `CRON_SECRET`.
+
 ## Pré-requisitos
 
 - **Node.js 20.19+ ou 22+** (atualmente Node 20.18.1 está instalado, recomendo atualizar)

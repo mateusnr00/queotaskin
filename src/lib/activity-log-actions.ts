@@ -31,6 +31,12 @@ export const ACOES = {
   "sorteio.excluido": "excluiu o sorteio",
   "sorteio.ganhador_definido": "declarou o ganhador de",
   "sorteio.ganhador_removido": "removeu o ganhador de",
+  // O sorteio ao vivo. Cada linha destas é decisão de máquina, não de gente,
+  // e é justamente por isso que precisa ficar registrada: quando o ganhador
+  // sai de um sorteio automático, o histórico é a única testemunha.
+  "sorteio.agendado": "agendou o sorteio ao vivo de",
+  "sorteio.numero_gerado": "sorteou o número de",
+  "sorteio.finalizado": "encerrou o sorteio ao vivo de",
   "config.pagamento_alterada": "alterou as credenciais de pagamento",
   "config.site_alterada": "alterou as configurações do site",
   "config.mensagens_alterada": "alterou as mensagens automáticas",

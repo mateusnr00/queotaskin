@@ -19,8 +19,14 @@ describe("slugs reservados", () => {
   it("deixa passar slug de campanha", () => {
     expect(slugReservado("ak-47-redline-field-tested")).toBe(false);
     expect(slugReservado("awp-dragon-lore")).toBe(false);
-    // "sorteios" é rota; "sorteio" no singular não é.
-    expect(slugReservado("sorteio")).toBe(false);
+  });
+
+  it("reserva o singular e o plural de sorteio", () => {
+    // "sorteio" no singular passou a ser rota quando a transmissão ao vivo
+    // ganhou endereço próprio (/sorteio/DRW-...). Antes ele era um slug
+    // válido, e este teste afirmava o contrário.
+    expect(slugReservado("sorteio")).toBe(true);
+    expect(slugReservado("sorteios")).toBe(true);
   });
 
   it("desvia com sufixo em vez de recusar", () => {

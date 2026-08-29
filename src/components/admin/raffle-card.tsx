@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
+  Radio,
   Copy,
   CopyPlus,
   ExternalLink,
@@ -327,6 +328,13 @@ export function RaffleCard({
             label="Links de campanha"
           >
             <Link2 className="h-4 w-4" />
+          </IconLink>
+
+          <IconLink
+            href={`/admin/sorteios/${raffle.id}/sorteio`}
+            label="Sorteio ao vivo"
+          >
+            <Radio className="h-4 w-4" />
           </IconLink>
 
           <IconLink
