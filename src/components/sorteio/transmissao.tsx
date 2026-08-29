@@ -35,10 +35,7 @@ import {
 import { numeroDoTitulo } from "@/lib/titulo";
 import { cn } from "@/lib/utils";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
-import {
-  BORDA_DE_AUTH,
-  HALO_DE_AUTH,
-} from "@/components/auth/cartao-de-auth";
+import { BORDA_DE_AUTH, HALO_DE_AUTH } from "@/components/auth/cartao-de-auth";
 import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CertificadoDoSorteio } from "@/components/sorteio/certificado";
 import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
@@ -69,7 +66,8 @@ export function TransmissaoDoSorteio({
 }: {
   estadoInicial: EstadoPublicoDoSorteio;
 }) {
-  const { estado, agora, conexao, recarregar } = useEstadoDoSorteio(estadoInicial);
+  const { estado, agora, conexao, recarregar } =
+    useEstadoDoSorteio(estadoInicial);
   const som = useSom();
 
   // A FASE VEM DO RELÓGIO, não da última resposta do servidor.
@@ -147,53 +145,87 @@ function Cabecalho({
   aoVivo: boolean;
   som: ReturnType<typeof useSom>;
 }) {
+  const premio = estado.campanha.premio ?? estado.campanha.titulo;
+  // Só quando o prêmio e o título dizem coisas diferentes. Numa campanha
+  // chamada pelo nome da skin, os dois são a mesma frase, e repeti-la embaixo
+  // da manchete não informa nada.
+  const subtitulo =
+    estado.campanha.premio &&
+    estado.campanha.premio.trim() !== estado.campanha.titulo.trim()
+      ? estado.campanha.titulo
+      : null;
+
   return (
-    <header className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-2">
+    <header className="flex items-start justify-between gap-4">
+      <div className="flex min-w-0 items-start gap-4">
+        {/* A FOTO DA SKIN.
+            O prêmio é o motivo de a pessoa estar nesta página, e ele existia
+            aqui só como texto. A foto vem do mesmo lugar que a lista de
+            prêmios usa, e entra numa moldura dupla: uma casca com fio de
+            cabelo por fora e o miolo com realce interno, para o render não
+            parecer colado no fundo.
+
+            Escondida do leitor de tela: o nome dela está do lado, em texto. */}
+        {estado.campanha.premioImagem && (
+          <span
+            aria-hidden
+            className="block shrink-0 rounded-[1.15rem] border border-white/10 bg-white/[0.04] p-1"
+          >
+            <span className="relative block h-16 w-16 overflow-hidden rounded-[0.9rem] bg-black/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)] sm:h-20 sm:w-20">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={estado.campanha.premioImagem}
+                alt=""
+                className="h-full w-full object-contain p-1.5"
+              />
+              {/* A luz vermelha por trás do item, do mesmo vermelho da
+                  marca. Fica atrás do render porque o PNG da skin é
+                  recortado: a luz vaza pelas bordas e dá volume. */}
+              <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_100%,rgba(239,68,68,0.35),transparent_70%)]" />
+            </span>
+          </span>
+        )}
+
+        <div className="flex min-w-0 flex-col gap-2 pt-0.5">
           {aoVivo ? (
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-red-300 uppercase">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.2em] text-red-300 uppercase">
               <span aria-hidden className="ponto-ao-vivo" />
               Ao vivo
             </span>
           ) : (
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-emerald-300 uppercase">
-              {fase === "FINISHED" ? "Sorteio finalizado" : "Sorteio confirmado"}
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.2em] text-emerald-300 uppercase">
+              {fase === "FINISHED"
+                ? "Sorteio finalizado"
+                : "Sorteio confirmado"}
             </span>
           )}
-          <h1 className="text-balance text-xl leading-tight font-extrabold tracking-tight text-white sm:text-2xl">
-            {estado.campanha.premio ?? estado.campanha.titulo}
+          <h1 className="text-balance text-xl leading-[1.1] font-extrabold tracking-tight text-white sm:text-[26px]">
+            {premio}
           </h1>
-          {/* Só quando o prêmio e o título dizem coisas diferentes. Numa
-              campanha chamada pelo nome da skin, os dois são a mesma frase, e
-              repeti-la embaixo da manchete não informa nada. */}
-          {estado.campanha.premio &&
-            estado.campanha.premio.trim() !== estado.campanha.titulo.trim() && (
-              <p className="truncate text-sm text-white/55">
-                {estado.campanha.titulo}
-              </p>
-            )}
+          {subtitulo && (
+            <p className="truncate text-sm text-white/55">{subtitulo}</p>
+          )}
         </div>
+      </div>
 
-        {/* O som fica no cabeçalho e nasce desligado: navegador não deixa
+      {/* O som fica no cabeçalho e nasce desligado: navegador não deixa
             tocar antes do clique, e ninguém quer barulho surpresa numa aba
             aberta há dez minutos. */}
-        <button
-          type="button"
-          onClick={som.alternar}
-          aria-pressed={som.ligado}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          {som.ligado ? (
-            <Volume2 className="h-5 w-5" />
-          ) : (
-            <VolumeX className="h-5 w-5" />
-          )}
-          <span className="sr-only">
-            {som.ligado ? "Desativar som" : "Ativar som"}
-          </span>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={som.alternar}
+        aria-pressed={som.ligado}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+      >
+        {som.ligado ? (
+          <Volume2 className="h-5 w-5" />
+        ) : (
+          <VolumeX className="h-5 w-5" />
+        )}
+        <span className="sr-only">
+          {som.ligado ? "Desativar som" : "Ativar som"}
+        </span>
+      </button>
     </header>
   );
 }
@@ -210,48 +242,50 @@ function Espera({
   const faltam = segundosAte(new Date(estado.drawScheduledAt), agora);
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center sm:p-8">
-      <p className="text-sm text-white/60">
-        O sorteio desta campanha acontece automaticamente. Não é preciso fazer
-        nada: a contagem começa sozinha na hora marcada.
-      </p>
+    <section className="rounded-[1.75rem] border border-white/[0.08] bg-white/[0.03] p-1.5">
+      <div className="rounded-[1.375rem] bg-[#0e1013] p-6 text-center shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] sm:p-9">
+        <p className="text-sm text-white/60">
+          O sorteio desta campanha acontece automaticamente. Não é preciso fazer
+          nada: a contagem começa sozinha na hora marcada.
+        </p>
 
-      <p
-        className="mt-6 font-mono text-5xl font-black tabular-nums text-white sm:text-6xl"
-        role="timer"
-        aria-label={`Faltam ${formatarContagemCurta(faltam)} para o sorteio começar`}
-      >
-        {formatarContagemCurta(faltam)}
-      </p>
-      <p className="mt-1 text-[11px] font-bold tracking-[0.16em] text-white/55 uppercase">
-        para a contagem regressiva
-      </p>
+        <p
+          className="mt-6 font-mono text-5xl font-black tabular-nums text-white sm:text-6xl"
+          role="timer"
+          aria-label={`Faltam ${formatarContagemCurta(faltam)} para o sorteio começar`}
+        >
+          {formatarContagemCurta(faltam)}
+        </p>
+        <p className="mt-1 text-[11px] font-bold tracking-[0.16em] text-white/55 uppercase">
+          para a contagem regressiva
+        </p>
 
-      {/* Três colunas quando há largura: com duas, os quatro campos deixavam
+        {/* Três colunas quando há largura: com duas, os quatro campos deixavam
           um buraco no meio da segunda linha no desktop. */}
-      <dl className="mt-7 grid grid-cols-2 gap-3 text-left sm:grid-cols-3">
-        <Dado
-          rotulo="Horário do sorteio"
-          valor={horaDeBrasilia(estado.drawStartsAt)}
-        />
-        <Dado
-          rotulo="Títulos disputando"
-          valor={estado.eligibleTicketCount.toLocaleString("pt-BR")}
-        />
-        <Dado
-          rotulo="Campanha encerrada"
-          valor={horaDeBrasilia(estado.raffleEndedAt)}
-        />
-        {/* O código ocupa a linha inteira: ele é o que a pessoa copia para
+        <dl className="mt-7 grid grid-cols-2 gap-3 text-left sm:grid-cols-3">
+          <Dado
+            rotulo="Horário do sorteio"
+            valor={horaDeBrasilia(estado.drawStartsAt)}
+          />
+          <Dado
+            rotulo="Títulos disputando"
+            valor={estado.eligibleTicketCount.toLocaleString("pt-BR")}
+          />
+          <Dado
+            rotulo="Campanha encerrada"
+            valor={horaDeBrasilia(estado.raffleEndedAt)}
+          />
+          {/* O código ocupa a linha inteira: ele é o que a pessoa copia para
             conferir depois, e cortado no meio ("DRW-20260829...") não serve
             para nada. */}
-        <Dado
-          rotulo="Código do sorteio"
-          valor={estado.publicId}
-          className="col-span-2 sm:col-span-3"
-          mono
-        />
-      </dl>
+          <Dado
+            rotulo="Código do sorteio"
+            valor={estado.publicId}
+            className="col-span-2 sm:col-span-3"
+            mono
+          />
+        </dl>
+      </div>
     </section>
   );
 }
@@ -332,61 +366,68 @@ function Contagem({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border p-6 text-center transition-colors duration-700 sm:p-10",
+        "rounded-[1.75rem] border p-1.5 transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]",
         tenso
-          ? "border-red-500/40 bg-red-950/20"
-          : "border-white/10 bg-white/[0.03]",
+          ? "border-red-500/45 bg-red-500/[0.06]"
+          : "border-white/[0.08] bg-white/[0.03]",
       )}
     >
-      <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
-        {preparando ? "Sorteando em" : "O sorteio começa em"}
-      </p>
-
-      {preparando && <AnelDePreparo numero={faltam} />}
-
-      <p
-        hidden={preparando}
-        className={cn(
-          "mt-3 font-mono font-black tabular-nums leading-none text-white",
-          tenso
-            ? "sorteio-pulso text-[6rem] sm:text-[10rem]"
-            : "text-7xl sm:text-9xl",
-        )}
-        // O relógio pisca a cada segundo: para quem ouve, isso seria uma
-        // interrupção por segundo. A frase abaixo diz a mesma coisa, de vez
-        // em quando.
-        aria-hidden
-      >
-        {tenso ? faltam : formatarContagemCurta(faltam)}
-      </p>
-      <p className="sr-only" role="status">
-        {faltam <= 5
-          ? "O sorteio está começando."
-          : `Faltam ${faltam} segundos para o sorteio.`}
-      </p>
-
       <div
-        className="mt-7 h-2 w-full overflow-hidden rounded-full bg-white/10"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(decorrido)}
-        aria-label="Tempo decorrido da contagem regressiva"
+        className={cn(
+          "relative overflow-hidden rounded-[1.375rem] p-6 text-center shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] sm:p-10",
+          tenso ? "bg-[#14090a]" : "bg-[#0e1013]",
+        )}
       >
-        <div
-          className={cn(
-            "h-full rounded-full transition-[width] duration-300 ease-linear",
-            tenso
-              ? "bg-gradient-to-r from-red-600 to-red-400"
-              : "bg-gradient-to-r from-red-500/70 to-red-400/70",
-          )}
-          style={{ width: `${decorrido}%` }}
-        />
-      </div>
+        <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
+          {preparando ? "Sorteando em" : "O sorteio começa em"}
+        </p>
 
-      <p className="mt-4 text-xs text-white/55">
-        Sorteio automático e sincronizado para todos os participantes.
-      </p>
+        {preparando && <AnelDePreparo numero={faltam} />}
+
+        <p
+          hidden={preparando}
+          className={cn(
+            "mt-3 font-mono font-black tabular-nums leading-none text-white",
+            tenso
+              ? "sorteio-pulso text-[6rem] sm:text-[10rem]"
+              : "text-7xl sm:text-9xl",
+          )}
+          // O relógio pisca a cada segundo: para quem ouve, isso seria uma
+          // interrupção por segundo. A frase abaixo diz a mesma coisa, de vez
+          // em quando.
+          aria-hidden
+        >
+          {tenso ? faltam : formatarContagemCurta(faltam)}
+        </p>
+        <p className="sr-only" role="status">
+          {faltam <= 5
+            ? "O sorteio está começando."
+            : `Faltam ${faltam} segundos para o sorteio.`}
+        </p>
+
+        <div
+          className="mt-7 h-2 w-full overflow-hidden rounded-full bg-white/10"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(decorrido)}
+          aria-label="Tempo decorrido da contagem regressiva"
+        >
+          <div
+            className={cn(
+              "h-full rounded-full transition-[width] duration-300 ease-linear",
+              tenso
+                ? "bg-gradient-to-r from-red-600 to-red-400"
+                : "bg-gradient-to-r from-red-500/70 to-red-400/70",
+            )}
+            style={{ width: `${decorrido}%` }}
+          />
+        </div>
+
+        <p className="mt-4 text-xs text-white/55">
+          Sorteio automático e sincronizado para todos os participantes.
+        </p>
+      </div>
     </section>
   );
 }
@@ -430,123 +471,159 @@ function Revelacao({
 
   return (
     <section className="space-y-4">
+      {/* MOLDURA DUPLA.
+          A casca de fora é o gradiente da marca com um dedo de folga; o miolo
+          é a placa onde o número mora, com um fio de luz no topo. Duas
+          superfícies em profundidades diferentes, com raios concêntricos.
+          Um cartão só, chapado no fundo, é o que dava o ar de rascunho. */}
       <div
         className={cn(
-          "relative overflow-hidden rounded-3xl border border-transparent p-6 text-center sm:p-10",
+          "rounded-[1.75rem] border border-transparent p-1.5",
           numero != null && `sorteio-brilho ${HALO_DE_AUTH}`,
         )}
         style={BORDA_DE_AUTH}
       >
-        <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
-          {numero == null ? "Sorteando..." : "Número sorteado"}
-        </p>
-
-        {atrasado && (
-          <p role="status" className="mt-2 text-xs leading-relaxed text-red-300">
-            O sorteio está demorando mais que o previsto. O resultado aparece
-            aqui sozinho assim que sair, e ninguém precisa recarregar a página.
+        <div className="relative overflow-hidden rounded-[1.375rem] bg-[#0e1013] p-6 text-center shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] sm:p-10">
+          <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
+            {numero == null ? "Sorteando..." : "Número sorteado"}
           </p>
-        )}
 
-        <div className="mx-auto mt-4 w-full max-w-[340px]">
-          <CarretelDeTitulos
-            totalNumbers={estado.campanha.totalNumbers}
-            amostra={estado.amostraDeTitulos}
-            numeroFinal={numero}
-            aoPassar={() => som.tocar("rolagem")}
-          />
-        </div>
+          {atrasado && (
+            <p
+              role="status"
+              className="mt-2 text-xs leading-relaxed text-red-300"
+            >
+              O sorteio está demorando mais que o previsto. O resultado aparece
+              aqui sozinho assim que sair, e ninguém precisa recarregar a
+              página.
+            </p>
+          )}
 
-        {/* Quantos títulos estão no bolo, durante o sorteio.
+          <div className="mx-auto mt-4 w-full max-w-[340px]">
+            <CarretelDeTitulos
+              totalNumbers={estado.campanha.totalNumbers}
+              amostra={estado.amostraDeTitulos}
+              numeroFinal={numero}
+              aoPassar={() => som.tocar("rolagem")}
+            />
+          </div>
+
+          {/* Quantos títulos estão no bolo, durante o sorteio.
             Sem isto a tela mostra números correndo e um resultado, e nada diz
             que a faixa inteira estava em jogo. Quem vê três resultados
             seguidos na metade de cima conclui sozinho que o sorteio puxa para
             o fim, e não tem como saber que não. */}
-        <p className="mt-3 text-xs text-white/55">
-          {estado.eligibleTicketCount > 0
-            ? `${estado.eligibleTicketCount.toLocaleString("pt-BR")} títulos no sorteio, todos com a mesma chance`
-            : "Todos os títulos com a mesma chance"}
-        </p>
-
-        {numero != null && (
-          <p className="sr-only" role="status">
-            Número sorteado: {numero}.
+          <p className="mt-3 text-xs text-white/55">
+            {estado.eligibleTicketCount > 0
+              ? `${estado.eligibleTicketCount.toLocaleString("pt-BR")} títulos no sorteio, todos com a mesma chance`
+              : "Todos os títulos com a mesma chance"}
           </p>
-        )}
+
+          {numero != null && (
+            <p className="sr-only" role="status">
+              Número sorteado: {numero}.
+            </p>
+          )}
+        </div>
       </div>
 
       {numero != null && (
         <div
           className={cn(
-            "relative overflow-hidden rounded-3xl border border-transparent p-6 text-center sm:p-8",
+            "rounded-[1.75rem] border border-transparent p-1.5",
             ganhador != null && HALO_DE_AUTH,
           )}
           style={BORDA_DE_AUTH}
         >
-          {ganhador == null ? (
-            <p className="flex items-center justify-center gap-2 text-sm text-white/60">
-              <span aria-hidden className="ponto-ao-vivo" />
-              Buscando o proprietário da cota...
-            </p>
-          ) : (
-            <>
-              <Confete />
-              <div className="sorteio-entra relative space-y-3">
-                <Trophy
-                  aria-hidden
-                  className="mx-auto h-14 w-14 text-red-500"
-                  strokeWidth={1.5}
-                />
-                <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
-                  Temos um ganhador
-                </p>
-                <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                  {ganhador}
-                </p>
+          <div className="relative overflow-hidden rounded-[1.375rem] bg-[#0e1013] p-6 text-center shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] sm:p-9">
+            {ganhador == null ? (
+              <p className="flex items-center justify-center gap-2 text-sm text-white/60">
+                <span aria-hidden className="ponto-ao-vivo" />
+                Buscando o proprietário da cota...
+              </p>
+            ) : (
+              <>
+                <Confete />
+                <div className="sorteio-entra relative space-y-3">
+                  {/* A SKIN, e não um troféu de biblioteca de ícones.
+                      O troféu era um desenho genérico que serve para qualquer
+                      concurso do mundo; aqui a pessoa levou UM item, e é ele
+                      que merece o lugar de honra. Moldura dupla de novo, um
+                      pouco maior que a do cabeçalho, com a luz da marca por
+                      trás do recorte. */}
+                  {estado.campanha.premioImagem ? (
+                    <span
+                      aria-hidden
+                      className="mx-auto block w-fit rounded-[1.4rem] border border-red-500/25 bg-white/[0.04] p-1.5"
+                    >
+                      <span className="relative block h-24 w-24 overflow-hidden rounded-[1.05rem] bg-black/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)] sm:h-28 sm:w-28">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={estado.campanha.premioImagem}
+                          alt=""
+                          className="h-full w-full object-contain p-2"
+                        />
+                        <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(65%_55%_at_50%_100%,rgba(239,68,68,0.4),transparent_72%)]" />
+                      </span>
+                    </span>
+                  ) : (
+                    <Trophy
+                      aria-hidden
+                      className="mx-auto h-14 w-14 text-red-500"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
+                    Temos um ganhador
+                  </p>
+                  <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                    {ganhador}
+                  </p>
 
-                {/* O canhoto: o pedaço de papel que sai do pote, com a
+                  {/* O canhoto: o pedaço de papel que sai do pote, com a
                     picotagem à esquerda. É o que dá objeto ao resultado,
                     em vez de deixar o número solto no meio do texto. */}
-                <div
-                  className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-red-500/50"
-                  style={{ background: "rgba(239,68,68,0.08)" }}
-                >
-                  <span
-                    aria-hidden
-                    className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-red-500/50"
-                  />
-                  <div className="min-w-0 flex-1 px-4 py-2.5 text-left">
-                    <p className="text-[9px] font-bold tracking-[0.16em] text-white/55 uppercase">
-                      Título vencedor
-                    </p>
-                    <p className="font-mono text-lg font-black tabular-nums text-white">
-                      {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
-                    </p>
+                  <div
+                    className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-red-500/50"
+                    style={{ background: "rgba(239,68,68,0.08)" }}
+                  >
+                    <span
+                      aria-hidden
+                      className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-red-500/50"
+                    />
+                    <div className="min-w-0 flex-1 px-4 py-2.5 text-left">
+                      <p className="text-[9px] font-bold tracking-[0.16em] text-white/55 uppercase">
+                        Título vencedor
+                      </p>
+                      <p className="font-mono text-lg font-black tabular-nums text-white">
+                        {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
+                      </p>
+                    </div>
+                    <ShieldCheck
+                      aria-hidden
+                      className="mr-4 h-4 w-4 shrink-0 self-center text-red-500"
+                    />
                   </div>
-                  <ShieldCheck
-                    aria-hidden
-                    className="mr-4 h-4 w-4 shrink-0 self-center text-red-500"
-                  />
-                </div>
 
-                <div className="flex flex-col items-center gap-2 pt-1 sm:flex-row sm:justify-center">
-                  <Link
-                    href={`/sorteio/${estado.publicId}/verificar`}
-                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-5 text-sm font-bold text-emerald-200 sm:w-auto"
-                  >
-                    <ShieldCheck aria-hidden className="h-4 w-4" />
-                    Conferir o sorteio
-                  </Link>
-                  <Link
-                    href={`/${estado.campanha.slug}`}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto"
-                  >
-                    Ver a campanha
-                  </Link>
+                  <div className="flex flex-col items-center gap-2 pt-1 sm:flex-row sm:justify-center">
+                    <Link
+                      href={`/sorteio/${estado.publicId}/verificar`}
+                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-6 text-sm font-bold text-emerald-200 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] sm:w-auto"
+                    >
+                      <ShieldCheck aria-hidden className="h-4 w-4" />
+                      Conferir o sorteio
+                    </Link>
+                    <Link
+                      href={`/${estado.campanha.slug}`}
+                      className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary px-7 text-sm font-bold text-primary-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-95 active:scale-[0.98] sm:w-auto"
+                    >
+                      Ver a campanha
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </section>
@@ -566,7 +643,9 @@ function Falha({ estado }: { estado: EstadoPublicoDoSorteio }) {
         Nenhum título foi alterado.
       </p>
       {estado.erro && (
-        <p className="mt-3 font-mono text-[11px] text-white/55">{estado.erro}</p>
+        <p className="mt-3 font-mono text-[11px] text-white/55">
+          {estado.erro}
+        </p>
       )}
     </section>
   );

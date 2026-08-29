@@ -679,6 +679,8 @@ export interface EstadoPublicoDoSorteio {
     titulo: string;
     slug: string;
     premio: string | null;
+    /** A foto da skin. É o objeto do desejo desta tela. */
+    premioImagem: string | null;
     imagem: string | null;
     totalNumbers: number;
   };
@@ -739,7 +741,7 @@ interface RifaDoSorteio {
   title: string;
   slug: string;
   totalNumbers: number;
-  prizes: { description: string }[];
+  prizes: { description: string; imageUrl: string | null }[];
   images: { url: string }[];
 }
 
@@ -773,6 +775,10 @@ export function estadoPublico(
       titulo: rifa.title,
       slug: rifa.slug,
       premio: rifa.prizes[0]?.description ?? null,
+      // A foto da skin, a mesma que a página da campanha usa em "ver os
+      // prêmios". A capa é arte de divulgação, com nome e logo dentro; a foto
+      // é o item. Numa tela que fala do prêmio, é o item que tem que aparecer.
+      premioImagem: rifa.prizes[0]?.imageUrl ?? null,
       imagem: rifa.images[0]?.url ?? null,
       totalNumbers: rifa.totalNumbers,
     },
@@ -821,7 +827,11 @@ export const SELECAO_DA_CAMPANHA = {
   title: true,
   slug: true,
   totalNumbers: true,
-  prizes: { select: { description: true }, orderBy: { position: "asc" }, take: 1 },
+  prizes: {
+    select: { description: true, imageUrl: true },
+    orderBy: { position: "asc" },
+    take: 1,
+  },
   images: { select: { url: true }, orderBy: { order: "asc" }, take: 1 },
 } satisfies Prisma.RaffleSelect;
 
