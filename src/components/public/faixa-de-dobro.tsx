@@ -79,6 +79,10 @@ export function FaixaDeDobro({
   // Acabou com a pessoa na página: a faixa some em vez de mentir.
   if (contagem && contagem.total <= 0) return null;
 
+  // O modo "acabando" só entra quando está mesmo acabando. Alarme permanente
+  // vira ruído, e a pessoa aprende a ignorar justamente na hora que importa.
+  const acabando = restante != null && restante <= 10;
+
   return (
     <section
       aria-labelledby="dobro-titulo"
@@ -111,13 +115,47 @@ export function FaixaDeDobro({
             aria-valuemax={100}
             aria-valuenow={restante == null ? undefined : Math.round(restante)}
             aria-label="Tempo restante da promoção"
-            className="relative h-9 w-full overflow-hidden rounded-lg bg-amber-950/25 md:h-10"
+            className={cn(
+              // O trilho é escurecido de leve, e não em 25%: o relógio é
+              // escuro e fica por cima dele, e a 25% o contraste caía para
+              // 3,7:1, abaixo do mínimo. Medido no navegador, não estimado.
+              // Escurecer menos aumenta o contraste com o texto escuro, e o
+              // preenchimento continua se distinguindo porque é bem mais claro.
+              "relative h-9 w-full overflow-hidden rounded-lg bg-amber-950/10 md:h-10",
+              acabando && "barra-quente",
+            )}
           >
             {restante != null && (
               <div
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-300 to-amber-200 transition-[width] duration-1000 ease-linear"
+                className={cn(
+                  "absolute inset-y-0 left-0 overflow-hidden transition-[width] duration-1000 ease-linear",
+                  acabando
+                    ? "bg-gradient-to-r from-red-400 to-red-300"
+                    : "bg-gradient-to-r from-amber-300 to-amber-200",
+                )}
                 style={{ width: `${restante}%` }}
-              />
+              >
+                {/* As listras são as mesmas da barra de vendas: a página fala
+                    uma língua só para dizer "isto está correndo agora". */}
+                <span
+                  aria-hidden
+                  className="barra-listras absolute inset-y-0 -left-1/2 w-[200%] opacity-70"
+                />
+                {/* O brilho que atravessa. Fica preso ao trecho preenchido,
+                    então ele percorre o tempo que resta, e não a barra toda. */}
+                <span
+                  aria-hidden
+                  className="dobro-brilho absolute inset-y-0 left-0 w-full"
+                />
+                {/* A ponta acesa, na fronteira do que falta. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "dobro-ponta absolute inset-y-0 right-0 w-2 rounded-full blur-[2px]",
+                    acabando ? "bg-red-100" : "bg-white",
+                  )}
+                />
+              </div>
             )}
             <p
               aria-hidden

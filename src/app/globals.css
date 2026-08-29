@@ -1176,3 +1176,70 @@
     display: none;
   }
 }
+
+/* ============================================================
+   A barra da promoção em dobro.
+
+   Ela reaproveita `.barra-listras`, que já anda na barra de vendas: duas
+   barras animadas de jeitos diferentes na mesma página seriam duas linguagens
+   para a mesma ideia de "isto está correndo agora".
+
+   Por cima das listras passa um brilho, de tempos em tempos. É ele que dá o
+   ar de coisa viva sem precisar de nada piscando: um reflexo que atravessa e
+   some, a cada dois segundos e meio, no ritmo de quem olha de relance.
+
+   O intervalo entre um brilho e outro é maior que a passagem dele de
+   propósito. Brilho colado em brilho vira listra piscando; espaçado, cada
+   passagem é notada de novo.
+   ============================================================ */
+
+.dobro-brilho {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 46%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0.55) 54%,
+    transparent 70%
+  );
+  animation: dobro-brilho 2.5s ease-in-out infinite;
+}
+
+@keyframes dobro-brilho {
+  0% {
+    transform: translateX(-100%);
+  }
+  /* Some no meio do ciclo e espera: a pausa é o que faz a próxima passagem
+     ser percebida em vez de virar ruído contínuo. */
+  55%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* A ponta acesa, na fronteira entre o que resta e o que já passou. É onde o
+   olho vai quando quer saber "quanto falta", então é o ponto que ganha luz. */
+.dobro-ponta {
+  animation: dobro-ponta 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes dobro-ponta {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dobro-brilho,
+  .dobro-ponta {
+    animation: none;
+  }
+  /* Sem animação o brilho ficaria parado em cima da barra como uma faixa
+     branca torta. */
+  .dobro-brilho {
+    display: none;
+  }
+}
