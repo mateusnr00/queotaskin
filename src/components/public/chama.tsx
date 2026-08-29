@@ -15,11 +15,10 @@ import { cn } from "@/lib/utils";
 
 export function Chama({
   /**
-   * Escala do palco de 72px. O medalhão sai com 120 vezes este valor, que é o
-   * palco mais a folga que as sombras pedem. 0,42 dá um disco de 50px, do
-   * tamanho de um título de faixa.
+   * Escala do palco de 72px. 0,55 dá uma chama de 40px, do tamanho de um
+   * título de faixa.
    */
-  escala = 0.42,
+  escala = 0.55,
   className,
 }: {
   escala?: number;
