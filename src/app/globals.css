@@ -260,33 +260,46 @@
  * fica colado no título, então um anel crescendo em volta encostaria no
  * texto. Não some de todo, para de 0,45 para baixo o selo sumir de vez a
  * cada ciclo e a leitura ficar intermitente. */
-/* O selo de status: apaga e liga, seco.
+/* O selo de status: apaga aos poucos e acende aos poucos.
  *
- * Quatro versoes. A primeira ia de 1 a 0,45 e nunca apagava. A segunda
- * apagava com estalo de escala e halo, e agitava. A terceira apagava com
- * fade de 360ms, e ainda era respiro demais.
+ * Quinta versao, e vale registrar as quatro anteriores porque cada uma errou
+ * para um lado diferente:
  *
- * Esta nao tem transicao nenhuma. `steps(1, end)` segura o valor de cada
- * trecho ate o proximo marco, entao o selo fica dois segundos aceso e meio
- * segundo apagado, sem nada no meio. E o gesto mais simples que existe:
- * ligado, desligado, ligado.
+ * 1. Ia de 1 a 0,45 e voltava. Nunca apagava.
+ * 2. Apagava, mas com estalo de escala e um halo saindo de tras. Agitava.
+ * 3. Apagava com fade de 360ms. Ninguem chegou a julgar esta.
+ * 4. Apagava e acendia SECO, com steps(1). Virou pisca-pisca de placa.
  *
- * Sem escala, sem halo, sem curva. Um pisca-pisca de placa, e nao um
- * organismo respirando.
+ * O pedido, lido junto, e simples: sem pulse (nada de escala, nada de halo),
+ * mas o apagar e o acender tem que ser GRADUAIS. A quarta versao tirou o fade
+ * junto com o pulse, e isso foi exagero de correcao meu.
  *
- * Piscadas: 0,4 por segundo. O limite da WCAG 2.3.1 e tres por segundo.
+ * Agora as rampas sao longas de proposito: 612ms para apagar e 748ms para
+ * acender, contra os 360ms da terceira versao e o corte instantaneo da quarta.
+ * A subida e mais lenta que a descida porque acender devagar parece coisa
+ * ganhando forca, e acender rapido parece susto.
+ *
+ * ease-in-out em tudo: sai devagar, atravessa, chega devagar. Nenhuma aresta.
+ *
+ * Piscadas: 0,29 por segundo. O limite da WCAG 2.3.1 e tres por segundo.
  */
 @keyframes pulso-selo {
-  0% {
+  0%,
+  30% {
     opacity: 1;
   }
-  80% {
+  48%,
+  56% {
     opacity: 0;
+  }
+  78%,
+  100% {
+    opacity: 1;
   }
 }
 
 .selo-pulsa {
-  animation: pulso-selo 2.5s steps(1, end) infinite;
+  animation: pulso-selo 3.4s ease-in-out infinite;
 }
 
 /* Abertura da caixa surpresa.
