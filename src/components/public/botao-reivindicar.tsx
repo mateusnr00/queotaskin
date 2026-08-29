@@ -31,8 +31,12 @@ export function BotaoReivindicar({
   /** Link de troca da Steam. Nulo quando a pessoa ainda não cadastrou. */
   tradeUrl: string | null;
   className?: string;
-  /** "claro" para quando o botão fica sobre a faixa laranja da caixa. */
-  variante?: "solido" | "claro";
+  /**
+   * "claro" para quando o botão fica sobre a faixa laranja da caixa.
+   * "marca" para a página do sorteio, que é vermelha inteira: o verde do
+   * WhatsApp ali não é escolha de design, é herança, e destoa da tela toda.
+   */
+  variante?: "solido" | "claro" | "marca";
 }) {
   const link = linkDoWhatsapp(
     telefoneDoSuporte,
@@ -46,10 +50,14 @@ export function BotaoReivindicar({
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold transition-colors",
-        variante === "claro"
-          ? "bg-white/95 text-emerald-700 hover:bg-white"
-          : "bg-emerald-600 text-white hover:bg-emerald-500",
+        "inline-flex min-h-11 items-center justify-center gap-2 text-sm font-bold",
+        variante === "marca"
+          ? // Pílula, como os outros botões da transmissão, e o mesmo
+            // amortecimento no toque.
+            "rounded-full bg-primary px-7 text-primary-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-95 active:scale-[0.98]"
+          : variante === "claro"
+            ? "rounded-lg bg-white/95 px-4 text-emerald-700 transition-colors hover:bg-white"
+            : "rounded-lg bg-emerald-600 px-4 text-white transition-colors hover:bg-emerald-500",
         className,
       )}
     >
