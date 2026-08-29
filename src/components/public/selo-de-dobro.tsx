@@ -16,9 +16,19 @@ import { cn } from "@/lib/utils";
 export function SeloDeDobro({
   /** Quantos bilhetes o pedido tem no total, já com o bônus. */
   total,
+  /**
+   * Onde o pedido está.
+   *
+   * O tempo do verbo não é detalhe: numa tela que ainda pede o Pix, "você
+   * pagou" afirma um pagamento que não aconteceu, e quem lê fica sem saber se
+   * já quitou. Antes do pagamento a frase é sobre o que está em curso e o que
+   * vem depois; com o Pix confirmado, sobre o que aconteceu.
+   */
+  estado = "pago",
   className,
 }: {
   total: number;
+  estado?: "pagando" | "pago";
   className?: string;
 }) {
   // Metade arredondada para cima: quando um número de brinde colide com o de
@@ -40,7 +50,7 @@ export function SeloDeDobro({
       </p>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         <span className="text-muted-foreground">
-          Você pagou por{" "}
+          {estado === "pagando" ? "Você está pagando por" : "Você pagou por"}{" "}
           <b className="font-bold tabular-nums text-foreground">{pagos}</b>
         </span>
         <ArrowRight
@@ -48,13 +58,16 @@ export function SeloDeDobro({
           className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
         />
         <span className="font-bold tabular-nums text-amber-600 dark:text-amber-400">
-          {total} números
+          {estado === "pagando" ? "receberá" : "recebeu"} {total} números
         </span>
       </p>
       {/* A frase inteira de novo, corrida, para quem ouve a página: a seta é
           desenho e some na leitura, e "11 22 números" não diz nada. */}
       <span className="sr-only">
-        Promoção em dobro: você pagou por {pagos} números e vai receber {total}.
+        Promoção em dobro:{" "}
+        {estado === "pagando"
+          ? `você está pagando por ${pagos} números e receberá ${total}.`
+          : `você pagou por ${pagos} números e recebeu ${total}.`}
       </span>
     </div>
   );

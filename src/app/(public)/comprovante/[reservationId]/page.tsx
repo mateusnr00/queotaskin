@@ -415,7 +415,9 @@ export default async function ReservationReceiptPage({
         />
       </div>
 
-      {reservation.dobroAplicado && <SeloDeDobro total={quantidade} />}
+      {reservation.dobroAplicado && (
+        <SeloDeDobro total={quantidade} estado="pagando" />
+      )}
 
       {showPix && <PaymentPoller />}
 
