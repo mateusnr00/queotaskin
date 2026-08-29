@@ -35,6 +35,10 @@ import {
 import { numeroDoTitulo } from "@/lib/titulo";
 import { cn } from "@/lib/utils";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
+import {
+  BORDA_DE_AUTH,
+  HALO_DE_AUTH,
+} from "@/components/auth/cartao-de-auth";
 import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CertificadoDoSorteio } from "@/components/sorteio/certificado";
 import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
@@ -373,8 +377,8 @@ function Contagem({
           className={cn(
             "h-full rounded-full transition-[width] duration-300 ease-linear",
             tenso
-              ? "bg-gradient-to-r from-red-500 to-orange-400"
-              : "bg-gradient-to-r from-primary to-amber-300",
+              ? "bg-gradient-to-r from-red-600 to-red-400"
+              : "bg-gradient-to-r from-red-500/70 to-red-400/70",
           )}
           style={{ width: `${decorrido}%` }}
         />
@@ -428,18 +432,17 @@ function Revelacao({
     <section className="space-y-4">
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border p-6 text-center sm:p-10",
-          numero == null
-            ? "border-white/10 bg-white/[0.03]"
-            : "sorteio-brilho border-amber-400/40 bg-amber-500/[0.07]",
+          "relative overflow-hidden rounded-3xl border border-transparent p-6 text-center sm:p-10",
+          numero != null && `sorteio-brilho ${HALO_DE_AUTH}`,
         )}
+        style={BORDA_DE_AUTH}
       >
         <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
           {numero == null ? "Sorteando..." : "Número sorteado"}
         </p>
 
         {atrasado && (
-          <p role="status" className="mt-2 text-xs leading-relaxed text-amber-300">
+          <p role="status" className="mt-2 text-xs leading-relaxed text-red-300">
             O sorteio está demorando mais que o previsto. O resultado aparece
             aqui sozinho assim que sair, e ninguém precisa recarregar a página.
           </p>
@@ -473,7 +476,13 @@ function Revelacao({
       </div>
 
       {numero != null && (
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center sm:p-8">
+        <div
+          className={cn(
+            "relative overflow-hidden rounded-3xl border border-transparent p-6 text-center sm:p-8",
+            ganhador != null && HALO_DE_AUTH,
+          )}
+          style={BORDA_DE_AUTH}
+        >
           {ganhador == null ? (
             <p className="flex items-center justify-center gap-2 text-sm text-white/60">
               <span aria-hidden className="ponto-ao-vivo" />
@@ -485,10 +494,10 @@ function Revelacao({
               <div className="sorteio-entra relative space-y-3">
                 <Trophy
                   aria-hidden
-                  className="mx-auto h-14 w-14 text-amber-400"
+                  className="mx-auto h-14 w-14 text-red-500"
                   strokeWidth={1.5}
                 />
-                <p className="text-[11px] font-bold tracking-[0.2em] text-amber-300 uppercase">
+                <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
                   Temos um ganhador
                 </p>
                 <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
@@ -499,24 +508,24 @@ function Revelacao({
                     picotagem à esquerda. É o que dá objeto ao resultado,
                     em vez de deixar o número solto no meio do texto. */}
                 <div
-                  className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-amber-400/60"
-                  style={{ background: "rgba(251,191,36,0.08)" }}
+                  className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-red-500/50"
+                  style={{ background: "rgba(239,68,68,0.08)" }}
                 >
                   <span
                     aria-hidden
-                    className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-amber-400/60"
+                    className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-red-500/50"
                   />
                   <div className="min-w-0 flex-1 px-4 py-2.5 text-left">
                     <p className="text-[9px] font-bold tracking-[0.16em] text-white/55 uppercase">
                       Título vencedor
                     </p>
-                    <p className="font-mono text-lg font-black tabular-nums text-amber-300">
+                    <p className="font-mono text-lg font-black tabular-nums text-white">
                       {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
                     </p>
                   </div>
                   <ShieldCheck
                     aria-hidden
-                    className="mr-4 h-4 w-4 shrink-0 self-center text-amber-400"
+                    className="mr-4 h-4 w-4 shrink-0 self-center text-red-500"
                   />
                 </div>
 
@@ -577,7 +586,7 @@ function EstadoDaConexao({
   return (
     <div
       role="status"
-      className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200"
+      className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs text-red-200"
     >
       <WifiOff aria-hidden className="h-4 w-4 shrink-0" />
       <span>

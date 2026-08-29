@@ -260,52 +260,33 @@
  * fica colado no título, então um anel crescendo em volta encostaria no
  * texto. Não some de todo, para de 0,45 para baixo o selo sumir de vez a
  * cada ciclo e a leitura ficar intermitente. */
-/* O selo de status: um respiro que fecha ate o fim.
+/* O selo de status: apaga e liga, seco.
  *
- * Tres versoes ate chegar aqui, e as duas primeiras erraram para lados
- * opostos.
+ * Quatro versoes. A primeira ia de 1 a 0,45 e nunca apagava. A segunda
+ * apagava com estalo de escala e halo, e agitava. A terceira apagava com
+ * fade de 360ms, e ainda era respiro demais.
  *
- * A original ia de opacidade 1 a 0,45 e voltava. Nunca apagava, e um brilho
- * que so diminui o olho para de registrar: o selo virava parte do fundo.
+ * Esta nao tem transicao nenhuma. `steps(1, end)` segura o valor de cada
+ * trecho ate o proximo marco, entao o selo fica dois segundos aceso e meio
+ * segundo apagado, sem nada no meio. E o gesto mais simples que existe:
+ * ligado, desligado, ligado.
  *
- * A segunda apagava de vez, mas com estalo de escala e um halo saindo de tras
- * no retorno. Apagar era o certo; o resto era energia demais. Escala fazia o
- * selo pular, halo era um segundo movimento competindo com o primeiro, e as
- * transicoes de 130ms davam o corte seco de interruptor. Junto, aquilo nao
- * chamava atencao, agitava.
+ * Sem escala, sem halo, sem curva. Um pisca-pisca de placa, e nao um
+ * organismo respirando.
  *
- * Esta e a original com a amplitude que faltava. So opacidade, nenhuma escala,
- * nenhum halo. O que muda em relacao a segunda tentativa:
- *
- * - As descidas e subidas levam 360ms cada, quase o triplo dos 130ms de antes.
- *   Fade longo e respiro; fade curto e piscada de lampada queimada.
- * - O ciclo passou de 1,9s para 3s. Uma piscada a cada tres segundos, contra
- *   uma a cada dois.
- * - Fica apagado 240ms, o suficiente para o sumico ser percebido como sumico,
- *   e curto demais para alguem sentir falta do texto.
- *
- * ease-in-out nas duas pontas: a curva sai devagar, atravessa rapido e chega
- * devagar, que e como uma coisa respira. Linear seria o corte seco de novo.
- *
- * Piscadas: 0,33 por segundo. O limite da WCAG 2.3.1 e tres por segundo.
+ * Piscadas: 0,4 por segundo. O limite da WCAG 2.3.1 e tres por segundo.
  */
 @keyframes pulso-selo {
-  0%,
-  40% {
+  0% {
     opacity: 1;
   }
-  52%,
-  60% {
+  80% {
     opacity: 0;
-  }
-  72%,
-  100% {
-    opacity: 1;
   }
 }
 
 .selo-pulsa {
-  animation: pulso-selo 3s ease-in-out infinite;
+  animation: pulso-selo 2.5s steps(1, end) infinite;
 }
 
 /* Abertura da caixa surpresa.
@@ -1296,11 +1277,19 @@
    ------------------------------------------------------------------ */
 
 .palco-do-sorteio {
+  /* A luz de cima e o vermelho da marca, e nao o laranja do tema.
+   *
+   * A transmissao inteira estava laranja porque herdou --primary, e ali o
+   * laranja e a cor de VENDER: preco, botao de participar, selo de campanha. O
+   * sorteio nao vende nada, e vestir os dois da mesma cor fazia o palco
+   * parecer mais um card de oferta. O vermelho e o da logo e o mesmo da borda
+   * das telas de entrar e criar conta, entao o site inteiro passa a falar a
+   * mesma lingua nas horas em que ele nao esta vendendo. */
   background:
     radial-gradient(
       120% 60% at 50% 0%,
-      color-mix(in srgb, var(--primary) 12%, transparent),
-      transparent 70%
+      rgba(239, 68, 68, 0.14),
+      transparent 68%
     ),
     #0b0d10;
   color: #fff;
@@ -1379,15 +1368,15 @@
 
 @keyframes sorteio-brilho {
   0% {
-    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
     transform: scale(0.985);
   }
   55% {
-    box-shadow: 0 0 44px 6px rgba(251, 191, 36, 0.28);
+    box-shadow: 0 0 44px 6px rgba(239, 68, 68, 0.3);
     transform: scale(1);
   }
   100% {
-    box-shadow: 0 0 22px 0 rgba(251, 191, 36, 0.12);
+    box-shadow: 0 0 22px 0 rgba(239, 68, 68, 0.14);
     transform: scale(1);
   }
 }
@@ -1421,7 +1410,7 @@
     animation: none;
   }
   .sorteio-brilho {
-    box-shadow: 0 0 22px 0 rgba(251, 191, 36, 0.12);
+    box-shadow: 0 0 22px 0 rgba(239, 68, 68, 0.14);
   }
 }
 
@@ -1472,13 +1461,49 @@
   }
 }
 
+/* A fita do carretel andando uma linha para cima.
+ *
+ * A esteira e uma animacao de entrada, e nao uma transicao de posicao: a cada
+ * passo o React troca as tres linhas e a `key` remonta o bloco, entao o
+ * navegador roda a animacao do zero. O resultado e uma esteira continua, sem o
+ * salto que uma transicao de `transform` daria ao ser interrompida no meio.
+ *
+ * Comeca deslocada uma linha para baixo e sobe ate o lugar: quem entra vem de
+ * baixo, como papel saindo de um pote.
+ */
+.carretel-fita {
+  animation-name: carretel-anda;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes carretel-anda {
+  from {
+    transform: translate3d(0, 62px, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* A moldura quando a fita para: acende no vermelho da marca. */
+.carretel-moldura-parada {
+  border-color: rgb(239 68 68);
+  animation: carretel-acende 0.6s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+@keyframes carretel-acende {
+  from {
+    transform: scale(0.97);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
 /* A luz que desce pela janela do carretel enquanto a fita corre. */
 .carretel-varredura {
-  background: linear-gradient(
-    180deg,
-    rgba(251, 191, 36, 0.35),
-    transparent
-  );
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.4), transparent);
   animation: carretel-varredura 1.1s linear infinite;
 }
 
@@ -1517,6 +1542,8 @@
   .anel-de-preparo,
   .numero-de-preparo,
   .carretel-varredura,
+  .carretel-fita,
+  .carretel-moldura-parada,
   .confete {
     animation: none;
   }

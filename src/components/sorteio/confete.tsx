@@ -12,7 +12,9 @@
 import { useMemo } from "react";
 
 const PEDACOS = 40;
-const CORES = ["#fbbf24", "#f59e0b", "#fde68a", "#ffffff", "#fb923c"];
+// As cores da marca: o vermelho da logo, o prata dela, e o branco que separa
+// os dois. Era âmbar, que não é de lugar nenhum deste site.
+const CORES = ["#ef4444", "#dc2626", "#e5e7eb", "#ffffff", "#f87171"];
 
 interface Pedaco {
   id: number;

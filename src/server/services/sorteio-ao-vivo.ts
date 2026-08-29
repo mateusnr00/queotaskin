@@ -49,7 +49,6 @@ import {
   hashDaSemente,
   METODO_VERIFICAVEL,
   sortearComProva,
-  titulosCanonicos,
   type ProvaDoSorteio,
 } from "@/lib/sorteio-justo";
 import {

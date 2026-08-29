@@ -233,15 +233,15 @@ function Veredito({
 
   if (situacao.fase === "falha") {
     return (
-      <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
-        <p className="text-sm font-bold text-amber-200">
+      <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center">
+        <p className="text-sm font-bold text-red-200">
           Não deu para conferir agora.
         </p>
-        <p className="mt-1 text-xs text-amber-200/80">{situacao.motivo}</p>
+        <p className="mt-1 text-xs text-red-200/80">{situacao.motivo}</p>
         <button
           type="button"
           onClick={aoRepetir}
-          className="mt-3 h-11 rounded-xl border border-amber-400/40 px-5 text-sm font-bold text-amber-100"
+          className="mt-3 h-11 rounded-xl border border-red-400/40 px-5 text-sm font-bold text-red-100"
         >
           Tentar de novo
         </button>

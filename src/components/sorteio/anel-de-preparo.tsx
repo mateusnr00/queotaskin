@@ -15,13 +15,13 @@ export function AnelDePreparo({ numero }: { numero: number }) {
     <div className="relative mx-auto flex h-[200px] w-[200px] items-center justify-center sm:h-[240px] sm:w-[240px]">
       <span
         aria-hidden
-        className="anel-de-preparo absolute -inset-4 rounded-full border border-amber-400/40"
+        className="anel-de-preparo absolute -inset-4 rounded-full border border-red-500/35"
         style={{ animationDelay: "0.28s" }}
       />
       <span
         aria-hidden
-        className="anel-de-preparo absolute inset-0 rounded-full border-2 border-amber-400"
-        style={{ boxShadow: "0 0 40px rgba(251,191,36,0.45)" }}
+        className="anel-de-preparo absolute inset-0 rounded-full border-2 border-red-500"
+        style={{ boxShadow: "0 0 46px rgba(239,68,68,0.45)" }}
       />
       <span
         // A troca de chave é o que remonta o número a cada segundo e faz a
@@ -29,7 +29,7 @@ export function AnelDePreparo({ numero }: { numero: number }) {
         // silêncio no meio de um anel que continua pulsando.
         key={numero}
         className="numero-de-preparo font-mono text-[104px] leading-none font-black tabular-nums text-white sm:text-[124px]"
-        style={{ textShadow: "0 0 60px rgba(251,191,36,0.5)" }}
+        style={{ textShadow: "0 0 60px rgba(239,68,68,0.55)" }}
       >
         {numero}
       </span>

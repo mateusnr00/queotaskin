@@ -1,24 +1,35 @@
 "use client";
 
-// O carretel do sorteio: títulos passando na vertical até parar num.
-//
-// Substituiu um contador que trocava dígitos no lugar. A diferença não é
-// enfeite: dígito trocando é um número aleatório piscando, e não se parece com
-// nada; um carretel que corre e freia é o gesto de tirar um papel do pote, que
-// é o que está acontecendo. E a freada dá tempo de a tensão subir, que era o
-// que faltava.
+// O carretel do sorteio: títulos passando na vertical até parar no vencedor.
 //
 // NADA AQUI DECIDE COISA ALGUMA. Os títulos que passam são uma amostra dos que
 // disputaram, entregue pelo servidor só para a fita ter números de verdade. O
-// vencedor foi escolhido, gravado e assinado antes do primeiro quadro. Quando
-// ele chega, o carretel para nele; enquanto não chega, ele gira.
+// vencedor foi escolhido, gravado e assinado antes do primeiro quadro. O que
+// este componente faz é ATERRISSAR nele.
 //
-// A DESACELERAÇÃO
+// O DEFEITO QUE ISTO CONSERTA
 //
-// Cada passo demora `48 + fração^3.4 * 380` milissegundos. O expoente alto é o
-// que faz quase nada mudar no primeiro terço e a freada inteira acontecer no
-// fim, que é onde ela vira tensão. Linear parece defeito, como se a página
-// estivesse travando.
+// A fita tinha vinte e cinco passos e desacelerava até o último, que era um
+// número qualquer da amostra. Ela parava ali, esperava o resultado chegar do
+// servidor, e então o número trocava de repente para o vencedor. Foi
+// exatamente o que se viu: parou no 039 e virou 080 do nada. Duas coisas
+// erradas ao mesmo tempo, e a segunda pior que a primeira: o movimento
+// quebrava, e o número em que a fita parou não era o que ganhou.
+//
+// COMO FUNCIONA AGORA
+//
+// Duas fases, e a segunda só começa quando o resultado chega.
+//
+// 1. GIRANDO. A fita corre em velocidade constante, sem fim e sem alvo. Não
+//    existe "último item" para ela travar: enquanto o servidor não respondeu,
+//    ela roda. Dura o que tiver que durar.
+//
+// 2. ATERRISSANDO. O vencedor chega, e aí a fita ganha um trecho final com
+//    ele no fim. Os últimos passos vão freando com a curva de sempre, e o
+//    movimento morre exatamente no número que ganhou.
+//
+// O número em que a fita para é o número que ganhou. Não há troca, não há
+// corte, e a única coisa que a chegada do resultado faz é dizer onde frear.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -27,29 +38,42 @@ import { casasDoTitulo } from "@/lib/titulo";
 /** Altura de cada linha. Três visíveis: a de cima, a do meio e a de baixo. */
 const ALTURA = 62;
 const VISIVEIS = 3;
-/** Quantos passos até parar. Junto com a curva, dá pouco mais de três segundos. */
-const PASSOS = 25;
+
+/** Intervalo entre trocas enquanto a fita só corre. */
+const PASSO_GIRANDO = 55;
+
+/** Quantos passos a frenagem leva depois que o vencedor chega. */
+const PASSOS_DA_FREADA = 9;
+
+/**
+ * A curva da freada.
+ *
+ * De 60ms a 620ms entre passos, com expoente 3. Quase nada muda nos primeiros
+ * passos e a freada inteira acontece nos últimos, que é onde ela vira tensão.
+ * Linear pareceria defeito, como se a página estivesse travando.
+ */
+function intervaloDaFreada(passo: number): number {
+  const fracao = passo / PASSOS_DA_FREADA;
+  return Math.round(60 + fracao ** 3 * 560);
+}
 
 function preencher(numero: number, casas: number): string {
   return String(numero).padStart(casas, "0");
 }
 
-function montarFita(amostra: readonly number[], total: number): number[] {
-  const bolo =
-    amostra.length > 0
-      ? amostra
-      : Array.from({ length: 40 }, () => 1 + Math.floor(Math.random() * total));
-  return Array.from(
-    { length: PASSOS },
-    () => bolo[Math.floor(Math.random() * bolo.length)],
-  );
+/** Um título qualquer da amostra, para a fita ter números de verdade. */
+function sortear(amostra: readonly number[], total: number): number {
+  if (amostra.length > 0) {
+    return amostra[Math.floor(Math.random() * amostra.length)];
+  }
+  return 1 + Math.floor(Math.random() * Math.max(1, total));
 }
 
 export function CarretelDeTitulos({
   totalNumbers,
   /** Amostra de títulos que disputaram, para a fita não ser inventada. */
   amostra,
-  /** O número real. Enquanto nulo, o carretel gira. */
+  /** O vencedor. Enquanto nulo, a fita corre sem alvo. */
   numeroFinal,
   /** Chamado a cada passo, para o efeito sonoro. */
   aoPassar,
@@ -60,49 +84,87 @@ export function CarretelDeTitulos({
   aoPassar?: () => void;
 }) {
   const casas = casasDoTitulo(totalNumbers);
-  const [fita] = useState(() => montarFita(amostra, totalNumbers));
-  const [passo, setPasso] = useState(0);
-  const [duracao, setDuracao] = useState(55);
+
+  // A janela mostra três linhas: a que saiu, a do meio e a que entra. Guardar
+  // só essas três, e não a fita inteira, é o que permite a fita ser infinita.
+  const [linhas, setLinhas] = useState<number[]>(() => [
+    sortear(amostra, totalNumbers),
+    sortear(amostra, totalNumbers),
+    sortear(amostra, totalNumbers),
+  ]);
+  const [duracao, setDuracao] = useState(PASSO_GIRANDO);
+  const [parado, setParado] = useState(false);
 
   const passarRef = useRef(aoPassar);
   useEffect(() => {
     passarRef.current = aoPassar;
   });
 
+  // O vencedor numa ref, para o laço enxergar a chegada dele sem ser
+  // reiniciado: recriar o efeito no meio do giro cortaria o movimento, que é
+  // justamente o defeito que este componente veio consertar.
+  const vencedorRef = useRef<number | null>(numeroFinal);
   useEffect(() => {
-    if (numeroFinal != null) return;
+    vencedorRef.current = numeroFinal;
+  }, [numeroFinal]);
+
+  useEffect(() => {
     // Quem pediu menos movimento não vê a fita correr. O TEMPO do sorteio não
     // muda: a revelação continua no mesmo segundo para todo mundo.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
 
-    const alvo = fita.length - 1;
     let cancelado = false;
     let id: ReturnType<typeof setTimeout>;
+    // Nulo enquanto gira; vira 0 no passo em que o vencedor aparece e conta
+    // até PASSOS_DA_FREADA, quando a fita para nele.
+    let freando: number | null = null;
 
-    const andar = (n: number) => {
+    const andar = () => {
       if (cancelado) return;
-      const fracao = n / alvo;
-      setPasso(n);
-      setDuracao(Math.round(50 + fracao ** 3.4 * 360));
-      passarRef.current?.();
-      if (n >= alvo) return;
-      id = setTimeout(() => andar(n + 1), Math.round(48 + fracao ** 3.4 * 380));
-    };
-    andar(0);
 
+      if (freando == null && vencedorRef.current != null) freando = 0;
+      const naFreada = freando != null;
+      if (naFreada) freando = (freando ?? 0) + 1;
+
+      // No último passo da freada, quem entra é o vencedor. Em qualquer outro,
+      // é um título qualquer da amostra.
+      const ultimo = naFreada && freando! >= PASSOS_DA_FREADA;
+      const entrando = ultimo
+        ? vencedorRef.current!
+        : sortear(amostra, totalNumbers);
+
+      setLinhas((antes) => [antes[1], antes[2], entrando]);
+      setDuracao(naFreada ? intervaloDaFreada(freando!) : PASSO_GIRANDO);
+      passarRef.current?.();
+
+      if (ultimo) {
+        // Mais dois passos para o vencedor caminhar da última linha até o
+        // centro da janela, e aí a fita morre nele.
+        id = setTimeout(() => {
+          if (cancelado) return;
+          setLinhas((antes) => [antes[1], antes[2], sortear(amostra, totalNumbers)]);
+          id = setTimeout(() => {
+            if (cancelado) return;
+            setParado(true);
+          }, 420);
+        }, 420);
+        return;
+      }
+
+      id = setTimeout(andar, naFreada ? intervaloDaFreada(freando!) : PASSO_GIRANDO);
+    };
+
+    id = setTimeout(andar, PASSO_GIRANDO);
     return () => {
       cancelado = true;
       clearTimeout(id);
     };
-  }, [fita.length, numeroFinal]);
+    // Roda uma vez e vive até o fim: reiniciar cortaria o movimento.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Quando o número real chega, ele vira a linha do meio e a fita para.
-  const linhas =
-    numeroFinal != null
-      ? [fita[Math.max(0, passo - 1)], numeroFinal, fita[0]]
-      : fita;
-  const indice = numeroFinal != null ? 1 : passo;
-  const deslocamento = -(indice - 1) * ALTURA;
   const mascara =
     "linear-gradient(180deg, transparent, #000 24%, #000 76%, transparent)";
 
@@ -119,48 +181,50 @@ export function CarretelDeTitulos({
         {/* A varredura que desce pela janela enquanto a fita corre. Some no
             instante em que o número para, senão continuaria passando por cima
             do resultado. */}
-        {numeroFinal == null && (
+        {!parado && (
           <span className="carretel-varredura pointer-events-none absolute inset-x-0 top-0 z-[2] h-28" />
         )}
 
+        {/* A fita anda uma linha para cima a cada passo, e o React troca o
+            conteúdo no fim da transição. O deslocamento é sempre o mesmo,
+            então o movimento é uma esteira e não um salto. */}
         <div
-          style={{
-            transform: `translateY(${deslocamento}px)`,
-            transition: `transform ${duracao}ms cubic-bezier(0.16, 1, 0.3, 1)`,
-          }}
+          key={linhas.join("-")}
+          className="carretel-fita"
+          style={{ animationDuration: `${duracao}ms` }}
         >
-          {linhas.map((numero, i) => {
-            const ativo = i === indice;
-            return (
-              <div
-                key={`${i}-${numero}`}
-                className="flex items-center justify-center font-mono font-black tabular-nums transition-[opacity,transform] duration-200"
-                style={{
-                  height: ALTURA,
-                  opacity: ativo ? 1 : 0.26,
-                  transform: ativo ? "scale(1)" : "scale(0.84)",
-                  fontSize: ativo ? 40 : 30,
-                  color: ativo ? "#fbbf24" : "#fff",
-                }}
-              >
-                {preencher(numero, casas)}
-              </div>
-            );
-          })}
+          {linhas.map((numero, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-center font-mono font-black tabular-nums"
+              style={{
+                height: ALTURA,
+                opacity: i === 1 ? 1 : 0.24,
+                fontSize: i === 1 ? 40 : 30,
+                color: i === 1 ? "#fff" : "rgba(255,255,255,0.75)",
+                textShadow:
+                  i === 1 ? "0 0 26px rgba(239,68,68,0.55)" : "none",
+              }}
+            >
+              {preencher(numero, casas)}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* A moldura da posição do meio: é ela que diz onde o título vai parar. */}
       <div
-        className="pointer-events-none absolute inset-x-0 rounded-2xl border-2 border-amber-400/70"
+        className={`pointer-events-none absolute inset-x-0 rounded-2xl border-2 ${
+          parado ? "carretel-moldura-parada" : "border-red-500/60"
+        }`}
         style={{
           top: ALTURA,
           height: ALTURA,
-          boxShadow:
-            "0 0 26px rgba(251,191,36,0.28), inset 0 0 18px rgba(251,191,36,0.18)",
+          boxShadow: parado
+            ? "0 0 34px rgba(239,68,68,0.45), inset 0 0 22px rgba(239,68,68,0.22)"
+            : "0 0 22px rgba(239,68,68,0.25), inset 0 0 16px rgba(239,68,68,0.14)",
         }}
       />
     </div>
   );
 }
-
