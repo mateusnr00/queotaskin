@@ -601,14 +601,14 @@ function Revelacao({
                     />
                   </div>
 
+                  {/* Só "Ver a campanha". O "Conferir o sorteio" que ficava
+                      ao lado saiu a pedido.
+
+                      Consequência que vale estar escrita: com ele, saiu o
+                      último link do site para /sorteio/<id>/verificar. A
+                      página continua de pé e o endereço continua funcionando,
+                      mas agora só chega lá quem digitar. */}
                   <div className="flex flex-col items-center gap-2 pt-1 sm:flex-row sm:justify-center">
-                    <Link
-                      href={`/sorteio/${estado.publicId}/verificar`}
-                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-6 text-sm font-bold text-emerald-200 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] sm:w-auto"
-                    >
-                      <ShieldCheck aria-hidden className="h-4 w-4" />
-                      Conferir o sorteio
-                    </Link>
                     <Link
                       href={`/${estado.campanha.slug}`}
                       className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary px-7 text-sm font-bold text-primary-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-95 active:scale-[0.98] sm:w-auto"
