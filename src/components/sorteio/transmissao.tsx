@@ -270,7 +270,13 @@ function Contagem({
   const faltam = segundosAte(new Date(estado.drawStartsAt), agora);
   const tenso = faltam <= SEGUNDOS_DE_TENSAO;
   // Nos três últimos a tela troca de gesto: sai o relógio, entra o anel.
-  const preparando = faltam > 0 && faltam <= SEGUNDOS_DE_PREPARO;
+  //
+  // O zero ENTRA na conta, e isso foi um conserto. Com `faltam > 0`, o
+  // instante do zero caía de volta no relógio sóbrio mostrando "0" por meio
+  // segundo, até a resposta do servidor trocar a fase para o carretel. Uma
+  // piscada para trás bem no clímax. Agora o anel segura o zero até a
+  // transmissão virar sozinha.
+  const preparando = faltam <= SEGUNDOS_DE_PREPARO;
   const decorrido = percentualDaContagem(
     {
       drawScheduledAt: new Date(estado.drawScheduledAt),

@@ -827,6 +827,58 @@ export const SELECAO_DA_CAMPANHA = {
 } satisfies Prisma.RaffleSelect;
 
 /**
+ * Amostra em memória, por sorteio.
+ *
+ * A fita do carretel não muda: o universo está congelado desde o
+ * encerramento. Guardar a amostra na instância evita repetir a consulta a cada
+ * consulta de estado, e no segundo em que a contagem zera são todos os
+ * espectadores perguntando de uma vez.
+ */
+const amostraPorSorteio = new Map<string, number[]>();
+
+/**
+ * Quarenta títulos espalhados pela lista, para a fita do carretel.
+ *
+ * Espalhados, e não os quarenta primeiros. Com o começo da lista, uma campanha
+ * de mil números mostrava 0005, 0012, 0039 passando e parava em 0776: a fita
+ * não parecia sair do mesmo bolo que o resultado. Quatro faixas ao longo da
+ * lista resolvem, e o custo é quatro consultas indexadas uma vez por instância.
+ *
+ * Só durante a contagem e o sorteio: depois disso o carretel já parou, e antes
+ * dele ninguém está olhando a fita.
+ */
+async function amostraParaOCarretel(draw: Draw): Promise<number[]> {
+  if (draw.status !== "COUNTDOWN" && draw.status !== "DRAWING") return [];
+  const guardada = amostraPorSorteio.get(draw.id);
+  if (guardada) return guardada;
+
+  const total = await prisma.ticket.count({
+    where: { raffleId: draw.raffleId, ...VENDIDO },
+  });
+  if (total === 0) return [];
+
+  const porFaixa = 10;
+  const faixas = [0, 0.25, 0.5, 0.75].map((p) =>
+    Math.max(0, Math.min(total - porFaixa, Math.floor(total * p))),
+  );
+  const pedacos = await Promise.all(
+    faixas.map((skip) =>
+      prisma.ticket.findMany({
+        where: { raffleId: draw.raffleId, ...VENDIDO },
+        orderBy: { number: "asc" },
+        skip,
+        take: porFaixa,
+        select: { number: true },
+      }),
+    ),
+  );
+
+  const amostra = [...new Set(pedacos.flat().map((t) => t.number))];
+  amostraPorSorteio.set(draw.id, amostra);
+  return amostra;
+}
+
+/**
  * Carrega o sorteio pelo código público, avança o que o relógio permitir e
  * devolve o estado. É o caminho único usado pela página e pela API: as duas
  * chegam à mesma conclusão porque passam pela mesma função.
@@ -849,15 +901,7 @@ export async function carregarEstadoPublico(
       where: { raffleId: atualizado.raffleId },
       select: { serverSeed: true, serverSeedHash: true },
     }),
-    // Quarenta títulos para a fita do carretel. Do começo da lista, e não
-    // sorteados: é enfeite, e uma consulta ordenada custa menos que um
-    // sorteio no banco a cada consulta de estado.
-    prisma.ticket.findMany({
-      where: { raffleId: atualizado.raffleId, ...VENDIDO },
-      orderBy: { number: "asc" },
-      take: 40,
-      select: { number: true },
-    }),
+    amostraParaOCarretel(atualizado),
   ]);
   if (!rifa) return null;
 
@@ -868,7 +912,7 @@ export async function carregarEstadoPublico(
     rifa,
     agora,
     semente,
-    amostra.map((t) => t.number),
+    amostra,
   );
 }
 
