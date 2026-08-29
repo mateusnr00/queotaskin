@@ -675,29 +675,58 @@ function Revelacao({
                     {ganhador}
                   </p>
 
-                  {/* O canhoto: o pedaço de papel que sai do pote, com a
-                    picotagem à esquerda. É o que dá objeto ao resultado,
-                    em vez de deixar o número solto no meio do texto. */}
-                  <div
-                    className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-red-500/50"
-                    style={{ background: "rgba(239,68,68,0.08)" }}
-                  >
-                    <span
-                      aria-hidden
-                      className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-red-500/50"
-                    />
-                    <div className="min-w-0 flex-1 px-4 py-2.5 text-left">
-                      <p className="text-[9px] font-bold tracking-[0.16em] text-white/55 uppercase">
-                        Título vencedor
-                      </p>
-                      <p className="font-mono text-lg font-black tabular-nums text-white">
-                        {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
-                      </p>
+                  {/* O canhoto: o pedaço de papel que sai do pote. É o que
+                      dá objeto ao resultado, em vez de deixar o número solto
+                      no meio do texto.
+
+                      Era um retângulo com borda tracejada à esquerda, e isso
+                      não faz ticket: sem os furos ele lê como um card com um
+                      detalhe. Agora tem os dois furos, a picotagem com os
+                      pontos acesos nas pontas, e o selo do outro lado. O
+                      desenho inteiro vive em `.winner-ticket`, no globals. */}
+                  <div className="winner-ticket">
+                    <div className="ticket-left">
+                      <div className="ticket-icon">
+                        <svg
+                          aria-hidden
+                          width="25"
+                          height="25"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M4.5 5.5H19.5V8.2C18.05 8.2 16.9 9.35 16.9 10.8C16.9 12.25 18.05 13.4 19.5 13.4V18.5H4.5V15.8C5.95 15.8 7.1 14.65 7.1 13.2C7.1 11.75 5.95 10.6 4.5 10.6V5.5Z"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
                     </div>
-                    <ShieldCheck
-                      aria-hidden
-                      className="mr-4 h-4 w-4 shrink-0 self-center text-red-500"
-                    />
+
+                    <div aria-hidden className="ticket-divider" />
+
+                    <div className="ticket-content">
+                      <span className="ticket-label">TÍTULO VENCEDOR</span>
+                      <strong className="ticket-number">
+                        {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
+                      </strong>
+                    </div>
+
+                    <div className="ticket-seal">
+                      <ShieldCheck
+                        aria-hidden
+                        className="h-[27px] w-[27px]"
+                        strokeWidth={1.7}
+                      />
+                    </div>
+
+                    {/* Textura, não informação: fica em 1,8% de opacidade e
+                        sai do fluxo para leitor de tela. */}
+                    <div aria-hidden className="ticket-watermark">
+                      WINNER
+                    </div>
                   </div>
 
                   {/* Só "Ver a campanha". O "Conferir o sorteio" que ficava
