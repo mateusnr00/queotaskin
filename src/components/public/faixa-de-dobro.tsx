@@ -33,35 +33,39 @@ import {
   contagemEmPalavras,
   contagemRegressiva,
   formatarContagem,
+  percentualRestante,
   type Contagem,
 } from "@/lib/promocao-em-dobro";
 import { cn } from "@/lib/utils";
 
 export function FaixaDeDobro({
+  /** Quando a promoção começou. É o que dá escala para a barra. */
+  inicio,
   /** Quando a promoção acaba. Nulo quer dizer "sem prazo". */
   fim,
   /** O que a pessoa tem selecionado agora, para a conta ficar concreta. */
   quantidadeEscolhida,
   className,
 }: {
+  inicio: string | null;
   fim: string | null;
   quantidadeEscolhida?: number;
   className?: string;
 }) {
   const fimEmData = fim ? new Date(fim) : null;
-  const [contagem, setContagem] = useState<Contagem | null>(() =>
-    fimEmData ? contagemRegressiva(fimEmData, new Date()) : null,
-  );
+  const inicioEmData = inicio ? new Date(inicio) : null;
+  const [agora, setAgora] = useState<Date>(() => new Date());
 
   useEffect(() => {
-    if (!fimEmData) return;
-    const alvo = fimEmData.getTime();
-    const relogio = setInterval(() => {
-      setContagem(contagemRegressiva(new Date(alvo), new Date()));
-    }, 1000);
+    if (!fim) return;
+    const relogio = setInterval(() => setAgora(new Date()), 1000);
     return () => clearInterval(relogio);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fim]);
+
+  const contagem: Contagem | null = fimEmData
+    ? contagemRegressiva(fimEmData, agora)
+    : null;
+  const restante = percentualRestante(inicioEmData, fimEmData, agora);
 
   // Acabou enquanto a pessoa estava na página: a faixa some em vez de mentir.
   if (contagem && contagem.total <= 0) return null;
@@ -150,6 +154,37 @@ export function FaixaDeDobro({
             </div>
           )}
         </div>
+
+        {/* A barra esvaziando, que é o que transforma um número em pressão:
+            "24:48:29" sozinho não diz se é muito ou pouco, e a barra dá a
+            escala num relance. Ela mede a janela inteira da promoção, e é por
+            isso que o painel grava a hora em que ela foi ligada.
+
+            Só a largura muda, com transição curta, e a cor vira vermelha no
+            fim: uma barra âmbar em qualquer estágio some no fundo âmbar da
+            faixa justamente quando mais importa. */}
+        {restante != null && (
+          <div className="mt-3">
+            <div
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(restante)}
+              aria-label="Tempo restante da promoção"
+              className="h-2 w-full overflow-hidden rounded-full bg-foreground/10"
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-1000 ease-linear",
+                  restante <= 15
+                    ? "bg-gradient-to-r from-red-500 to-orange-500"
+                    : "bg-gradient-to-r from-amber-400 to-orange-500",
+                )}
+                style={{ width: `${restante}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* items-start: em três linhas no telefone, o ícone centralizado
             flutuava no meio do parágrafo em vez de marcar o começo dele. */}

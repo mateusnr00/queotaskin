@@ -521,13 +521,30 @@ export async function setRafflePromotionsAction(
       parsed.data;
     await assertRaffleInActiveTenant(raffleId, session.user);
 
+    // O comeco da promocao existe para a BARRA poder ser honesta: sem ele nao
+    // existe "quanto ja passou", so "quanto falta", e a barra viraria chute.
+    // Quando o admin liga sem informar data, o instante de ligar vira o
+    // comeco. Salvar de novo depois nao reinicia a barra: so o primeiro
+    // "ligar" grava, e mexer na data continua sendo escolha explicita dele.
+    const atual = await prisma.raffle.findUnique({
+      where: { id: raffleId },
+      select: { promotionsDoubleFrom: true, promotionsDoubleEnabled: true },
+    });
+    const inicioDaPromocao = !doubleEnabled
+      ? null
+      : doubleFrom
+        ? new Date(doubleFrom)
+        : atual?.promotionsDoubleEnabled && atual.promotionsDoubleFrom
+          ? atual.promotionsDoubleFrom
+          : new Date();
+
     await prisma.$transaction([
       prisma.raffle.update({
         where: { id: raffleId },
         data: {
           promotionsEnabled: enabled,
           promotionsDoubleEnabled: doubleEnabled,
-          promotionsDoubleFrom: doubleFrom ? new Date(doubleFrom) : null,
+          promotionsDoubleFrom: inicioDaPromocao,
           promotionsDoubleUntil: doubleUntil ? new Date(doubleUntil) : null,
           promotionsAccumulative: accumulative,
         },

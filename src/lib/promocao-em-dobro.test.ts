@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bilhetesDe,
+  percentualRestante,
   contagemEmPalavras,
   contagemRegressiva,
   dobroAgendado,
@@ -118,5 +119,36 @@ describe("contagemEmPalavras", () => {
     expect(
       contagemEmPalavras(contagemRegressiva(d("2026-08-29T11:00:00Z"), agora)),
     ).toBe("A promoção terminou.");
+  });
+});
+
+describe("percentualRestante", () => {
+  it("mede o que falta contra a janela inteira", () => {
+    const inicio = d("2026-08-29T10:00:00Z");
+    const fim = d("2026-08-29T14:00:00Z");
+    // 12:00 é a metade de uma janela de 4 horas.
+    expect(percentualRestante(inicio, fim, agora)).toBe(50);
+    expect(percentualRestante(inicio, fim, d("2026-08-29T11:00:00Z"))).toBe(75);
+    expect(percentualRestante(inicio, fim, d("2026-08-29T13:00:00Z"))).toBe(25);
+  });
+
+  it("não passa de 100 nem cai abaixo de zero", () => {
+    // Antes de começar a barra fica cheia; depois de acabar, vazia. Barra que
+    // passa dos extremos vaza para fora do trilho na tela.
+    const inicio = d("2026-08-29T10:00:00Z");
+    const fim = d("2026-08-29T14:00:00Z");
+    expect(percentualRestante(inicio, fim, d("2026-08-29T08:00:00Z"))).toBe(100);
+    expect(percentualRestante(inicio, fim, d("2026-08-29T20:00:00Z"))).toBe(0);
+  });
+
+  it("devolve null quando não dá para saber", () => {
+    // Sem começo não existe "quanto já passou", e desenhar uma barra ali
+    // seria chute com cara de informação.
+    expect(percentualRestante(null, d("2026-08-29T14:00:00Z"), agora)).toBeNull();
+    expect(percentualRestante(d("2026-08-29T10:00:00Z"), null, agora)).toBeNull();
+    // Janela invertida ou de duração zero também não desenha.
+    expect(
+      percentualRestante(d("2026-08-29T14:00:00Z"), d("2026-08-29T10:00:00Z"), agora),
+    ).toBeNull();
   });
 });

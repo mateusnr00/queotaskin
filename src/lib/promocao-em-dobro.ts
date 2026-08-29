@@ -99,3 +99,26 @@ export function contagemEmPalavras(c: Contagem): string {
   }
   return "A promoção termina em menos de um minuto.";
 }
+
+/**
+ * Quanto da janela ainda resta, de 0 a 100.
+ *
+ * A barra precisa dos dois extremos para dizer a verdade: sem o começo, não
+ * existe "quanto já passou", só "quanto falta", e qualquer barra desenhada aí
+ * seria chute. Por isso o painel grava o instante em que a promoção foi ligada
+ * quando ninguém informa uma data de início.
+ *
+ * Devolve null quando não dá para saber, e aí a faixa mostra só o relógio.
+ */
+export function percentualRestante(
+  inicio: Date | null,
+  fim: Date | null,
+  agora: Date,
+): number | null {
+  if (!inicio || !fim) return null;
+  const total = fim.getTime() - inicio.getTime();
+  if (total <= 0) return null;
+  const restante = fim.getTime() - agora.getTime();
+  const pct = (restante / total) * 100;
+  return Math.min(100, Math.max(0, pct));
+}

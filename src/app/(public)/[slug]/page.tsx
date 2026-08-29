@@ -478,6 +478,7 @@ export default async function PublicRaffleDetailPage({
             <>
               {dobroValendo && (
                 <FaixaDeDobro
+                  inicio={raffle.promotionsDoubleFrom?.toISOString() ?? null}
                   fim={raffle.promotionsDoubleUntil?.toISOString() ?? null}
                   className="mb-4"
                 />
