@@ -11,7 +11,12 @@ import {
 } from "@/components/public/cards-de-campanha";
 import { contarVendidosPorRifa } from "@/server/services/vendidos";
 import { getCurrentTenant } from "@/lib/tenant";
-import { ORDEM_DA_VITRINE, separarPrincipal } from "@/lib/vitrine";
+import {
+  NA_VITRINE,
+  ORDEM_DA_VITRINE,
+  seloDoSorteio,
+  separarPrincipal,
+} from "@/lib/vitrine";
 
 export const metadata: Metadata = { title: "Campanhas" };
 
@@ -31,11 +36,7 @@ export default async function PublicRafflesListPage() {
   if (!tenant) notFound();
 
   const raffles = await prisma.raffle.findMany({
-    where: {
-      status: "ACTIVE",
-      privacy: "PUBLIC",
-      tenantId: tenant.id,
-    },
+    where: { ...NA_VITRINE, tenantId: tenant.id },
     orderBy: ORDEM_DA_VITRINE,
     select: {
       id: true,
@@ -55,6 +56,9 @@ export default async function PublicRafflesListPage() {
         take: 1,
         select: { skinName: true, skinRarity: true },
       },
+      // O estado do sorteio, para o card dizer "Sorteio em breve" ou "ao vivo"
+      // em vez do selo de venda, que fala de uma venda que já acabou.
+      draw: { select: { status: true, publicId: true } },
     },
   });
 
@@ -67,8 +71,11 @@ export default async function PublicRafflesListPage() {
 
   const { principal, demais } = separarPrincipal(raffles);
 
-  const selo = (id: string, total: number) =>
-    statusDaCampanha(vendidosPorRifa.get(id) ?? 0, total, statusConfig);
+  // O selo do sorteio manda quando existe: "Sorteio em breve" é o estado real
+  // da transmissão, e o selo de venda falaria de uma venda que já terminou.
+  const selo = (r: (typeof raffles)[number]) =>
+    seloDoSorteio(r.draw?.status) ??
+    statusDaCampanha(vendidosPorRifa.get(r.id) ?? 0, r.totalNumbers, statusConfig);
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
@@ -92,7 +99,7 @@ export default async function PublicRafflesListPage() {
           <FeaturedRaffleCard
             raffle={principal}
             sold={vendidosPorRifa.get(principal.id) ?? 0}
-            statusBadge={selo(principal.id, principal.totalNumbers)}
+            statusBadge={selo(principal)}
           />
           {demais.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -101,7 +108,7 @@ export default async function PublicRafflesListPage() {
                   key={r.id}
                   raffle={r}
                   sold={vendidosPorRifa.get(r.id) ?? 0}
-                  statusBadge={selo(r.id, r.totalNumbers)}
+                  statusBadge={selo(r)}
                 />
               ))}
             </div>

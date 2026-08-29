@@ -12,7 +12,12 @@ import {
 } from "@/components/public/cards-de-campanha";
 import { formatDate } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
-import { ORDEM_DA_VITRINE, separarPrincipal } from "@/lib/vitrine";
+import {
+  NA_VITRINE,
+  ORDEM_DA_VITRINE,
+  seloDoSorteio,
+  separarPrincipal,
+} from "@/lib/vitrine";
 import { notFound } from "next/navigation";
 
 const MAX_RAFFLES = 12;
@@ -50,11 +55,7 @@ export default async function HomePage() {
   // `select` em vez de `include`: a Raffle tem ~70 colunas e o card usa oito.
   // Puxar a linha inteira de sete campanhas era tráfego e parse à toa.
   const activeRaffles = await prisma.raffle.findMany({
-    where: {
-      status: "ACTIVE",
-      privacy: "PUBLIC",
-      tenantId: tenant.id,
-    },
+    where: { ...NA_VITRINE, tenantId: tenant.id },
     take: MAX_RAFFLES,
     orderBy: ORDEM_DA_VITRINE,
     select: {
@@ -76,6 +77,9 @@ export default async function HomePage() {
         take: 1,
         select: { skinName: true, skinRarity: true },
       },
+      // O estado do sorteio, para o card dizer "Sorteio em breve" ou "ao vivo"
+      // em vez do selo de venda, que fala de uma venda que já acabou.
+      draw: { select: { status: true, publicId: true } },
     },
   });
 
@@ -84,6 +88,44 @@ export default async function HomePage() {
     activeRaffles.map((r) => r.id)
   );
   const statusConfig = await getConfiguracaoDeStatus();
+
+  // Os ganhadores do SORTEIO principal.
+  //
+  // Faltavam. A lista de ganhadores da home só mostrava título premiado, que é
+  // o prêmio instantâneo, e o ganhador do sorteio, que é o prêmio da campanha
+  // inteira, não aparecia em lugar nenhum da página principal. Era o que
+  // estava combinado desde o começo do projeto e nunca tinha sido ligado.
+  const sorteados = showWinners
+    ? await prisma.draw.findMany({
+        where: {
+          status: "FINISHED",
+          winningNumber: { not: null },
+          raffle: { tenantId: tenant.id, privacy: "PUBLIC" },
+        },
+        take: MAX_WINNERS,
+        orderBy: { drawExecutedAt: "desc" },
+        select: {
+          id: true,
+          publicId: true,
+          winningNumber: true,
+          winnerName: true,
+          drawExecutedAt: true,
+          raffle: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              images: { where: { isCover: true }, take: 1, select: { url: true } },
+              prizes: {
+                orderBy: { position: "asc" },
+                take: 1,
+                select: { description: true },
+              },
+            },
+          },
+        },
+      })
+    : [];
 
   const awarded = showWinners
     ? await prisma.awardedTicket.findMany({
@@ -105,10 +147,13 @@ export default async function HomePage() {
 
   // Pra cada awarded ticket, descobre o ticket pago correspondente e o
   // participante (name + phone). Faz uma só query agregada.
-  const winnerKeys = awarded.map((a) => ({
-    raffleId: a.raffleId,
-    number: a.number,
-  }));
+  const winnerKeys = [
+    ...awarded.map((a) => ({ raffleId: a.raffleId, number: a.number })),
+    ...sorteados.map((d) => ({
+      raffleId: d.raffle.id,
+      number: d.winningNumber!,
+    })),
+  ];
   const winnerTickets = winnerKeys.length
     ? await prisma.ticket.findMany({
         where: { OR: winnerKeys },
@@ -133,21 +178,31 @@ export default async function HomePage() {
   // destaque exigia recriar a campanha para ela ficar mais nova que as outras.
   const { principal: featured, demais: rest } = separarPrincipal(activeRaffles);
 
+  // O selo do sorteio manda quando existe: "Sorteio em breve" é o estado real
+  // da transmissão, e o selo de venda falaria de uma venda que já terminou.
+  const selo = (r: (typeof activeRaffles)[number]) =>
+    seloDoSorteio(r.draw?.status) ??
+    statusDaCampanha(
+      vendidosPorRifa.get(r.id) ?? 0,
+      r.totalNumbers,
+      statusConfig,
+    );
+
   // A coluna de ganhadores só existe quando há ganhador. Antes o grid de duas
   // colunas era montado só pelo toggle do admin: sem nenhum sorteio realizado,
   // a segunda coluna vinha vazia e empurrava todo o conteúdo pra esquerda,
   // deixando um vão do tamanho dela à direita.
-  const showWinnersColumn = showWinners && awarded.length > 0;
+  const temGanhador = awarded.length > 0 || sorteados.length > 0;
+  const mostrarGanhadores = showWinners && temGanhador;
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6 md:py-10">
-      <div
-        className={
-          showWinnersColumn
-            ? "grid gap-8 lg:grid-cols-[1.6fr_1fr]"
-            : "mx-auto max-w-4xl"
-        }
-      >
+      {/* Campanhas em cima, ganhadores embaixo.
+          Os ganhadores eram uma coluna à direita, e ali cabiam três cartões
+          estreitos antes de a coluna acabar. Embaixo e na largura toda, a
+          lista respira e o resultado do sorteio, que é o que a pessoa vem
+          conferir depois, tem o tamanho que merece. */}
+      <div className="mx-auto max-w-4xl">
         {/* ============ Campanhas ============ */}
         <section className="space-y-3">
           {showHeader && (
@@ -164,23 +219,15 @@ export default async function HomePage() {
               <FeaturedRaffleCard
                 raffle={featured}
                 sold={vendidosPorRifa.get(featured.id) ?? 0}
-                statusBadge={statusDaCampanha(
-                  vendidosPorRifa.get(featured.id) ?? 0,
-                  featured.totalNumbers,
-                  statusConfig
-                )}
+                statusBadge={selo(featured)}
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 {rest.map((r) => (
-                    <CompactRaffleCard
+                  <CompactRaffleCard
                     key={r.id}
                     raffle={r}
                     sold={vendidosPorRifa.get(r.id) ?? 0}
-                    statusBadge={statusDaCampanha(
-                      vendidosPorRifa.get(r.id) ?? 0,
-                      r.totalNumbers,
-                      statusConfig
-                    )}
+                    statusBadge={selo(r)}
                   />
                 ))}
               </div>
@@ -188,11 +235,42 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* ============ Ganhadores (só renderiza se admin ligou o toggle) ============ */}
-        {showWinnersColumn && (
-          <section className="space-y-3">
-            <SectionHeader title="Ganhadores" caption="sortudos" />
-            <div className="space-y-3">
+        {/* ============ Ganhadores (só com o toggle do painel ligado) ============ */}
+        {mostrarGanhadores && (
+          <section className="mt-10 space-y-3">
+            <SectionHeader
+              title="Ganhadores"
+              caption="quem já levou pra casa"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {/* O ganhador do sorteio vem primeiro: é o prêmio da campanha
+                  inteira, e título premiado é prêmio instantâneo. */}
+              {sorteados.map((d) => {
+                const win = winnerByKey.get(
+                  `${d.raffle.id}:${d.winningNumber}`,
+                );
+                return (
+                  <WinnerCard
+                    key={d.id}
+                    raffleTitle={d.raffle.title}
+                    raffleSlug={d.raffle.slug}
+                    coverUrl={d.raffle.images[0]?.url ?? null}
+                    prizeDescription={
+                      d.raffle.prizes[0]?.description ?? d.raffle.title
+                    }
+                    number={d.winningNumber!}
+                    drawDate={d.drawExecutedAt}
+                    // O nome congelado no sorteio manda: ele foi gravado no
+                    // instante do resultado e não muda se a conta for
+                    // renomeada depois.
+                    winnerName={d.winnerName ?? win?.name ?? "Ganhador"}
+                    winnerPhone={win?.phone ?? null}
+                    selo="Sorteio da campanha"
+                    href={`/sorteio/${d.publicId}`}
+                  />
+                );
+              })}
+
               {awarded.map((a) => {
                 const win = winnerByKey.get(`${a.raffleId}:${a.number}`);
                 return (
@@ -206,6 +284,7 @@ export default async function HomePage() {
                     drawDate={a.raffle.drawDate}
                     winnerName={win?.name ?? "Ganhador"}
                     winnerPhone={win?.phone ?? null}
+                    selo="Título premiado"
                   />
                 );
               })}
@@ -270,6 +349,8 @@ function WinnerCard({
   drawDate,
   winnerName,
   winnerPhone,
+  selo,
+  href,
 }: {
   raffleTitle: string;
   raffleSlug: string;
@@ -279,6 +360,10 @@ function WinnerCard({
   drawDate: Date | null;
   winnerName: string;
   winnerPhone: string | null;
+  /** De onde veio o prêmio: sorteio da campanha ou título premiado. */
+  selo?: string;
+  /** Para onde o cartão leva. Sem isto, leva para a campanha. */
+  href?: string;
 }) {
   return (
     <div className="rounded-xl border bg-card p-3 shadow-sm">
@@ -298,9 +383,14 @@ function WinnerCard({
           )}
         </div>
         <div className="min-w-0 flex-1 text-xs space-y-0.5">
+          {selo && (
+            <div className="text-[10px] font-bold tracking-[0.1em] text-amber-600 uppercase dark:text-amber-400">
+              {selo}
+            </div>
+          )}
           <div className="font-bold text-sm truncate">{winnerName}</div>
           <Link
-            href={`/${raffleSlug}`}
+            href={href ?? `/${raffleSlug}`}
             className="block text-muted-foreground line-clamp-1 hover:text-foreground"
           >
             {raffleTitle}

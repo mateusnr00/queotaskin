@@ -33,6 +33,23 @@ export interface RaffleCardData {
   showProgressBar: boolean;
   images: { url: string }[];
   prizes: { skinName: string | null; skinRarity: SkinRarity | null }[];
+  /**
+   * O sorteio ao vivo desta campanha, quando já existe.
+   *
+   * O card precisa saber porque uma campanha à espera do sorteio não vende
+   * mais nada: mostrar "Participar" nela leva a pessoa para uma página onde
+   * não há o que participar, e isso é pior do que não mostrar botão.
+   */
+  draw?: { status: string; publicId: string } | null;
+}
+
+/** A campanha ainda está vendendo? */
+export function emVenda(raffle: RaffleCardData): boolean {
+  return (
+    !raffle.draw ||
+    raffle.draw.status === "FINISHED" ||
+    raffle.draw.status === "ERROR"
+  );
 }
 
 // Texto exibido no lugar do preço. Rifas gratuitas usam o freeLabel
@@ -76,9 +93,12 @@ export function FeaturedRaffleCard({
   statusBadge: string;
 }) {
   const prize = raffle.prizes[0];
+  // Fechada para o sorteio, o card leva para a transmissão: é para lá que a
+  // pessoa quer ir, e a página da campanha só diria que a venda acabou.
+  const vendendo = emVenda(raffle);
   return (
     <Link
-      href={`/${raffle.slug}`}
+      href={vendendo ? `/${raffle.slug}` : `/sorteio/${raffle.draw!.publicId}`}
       className="group block overflow-hidden rounded-2xl border bg-card transition-colors hover:border-primary/40"
     >
       <div className="relative">
@@ -115,19 +135,21 @@ export function FeaturedRaffleCard({
         <div className="flex items-end justify-between gap-3 border-t pt-3">
           <span>
             <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
-              Por número
+              {vendendo ? "Por número" : "Títulos vendidos"}
             </span>
             <span
               className={cn(
                 "text-xl leading-none font-bold text-primary",
-                raffle.isFree && "text-base tracking-wider uppercase",
+                raffle.isFree && vendendo && "text-base tracking-wider uppercase",
               )}
             >
-              {priceLabel(raffle)}
+              {vendendo
+                ? priceLabel(raffle)
+                : sold.toLocaleString("pt-BR")}
             </span>
           </span>
           <span className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
-            Participar
+            {vendendo ? "Participar" : "Assistir ao sorteio"}
           </span>
         </div>
       </div>
@@ -146,9 +168,10 @@ export function CompactRaffleCard({
   sold: number;
 }) {
   const prize = raffle.prizes[0];
+  const vendendo = emVenda(raffle);
   return (
     <Link
-      href={`/${raffle.slug}`}
+      href={vendendo ? `/${raffle.slug}` : `/sorteio/${raffle.draw!.publicId}`}
       className="group flex gap-3 overflow-hidden rounded-xl border bg-card p-3 transition-colors hover:border-primary/40"
     >
       <RaffleCover
@@ -180,10 +203,15 @@ export function CompactRaffleCard({
           <span
             className={cn(
               "font-bold text-primary",
-              raffle.isFree ? "text-xs tracking-wider uppercase" : "text-base",
+              raffle.isFree && vendendo
+                ? "text-xs tracking-wider uppercase"
+                : "text-base",
+              // Fechada, o preço sai: ele convida a comprar uma coisa que não
+              // está mais à venda.
+              !vendendo && "text-xs tracking-wider uppercase",
             )}
           >
-            {priceLabel(raffle)}
+            {vendendo ? priceLabel(raffle) : "Assistir ao sorteio"}
           </span>
           <span className="flex min-w-0 flex-wrap items-center gap-1.5">
             <SeloDeExclusiva minLevel={raffle.minLevel} />

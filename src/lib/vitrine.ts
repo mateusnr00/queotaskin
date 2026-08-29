@@ -7,6 +7,33 @@
 // A ordem é: principal primeiro, depois a posição definida no painel, e o
 // empate cai para a mais recente, que era o único critério que existia antes.
 
+/**
+ * Quem aparece na vitrine.
+ *
+ * ACTIVE é o caso óbvio. O outro entrou por um defeito que o sorteio
+ * automático criou: quando a campanha encerra, ela vira FINISHED no mesmo
+ * instante em que o sorteio nasce, e com isso SUMIA da home e da lista de
+ * campanhas na hora. Quem tinha comprado abria o site e não achava mais a
+ * campanha, justo nos dez minutos em que ela é a coisa mais interessante do
+ * site: o sorteio está para acontecer.
+ *
+ * Então ela fica até o sorteio TERMINAR. Depois disso sai da vitrine e passa a
+ * viver na lista de ganhadores, que é onde o resultado interessa.
+ *
+ * Sorteio em ERROR também sai: ele exige gente olhando, e uma campanha presa
+ * em "aguardando sorteio" para sempre é pior do que ela não estar ali.
+ */
+export const NA_VITRINE = {
+  privacy: "PUBLIC" as const,
+  OR: [
+    { status: "ACTIVE" as const },
+    {
+      status: "FINISHED" as const,
+      draw: { is: { status: { notIn: ["FINISHED" as const, "ERROR" as const] } } },
+    },
+  ],
+};
+
 /** O orderBy do Prisma para qualquer listagem pública de campanhas. */
 export const ORDEM_DA_VITRINE = [
   { principal: "desc" as const },
@@ -31,4 +58,26 @@ export function separarPrincipal<T extends { principal: boolean }>(
     principal: escolhida,
     demais: campanhas.filter((c) => c !== escolhida),
   };
+}
+
+/**
+ * O selo do card para uma campanha que já encerrou e está esperando o sorteio.
+ *
+ * Devolve null quando não há sorteio em curso, e aí vale o selo automático de
+ * venda (o "Aguardando sorteio" que já existia, calculado pelo percentual).
+ * Aqui o texto não é dedução sobre a venda: é o estado real da transmissão.
+ */
+export function seloDoSorteio(
+  status: string | null | undefined,
+): string | null {
+  switch (status) {
+    case "WAITING_DRAW":
+      return "Sorteio em breve";
+    case "COUNTDOWN":
+    case "DRAWING":
+    case "REVEALING":
+      return "Sorteio ao vivo agora";
+    default:
+      return null;
+  }
 }
