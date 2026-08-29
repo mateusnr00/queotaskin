@@ -90,7 +90,15 @@ export function FaixaDeDobro({
         id="dobro-titulo"
         className="text-lg font-extrabold tracking-tight text-amber-950 md:text-xl"
       >
-        🔥 Chance em dobro! 🔥
+        {/* aria-hidden nos dois: o leitor de tela anunciaria "fogo" duas
+            vezes, e o fogo aqui é entusiasmo, não informação. */}
+        <span aria-hidden className="fogo">
+          🔥
+        </span>{" "}
+        Chance em dobro!{" "}
+        <span aria-hidden className="fogo fogo-atrasado">
+          🔥
+        </span>
       </h2>
 
       {contagem && (
