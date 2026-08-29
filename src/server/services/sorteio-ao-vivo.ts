@@ -837,43 +837,44 @@ export const SELECAO_DA_CAMPANHA = {
 const amostraPorSorteio = new Map<string, number[]>();
 
 /**
- * Quarenta títulos espalhados pela lista, para a fita do carretel.
+ * Quarenta títulos espalhados pela lista INTEIRA, para a fita do carretel.
  *
- * Espalhados, e não os quarenta primeiros. Com o começo da lista, uma campanha
- * de mil números mostrava 0005, 0012, 0039 passando e parava em 0776: a fita
- * não parecia sair do mesmo bolo que o resultado. Quatro faixas ao longo da
- * lista resolvem, e o custo é quatro consultas indexadas uma vez por instância.
+ * Já foram os quarenta primeiros, e depois quatro faixas em 0%, 25%, 50% e
+ * 75%. As duas versões erravam pelo mesmo motivo: a fita mostrava sempre os
+ * mesmos punhados de números. Com as faixas, uma campanha de mil títulos
+ * exibia 0004, 0253, 0505 e 0755 girando em todo sorteio, e quem assiste não
+ * sabe que a fita é enfeite. Ver sempre os mesmos números altos passando, e o
+ * resultado caindo lá em cima, é o bastante para a pessoa concluir que o
+ * sorteio puxa para o fim da lista. Foi exatamente essa a reclamação.
  *
- * Só durante a contagem e o sorteio: depois disso o carretel já parou, e antes
- * dele ninguém está olhando a fita.
+ * Agora é um passo constante ao longo do bolo todo: com mil títulos, pega um
+ * a cada vinte e cinco, do primeiro ao último. A fita passa a percorrer a
+ * faixa inteira, que é o que ela deveria sugerir desde o começo.
+ *
+ * Uma consulta só, com `row_number()`, e guardada em memória por sorteio: no
+ * segundo em que a contagem zera são todos os espectadores perguntando de uma
+ * vez, e isto não podia ser por requisição.
  */
 async function amostraParaOCarretel(draw: Draw): Promise<number[]> {
   if (draw.status !== "COUNTDOWN" && draw.status !== "DRAWING") return [];
   const guardada = amostraPorSorteio.get(draw.id);
   if (guardada) return guardada;
 
-  const total = await prisma.ticket.count({
-    where: { raffleId: draw.raffleId, ...VENDIDO },
-  });
-  if (total === 0) return [];
+  const linhas = await prisma.$queryRaw<{ number: number }[]>`
+    SELECT "number" FROM (
+      SELECT "number",
+             row_number() OVER (ORDER BY "number") - 1 AS pos,
+             count(*) OVER () AS total
+      FROM "Ticket"
+      WHERE "raffleId" = ${draw.raffleId}
+        AND "status" IN ('PAID', 'AWARDED')
+    ) t
+    WHERE pos % GREATEST(1, (total / 40)::int) = 0
+    ORDER BY "number"
+    LIMIT 40
+  `;
 
-  const porFaixa = 10;
-  const faixas = [0, 0.25, 0.5, 0.75].map((p) =>
-    Math.max(0, Math.min(total - porFaixa, Math.floor(total * p))),
-  );
-  const pedacos = await Promise.all(
-    faixas.map((skip) =>
-      prisma.ticket.findMany({
-        where: { raffleId: draw.raffleId, ...VENDIDO },
-        orderBy: { number: "asc" },
-        skip,
-        take: porFaixa,
-        select: { number: true },
-      }),
-    ),
-  );
-
-  const amostra = [...new Set(pedacos.flat().map((t) => t.number))];
+  const amostra = linhas.map((l) => Number(l.number));
   amostraPorSorteio.set(draw.id, amostra);
   return amostra;
 }

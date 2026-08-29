@@ -125,6 +125,64 @@ describe("sortearComProva", () => {
   });
 });
 
+describe("uniformidade do sorteio", () => {
+  // Existe por causa de uma reclamação real: "o sorteio sempre fica nos
+  // últimos números". Era impressão de amostra pequena, três resultados
+  // seguidos na metade de cima, o que acontece uma vez em oito. Mas a
+  // pergunta é boa demais para ficar dependendo de eu medir à mão de novo:
+  // este teste falha se algum dia o sorteador pender para um pedaço da lista.
+  //
+  // O limite é frouxo de propósito. Qui-quadrado com nove graus de liberdade
+  // passa de 21,67 uma vez em cem por puro acaso, e um teste que falha uma
+  // execução em cem é um teste que as pessoas aprendem a ignorar. Em 40 a
+  // chance de falso alarme é de uma em cem mil, e um viés de verdade estoura
+  // isso com folga.
+  it("espalha os sorteios por toda a lista de títulos", async () => {
+    const TOTAL = 100;
+    const RODADAS = 4000;
+    const titulos = Array.from({ length: TOTAL }, (_, i) => i + 1);
+    const clientSeed = await sementeDoManifesto(titulos);
+
+    const decis = new Array(10).fill(0);
+    let soma = 0;
+    for (let i = 0; i < RODADAS; i++) {
+      const { winnerIndex } = await indiceVencedor(
+        gerarSemente(),
+        clientSeed,
+        1,
+        TOTAL,
+      );
+      decis[Math.floor((winnerIndex / TOTAL) * 10)]++;
+      soma += winnerIndex;
+    }
+
+    const esperado = RODADAS / 10;
+    const qui = decis.reduce((a, c) => a + (c - esperado) ** 2 / esperado, 0);
+    expect(qui).toBeLessThan(40);
+
+    // E a média no meio da lista: um viés que mantivesse os decis parelhos
+    // mas puxasse dentro deles não apareceria no qui-quadrado.
+    const media = soma / RODADAS;
+    expect(media).toBeGreaterThan(TOTAL * 0.44);
+    expect(media).toBeLessThan(TOTAL * 0.56);
+
+    // Nenhum decil vazio, que é como um erro grosseiro de índice apareceria.
+    expect(decis.every((c) => c > 0)).toBe(true);
+  }, 120000);
+
+  it("não repete o mesmo vencedor com sementes diferentes", async () => {
+    const titulos = Array.from({ length: 1000 }, (_, i) => i + 1);
+    const vencedores = new Set<number>();
+    for (let i = 0; i < 50; i++) {
+      const prova = await sortearComProva(titulos, gerarSemente());
+      vencedores.add(prova.winningNumber);
+    }
+    // Cinquenta sorteios em mil títulos: repetir algum é possível, mas cair
+    // em menos de quarenta valores distintos seria sinal de travamento.
+    expect(vencedores.size).toBeGreaterThan(40);
+  }, 60000);
+});
+
 describe("conferirProva", () => {
   const numeros = Array.from({ length: 250 }, (_, i) => i + 1);
 
