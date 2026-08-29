@@ -17,8 +17,6 @@ import { CardDeBoost } from "@/components/rank/card-de-boost";
 import { XP_MULTIPLIER_TIERS } from "@/lib/xp/config";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { timePorId } from "@/lib/times-cs2";
-import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { SeletorDeTime } from "@/components/times/seletor-de-time";
 
 export const metadata: Metadata = { title: "Minha conta" };
@@ -56,8 +54,6 @@ export default async function MyAccountPage() {
     },
   });
   if (!user) notFound();
-
-  const timeDoCoracao = timePorId(user.favoriteTeamId);
 
   const paidReservations = await prisma.reservation.count({
     where: {
@@ -182,15 +178,9 @@ export default async function MyAccountPage() {
           {/* Time do coração. Fica abaixo da entrega da Steam porque é
               cosmético e a entrega é o que decide se a skin chega. */}
           <section className="rounded-xl border bg-card p-4">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <h2 className="text-base font-bold">Time do coração</h2>
-              {timeDoCoracao && (
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold">
-                  <EmblemaDoTime time={timeDoCoracao} tamanho="sm" />
-                  {timeDoCoracao.nome}
-                </span>
-              )}
-            </div>
+            {/* Sem selo repetindo o time no cabeçalho: a própria linha do
+                seletor já mostra o emblema e o nome, logo abaixo. */}
+            <h2 className="mb-1 text-base font-bold">Time do coração</h2>
             <p className="mb-4 text-sm text-muted-foreground">
               Aparece ao lado do seu nome nas listas de ganhadores. Escolher é
               opcional, e dá para tirar quando quiser.
