@@ -240,10 +240,13 @@ quando o número pode aparecer e quando o nome pode aparecer, tudo em colunas
 | Onde | O quê |
 | --- | --- |
 | `src/lib/sorteio-ao-vivo.ts` | A linha do tempo, pura e testada. Fases, marcos, formatação, código público. |
+| `src/lib/sorteio-justo.ts` | O sorteio verificável: compromisso, manifesto, HMAC e conferência. Roda igual no servidor e no navegador. |
 | `src/server/services/sorteio-ao-vivo.ts` | O motor: agenda, sorteia, avança fase, monta o estado público. |
 | `src/app/api/sorteio/[publicId]/estado` | O estado. Chamada nas viradas de fase; avança a máquina de quebra. |
 | `src/app/api/cron/sorteios` | A rede de proteção, de minuto em minuto. |
 | `src/app/(public)/sorteio/[publicId]` | A transmissão e, depois, o comprovante permanente. |
+| `src/app/(public)/sorteio/[publicId]/verificar` | A conferência, feita no navegador de quem abre. |
+| `src/app/api/sorteio/[publicId]/manifesto` | A lista de títulos que disputaram. Só números, nunca gente. |
 | `src/app/(admin)/admin/sorteios/[id]/sorteio` | O acompanhamento, só de leitura. |
 
 ### Quando uma campanha encerra
@@ -254,18 +257,53 @@ gera sorteio, e continua `ACTIVE`. No mesmo instante em que o `Draw` nasce, a
 campanha vira `FINISHED` na MESMA transação, e é isso que congela o universo:
 `createReservation` já recusa campanha que não esteja `ACTIVE`.
 
-### O número
+### O número: verificável, não só imprevisível
 
-`crypto.randomInt` sorteando um índice entre os bilhetes VENDIDOS (`PAID` e
-`AWARDED`, a mesma definição que a barra de progresso usa). Sortear no
-intervalo cheio cairia em número sem dono numa campanha que encerrou pela
-data com metade vendida. Junto do resultado vai o SHA-256 da lista que
-disputou, que é o que permite conferir depois que ela não foi mexida.
+O sorteio não usa sorteador. Ele é uma conta que qualquer pessoa refaz, com
+compromisso e revelação (`src/lib/sorteio-justo.ts`):
 
-O resultado é gravado antes de a animação começar. A rolagem de números na
-tela é enfeite: `RolagemDeNumeros` gira enquanto `numeroFinal` é nulo e para
-quando ele chega. Não existe caminho em que o que está na tela vire o
-resultado.
+1. **Na criação da campanha**, o sistema sorteia uma chave secreta de 32 bytes
+   e publica só o SHA-256 dela. O hash aparece na página da campanha enquanto
+   as cotas são vendidas.
+2. **No encerramento**, a lista de títulos elegíveis vira o manifesto (ordem
+   crescente, um por linha) e o SHA-256 dela é o segundo ingrediente.
+3. **O vencedor** é `HMAC-SHA256(chave, "manifesto:nonce")`, lido como inteiro
+   de 256 bits, módulo a quantidade de títulos.
+4. **Na revelação**, a chave é publicada.
+
+A ORDEM é o que dá valor a isso. O compromisso sai antes de existir manifesto:
+se a chave fosse escolhida depois do encerramento, quem opera o site já saberia
+quem está no bolo e poderia gerar mil chaves até achar a que faz ganhar quem
+ele quer, publicando só o hash escolhido. Travando antes da primeira venda,
+essa escolha deixa de existir.
+
+A chave secreta vive em `DrawSeed`, tabela própria: meia dúzia de lugares deste
+código fazem `raffle.findUnique` sem `select` e entregam a linha inteira para
+componente de cliente, e uma coluna secreta ali iria para o navegador em
+silêncio.
+
+Elegível é título vendido (`PAID` e `AWARDED`, a mesma definição da barra de
+progresso). Sortear no intervalo cheio cairia em número sem dono numa campanha
+que encerrou pela data com metade vendida.
+
+O resultado é gravado antes de a animação começar. O carretel na tela é
+enfeite: `CarretelDeTitulos` gira enquanto o número real é nulo e para quando
+ele chega. Não existe caminho em que o que está na tela vire o resultado.
+
+### A página de conferência
+
+`/sorteio/<id>/verificar` refaz o sorteio **no navegador de quem abriu**, com
+o mesmo módulo que o servidor usou para sortear (Web Crypto, uma implementação
+só para os dois lados). Ela baixa a lista de títulos de
+`/api/sorteio/<id>/manifesto`, recalcula o hash, recalcula o HMAC, e mostra
+sete checagens em português.
+
+Testado adulterando o banco: trocando o número vencedor depois do sorteio, seis
+checagens continuam verdes e só "o título vencedor é o que está nessa posição"
+reprova, apontando exatamente para o que foi mexido.
+
+`crypto.subtle` só existe em contexto seguro (https ou localhost). Fora disso a
+página diz isso em português em vez de morrer com erro em inglês.
 
 ### Idempotência
 

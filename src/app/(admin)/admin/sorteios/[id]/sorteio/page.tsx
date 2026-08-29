@@ -200,16 +200,22 @@ export default async function SorteioDaCampanhaPage({
                   <Campo rotulo="Método" valor={draw.rngMethod} />
                   <Campo rotulo="Versão do motor" valor={String(draw.drawVersion)} />
                 </dl>
-                {draw.snapshotHash && (
-                  <div className="mt-3 rounded-xl border bg-muted/40 p-3">
-                    <p className="text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
-                      Impressão digital dos elegíveis (SHA-256)
-                    </p>
-                    <p className="mt-1 font-mono text-[10px] leading-relaxed break-all text-muted-foreground">
-                      {draw.snapshotHash}
-                    </p>
-                  </div>
-                )}
+                {/* A prova, na íntegra. O painel vê tudo, inclusive o que
+                    só vira público na revelação: é aqui que a equipe confere
+                    um sorteio que alguém questionou. */}
+                <div className="mt-3 space-y-2">
+                  <Prova rotulo="Chave travada (SHA-256)" valor={draw.serverSeedHash} />
+                  <Prova rotulo="Lista de títulos (SHA-256)" valor={draw.clientSeed} />
+                  <Prova rotulo="Cálculo (HMAC-SHA256)" valor={draw.hmacHex} />
+                  <Prova
+                    rotulo="Posição sorteada"
+                    valor={
+                      draw.winnerIndex == null
+                        ? null
+                        : `${draw.winnerIndex} de ${draw.eligibleTicketCount}`
+                    }
+                  />
+                </div>
               </>
             )}
 
@@ -221,6 +227,20 @@ export default async function SorteioDaCampanhaPage({
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+function Prova({ rotulo, valor }: { rotulo: string; valor: string | null }) {
+  if (!valor) return null;
+  return (
+    <div className="rounded-xl border bg-muted/40 p-3">
+      <p className="text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+        {rotulo}
+      </p>
+      <p className="mt-1 font-mono text-[10px] leading-relaxed break-all text-muted-foreground">
+        {valor}
+      </p>
     </div>
   );
 }

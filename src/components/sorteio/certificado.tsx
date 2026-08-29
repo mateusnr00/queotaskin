@@ -2,19 +2,26 @@
 
 // O comprovante do sorteio.
 //
-// É o bloco que responde "como sei que isso não foi combinado". Ele não prova
-// nada sozinho, nenhum comprovante prova, mas registra em público o que
-// permite conferir depois: quantos títulos disputaram, como o número foi
-// escolhido, em que instante, e a impressão digital da lista que disputou.
+// É o bloco que responde "como sei que isso não foi combinado". E a resposta
+// deixou de ser "confie na gente": ele publica os quatro valores com que
+// qualquer pessoa refaz o sorteio, e leva para a página onde o próprio
+// navegador dela faz a conta.
 //
-// A impressão digital é o detalhe que importa. `snapshotHash` é o SHA-256 dos
-// números elegíveis: se a lista tivesse sido mexida entre o encerramento e o
-// sorteio, ela daria outro valor. Publicá-la junto do resultado é o que
-// transforma "confie em nós" em algo que alguém pode checar.
+// O QUE ESTÁ AQUI, E POR QUÊ
 //
-// Aparece só depois da revelação. Antes disso ele estaria falando de um
-// resultado que ninguém pode ver, e o hash seria pista sobre a lista.
+// - CHAVE TRAVADA (serverSeedHash): publicada quando a campanha foi criada,
+//   antes da primeira venda. É o compromisso.
+// - CHAVE PUBLICADA (serverSeed): a chave em si, só depois do resultado. O
+//   SHA-256 dela tem que dar o hash de cima, e é isso que impede trocar a
+//   chave depois de ver quem ganharia.
+// - LISTA DE TÍTULOS (clientSeed): o SHA-256 dos títulos que disputaram. Muda
+//   se um único título entrar ou sair.
+// - CÁLCULO (hmacHex) e POSIÇÃO (winnerIndex): o resultado da conta.
+//
+// Aparece só depois da revelação. Antes disso metade destes valores não
+// existe publicamente, e mostrar a outra metade seria enfeite.
 
+import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
@@ -47,8 +54,40 @@ export function CertificadoDoSorteio({
       rotulo: "Títulos elegíveis",
       valor: estado.eligibleTicketCount.toLocaleString("pt-BR"),
     },
+    ...(estado.prova.winnerIndex != null
+      ? [
+          {
+            rotulo: "Posição sorteada",
+            valor: `${(estado.prova.winnerIndex + 1).toLocaleString("pt-BR")} de ${estado.eligibleTicketCount.toLocaleString("pt-BR")}`,
+            mono: true,
+          },
+        ]
+      : []),
     { rotulo: "Método", valor: estado.rngMethod, mono: true },
     { rotulo: "Versão do sorteio", valor: String(estado.drawVersion) },
+  ];
+
+  const chaves: { rotulo: string; valor: string | null; nota: string }[] = [
+    {
+      rotulo: "Chave travada antes das vendas (SHA-256)",
+      valor: estado.prova.serverSeedHash,
+      nota: "Publicada quando a campanha foi criada.",
+    },
+    {
+      rotulo: "Chave publicada agora",
+      valor: estado.prova.serverSeed,
+      nota: "O SHA-256 dela tem que dar exatamente o hash acima.",
+    },
+    {
+      rotulo: "Lista de títulos que disputaram (SHA-256)",
+      valor: estado.prova.clientSeed,
+      nota: "Muda se um único título entrar ou sair da lista.",
+    },
+    {
+      rotulo: "Cálculo do sorteio (HMAC-SHA256)",
+      valor: estado.prova.hmacHex,
+      nota: "Chave publicada aplicada à lista. É daqui que sai a posição.",
+    },
   ];
 
   return (
@@ -80,23 +119,43 @@ export function CertificadoDoSorteio({
         ))}
       </dl>
 
-      {estado.snapshotHash && (
-        <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
-          <p className="text-[10px] font-bold tracking-[0.12em] text-white/55 uppercase">
-            Impressão digital dos títulos elegíveis (SHA-256)
-          </p>
-          {/* Quebra em qualquer caractere: são sessenta e quatro hexadecimais
-              sem espaço nenhum, e sem isto eles esticariam a página inteira
-              no celular. */}
-          <p className="mt-1 font-mono text-[10px] leading-relaxed break-all text-white/55">
-            {estado.snapshotHash}
-          </p>
-        </div>
-      )}
+      <div className="mt-4 space-y-2">
+        {chaves.map(
+          (chave) =>
+            chave.valor && (
+              <div
+                key={chave.rotulo}
+                className="rounded-xl border border-white/10 bg-black/30 p-3"
+              >
+                <p className="text-[10px] font-bold tracking-[0.12em] text-white/55 uppercase">
+                  {chave.rotulo}
+                </p>
+                {/* Quebra em qualquer caractere: são sessenta e quatro
+                    hexadecimais sem espaço nenhum, e sem isto eles esticariam
+                    a página inteira no celular. */}
+                <p className="mt-1 font-mono text-[10px] leading-relaxed break-all text-white/70">
+                  {chave.valor}
+                </p>
+                <p className="mt-1 text-[10px] leading-relaxed text-white/55">
+                  {chave.nota}
+                </p>
+              </div>
+            ),
+        )}
+      </div>
+
+      <Link
+        href={`/sorteio/${estado.publicId}/verificar`}
+        className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-200 transition-colors hover:bg-emerald-500/15"
+      >
+        <ShieldCheck aria-hidden className="h-4 w-4" />
+        Conferir este sorteio
+      </Link>
 
       <p className="mt-3 text-[11px] leading-relaxed text-white/55">
-        Resultado confirmado e definitivo. O número foi escolhido pelo servidor
-        no instante acima, antes de qualquer animação, e não pode ser alterado.
+        A conferência roda no seu próprio navegador, com os dados desta página.
+        O número foi escolhido antes de qualquer animação e não pode ser
+        alterado.
       </p>
     </section>
   );

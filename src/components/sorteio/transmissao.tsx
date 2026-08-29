@@ -16,7 +16,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { Volume2, VolumeX, WifiOff, RefreshCw } from "lucide-react";
+import {
+  RefreshCw,
+  ShieldCheck,
+  Trophy,
+  Volume2,
+  VolumeX,
+  WifiOff,
+} from "lucide-react";
 
 import {
   formatarContagemCurta,
@@ -25,16 +32,21 @@ import {
 } from "@/lib/sorteio-ao-vivo";
 import { cn } from "@/lib/utils";
 import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
+import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CertificadoDoSorteio } from "@/components/sorteio/certificado";
 import {
+  CarretelDeTitulos,
   numeroFormatado,
-  RolagemDeNumeros,
-} from "@/components/sorteio/rolagem-de-numeros";
+} from "@/components/sorteio/carretel-de-titulos";
+import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
 import { useSom } from "@/components/sorteio/usar-som";
 
 /** Os últimos segundos, quando a contagem troca de cara. */
 const SEGUNDOS_DE_TENSAO = 10;
+
+/** Os últimos de todos, quando ela vira o anel de preparo. */
+const SEGUNDOS_DE_PREPARO = 3;
 
 function horaDeBrasilia(iso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -257,6 +269,8 @@ function Contagem({
 }) {
   const faltam = segundosAte(new Date(estado.drawStartsAt), agora);
   const tenso = faltam <= SEGUNDOS_DE_TENSAO;
+  // Nos três últimos a tela troca de gesto: sai o relógio, entra o anel.
+  const preparando = faltam > 0 && faltam <= SEGUNDOS_DE_PREPARO;
   const decorrido = percentualDaContagem(
     {
       drawScheduledAt: new Date(estado.drawScheduledAt),
@@ -286,10 +300,13 @@ function Contagem({
       )}
     >
       <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
-        O sorteio começa em
+        {preparando ? "Sorteando em" : "O sorteio começa em"}
       </p>
 
+      {preparando && <AnelDePreparo numero={faltam} />}
+
       <p
+        hidden={preparando}
         className={cn(
           "mt-3 font-mono font-black tabular-nums leading-none text-white",
           tenso
@@ -344,9 +361,6 @@ function Revelacao({
   estado: EstadoPublicoDoSorteio;
   som: ReturnType<typeof useSom>;
 }) {
-  const inicioMs = Date.parse(estado.drawStartsAt);
-  const revelacaoMs = Date.parse(estado.revealAt);
-
   const numero = estado.resultado?.numero ?? null;
   const ganhador = estado.resultado?.ganhador ?? null;
 
@@ -373,13 +387,12 @@ function Revelacao({
           {numero == null ? "Sorteando..." : "Número sorteado"}
         </p>
 
-        <div className="mt-4 flex items-center justify-center">
-          <RolagemDeNumeros
+        <div className="mx-auto mt-4 w-full max-w-[340px]">
+          <CarretelDeTitulos
             totalNumbers={estado.campanha.totalNumbers}
-            inicioMs={inicioMs}
-            revelacaoMs={revelacaoMs}
+            amostra={estado.amostraDeTitulos}
             numeroFinal={numero}
-            aoTrocar={() => som.tocar("rolagem")}
+            aoPassar={() => som.tocar("rolagem")}
           />
         </div>
 
@@ -391,33 +404,70 @@ function Revelacao({
       </div>
 
       {numero != null && (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center sm:p-8">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center sm:p-8">
           {ganhador == null ? (
             <p className="flex items-center justify-center gap-2 text-sm text-white/60">
               <span aria-hidden className="ponto-ao-vivo" />
               Buscando o proprietário da cota...
             </p>
           ) : (
-            <div className="sorteio-entra space-y-3">
-              <p className="text-[11px] font-bold tracking-[0.2em] text-amber-300 uppercase">
-                Temos um ganhador
-              </p>
-              <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                {ganhador}
-              </p>
-              <p className="text-sm text-white/60">
-                com o título{" "}
-                <span className="font-mono font-bold text-amber-300">
-                  {numeroFormatado(numero, estado.campanha.totalNumbers)}
-                </span>
-              </p>
-              <Link
-                href={`/${estado.campanha.slug}`}
-                className="mt-2 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                Ver a campanha
-              </Link>
-            </div>
+            <>
+              <Confete />
+              <div className="sorteio-entra relative space-y-3">
+                <Trophy
+                  aria-hidden
+                  className="mx-auto h-14 w-14 text-amber-400"
+                  strokeWidth={1.5}
+                />
+                <p className="text-[11px] font-bold tracking-[0.2em] text-amber-300 uppercase">
+                  Temos um ganhador
+                </p>
+                <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                  {ganhador}
+                </p>
+
+                {/* O canhoto: o pedaço de papel que sai do pote, com a
+                    picotagem à esquerda. É o que dá objeto ao resultado,
+                    em vez de deixar o número solto no meio do texto. */}
+                <div
+                  className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-amber-400/60"
+                  style={{ background: "rgba(251,191,36,0.08)" }}
+                >
+                  <span
+                    aria-hidden
+                    className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-amber-400/60"
+                  />
+                  <div className="min-w-0 flex-1 px-4 py-2.5 text-left">
+                    <p className="text-[9px] font-bold tracking-[0.16em] text-white/55 uppercase">
+                      Título vencedor
+                    </p>
+                    <p className="font-mono text-lg font-black tabular-nums text-amber-300">
+                      {numeroFormatado(numero, estado.campanha.totalNumbers)}
+                    </p>
+                  </div>
+                  <ShieldCheck
+                    aria-hidden
+                    className="mr-4 h-4 w-4 shrink-0 self-center text-amber-400"
+                  />
+                </div>
+
+                <div className="flex flex-col items-center gap-2 pt-1 sm:flex-row sm:justify-center">
+                  <Link
+                    href={`/sorteio/${estado.publicId}/verificar`}
+                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-5 text-sm font-bold text-emerald-200 sm:w-auto"
+                  >
+                    <ShieldCheck aria-hidden className="h-4 w-4" />
+                    Conferir o sorteio
+                  </Link>
+                  <Link
+                    href={`/${estado.campanha.slug}`}
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto"
+                  >
+                    Ver a campanha
+                  </Link>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}

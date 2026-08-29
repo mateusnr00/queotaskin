@@ -618,7 +618,8 @@ model Raffle {
   /// O sorteio ao vivo desta campanha. No máximo um, garantido pelo @unique
   /// do lado do Draw: dois sorteios oficiais para a mesma campanha seriam
   /// dois ganhadores para o mesmo prêmio.
-  draw Draw?
+  draw     Draw?
+  drawSeed DrawSeed?
 
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
@@ -1705,16 +1706,29 @@ model Draw {
   winnerName     String?
 
   // -------------------------------------------------------------- prova
-  /// Quantos bilhetes disputaram. É o denominador da chance de cada um.
-  eligibleTicketCount Int     @default(0)
+  //
+  // O que permite qualquer pessoa refazer o sorteio no próprio navegador. A
+  // matemática vive em src/lib/sorteio-justo.ts; aqui ficam só os valores.
+  //
+  /// Quantos títulos disputaram. É o denominador da chance de cada um.
+  eligibleTicketCount Int    @default(0)
   /// Como o número foi escolhido, escrito por extenso no comprovante.
-  rngMethod           String  @default("node:crypto.randomInt")
-  /// SHA-256 do universo que disputou. Serve para provar depois que a lista
-  /// de bilhetes elegíveis não foi mexida entre o encerramento e o sorteio.
-  snapshotHash        String?
-  /// Versão do motor. Um dia a regra muda, e um sorteio antigo precisa
-  /// continuar explicável pela regra que valia quando ele rodou.
-  drawVersion         Int     @default(1)
+  rngMethod           String @default("hmac-sha256 (compromisso e revelação)")
+  /// Versão do motor. 1 era o sorteio por crypto.randomInt, sem como
+  /// conferir; 2 é o verificável. Um sorteio antigo precisa continuar
+  /// explicável pela regra que valia quando ele rodou.
+  drawVersion         Int    @default(2)
+
+  /// Cópia do compromisso publicado antes da primeira venda (ver DrawSeed).
+  serverSeedHash String?
+  /// SHA-256 do manifesto: os títulos elegíveis, em ordem, um por linha.
+  clientSeed     String?
+  /// Contador do sorteio dentro da campanha. Hoje sempre 1.
+  nonce          Int     @default(1)
+  /// Posição sorteada dentro do manifesto.
+  winnerIndex    Int?
+  /// O HMAC inteiro, para quem quiser conferir dígito a dígito.
+  hmacHex        String?
 
   /// Por que falhou, quando falhou. Só preenchido em ERROR.
   errorReason String?
@@ -1726,4 +1740,29 @@ model Draw {
   /// o índice dessa pergunta.
   @@index([status, drawScheduledAt])
   @@index([status, drawStartsAt])
+}
+
+/// A semente secreta do sorteio, comprometida antes da primeira venda.
+///
+/// Fica numa tabela própria, e não em colunas do Raffle, por uma razão de
+/// segurança concreta: meia dúzia de lugares deste código fazem
+/// `raffle.findUnique` sem `select` e entregam a linha inteira para um
+/// componente de cliente. Uma coluna secreta ali dentro iria para o navegador
+/// no primeiro desses caminhos, em silêncio. Numa tabela separada, vazar exige
+/// alguém escrever `drawSeed` de propósito.
+///
+/// O compromisso (`serverSeedHash`) é público desde o primeiro dia e aparece
+/// na página da campanha. A semente em si só é publicada depois que o número
+/// vencedor já é público, e `revealedAt` é o carimbo desse momento.
+model DrawSeed {
+  raffleId String @id
+  raffle   Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  /// SEGREDO até a revelação. Nunca sai de um endpoint antes disso.
+  serverSeed     String
+  /// SHA-256 da semente. Publicado desde a criação da campanha.
+  serverSeedHash String
+
+  committedAt DateTime  @default(now())
+  revealedAt  DateTime?
 }

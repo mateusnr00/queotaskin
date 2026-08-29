@@ -16,6 +16,7 @@ import { toSkinPrize } from "@/lib/prize-mapper";
 import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
+import { SeloDeCompromisso } from "@/components/sorteio/selo-de-compromisso";
 import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
@@ -193,15 +194,24 @@ export default async function PublicRaffleDetailPage({
   // estático de ganhador por um convite para assistir: entre o encerramento e
   // a revelação existem dez minutos em que a página precisa dizer para onde
   // ir, e antes disso ela não dizia nada.
-  const sorteio = await prisma.draw.findUnique({
-    where: { raffleId: raffle.id },
-    select: {
-      publicId: true,
-      status: true,
-      drawStartsAt: true,
-      eligibleTicketCount: true,
-    },
-  });
+  const [sorteio, semente] = await Promise.all([
+    prisma.draw.findUnique({
+      where: { raffleId: raffle.id },
+      select: {
+        publicId: true,
+        status: true,
+        drawStartsAt: true,
+        eligibleTicketCount: true,
+      },
+    }),
+    // Só o HASH. A semente em si nunca é lida aqui: esta página entrega
+    // objetos inteiros para componentes de cliente, e uma leitura descuidada
+    // do segredo mandaria a chave do sorteio para o navegador de todo mundo.
+    prisma.drawSeed.findUnique({
+      where: { raffleId: raffle.id },
+      select: { serverSeedHash: true, committedAt: true },
+    }),
+  ]);
 
   const isActive = raffle.status === "ACTIVE";
   const statusConfig = await getConfiguracaoDeStatus();
@@ -390,6 +400,14 @@ export default async function PublicRaffleDetailPage({
             </p>
           )}
         </div>
+
+        {semente && (
+          <SeloDeCompromisso
+            hash={semente.serverSeedHash}
+            desde={semente.committedAt.toISOString()}
+            publicId={sorteio?.publicId ?? null}
+          />
+        )}
 
         {sorteio && (
           <SeloDeTransmissao

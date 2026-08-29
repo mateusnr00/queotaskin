@@ -19,6 +19,7 @@ import { raffleGeneralSchema } from "@/lib/validations/raffle";
 import { garantirSlugLivre } from "@/server/services/raffles";
 import { toSlug } from "@/lib/slug";
 import { registrarLog } from "@/server/services/activity-log";
+import { garantirSemente } from "@/server/services/sorteio-ao-vivo";
 import { diferencas } from "@/lib/activity-log-detalhes";
 import { desviarDeReservado, slugReservado } from "@/lib/rotas-reservadas";
 import type { ActionResult } from "@/server/actions/auth";
@@ -179,6 +180,24 @@ export async function createRaffleAction(
 
         return criado;
       });
+
+      // A semente do sorteio, comprometida AGORA.
+      //
+      // A ordem é o que dá valor ao compromisso: o hash da semente fica
+      // público enquanto as cotas são vendidas, antes de existir uma lista de
+      // participantes. Se ele nascesse junto do sorteio, quem opera o site já
+      // saberia quem está no bolo e poderia gerar mil sementes até achar a que
+      // faz ganhar quem ele quer, publicando só o hash escolhido. Travando
+      // antes da primeira venda, essa escolha deixa de existir.
+      //
+      // Fora da transação e com catch próprio: a campanha não pode deixar de
+      // nascer porque o compromisso falhou. O motor do sorteio chama a mesma
+      // função antes de sortear, então uma falha aqui é recuperada depois, com
+      // um compromisso mais fraco (posterior às vendas) e o carimbo de data
+      // dizendo isso.
+      await garantirSemente(raffle.id).catch((err) =>
+        console.error("[createRaffleAction] compromisso da semente:", err),
+      );
 
       await registrarLog({
         acao: "sorteio.criado",

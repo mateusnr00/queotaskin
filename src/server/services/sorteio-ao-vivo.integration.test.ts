@@ -18,9 +18,12 @@ import {
   avancarSorteio,
   carregarEstadoPublico,
   estadoPublico,
+  garantirSemente,
   processarSorteios,
   SELECAO_DA_CAMPANHA,
+  VENDIDO_NO_SORTEIO,
 } from "./sorteio-ao-vivo";
+import { conferirProva } from "@/lib/sorteio-justo";
 import { marcosDoSorteio, TEMPOS_PADRAO } from "@/lib/sorteio-ao-vivo";
 
 function isLocalDatabase(): boolean {
@@ -226,7 +229,9 @@ suite("motor do sorteio ao vivo (integração)", () => {
     expect(final.winningNumber).not.toBeNull();
     expect(final.drawExecutedAt).not.toBeNull();
     expect(final.eligibleTicketCount).toBe(8);
-    expect(final.snapshotHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(final.clientSeed).toMatch(/^[0-9a-f]{64}$/);
+    expect(final.hmacHex).toMatch(/^[0-9a-f]{64}$/);
+    expect(final.winnerIndex).not.toBeNull();
     expect(final.winnerTicketId).not.toBeNull();
     // O nome vai congelado e encurtado, no formato das listas públicas.
     // "de" é partícula, então o nome curto para em "Fulano". É a mesma regra
@@ -318,11 +323,18 @@ suite("motor do sorteio ao vivo (integração)", () => {
       where: { id: raffleId },
       select: SELECAO_DA_CAMPANHA,
     });
+    // A semente entra inteira, como entra em produção: quem decide o que sai
+    // é `estadoPublico`, e é essa decisão que este teste vigia.
+    const semente = await prisma.drawSeed.findUniqueOrThrow({
+      where: { raffleId },
+      select: { serverSeed: true, serverSeedHash: true },
+    });
 
     const durante = estadoPublico(
       executado,
       rifa,
       new Date(draw.revealAt.getTime() - 1000),
+      semente,
     );
     expect(durante.status).toBe("DRAWING");
     expect(durante.resultado).toBeNull();
@@ -331,18 +343,26 @@ suite("motor do sorteio ao vivo (integração)", () => {
     expect(JSON.stringify(durante)).not.toMatch(
       /winningNumber|winnerName|winnerTicketId|winnerUserId/,
     );
-    expect(durante.snapshotHash).toBeNull();
     expect(durante.drawExecutedAt).toBeNull();
+    // O compromisso SAI desde já: ele foi publicado antes das vendas, e
+    // escondê-lo agora tiraria o sentido de tê-lo publicado.
+    expect(durante.prova.serverSeedHash).toMatch(/^[0-9a-f]{64}$/);
+    // A chave secreta, não: com ela em mãos qualquer um calcularia o
+    // resultado antes da revelação.
+    expect(durante.prova.serverSeed).toBeNull();
+    expect(durante.prova.clientSeed).toBeNull();
+    expect(durante.prova.hmacHex).toBeNull();
 
-    const naRevelacao = estadoPublico(executado, rifa, draw.revealAt);
+    const naRevelacao = estadoPublico(executado, rifa, draw.revealAt, semente);
     expect(naRevelacao.resultado?.numero).toBe(executado.winningNumber);
     // O número saiu, o nome ainda não: são quatro segundos de diferença, e é
     // o que a animação usa para "buscando o dono da cota".
     expect(naRevelacao.resultado?.ganhador).toBeNull();
 
-    const noFim = estadoPublico(executado, rifa, draw.winnerRevealAt);
+    const noFim = estadoPublico(executado, rifa, draw.winnerRevealAt, semente);
     expect(noFim.resultado?.ganhador).toBe("Fulano");
-    expect(noFim.snapshotHash).toBe(executado.snapshotHash);
+    expect(noFim.prova.serverSeed).toMatch(/^[0-9a-f]{64}$/);
+    expect(noFim.prova.clientSeed).toBe(executado.clientSeed);
   });
 
   it("o estado público nunca carrega dado sensível do ganhador", async () => {
@@ -369,6 +389,75 @@ suite("motor do sorteio ao vivo (integração)", () => {
     // Nem o nome completo: só o curto.
     expect(json).not.toContain("Fulano de Tal Silva");
     expect(estado!.resultado?.ganhador).toBe("Fulano");
+  });
+
+  it("um sorteio de verdade passa na conferência pública", async () => {
+    // O teste que fecha o ciclo. Ele refaz exatamente o que o navegador do
+    // participante faz na página de conferência: pega a prova publicada, pega
+    // a lista de títulos, e recalcula. Se algum dia o motor e o verificador
+    // divergirem, é aqui que aparece, e não num print de cliente bravo.
+    const raffleId = await novaCampanha({ totalNumbers: 12, vendidos: 12 });
+    await agendarSorteiosPendentes(new Date());
+    const draw = await prisma.draw.findUniqueOrThrow({ where: { raffleId } });
+    const final = await avancarSorteio(
+      draw,
+      new Date(draw.winnerRevealAt.getTime() + 1000),
+    );
+
+    const estado = await carregarEstadoPublico(
+      draw.publicId,
+      new Date(draw.winnerRevealAt.getTime() + 1000),
+    );
+    const numeros = (
+      await prisma.ticket.findMany({
+        where: { raffleId, ...VENDIDO_NO_SORTEIO },
+        select: { number: true },
+      })
+    ).map((t) => t.number);
+
+    const { ok, checagens } = await conferirProva(
+      {
+        serverSeedHash: estado!.prova.serverSeedHash!,
+        serverSeed: estado!.prova.serverSeed,
+        clientSeed: estado!.prova.clientSeed!,
+        nonce: estado!.prova.nonce,
+        ticketCount: estado!.eligibleTicketCount,
+        winnerIndex: estado!.prova.winnerIndex!,
+        winningNumber: estado!.resultado!.numero,
+        hmacHex: estado!.prova.hmacHex!,
+      },
+      numeros,
+    );
+
+    expect(checagens).toEqual({
+      sementeRevelada: true,
+      compromissoConfere: true,
+      manifestoConfere: true,
+      quantidadeConfere: true,
+      hmacConfere: true,
+      indiceConfere: true,
+      vencedorConfere: true,
+    });
+    expect(ok).toBe(true);
+    expect(estado!.resultado!.numero).toBe(final.winningNumber);
+  });
+
+  it("a semente é comprometida uma vez e nunca trocada", async () => {
+    // Trocar a semente depois de publicada é EXATAMENTE a fraude que o
+    // compromisso existe para impedir. Duas chamadas, o mesmo hash.
+    const raffleId = await novaCampanha({ totalNumbers: 3, vendidos: 3 });
+    const primeiro = await garantirSemente(raffleId);
+    const segundo = await garantirSemente(raffleId);
+    expect(segundo).toBe(primeiro);
+    expect(primeiro).toMatch(/^[0-9a-f]{64}$/);
+
+    // E nem uma corrida troca: três chamadas ao mesmo tempo.
+    const paralelas = await Promise.all([
+      garantirSemente(raffleId),
+      garantirSemente(raffleId),
+      garantirSemente(raffleId),
+    ]);
+    expect(new Set(paralelas)).toEqual(new Set([primeiro]));
   });
 
   it("código público inexistente devolve nulo em vez de explodir", async () => {

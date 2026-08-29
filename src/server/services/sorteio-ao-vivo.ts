@@ -35,7 +35,7 @@
 // zero. É o mesmo arranjo que a expiração de reservas já usa neste projeto:
 // o cron é a rede, o caminho quente é o gatilho.
 
-import { createHash, randomInt } from "node:crypto";
+import { randomInt } from "node:crypto";
 
 import type { Draw, DrawStatus, Prisma } from "@prisma/client";
 
@@ -43,6 +43,15 @@ import { prisma } from "@/lib/db";
 import { nomeCurto } from "@/lib/nome-curto";
 import { registrarLog } from "@/server/services/activity-log";
 import { VENDIDO } from "@/server/services/vendidos";
+import {
+  conferirProva,
+  gerarSemente,
+  hashDaSemente,
+  METODO_VERIFICAVEL,
+  sortearComProva,
+  titulosCanonicos,
+  type ProvaDoSorteio,
+} from "@/lib/sorteio-justo";
 import {
   faseDoSorteio,
   idPublicoDoSorteio,
@@ -53,11 +62,26 @@ import {
   type EstadoDoSorteio,
 } from "@/lib/sorteio-ao-vivo";
 
-/** Versão do motor gravada em cada sorteio. Ver `drawVersion` no schema. */
-const VERSAO_DO_MOTOR = 1;
+/**
+ * O que conta como título elegível, reexportado.
+ *
+ * A rota do manifesto precisa da MESMA definição que o motor usou para
+ * sortear. Duas listas montadas por regras diferentes fariam a conferência
+ * falhar num sorteio honesto, que é o pior defeito possível numa página cujo
+ * propósito é dizer "confere".
+ */
+export const VENDIDO_NO_SORTEIO = VENDIDO;
+
+/**
+ * Versão do motor gravada em cada sorteio. Ver `drawVersion` no schema.
+ *
+ * 1 era o sorteio por `crypto.randomInt`: honesto, imprevisível e impossível
+ * de conferir de fora. 2 é o verificável, com compromisso e revelação.
+ */
+const VERSAO_DO_MOTOR = 2;
 
 /** Escrito por extenso no comprovante. */
-const METODO_DE_SORTEIO = "node:crypto.randomInt";
+const METODO_DE_SORTEIO = METODO_VERIFICAVEL;
 
 function situacaoDe(draw: Draw) {
   return {
@@ -289,8 +313,12 @@ export async function agendarSorteiosPendentes(
 
 /** O universo que disputa, congelado no instante do sorteio. */
 interface Universo {
-  bilhetes: { id: string; number: number; userId: string | null; nome: string | null }[];
-  hash: string;
+  bilhetes: {
+    id: string;
+    number: number;
+    userId: string | null;
+    nome: string | null;
+  }[];
 }
 
 /**
@@ -306,9 +334,9 @@ interface Universo {
  * intervalo cheio cairia em número sem dono na metade das vezes, e a
  * transmissão terminaria anunciando que ninguém ganhou.
  *
- * O hash é a impressão digital desse universo: quem disputou, em que ordem, e
- * quantos eram. Guardado junto do resultado, ele permite provar depois que a
- * lista não foi mexida entre o encerramento e o sorteio.
+ * Esta lista é o MANIFESTO do sorteio: dela sai o hash que entra no cálculo do
+ * vencedor, e é ela que a página de conferência publica para o navegador do
+ * participante refazer a conta.
  */
 async function universoElegivel(
   raffleId: string,
@@ -324,31 +352,53 @@ async function universoElegivel(
     },
   });
 
-  const lista = bilhetes.map((b) => ({
-    id: b.id,
-    number: b.number,
-    userId: b.reservation?.userId ?? null,
-    nome: b.reservation?.participantName ?? null,
-  }));
-
-  const hash = createHash("sha256")
-    .update(`${raffleId}|${lista.length}|${lista.map((b) => b.number).join(",")}`)
-    .digest("hex");
-
-  return { bilhetes: lista, hash };
+  return {
+    bilhetes: bilhetes.map((b) => ({
+      id: b.id,
+      number: b.number,
+      userId: b.reservation?.userId ?? null,
+      nome: b.reservation?.participantName ?? null,
+    })),
+  };
 }
 
 /**
- * Escolhe um índice uniforme em [0, total).
+ * Garante que a campanha tenha uma semente comprometida, e devolve o
+ * compromisso.
  *
- * `crypto.randomInt` já faz amostragem por rejeição internamente, então não há
- * viés de módulo mesmo quando o total não divide a potência de dois: o que
- * cairia fora da faixa é descartado e sorteado de novo. É por isso que não
- * existe `% total` em lugar nenhum deste arquivo, e por isso `Math.random`
- * está fora de questão, ele não é criptográfico e a semente é adivinhável.
+ * Chamada na criação da campanha, que é onde ela vale alguma coisa: o hash
+ * fica público enquanto as cotas são vendidas, antes de existir manifesto.
+ * Também é chamada antes do sorteio, e aí é rede de proteção para campanha
+ * criada antes deste recurso existir. Nesse caso o compromisso nasce depois
+ * das vendas, o que é mais fraco, e `committedAt` guarda a data para quem
+ * quiser saber a diferença.
+ *
+ * Idempotente: a semente nunca é trocada depois de comprometida. Trocar seria
+ * exatamente a fraude que o compromisso existe para impedir.
  */
-function sortearIndice(total: number): number {
-  return randomInt(0, total);
+export async function garantirSemente(raffleId: string): Promise<string> {
+  const existente = await prisma.drawSeed.findUnique({
+    where: { raffleId },
+    select: { serverSeedHash: true },
+  });
+  if (existente) return existente.serverSeedHash;
+
+  const serverSeed = gerarSemente();
+  const serverSeedHash = await hashDaSemente(serverSeed);
+  try {
+    await prisma.drawSeed.create({
+      data: { raffleId, serverSeed, serverSeedHash },
+    });
+    return serverSeedHash;
+  } catch {
+    // Corrida: outro processo comprometeu primeiro. O compromisso que vale é
+    // o dele, e nunca o nosso.
+    const agora = await prisma.drawSeed.findUniqueOrThrow({
+      where: { raffleId },
+      select: { serverSeedHash: true },
+    });
+    return agora.serverSeedHash;
+  }
 }
 
 /**
@@ -391,7 +441,45 @@ async function executarSorteio(draw: Draw): Promise<Draw> {
       return await marcarErro(draw.id, "Nenhum bilhete elegível no sorteio");
     }
 
-    const vencedor = universo.bilhetes[sortearIndice(universo.bilhetes.length)];
+    // A semente comprometida. Em campanha nova ela foi travada no dia da
+    // criação; a chamada aqui é rede para campanha antiga, e nunca troca uma
+    // semente já existente.
+    await garantirSemente(draw.raffleId);
+    const semente = await prisma.drawSeed.findUniqueOrThrow({
+      where: { raffleId: draw.raffleId },
+      select: { serverSeed: true, serverSeedHash: true },
+    });
+
+    // O sorteio em si: HMAC da semente secreta sobre o hash do manifesto. Não
+    // há sorteador aqui dentro, e essa é a diferença que interessa: o
+    // resultado é uma CONTA, e qualquer pessoa refaz a mesma conta depois com
+    // os dados que publicamos.
+    const numeros = universo.bilhetes.map((b) => b.number);
+    const prova: ProvaDoSorteio = await sortearComProva(
+      numeros,
+      semente.serverSeed,
+      draw.nonce,
+    );
+
+    // Confere a própria conta antes de gravar. Um manifesto com número
+    // repetido, ou um bilhete que sumiu entre a leitura e o cálculo, faria a
+    // prova nascer torta, e um resultado que não passa na própria conferência
+    // é pior do que sorteio nenhum: ele seria publicado como verificável.
+    const { ok } = await conferirProva(prova, numeros);
+    if (!ok) {
+      return await marcarErro(
+        draw.id,
+        "A prova do sorteio não passou na conferência interna",
+      );
+    }
+
+    const vencedor = universo.bilhetes.find(
+      (b) => b.number === prova.winningNumber,
+    );
+    if (!vencedor) {
+      return await marcarErro(draw.id, "Título sorteado não está no manifesto");
+    }
+
     const executadoEm = new Date();
 
     const atualizado = await prisma.draw.update({
@@ -401,9 +489,13 @@ async function executarSorteio(draw: Draw): Promise<Draw> {
         winnerTicketId: vencedor.id,
         winnerUserId: vencedor.userId,
         winnerName: vencedor.nome ? nomeCurto(vencedor.nome) : null,
-        eligibleTicketCount: universo.bilhetes.length,
-        snapshotHash: universo.hash,
+        eligibleTicketCount: prova.ticketCount,
+        serverSeedHash: prova.serverSeedHash,
+        clientSeed: prova.clientSeed,
+        winnerIndex: prova.winnerIndex,
+        hmacHex: prova.hmacHex,
         rngMethod: METODO_DE_SORTEIO,
+        drawVersion: VERSAO_DO_MOTOR,
         drawExecutedAt: executadoEm,
       },
     });
@@ -416,7 +508,7 @@ async function executarSorteio(draw: Draw): Promise<Draw> {
       data: {
         winnerTicketNumber: vencedor.number,
         winnerDrawnAt: executadoEm,
-        winnerNote: `Sorteio automático ${draw.publicId}. ${universo.bilhetes.length} bilhetes elegíveis, sorteio por ${METODO_DE_SORTEIO}.`,
+        winnerNote: `Sorteio automático ${draw.publicId}. ${prova.ticketCount} títulos elegíveis, ${METODO_DE_SORTEIO}. Confira em /sorteio/${draw.publicId}/verificar`,
       },
     });
 
@@ -433,14 +525,15 @@ async function executarSorteio(draw: Draw): Promise<Draw> {
       detalhes: {
         sorteio: draw.publicId,
         numero: vencedor.number,
-        elegiveis: universo.bilhetes.length,
+        elegiveis: prova.ticketCount,
         metodo: METODO_DE_SORTEIO,
-        hash: universo.hash,
+        indice: prova.winnerIndex,
+        manifesto: prova.clientSeed,
         // Só quando divergiu do que foi contado no encerramento. Divergir é
         // possível de forma legítima (um webhook atrasado confirmando um
         // pagamento depois do fechamento), e é exatamente o tipo de coisa que
         // ninguém consegue reconstruir depois sem registro.
-        ...(draw.eligibleTicketCount !== universo.bilhetes.length
+        ...(draw.eligibleTicketCount !== prova.ticketCount
           ? { elegiveisNoAgendamento: draw.eligibleTicketCount }
           : {}),
       },
@@ -599,9 +692,36 @@ export interface EstadoPublicoDoSorteio {
 
   eligibleTicketCount: number;
   rngMethod: string;
-  snapshotHash: string | null;
   drawExecutedAt: string | null;
+
+  /**
+   * Uma amostra dos títulos que disputaram, para o carretel da animação ter
+   * números de verdade correndo na fita em vez de dígitos inventados.
+   *
+   * É enfeite, e não vaza nada: são títulos vendidos, sorteados sem relação
+   * nenhuma com o resultado, e a lista inteira vira pública no manifesto
+   * depois da revelação de qualquer jeito.
+   */
+  amostraDeTitulos: number[];
   drawVersion: number;
+
+  /**
+   * A prova do sorteio.
+   *
+   * `serverSeedHash` é o COMPROMISSO e sai desde o primeiro instante: ele foi
+   * publicado antes da primeira venda, e escondê-lo agora tiraria o sentido de
+   * tê-lo publicado. `serverSeed` é a chave secreta e só sai depois que o
+   * número é público; antes disso ela permitiria calcular o resultado antes da
+   * hora, que é a única coisa que este desenho precisa impedir.
+   */
+  prova: {
+    serverSeedHash: string | null;
+    serverSeed: string | null;
+    clientSeed: string | null;
+    nonce: number;
+    winnerIndex: number | null;
+    hmacHex: string | null;
+  };
 
   /**
    * O resultado. Null enquanto não pode ser mostrado, e null é literal: a
@@ -638,6 +758,8 @@ export function estadoPublico(
   draw: Draw,
   rifa: RifaDoSorteio,
   agora: Date,
+  semente?: { serverSeed: string; serverSeedHash: string } | null,
+  amostraDeTitulos: number[] = [],
 ): EstadoPublicoDoSorteio {
   const situacao = situacaoDe(draw);
   const mostrarNumero = podeMostrarNumero(situacao, agora);
@@ -664,12 +786,24 @@ export function estadoPublico(
 
     eligibleTicketCount: draw.eligibleTicketCount,
     rngMethod: draw.rngMethod,
-    // O hash só sai junto do resultado: antes da revelação ele é a impressão
-    // digital de uma lista que ninguém pode conferir ainda, e publicá-lo cedo
-    // só serviria para alguém tentar adivinhar o universo.
-    snapshotHash: mostrarNumero ? draw.snapshotHash : null,
+    amostraDeTitulos,
     drawExecutedAt: mostrarNumero ? (draw.drawExecutedAt?.toISOString() ?? null) : null,
     drawVersion: draw.drawVersion,
+
+    prova: {
+      // O compromisso é público desde sempre, e é o que dá valor a ele.
+      serverSeedHash: draw.serverSeedHash ?? semente?.serverSeedHash ?? null,
+      // A chave secreta, só depois do número. Esta linha é a única guarda que
+      // separa "verificável" de "previsível".
+      serverSeed: mostrarNumero ? (semente?.serverSeed ?? null) : null,
+      // O resto da prova sai junto com o número: antes dele, o hash do
+      // manifesto e o HMAC seriam pistas sobre um resultado que ainda não pode
+      // aparecer.
+      clientSeed: mostrarNumero ? draw.clientSeed : null,
+      nonce: draw.nonce,
+      winnerIndex: mostrarNumero ? draw.winnerIndex : null,
+      hmacHex: mostrarNumero ? draw.hmacHex : null,
+    },
 
     resultado:
       mostrarNumero && draw.winningNumber != null
@@ -706,13 +840,36 @@ export async function carregarEstadoPublico(
 
   const atualizado = await avancarSorteio(draw, agora);
 
-  const rifa = await prisma.raffle.findUnique({
-    where: { id: atualizado.raffleId },
-    select: SELECAO_DA_CAMPANHA,
-  });
+  const [rifa, semente, amostra] = await Promise.all([
+    prisma.raffle.findUnique({
+      where: { id: atualizado.raffleId },
+      select: SELECAO_DA_CAMPANHA,
+    }),
+    prisma.drawSeed.findUnique({
+      where: { raffleId: atualizado.raffleId },
+      select: { serverSeed: true, serverSeedHash: true },
+    }),
+    // Quarenta títulos para a fita do carretel. Do começo da lista, e não
+    // sorteados: é enfeite, e uma consulta ordenada custa menos que um
+    // sorteio no banco a cada consulta de estado.
+    prisma.ticket.findMany({
+      where: { raffleId: atualizado.raffleId, ...VENDIDO },
+      orderBy: { number: "asc" },
+      take: 40,
+      select: { number: true },
+    }),
+  ]);
   if (!rifa) return null;
 
-  return estadoPublico(atualizado, rifa, agora);
+  // A semente entra inteira aqui e `estadoPublico` decide o que sai. A decisão
+  // fica num lugar só, e não repartida entre quem busca e quem monta.
+  return estadoPublico(
+    atualizado,
+    rifa,
+    agora,
+    semente,
+    amostra.map((t) => t.number),
+  );
 }
 
 /** Status em português, para o painel. */

@@ -1390,3 +1390,105 @@
     box-shadow: 0 0 22px 0 rgba(251, 191, 36, 0.12);
   }
 }
+
+/* ------------------------------------------------------------------
+   SORTEIO AO VIVO, CENAS
+
+   O anel dos tres segundos finais, a varredura do carretel e o confete
+   da revelacao. Mesma regra do resto do arquivo: transform e opacity,
+   que sao as duas propriedades que o navegador anima sem recalcular
+   layout.
+   ------------------------------------------------------------------ */
+
+/* Os dois aneis que respiram em volta do 3, 2, 1. */
+.anel-de-preparo {
+  animation: anel-de-preparo 1s ease-in-out infinite;
+}
+
+@keyframes anel-de-preparo {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+/* O numero trocando de identidade a cada segundo. Entra por cima, uma vez
+   so por digito: a `key` no componente remonta o elemento e a animacao
+   roda de novo. */
+.numero-de-preparo {
+  animation: numero-de-preparo 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+@keyframes numero-de-preparo {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.09);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* A luz que desce pela janela do carretel enquanto a fita corre. */
+.carretel-varredura {
+  background: linear-gradient(
+    180deg,
+    rgba(251, 191, 36, 0.35),
+    transparent
+  );
+  animation: carretel-varredura 1.1s linear infinite;
+}
+
+@keyframes carretel-varredura {
+  0% {
+    transform: translateY(-120%);
+  }
+  100% {
+    transform: translateY(420px);
+  }
+}
+
+/* O confete: cai uma vez e some. Ver src/components/sorteio/confete.tsx
+   para por que nao repete. */
+.confete {
+  animation-name: confete-cai;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes confete-cai {
+  0% {
+    transform: translate3d(0, -40px, 0) rotate(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 620px, 0) rotate(760deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anel-de-preparo,
+  .numero-de-preparo,
+  .carretel-varredura,
+  .confete {
+    animation: none;
+  }
+  /* Confete parado no topo da tela seria uma faixa de quadradinhos colada no
+     alto. Some de vez. */
+  .confete {
+    display: none;
+  }
+}
