@@ -24,6 +24,7 @@ import { CalendarDays, Check, Trophy } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { SeloDeDobro } from "@/components/public/selo-de-dobro";
 
 const DEFAULT_TITLE = "Pagamento confirmado!";
 const DEFAULT_BUTTON_LABEL = "Ver mais campanhas";
@@ -42,6 +43,8 @@ interface Props {
   customButtonLabel?: string | null;
   customImageUrl?: string | null;
   /** Renderizado entre o comprovante e os botões. */
+  /** O pedido saiu com a promoção em dobro. */
+  dobroAplicado?: boolean;
   children?: ReactNode;
 }
 
@@ -57,6 +60,7 @@ export function PaidCelebration({
   customDescription,
   customButtonLabel,
   customImageUrl,
+  dobroAplicado = false,
   children,
 }: Props) {
   const title = customTitle?.trim() || DEFAULT_TITLE;
@@ -173,6 +177,9 @@ export function PaidCelebration({
             {numbers.length} título{numbers.length === 1 ? "" : "s"}
           </span>
         </div>
+        {dobroAplicado && (
+          <SeloDeDobro total={numbers.length} className="mb-3" />
+        )}
         <ul className="flex flex-wrap gap-1.5">
           {numbers.map((n) => (
             <li

@@ -19,6 +19,7 @@ import { ExpiredReservation } from "@/components/public/expired-reservation";
 import { TrilhaDoPedido } from "@/components/public/trilha-do-pedido";
 import { TituloDaAba } from "@/components/public/titulo-da-aba";
 import { EventoDeCompra } from "@/components/public/evento-de-compra";
+import { SeloDeDobro } from "@/components/public/selo-de-dobro";
 import { ComoVoltar } from "@/components/public/como-voltar";
 import {
   ensurePixForReservation,
@@ -272,6 +273,7 @@ export default async function ReservationReceiptPage({
         />
         <TrilhaDoPedido estado="pago" titulo={reservation.raffle.title} />
         <PaidCelebration
+          dobroAplicado={reservation.dobroAplicado}
           raffleTitle={reservation.raffle.title}
           raffleSlug={reservation.raffle.slug}
           numbers={reservation.tickets.map((t) => t.number)}
@@ -413,6 +415,8 @@ export default async function ReservationReceiptPage({
         />
       </div>
 
+      {reservation.dobroAplicado && <SeloDeDobro total={quantidade} />}
+
       {showPix && <PaymentPoller />}
 
       {showPix && qrDataUrl && pixCode ? (
@@ -445,6 +449,11 @@ export default async function ReservationReceiptPage({
             <p className="text-sm font-semibold">
               {quantidade}{" "}
               {quantidade === 1 ? "número reservado" : "números reservados"}
+              {reservation.dobroAplicado && (
+                <span className="ml-1.5 font-bold text-amber-600 dark:text-amber-400">
+                  (o dobro)
+                </span>
+              )}
             </p>
             <p className="text-xs text-muted-foreground">
               Aparecem aqui assim que o pagamento for confirmado.
