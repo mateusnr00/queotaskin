@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  INICIO_DA_CAUDA,
   casasDoTitulo,
   embaralhamentoEstavel,
   numeroDoTitulo,
   ordemEmbaralhada,
+  tituloDaCauda,
   tituloDaFita,
 } from "@/lib/titulo";
 
@@ -162,5 +164,109 @@ describe("tituloDaFita", () => {
       }
     }
     expect(repetidos).toBeLessThan(12);
+  });
+});
+
+describe("tituloDaCauda", () => {
+  const AMOSTRA = [7, 11, 23, 41, 63, 75, 79, 88, 91, 99];
+  const TOTAL = 100;
+  const SEMENTE = "DRW-2026-0830";
+  const VENCEDOR = 63;
+
+  // O quadro final da fita: linha de cima, vencedor, linha de baixo. Os dois
+  // vizinhos saem de passos FIXOS da cauda, e é isso que precisa ser igual em
+  // qualquer aparelho.
+  const PASSOS_DA_FREADA = 9;
+  const quadroFinal = (semente: string) => [
+    tituloDaCauda(semente, PASSOS_DA_FREADA - 1, AMOSTRA, TOTAL, VENCEDOR),
+    VENCEDOR,
+    tituloDaCauda(semente, PASSOS_DA_FREADA + 1, AMOSTRA, TOTAL, VENCEDOR),
+  ];
+
+  it("o quadro final não depende de quanto a fita girou", () => {
+    // Este é o defeito que o teste existe para impedir. Antes, os vizinhos
+    // vinham da posição corrida da fita, que depende de quantos passos deram
+    // até o resultado chegar: com rede lenta, mais passos, outros vizinhos. O
+    // celular parava entre 079 e 041 e o computador entre 011 e 075, com o
+    // mesmo vencedor no meio, e quem comparava as duas telas desconfiava.
+    //
+    // A cauda não recebe a posição, então não há como o giro influenciá-la.
+    expect(quadroFinal(SEMENTE)).toEqual(quadroFinal(SEMENTE));
+    expect(quadroFinal(SEMENTE)).toEqual([
+      tituloDaCauda(SEMENTE, 8, AMOSTRA, TOTAL, VENCEDOR),
+      63,
+      tituloDaCauda(SEMENTE, 10, AMOSTRA, TOTAL, VENCEDOR),
+    ]);
+  });
+
+  it("a fórmula ANTIGA divergia com o tempo de giro, e a nova não", () => {
+    // A prova do defeito, e o motivo de ele só aparecer AO VIVO.
+    //
+    // Num sorteio já encerrado o vencedor chega no primeiro quadro, a fita
+    // freia sempre do mesmo ponto e o fim é igual para todos. Ao vivo não: ela
+    // gira sem alvo até o resultado chegar, e quantos passos ela dá depende do
+    // respiro aleatório de 150 a 750ms antes da busca. Com passo de 55ms, isso
+    // são uns onze passos de diferença entre um visitante e outro.
+    //
+    // ANTES, os vizinhos saíam da posição corrida da fita, então cada
+    // quantidade de passos dava um par diferente:
+    const antigo = (passosDeGiro: number) => {
+      const posicao = 3 + passosDeGiro + PASSOS_DA_FREADA;
+      return [
+        tituloDaFita(SEMENTE, posicao - 2, AMOSTRA, TOTAL),
+        VENCEDOR,
+        tituloDaFita(SEMENTE, posicao, AMOSTRA, TOTAL),
+      ];
+    };
+    const antigos = new Set(
+      [0, 3, 7, 11, 20, 45].map((n) => JSON.stringify(antigo(n))),
+    );
+    expect(antigos.size).toBeGreaterThan(1);
+
+    // AGORA a cauda não recebe a posição, então não há o que divergir: o par é
+    // o mesmo por construção, para qualquer tempo de giro.
+    expect(quadroFinal(SEMENTE)).toEqual(quadroFinal(SEMENTE));
+  });
+
+  it("os índices da cauda ficam longe dos que o giro alcança", () => {
+    // Se as duas faixas se encontrassem, um giro muito longo cairia dentro da
+    // cauda e o fim da fita voltaria a depender do tempo.
+    expect(INICIO_DA_CAUDA).toBeGreaterThan(100_000);
+  });
+
+  it("sorteios diferentes têm caudas diferentes", () => {
+    // Determinístico não pode virar igual para todo mundo: cada transmissão
+    // tem a sua fita.
+    const a = Array.from({ length: 12 }, (_, k) =>
+      tituloDaCauda("DRW-A", k, AMOSTRA, TOTAL),
+    );
+    const b = Array.from({ length: 12 }, (_, k) =>
+      tituloDaCauda("DRW-B", k, AMOSTRA, TOTAL),
+    );
+    expect(a).not.toEqual(b);
+  });
+
+  it("o vizinho visível não repete o vencedor", () => {
+    // Duas linhas com o mesmo número no quadro final parecem defeito.
+    for (const semente of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+      for (const passo of [PASSOS_DA_FREADA - 1, PASSOS_DA_FREADA + 1]) {
+        expect(
+          tituloDaCauda(semente, passo, AMOSTRA, TOTAL, VENCEDOR),
+        ).not.toBe(VENCEDOR);
+      }
+    }
+  });
+
+  it("campanha de um número só não trava procurando outro", () => {
+    // Não existe outro título para achar. Devolve o que tem, sem laço infinito.
+    expect(tituloDaCauda("x", 3, [63], TOTAL, 63)).toBe(63);
+  });
+
+  it("sem amostra, cai no intervalo da campanha", () => {
+    for (let k = 0; k < 20; k++) {
+      const n = tituloDaCauda("x", k, [], 50);
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n).toBeLessThanOrEqual(50);
+    }
   });
 });
