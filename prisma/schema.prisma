@@ -611,6 +611,16 @@ model Raffle {
   /// for. Livre porque cada entrega tem a sua história.
   deliveryNote  String?   @db.Text
 
+  /// Quanto custou comprar a skin do fornecedor para entregar ao ganhador.
+  ///
+  /// É o custo REAL da premiação, e não tem como sair de nenhum outro lugar:
+  /// o preço da cota é receita, o valor de mercado da skin é estimativa, e o
+  /// que saiu do caixa é isto aqui, digitado por quem comprou.
+  ///
+  /// Decimal, e não Float: dinheiro em ponto flutuante acumula erro de
+  /// centavo, e a soma da coluna é o número que interessa.
+  deliveryCost  Decimal?  @db.Decimal(10, 2)
+
   /// Campanha exclusiva: nível mínimo (1–21) para conseguir reservar.
   /// NULL = aberta a todos. Quem já está em patente de prestígio passa em
   /// qualquer exigência. É o que dá consequência ao rank.

@@ -41,7 +41,12 @@ import { semAcento } from "@/lib/busca";
 import { formatDateTime } from "@/lib/format";
 import { numeroDoTitulo } from "@/lib/titulo";
 import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
-import { marcarEntregaAction } from "@/server/actions/entregas";
+import {
+  marcarEntregaAction,
+  salvarCustoDaEntregaAction,
+} from "@/server/actions/entregas";
+import { formatBRL } from "@/lib/format";
+import { lerReais } from "@/lib/dinheiro";
 import type { Delivery } from "@/server/services/deliveries";
 
 type Filtro = "TODAS" | "PENDENTES" | "ENTREGUES";
@@ -59,6 +64,10 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
   const [busca, setBusca] = useState("");
 
   const pendentes = entregas.filter((e) => e.deliveredAt == null).length;
+  // O total é a razão de anotar o custo: uma coluna de valores sem soma é uma
+  // coluna de valores.
+  const gasto = entregas.reduce((t, e) => t + (e.deliveryCost ?? 0), 0);
+  const semCusto = entregas.filter((e) => e.deliveryCost == null).length;
   const semLink = entregas.filter(
     (e) => e.deliveredAt == null && e.winner && !e.winner.steamTradeUrl,
   ).length;
@@ -91,6 +100,16 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
           </span>{" "}
           de {entregas.length}. Ganhador, skin e link de troca de cada campanha
           sorteada.
+          {gasto > 0 && (
+            <>
+              {" "}
+              <span className="font-semibold text-foreground">
+                {formatBRL(gasto)}
+              </span>{" "}
+              gastos com fornecedor
+              {semCusto > 0 && `, ${semCusto} sem custo anotado`}.
+            </>
+          )}
         </p>
       </header>
 
@@ -133,7 +152,27 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
         />
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      {/* CARTÕES no celular, TABELA no desktop.
+          Tabela numa tela de 390px vira rolagem lateral: a pessoa arrasta para
+          ler cada coluna e perde de vista a linha em que estava. Empilhado,
+          cada entrega é um bloco fechado, com tudo à mão e nada escondido fora
+          da tela.
+          No desktop a tabela ganha, porque ali a comparação entre linhas é o
+          que diz o que falta fazer. */}
+      <div className="space-y-3 sm:hidden">
+        {visiveis.map((e) => (
+          <Cartao key={e.raffleId} entrega={e} />
+        ))}
+        {visiveis.length === 0 && (
+          <p className="rounded-xl border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
+            {entregas.length === 0
+              ? "Nenhuma campanha sorteada ainda."
+              : "Nada aqui com esse filtro."}
+          </p>
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border bg-card sm:block">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -142,6 +181,9 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
                 <TableHead className="min-w-[180px]">Ganhador</TableHead>
                 <TableHead className="min-w-[120px]">Link de troca</TableHead>
                 <TableHead className="text-right">Título</TableHead>
+                <TableHead className="min-w-[130px] text-right">
+                  Custo
+                </TableHead>
                 <TableHead className="min-w-[150px]">Sorteado</TableHead>
                 {/* A coluna de ação fica GRUDADA na direita.
                     Sem isso, no celular ela some fora da rolagem horizontal e
@@ -199,15 +241,22 @@ function Linha({ entrega }: { entrega: Delivery }) {
             )}
           </span>
           <div className="min-w-0">
-            <p
-              className="truncate text-sm font-semibold"
-              style={
-                premio?.skinRarity
-                  ? { color: RARITY_TEXT_VAR[premio.skinRarity] }
-                  : undefined
-              }
-            >
-              {premio?.skinName ?? premio?.description ?? entrega.raffleTitle}
+            {/* O nome com botão de copiar, do mesmo jeito que o link de
+                troca: é o texto que vai colado na busca do fornecedor, e
+                digitar "'Two Times' McCoy | TACP Cavalry" à mão é onde o erro
+                de entrega nasce. */}
+            <p className="flex items-center gap-1">
+              <span
+                className="truncate text-sm font-semibold"
+                style={
+                  premio?.skinRarity
+                    ? { color: RARITY_TEXT_VAR[premio.skinRarity] }
+                    : undefined
+                }
+              >
+                {nomeDaSkin(entrega)}
+              </span>
+              <BotaoDeCopia valor={nomeDaSkin(entrega)} rotulo="Copiar nome da skin" />
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {premio?.skinWear && (
@@ -267,6 +316,10 @@ function Linha({ entrega }: { entrega: Delivery }) {
         {numeroDoTitulo(entrega.ticketNumber, entrega.totalNumbers)}
       </TableCell>
 
+      <TableCell className="text-right">
+        <CampoDeCusto entrega={entrega} />
+      </TableCell>
+
       <TableCell className="text-xs text-muted-foreground">
         {formatDateTime(entrega.drawnAt)}
       </TableCell>
@@ -278,13 +331,124 @@ function Linha({ entrega }: { entrega: Delivery }) {
   );
 }
 
+function Cartao({ entrega }: { entrega: Delivery }) {
+  const premio = entrega.prizes[0] ?? null;
+  const entregue = entrega.deliveredAt != null;
+
+  return (
+    <article
+      className={cn(
+        "space-y-3 rounded-xl border bg-card p-3",
+        entregue && "border-emerald-500/30",
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40">
+          {premio?.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={premio.imageUrl}
+              alt=""
+              className="h-full w-full object-contain p-0.5"
+            />
+          ) : (
+            <PackageCheck className="h-5 w-5 text-muted-foreground" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-start gap-1">
+            <span
+              className="min-w-0 text-sm font-bold leading-snug"
+              style={
+                premio?.skinRarity
+                  ? { color: RARITY_TEXT_VAR[premio.skinRarity] }
+                  : undefined
+              }
+            >
+              {nomeDaSkin(entrega)}
+            </span>
+            <BotaoDeCopia valor={nomeDaSkin(entrega)} rotulo="Copiar nome da skin" />
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {premio?.skinWear && (
+              <span className="mr-1.5 rounded border px-1 py-px text-[10px] font-semibold">
+                {WEAR_SHORT[premio.skinWear]}
+              </span>
+            )}
+            Título{" "}
+            <strong className="font-mono text-foreground tabular-nums">
+              {numeroDoTitulo(entrega.ticketNumber, entrega.totalNumbers)}
+            </strong>
+            {" · "}
+            {formatDateTime(entrega.drawnAt)}
+          </p>
+        </div>
+        {entregue && (
+          <PackageCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+        )}
+      </div>
+
+      <div className="rounded-lg border bg-muted/20 p-2.5">
+        {entrega.winner ? (
+          <>
+            <p className="text-sm font-semibold">{entrega.winner.name}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {entrega.winner.phone ?? "sem telefone"}
+            </p>
+            {entrega.winner.steamTradeUrl ? (
+              <div className="mt-1.5 flex items-center gap-1">
+                <BotaoDeCopia valor={entrega.winner.steamTradeUrl} />
+                <a
+                  href={entrega.winner.steamTradeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Abrir na Steam
+                </a>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Link de troca não cadastrado.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-destructive">
+            Título {entrega.ticketNumber} não consta como vendido nesta
+            campanha.
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Custo</span>
+        <div className="w-32">
+          <CampoDeCusto entrega={entrega} />
+        </div>
+      </div>
+
+      <div className="flex justify-end border-t pt-2.5">
+        <AcaoDeEntrega entrega={entrega} />
+      </div>
+    </article>
+  );
+}
+
 /** Copiar sem sair da linha. É o gesto mais repetido desta tela. */
-function BotaoDeCopia({ valor }: { valor: string }) {
+function BotaoDeCopia({
+  valor,
+  rotulo = "Copiar link de troca",
+}: {
+  valor: string;
+  rotulo?: string;
+}) {
   const [copiado, setCopiado] = useState(false);
   return (
     <button
       type="button"
-      title="Copiar link"
+      title={rotulo}
       onClick={async () => {
         await navigator.clipboard.writeText(valor);
         setCopiado(true);
@@ -297,8 +461,67 @@ function BotaoDeCopia({ valor }: { valor: string }) {
       ) : (
         <Copy className="h-4 w-4" />
       )}
-      <span className="sr-only">Copiar link de troca</span>
+      <span className="sr-only">{rotulo}</span>
     </button>
+  );
+}
+
+/** O texto que o fornecedor precisa receber, num lugar só. */
+function nomeDaSkin(entrega: Delivery): string {
+  const p = entrega.prizes[0];
+  return p?.skinName ?? p?.description ?? entrega.raffleTitle;
+}
+
+/**
+ * O custo, editável na própria linha.
+ *
+ * Salva ao sair do campo e no Enter, e só quando o valor mudou, igual ao campo
+ * de escudo dos times: anotar preço é digitar um número e seguir, não abrir um
+ * formulário.
+ */
+function CampoDeCusto({ entrega }: { entrega: Delivery }) {
+  const router = useRouter();
+  const gravado = entrega.deliveryCost;
+  const [texto, setTexto] = useState(
+    gravado == null ? "" : gravado.toFixed(2).replace(".", ","),
+  );
+  const [salvando, setSalvando] = useState(false);
+
+  async function salvar() {
+    const valor = lerReais(texto);
+    if (valor === gravado) return;
+    setSalvando(true);
+    const r = await salvarCustoDaEntregaAction(entrega.raffleId, valor);
+    setSalvando(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      setTexto(gravado == null ? "" : gravado.toFixed(2).replace(".", ","));
+      return;
+    }
+    toast.success(valor == null ? "Custo apagado." : `Custo: ${formatBRL(valor)}`);
+    router.refresh();
+  }
+
+  return (
+    <Input
+      value={texto}
+      disabled={salvando}
+      inputMode="decimal"
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={salvar}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setTexto(gravado == null ? "" : gravado.toFixed(2).replace(".", ","));
+        }
+      }}
+      placeholder="R$"
+      aria-label={`Custo da entrega de ${entrega.raffleTitle}`}
+      className={cn(
+        "h-8 text-right font-mono text-xs tabular-nums",
+        gravado != null && "border-emerald-500/40",
+      )}
+    />
   );
 }
 

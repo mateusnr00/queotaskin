@@ -14,6 +14,8 @@ export interface Delivery {
   /** Quando a skin saiu. Nulo é pendente: ver a nota no schema. */
   deliveredAt: Date | null;
   deliveryNote: string | null;
+  /** Quanto saiu do caixa para comprar a skin. Nulo é "ainda não anotado". */
+  deliveryCost: number | null;
   /** Nome de quem marcou, quando a conta ainda existe. */
   deliveredBy: string | null;
   /** Comprador do número sorteado. Nulo se o título não foi vendido. */
@@ -106,6 +108,10 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       note: raffle.winnerNote,
       deliveredAt: raffle.deliveredAt,
       deliveryNote: raffle.deliveryNote,
+      // Decimal do Prisma não atravessa a fronteira servidor/cliente, então
+      // vira número aqui, no mesmo lugar em que todo o resto é normalizado.
+      deliveryCost:
+        raffle.deliveryCost != null ? Number(raffle.deliveryCost) : null,
       deliveredBy: raffle.deliveredById
         ? (nomePorId.get(raffle.deliveredById) ?? null)
         : null,

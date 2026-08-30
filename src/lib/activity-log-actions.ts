@@ -41,6 +41,7 @@ export const ACOES = {
   // saiu?" meses depois, quando a memória de quem operou não serve mais.
   "entrega.marcada": "marcou como entregue",
   "entrega.desmarcada": "desmarcou a entrega de",
+  "entrega.custo_alterado": "anotou o custo da entrega de",
   // O cadastro de times. Escudo é marca de terceiro, e saber quem subiu o quê
   // importa no dia em que alguém pedir para tirar.
   "time.criado": "cadastrou o time",

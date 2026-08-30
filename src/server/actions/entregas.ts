@@ -89,3 +89,53 @@ export async function marcarEntregaAction(
     return { ok: false, error: "Não foi possível salvar." };
   }
 }
+
+/**
+ * O custo da entrega: quanto saiu do caixa para comprar a skin.
+ *
+ * Ação separada de marcar entregue, e de propósito. As duas coisas acontecem em
+ * momentos diferentes: às vezes a skin é comprada antes de a oferta sair, às
+ * vezes o valor só é conferido depois. Amarrar o custo ao ato de marcar
+ * obrigaria a saber o preço na hora exata do envio, e obrigaria a desmarcar
+ * para corrigir um valor digitado errado.
+ *
+ * Campo vazio limpa, que é o mesmo gesto de apagar o número e sair.
+ */
+export async function salvarCustoDaEntregaAction(
+  raffleId: string,
+  valor: number | null,
+): Promise<ActionResult<{ deliveryCost: number | null }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
+
+    if (valor != null && (!Number.isFinite(valor) || valor < 0 || valor > 99_999_999)) {
+      return { ok: false, error: "Valor inválido." };
+    }
+
+    const rifa = await prisma.raffle.findUnique({
+      where: { id: raffleId },
+      select: { title: true },
+    });
+    if (!rifa) return { ok: false, error: "Campanha não encontrada." };
+
+    await prisma.raffle.update({
+      where: { id: raffleId },
+      // Duas casas na entrada também, e não só no banco: sem isto, um valor
+      // colado com três decimais viraria arredondamento silencioso do Postgres.
+      data: { deliveryCost: valor == null ? null : Number(valor.toFixed(2)) },
+    });
+
+    await registrarLog({
+      acao: "entrega.custo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId, rotulo: rifa.title },
+      detalhes: { custo: valor },
+    });
+
+    revalidatePath("/admin/entregas");
+    return { ok: true, data: { deliveryCost: valor } };
+  } catch {
+    return { ok: false, error: "Não foi possível salvar o custo." };
+  }
+}
