@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,63 +22,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatBRL } from "@/lib/format";
+import { StatDeHoje } from "@/components/admin/estatisticas/stat-de-hoje";
+import { GraficoCombo } from "@/components/admin/estatisticas/grafico-combo";
+import { ListaPorCanal } from "@/components/admin/estatisticas/lista-por-canal";
+import { MetodoDonut } from "@/components/admin/estatisticas/metodo-donut";
+import {
+  serieDeVendas,
+  faturamentoPorCanal,
+  metodoDePagamento,
+  totaisComparativo,
+} from "@/server/services/estatisticas";
+import { limitarIntervalo, type Granularidade } from "@/lib/periodo";
 
 export const metadata: Metadata = { title: "Relatórios" };
 
-type GroupKey = "day" | "week" | "month";
-
-function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-// Calcula a chave de agrupamento (segunda-feira da semana ISO) para uma data.
-// Padrão ISO 8601: semana começa na segunda.
-function isoWeek(d: Date): string {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() - dayNum + 1); // segunda da mesma semana
-  return date.toISOString().slice(0, 10);
-}
-
-function isoMonth(d: Date): string {
-  return d.toISOString().slice(0, 7); // YYYY-MM
-}
-
-const GROUP_LABEL: Record<GroupKey, string> = {
-  day: "Dia",
-  week: "Semana",
-  month: "Mês",
+const GRAN_LABEL: Record<Granularidade, string> = {
+  dia: "Dia",
+  semana: "Semana",
+  mes: "Mês",
 };
 
-function formatBucketLabel(bucket: string, group: GroupKey): string {
-  if (group === "month") {
-    const [y, m] = bucket.split("-");
-    const date = new Date(Number(y), Number(m) - 1, 1);
-    return new Intl.DateTimeFormat("pt-BR", {
-      month: "long",
-      year: "numeric",
-    }).format(date);
-  }
-  const date = new Date(bucket + "T00:00:00Z");
-  if (group === "week") {
-    return (
-      "Sem. iniciada em " +
-      new Intl.DateTimeFormat("pt-BR").format(date)
-    );
-  }
-  return new Intl.DateTimeFormat("pt-BR", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 export default async function AdminReportsPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    group?: string;
     raffleId?: string;
     from?: string;
     to?: string;
@@ -88,122 +58,58 @@ export default async function AdminReportsPage({
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const sp = await searchParams;
-  const group = (["day", "week", "month"].includes(sp.group ?? "")
-    ? sp.group
-    : "day") as GroupKey;
   const raffleId = sp.raffleId === "all" ? undefined : sp.raffleId;
 
-  // Padrão: últimos 30 dias.
+  // Padrão: últimos 30 dias. O intervalo é preso ao teto de 180 dias.
   const now = new Date();
   const defaultFrom = new Date(now);
   defaultFrom.setDate(defaultFrom.getDate() - 30);
-
-  const from = sp.from ? new Date(sp.from) : defaultFrom;
-  const to = sp.to ? new Date(sp.to + "T23:59:59") : now;
-
-  // Carrega reservas PAGAS no intervalo. Considera apenas as confirmadas;
-  // pendentes/expiradas não contam como venda. Filtra pelo tenant atual.
-  const where: Prisma.ReservationWhereInput = {
-    status: "PAID",
-    paidAt: { gte: from, lte: to },
-    raffle: { tenantId },
-    ...(raffleId && { raffleId }),
-  };
-
-  const [reservations, raffleOptions] = await Promise.all([
-    prisma.reservation.findMany({
-      where,
-      orderBy: { paidAt: "asc" },
-      select: {
-        paidAt: true,
-        totalAmount: true,
-        _count: { select: { tickets: true } },
-      },
-    }),
-    prisma.raffle.findMany({
-      where: { tenantId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, title: true },
-    }),
-  ]);
-
-  // Agrega in-memory pelo bucket escolhido.
-  // Para escalar (centenas de milhares de reservas), trocar pra query SQL
-  // com date_trunc, Prisma raw query. Por enquanto JS é suficiente.
-  const bucketKeyFn =
-    group === "day" ? isoDay : group === "week" ? isoWeek : isoMonth;
-
-  const buckets = new Map<
-    string,
-    { count: number; tickets: number; total: number }
-  >();
-
-  for (const r of reservations) {
-    if (!r.paidAt) continue;
-    const key = bucketKeyFn(r.paidAt);
-    const entry = buckets.get(key) ?? { count: 0, tickets: 0, total: 0 };
-    entry.count += 1;
-    entry.tickets += r._count.tickets;
-    entry.total += Number(r.totalAmount);
-    buckets.set(key, entry);
-  }
-
-  const rows = Array.from(buckets.entries()).sort(([a], [b]) =>
-    a < b ? 1 : -1 // mais recente primeiro
+  const from0 = sp.from ? new Date(`${sp.from}T00:00:00`) : defaultFrom;
+  const to0 = sp.to ? new Date(`${sp.to}T23:59:59.999`) : now;
+  const { from, to } = limitarIntervalo(
+    Number.isNaN(from0.getTime()) ? defaultFrom : from0,
+    Number.isNaN(to0.getTime()) ? now : to0,
   );
 
-  const totalReservations = reservations.length;
-  const totalTickets = reservations.reduce(
-    (acc, r) => acc + r._count.tickets,
-    0
-  );
-  const totalRevenue = reservations.reduce(
-    (acc, r) => acc + Number(r.totalAmount),
-    0
-  );
+  const recorte = { tenantId, from, to, raffleId };
+
+  const [comparativo, serie, canais, metodos, raffleOptions] =
+    await Promise.all([
+      totaisComparativo(recorte),
+      serieDeVendas(recorte),
+      faturamentoPorCanal(recorte),
+      metodoDePagamento(recorte),
+      prisma.raffle.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, title: true },
+      }),
+    ]);
+
+  const linhas = [...serie.pontos].reverse(); // tabela: mais recente primeiro
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Relatórios</h1>
         <p className="text-sm text-muted-foreground">
-          Vendas confirmadas (status PAGO) agrupadas pelo período escolhido.
+          Vendas confirmadas (PAGO), com comparativo e gráficos. Agrupamento
+          automático por {GRAN_LABEL[serie.granularidade].toLowerCase()}.
         </p>
       </div>
 
       <form className="grid gap-3 md:grid-cols-4">
         <div>
           <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Tipo
-          </label>
-          <Select name="group" defaultValue={group}>
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue
-                labels={{
-                  day: "Vendas por Dia",
-                  week: "Vendas por Semana",
-                  month: "Vendas por Mês",
-                }}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="day">Vendas por Dia</SelectItem>
-              <SelectItem value="week">Vendas por Semana</SelectItem>
-              <SelectItem value="month">Vendas por Mês</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Sorteio
           </label>
           <Select name="raffleId" defaultValue={raffleId ?? "all"}>
-            <SelectTrigger className="w-full mt-1">
+            <SelectTrigger className="mt-1 w-full">
               <SelectValue
                 labels={{
                   all: "Todos os sorteios",
                   ...Object.fromEntries(
-                    raffleOptions.map((r) => [r.id, r.title])
+                    raffleOptions.map((r) => [r.id, r.title]),
                   ),
                 }}
               />
@@ -225,97 +131,105 @@ export default async function AdminReportsPage({
           <Input
             type="date"
             name="from"
-            defaultValue={from.toISOString().slice(0, 10)}
+            defaultValue={isoDay(from)}
             className="mt-1"
           />
         </div>
         <div>
           <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Até
+            Até (teto de 180 dias)
           </label>
           <Input
             type="date"
             name="to"
-            defaultValue={to.toISOString().slice(0, 10)}
+            defaultValue={isoDay(to)}
             className="mt-1"
           />
         </div>
-        <div className="md:col-span-4">
+        <div className="flex items-end">
           <Button type="submit" className="w-full md:w-auto">
-            Gerar Relatório
+            Gerar relatório
           </Button>
         </div>
       </form>
 
-      {/* Totais agregados */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Reservas pagas
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {totalReservations.toLocaleString("pt-BR")}
-            </div>
-          </CardContent>
+      {/* KPIs com delta vs período anterior de mesmo tamanho. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatDeHoje
+          label="Faturamento"
+          value={formatBRL(comparativo.atual.faturamento)}
+          delta={comparativo.variacao.faturamento}
+          hint={`antes: ${formatBRL(comparativo.anterior.faturamento)}`}
+        />
+        <StatDeHoje
+          label="Reservas pagas"
+          value={comparativo.atual.reservas.toLocaleString("pt-BR")}
+          delta={comparativo.variacao.reservas}
+          hint={`antes: ${comparativo.anterior.reservas.toLocaleString("pt-BR")}`}
+        />
+        <StatDeHoje
+          label="Títulos vendidos"
+          value={comparativo.atual.titulos.toLocaleString("pt-BR")}
+          delta={comparativo.variacao.titulos}
+          hint={`antes: ${comparativo.anterior.titulos.toLocaleString("pt-BR")}`}
+        />
+        <StatDeHoje
+          label="Ticket médio"
+          value={formatBRL(comparativo.atual.ticketMedio)}
+          delta={comparativo.variacao.ticketMedio}
+          hint={`antes: ${formatBRL(comparativo.anterior.ticketMedio)}`}
+        />
+      </div>
+
+      <Card className="p-5">
+        <h2 className="mb-3 font-semibold">Faturamento e reservas no tempo</h2>
+        <GraficoCombo pontos={serie.pontos} />
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <h2 className="mb-3 font-semibold">Faturamento por canal</h2>
+          <ListaPorCanal canais={canais} />
         </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Títulos vendidos
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {totalTickets.toLocaleString("pt-BR")}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Faturamento
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {formatBRL(totalRevenue)}
-            </div>
-          </CardContent>
+        <Card className="p-5">
+          <h2 className="mb-3 font-semibold">Método de pagamento</h2>
+          <MetodoDonut metodos={metodos} />
         </Card>
       </div>
 
-      {/* Tabela agrupada */}
+      {/* Tabela detalhada. */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{GROUP_LABEL[group]}</TableHead>
+              <TableHead>{GRAN_LABEL[serie.granularidade]}</TableHead>
               <TableHead className="text-right">Reservas</TableHead>
               <TableHead className="text-right">Títulos</TableHead>
               <TableHead className="text-right">Faturamento</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length === 0 ? (
+            {linhas.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={4}
-                  className="text-center text-muted-foreground py-10"
+                  className="py-10 text-center text-muted-foreground"
                 >
                   Nenhuma venda no período selecionado.
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map(([bucket, data]) => (
-                <TableRow key={bucket}>
-                  <TableCell className="font-medium">
-                    {formatBucketLabel(bucket, group)}
+              linhas.map((p) => (
+                <TableRow key={p.chave}>
+                  <TableCell className="font-medium">{p.rotulo}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {p.reservas.toLocaleString("pt-BR")}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {data.count.toLocaleString("pt-BR")}
+                    {p.titulos.toLocaleString("pt-BR")}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {data.tickets.toLocaleString("pt-BR")}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold">
-                    {formatBRL(data.total)}
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {formatBRL(p.faturamento)}
                   </TableCell>
                 </TableRow>
               ))

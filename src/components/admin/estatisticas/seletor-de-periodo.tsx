@@ -4,7 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // Seletor do período da seção de análise. É servidor puro: os presets são
-// links que trocam a query, e o intervalo custom é um form GET — mesmo padrão
+// links que trocam a query, e o intervalo custom é um form GET, no mesmo padrão
 // da busca de /admin/relatorios, sobrevive ao recarregar e dá para compartilhar
 // por URL. O teto de 180 dias é aplicado no servidor, ao ler a query.
 

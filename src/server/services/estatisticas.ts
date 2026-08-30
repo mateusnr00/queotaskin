@@ -1,7 +1,7 @@
 // Serviços de estatística do painel (Início + Relatórios).
 //
 // Cada função responde a uma pergunta do painel a partir de dados que já
-// existem e já são indexados — não há migration por trás de nada aqui. Os
+// existem e já são indexados, sem migration por trás de nada aqui. Os
 // cálculos de período vêm de `@/lib/periodo` (puros e testados); o que mora
 // aqui é a consulta e a forma final que a tela consome.
 //

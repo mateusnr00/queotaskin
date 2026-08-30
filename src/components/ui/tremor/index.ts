@@ -2,7 +2,7 @@
 // tokens do QuéOta Skin. As superfícies (Card, Badge, etc.) continuam vindo do
 // shadcn; daqui saem só os gráficos e listas.
 //
-// A cor sai dos nossos CSS vars via `utils/chartColors.ts` — use as chaves
+// A cor sai dos nossos CSS vars via `utils/chartColors.ts`: use as chaves
 // `chart1..chart5` e `primary` na prop `colors={[...]}`.
 
 export { AreaChart, type AreaChartEventProps } from "./components/AreaChart/AreaChart";

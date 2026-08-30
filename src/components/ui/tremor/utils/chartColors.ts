@@ -1,10 +1,10 @@
-// Tremor chartColors [v0.1.0] — re-tematizado para o QuéOta Skin.
+// Tremor chartColors [v0.1.0], re-tematizado para o QuéOta Skin.
 //
 // A ponte de tema mora aqui: em vez das cores fixas do Tailwind (blue-500,
 // emerald-500...), cada chave aponta para os utilitários que o `globals.css`
 // gera dos nossos tokens no `@theme inline` (--color-chart-1..5, --primary).
 // Assim o gráfico segue o tema claro/escuro e a cor primária por tenant sem
-// nenhum ajuste no componente — só a `colors={[...]}` na hora de usar.
+// nenhum ajuste no componente, só a `colors={[...]}` na hora de usar.
 //
 // - chart1..chart5  = a paleta de séries do sistema (chart-1 é o laranja
 //                     primário; 2 amarelo, 3 azul, 4 vermelho, 5 verde).

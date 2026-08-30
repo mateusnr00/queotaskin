@@ -269,7 +269,7 @@ export default async function AdminDashboardPage({
         />
         <StatDeHoje
           label="Conversão hoje"
-          value={conversaoHoje != null ? `${conversaoHoje}%` : "—"}
+          value={conversaoHoje != null ? `${conversaoHoje}%` : "-"}
           hint={`${kpiHoje.atual.reservas.toLocaleString("pt-BR")} de ${visitas.visitantesHoje.toLocaleString("pt-BR")} visitantes`}
         />
       </div>
