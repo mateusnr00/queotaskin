@@ -7,6 +7,7 @@ import {
   PRESTIGE_RANKS,
   nomeDoNivel,
   TIERS,
+  rankDoPrestigio,
   rankFromXp,
   rankProgress,
   xpForLevel,
@@ -280,7 +281,14 @@ export function RankLadder({ xp }: { xp: number }) {
                   backgroundColor: reached ? `${prestige.color}0f` : undefined,
                 }}
               >
-                <RankBadge xp={prestige.xp} size="md" muted={!reached} />
+                {/* O selo DESTA patente, e não o que os XP dela resolveriam:
+                    a regra de gasto do GOAT derrubava a linha dele para o selo
+                    do PRO. */}
+                <RankBadge
+                  rank={rankDoPrestigio(prestige)}
+                  size="md"
+                  muted={!reached}
+                />
                 <div className="min-w-0 flex-1">
                   <p
                     className="text-xs font-bold"
