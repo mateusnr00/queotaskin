@@ -225,7 +225,6 @@ export function TabelaDeEntregas({
               <TableRow>
                 <TableHead className="min-w-[260px]">Skin</TableHead>
                 <TableHead className="min-w-[120px]">Link de troca</TableHead>
-                <TableHead className="text-right">Título</TableHead>
                 <TableHead className="min-w-[130px] text-right">
                   Custo ({moeda})
                 </TableHead>
@@ -299,24 +298,16 @@ function Linha({
               >
                 {nomeDaSkin(entrega)}
               </span>
+              {premio?.skinWear && (
+                <span className="shrink-0 rounded border px-1 py-px text-[10px] font-semibold text-muted-foreground">
+                  {WEAR_SHORT[premio.skinWear]}
+                </span>
+              )}
               <BotaoDeCopia
                 valor={nomeDaSkin(entrega)}
                 rotulo="Copiar nome da skin"
               />
               <FichaDoGanhador entrega={entrega} />
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {premio?.skinWear && (
-                <span className="mr-1.5 rounded border px-1 py-px text-[10px] font-semibold">
-                  {WEAR_SHORT[premio.skinWear]}
-                </span>
-              )}
-              <Link
-                href={`/admin/sorteios/${entrega.raffleId}/compras`}
-                className="hover:text-foreground hover:underline"
-              >
-                {entrega.raffleTitle}
-              </Link>
             </p>
           </div>
         </div>
@@ -324,10 +315,6 @@ function Linha({
 
       <TableCell>
         <LinkDeTroca entrega={entrega} />
-      </TableCell>
-
-      <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-        {numeroDoTitulo(entrega.ticketNumber, entrega.totalNumbers)}
       </TableCell>
 
       <TableCell className="text-right">
@@ -384,11 +371,6 @@ function Cartao({
                 {WEAR_SHORT[premio.skinWear]}
               </span>
             )}
-            Título{" "}
-            <strong className="font-mono text-foreground tabular-nums">
-              {numeroDoTitulo(entrega.ticketNumber, entrega.totalNumbers)}
-            </strong>
-            {" · "}
             {formatDateTime(entrega.drawnAt)}
           </p>
         </div>
@@ -523,6 +505,15 @@ function FichaDoGanhador({
               rotulo="Título"
               valor={numeroDoTitulo(entrega.ticketNumber, entrega.totalNumbers)}
             />
+            {/* O link da campanha mora aqui, e não na lista: ele é consulta,
+                e a lista é para operar. */}
+            <Link
+              href={`/admin/sorteios/${entrega.raffleId}/compras`}
+              className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-muted/60"
+            >
+              <span className="min-w-0 truncate">Ver a campanha</span>
+              <ExternalLink aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            </Link>
           </dl>
         ) : (
           <p className="text-sm text-destructive">
