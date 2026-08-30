@@ -4,6 +4,7 @@ import {
   dataParaAwesome,
   fechamentoAte,
   lerDiarioAwesome,
+  lerUltimaAwesome,
 } from "@/lib/awesome";
 
 // A forma documentada de /json/daily: só o PRIMEIRO item traz code, codein e
@@ -139,5 +140,43 @@ describe("dataParaAwesome", () => {
     expect(dataParaAwesome(new Date("2026-08-28T15:00:00Z"))).toBe("20260828");
     // 22h de Brasília é 01h UTC do dia seguinte.
     expect(dataParaAwesome(new Date("2026-08-29T01:00:00Z"))).toBe("20260828");
+  });
+});
+
+describe("lerUltimaAwesome", () => {
+  // /json/last devolve um OBJETO com chave sem hífen, e não uma lista.
+  const AGORA = {
+    CNYBRL: {
+      code: "CNY",
+      codein: "BRL",
+      name: "Yuan Chinês/Real Brasileiro",
+      high: "0.7620",
+      low: "0.7590",
+      varBid: "0.0003",
+      pctChange: "0.04",
+      bid: "0.7601",
+      ask: "0.7605",
+      timestamp: "1787949300",
+      create_date: "2026-08-28 17:35:00",
+    },
+  };
+
+  it("acha o par pela chave sem hífen", () => {
+    expect(lerUltimaAwesome(AGORA, "CNY-BRL")?.taxa).toBe(0.7605);
+  });
+
+  it("par ausente devolve nulo, e não o primeiro que achar", () => {
+    expect(lerUltimaAwesome(AGORA, "USD-BRL")).toBeNull();
+  });
+
+  it("usa ask, a venda, igual ao resto", () => {
+    expect(lerUltimaAwesome(AGORA, "CNY-BRL")?.compra).toBe(0.7601);
+    expect(lerUltimaAwesome(AGORA, "CNY-BRL")?.taxa).not.toBe(0.7601);
+  });
+
+  it("resposta de outro formato não derruba nada", () => {
+    for (const lixo of [null, undefined, "", 42, [], {}, { CNYBRL: "x" }]) {
+      expect(lerUltimaAwesome(lixo, "CNY-BRL")).toBeNull();
+    }
   });
 });

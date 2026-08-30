@@ -14,9 +14,8 @@
 //   node scripts/backfill-cambio.mjs            (mostra o que faria)
 //   node scripts/backfill-cambio.mjs --gravar   (grava)
 //
-// Tenta o PTAX primeiro, que é a taxa oficial, e cai para a AwesomeAPI quando
-// o Banco Central não responde por aquela moeda ou aquele dia. A fonte usada
-// fica gravada na linha.
+// Tenta a AwesomeAPI primeiro, porque o PTAX não publica o yuan, e cai para o
+// PTAX quando ela não responde. A fonte usada fica gravada na linha.
 
 import { PrismaClient } from "@prisma/client";
 
@@ -124,11 +123,19 @@ async function awesomeDe(data) {
   return melhor;
 }
 
-/** PTAX na frente, porque é a oficial; AwesomeAPI quando ele não responde. */
+/**
+ * AwesomeAPI na frente; PTAX quando ela não responde.
+ *
+ * A ordem era a inversa, com a oficial primeiro. Foi trocada porque o PTAX NÃO
+ * PUBLICA O YUAN: em produção ele serve o dólar e devolve vazio para CNY.
+ * Manter a fonte oficial na frente de uma moeda que ela não tem é gastar uma
+ * ida à rede para receber nada, em toda entrega.
+ */
 async function cambioDe(data) {
+  const a = await awesomeDe(data);
+  if (a) return a;
   const p = await ptaxDe(data);
-  if (p) return { ...p, fonte: "PTAX" };
-  return awesomeDe(data);
+  return p ? { ...p, fonte: "PTAX" } : null;
 }
 
 const main = async () => {

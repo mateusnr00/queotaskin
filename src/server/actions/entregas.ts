@@ -178,7 +178,8 @@ export async function salvarCustoDaEntregaAction(
     // e travar o salvamento por causa do Banco Central seria trocar um
     // problema pequeno por um grande.
     const quando = rifa.deliveredAt ?? rifa.winnerDrawnAt ?? new Date();
-    const cambio = valor == null ? null : await cambioDoDia("CNY", quando);
+    const tentativa = valor == null ? null : await cambioDoDia("CNY", quando);
+    const cambio = tentativa?.cambio ?? null;
 
     await prisma.raffle.update({
       where: { id: raffleId },
@@ -220,6 +221,9 @@ export async function salvarCustoDaEntregaAction(
         cambio: cambio?.taxa ?? null,
         cambioDe: cambio?.quando?.toISOString() ?? null,
         cambioFonte: cambio?.fonte ?? null,
+        // O motivo entra no registro quando não veio taxa: é o que permite
+        // descobrir depois por que uma linha ficou sem câmbio.
+        cambioNotas: cambio ? undefined : (tentativa?.notas ?? undefined),
       },
     });
 
@@ -292,14 +296,36 @@ export async function buscarCotacaoAction(): Promise<
     atualizadaEm: string | null;
     fonteCny: string | null;
     fonteUsd: string | null;
+    notasCny: string[];
+    notasUsd: string[];
+    salvas: boolean;
   }>
 > {
   try {
-    await getAdminOrThrow();
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
     const c = await buscarCotacao();
     if (!c) {
       return { ok: false, error: "Não foi possível buscar a cotação agora." };
     }
+
+    // SALVA SOZINHA.
+    //
+    // Digitar a taxa era trabalho que ninguém lembrava de refazer, e taxa
+    // esquecida converte custo de skin por um câmbio de semanas atrás.
+    //
+    // SÓ o que veio: uma moeda que a fonte não trouxe não pode apagar a taxa
+    // boa que já estava salva. Este é o campo de retaguarda, e zerá-lo em dia
+    // de fonte fora do ar deixaria o painel pior do que antes de buscar.
+    const aSalvar: { cnyToBrl?: number; usdToBrl?: number } = {};
+    if (c.cnyToBrl != null) aSalvar.cnyToBrl = c.cnyToBrl;
+    if (c.usdToBrl != null) aSalvar.usdToBrl = c.usdToBrl;
+    const salvas = Object.keys(aSalvar).length > 0;
+    if (salvas) {
+      await prisma.tenant.update({ where: { id: tenantId }, data: aSalvar });
+      revalidatePath("/admin/entregas");
+    }
+
     return {
       ok: true,
       data: {
@@ -310,6 +336,9 @@ export async function buscarCotacaoAction(): Promise<
         atualizadaEm: c.atualizadaEm?.toISOString() ?? null,
         fonteCny: c.fonteCny,
         fonteUsd: c.fonteUsd,
+        notasCny: c.notasCny,
+        notasUsd: c.notasUsd,
+        salvas,
       },
     };
   } catch {

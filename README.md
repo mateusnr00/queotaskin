@@ -81,12 +81,19 @@ que se compra a moeda para pagar.
 
 #### Duas fontes, nessa ordem
 
-Primeiro o [PTAX do Banco Central](https://olinda.bcb.gov.br), que é a taxa
-oficial, a que a Receita espera, e não pede chave. Quando ele não publica
-aquela moeda ou está fora do ar, entra o fechamento diário da
-[AwesomeAPI](https://awesomeapi.com.br) (`/json/daily`, que aceita
-`start_date` e `end_date` e por isso também responde pelo passado, que é o
-que permite preencher entregas antigas).
+Primeiro a [AwesomeAPI](https://awesomeapi.com.br); o
+[PTAX do Banco Central](https://olinda.bcb.gov.br) atrás dela.
+
+A ordem já foi a inversa, com a oficial na frente. Foi trocada porque **o
+PTAX não publica o yuan**: em produção ele serve o dólar e devolve vazio
+para CNY. Manter a fonte oficial na frente de uma moeda que ela não tem é
+gastar uma ida à rede para receber nada, em toda anotação de custo. Para o
+dólar o PTAX segue sendo quem responde.
+
+Dois endpoints da AwesomeAPI, e não um: `/json/last` para o câmbio de
+agora, `/json/daily` (com `start_date` e `end_date`) para uma data passada.
+Usar o `daily` para perguntar o câmbio de hoje traz o fechamento de ontem,
+porque o de hoje ainda não existe.
 
 As duas usam a ponta de venda, então trocar de fonte muda a origem e não o
 critério. `deliveryFxSource` grava qual respondeu: taxa sem procedência não
@@ -95,6 +102,14 @@ se reconcilia depois, e as duas moedas podem vir de lugares diferentes.
 `AWESOMEAPI_TOKEN` é opcional; sem ele a resposta vem de cache de um minuto,
 o que para fechamento de dia anterior dá no mesmo. A chave vai no cabeçalho
 `x-api-key`, não na query, para não acabar em log de acesso.
+
+#### Quando nenhuma fonte responde
+
+O diálogo diz **o que cada uma respondeu**: `AwesomeAPI: HTTP 404 (par
+inexistente)`, `PTAX: sem boletim para essa moeda na janela`, e assim por
+diante. Antes ficava um traço, e traço não distingue 404 de timeout, moeda
+inexistente ou janela sem fechamento: diagnosticar exigia acesso à rede de
+produção.
 
 #### As armadilhas, todas com teste
 
@@ -127,10 +142,14 @@ salvamento por causa de um serviço de fora seria trocar um problema pequeno
 por um grande. A linha fica sem câmbio, e o relatório diz quantos yuans
 ficaram de fora em vez de mostrar um total parcial com cara de completo.
 
-As taxas em Admin → Entregas, botão **Taxas**, são a rede de segurança:
-valem para linhas sem fechamento próprio e para o dia em que as duas fontes
-estiverem fora do ar. O diálogo mostra o câmbio de hoje, com a fonte de cada
-moeda, e o quanto o campo destoa dele.
+As taxas em Admin → Entregas, botão **Taxas**, são a retaguarda: valem para
+linhas sem fechamento próprio. Elas se **buscam e salvam sozinhas** ao abrir
+o diálogo, porque digitar taxa era trabalho que ninguém lembrava de refazer,
+e taxa esquecida converte custo por um câmbio de semanas atrás.
+
+Só o que veio é gravado: uma moeda que a fonte não trouxe **não apaga** a
+taxa boa que já estava salva. Editar e salvar na mão continua valendo, para
+quando a taxa real de compra for outra (spread e tarifa do fornecedor).
 
 #### Preenchendo entregas antigas
 

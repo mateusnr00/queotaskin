@@ -17,6 +17,7 @@ import {
   dataParaAwesome,
   fechamentoAte,
   lerDiarioAwesome,
+  lerUltimaAwesome,
 } from "@/lib/awesome";
 import type { Cotacao } from "@/lib/cotacao";
 
@@ -69,7 +70,7 @@ export async function cotacaoPtax(
   }
 }
 
-const AWESOME = "https://economia.awesomeapi.com.br/json/daily";
+const AWESOME = "https://economia.awesomeapi.com.br/json";
 
 /** De onde a taxa veio. Fica gravado na entrega: número sem procedência não
  * se confere depois. */
@@ -83,61 +84,125 @@ export interface CambioDoDia {
 }
 
 /**
- * A retaguarda: o fechamento diário da AwesomeAPI.
+ * O que uma tentativa de buscar câmbio produziu.
  *
- * Existe porque o Banco Central não publica toda moeda e nem sempre está no
- * ar, e porque deixar a entrega sem câmbio para sempre é pior do que gravar a
- * taxa de uma fonte de mercado dizendo que foi dela que veio.
- *
- * Pede um PERÍODO pelo mesmo motivo do PTAX: fim de semana não tem fechamento.
- * O token é opcional; sem ele a resposta vem de cache de um minuto, o que para
- * fechamento de dia anterior dá no mesmo.
+ * As notas existem porque a versão anterior falhava em SILÊNCIO: quando
+ * nenhuma fonte respondia por uma moeda, a tela mostrava um traço e não havia
+ * como saber se foi 404, timeout, moeda inexistente ou janela sem fechamento.
+ * Diagnosticar isso exigia acesso à rede que nem sempre se tem.
  */
-async function cambioAwesome(
-  moeda: "CNY" | "USD",
-  ate: Date,
-): Promise<CambioDoDia | null> {
-  const inicio = new Date(ate);
-  inicio.setUTCDate(inicio.getUTCDate() - JANELA_EM_DIAS);
+export interface TentativaDeCambio {
+  cambio: CambioDoDia | null;
+  /** Uma linha por fonte consultada, dizendo o que ela respondeu. */
+  notas: string[];
+}
+
+/** Uma ida à AwesomeAPI, com o motivo da falha quando falha. */
+async function pedirAwesome(
+  caminho: string,
+  ler: (bruto: unknown) => CambioDoDia | null,
+): Promise<TentativaDeCambio> {
   const token = process.env.AWESOMEAPI_TOKEN?.trim();
-  const q = new URLSearchParams({
-    start_date: dataParaAwesome(inicio),
-    end_date: dataParaAwesome(ate),
-  });
   try {
-    const res = await fetch(`${AWESOME}/${moeda}-BRL/30?${q}`, {
+    const res = await fetch(`${AWESOME}/${caminho}`, {
       // No cabeçalho e não na query: chave em URL acaba em log de acesso.
       headers: token ? { "x-api-key": token } : undefined,
       signal: AbortSignal.timeout(TIMEOUT_EM_MS),
       next: { revalidate: VALIDADE_EM_SEGUNDOS },
     });
-    // 404 é "essa moeda não existe", resposta legítima e não erro de rede.
-    if (!res.ok) return null;
-    const dia = fechamentoAte(lerDiarioAwesome(await res.json()), ate);
-    return dia
-      ? { taxa: dia.taxa, quando: dia.quando, fonte: "AWESOMEAPI" }
-      : null;
-  } catch {
-    return null;
+    if (!res.ok) {
+      // 404 aqui quer dizer "esse par não existe", que é resposta e não erro.
+      return {
+        cambio: null,
+        notas: [
+          `AwesomeAPI: HTTP ${res.status}` +
+            (res.status === 404 ? " (par inexistente)" : ""),
+        ],
+      };
+    }
+    const cambio = ler(await res.json());
+    return {
+      cambio,
+      notas: cambio ? [] : ["AwesomeAPI: respondeu sem cotação utilizável"],
+    };
+  } catch (e) {
+    // "TypeError" sozinho não ajuda ninguém: o fetch do Node lança isso para
+    // qualquer falha de rede, e o que interessa está na causa (ECONNREFUSED,
+    // ENOTFOUND, e por aí). Timeout vem como AbortError, que já é claro.
+    const causa = (e as { cause?: { code?: string } })?.cause?.code;
+    const nome = e instanceof Error ? e.name : "erro";
+    return {
+      cambio: null,
+      notas: [
+        `AwesomeAPI: ${causa ?? (nome === "TimeoutError" ? "tempo esgotado" : nome)}`,
+      ],
+    };
   }
 }
 
+/** O câmbio de AGORA, pelo /json/last. */
+function awesomeAgora(moeda: "CNY" | "USD"): Promise<TentativaDeCambio> {
+  const par = `${moeda}-BRL`;
+  return pedirAwesome(`last/${par}`, (bruto) => {
+    const d = lerUltimaAwesome(bruto, par);
+    return d ? { taxa: d.taxa, quando: d.quando, fonte: "AWESOMEAPI" } : null;
+  });
+}
+
 /**
- * O câmbio de um dia, com o oficial na frente.
+ * O câmbio de um dia passado, pelo fechamento diário.
  *
- * PTAX primeiro porque é a taxa que a Receita espera. A AwesomeAPI entra
- * quando ele não responde por aquela moeda ou por aquele dia. As duas usam a
- * ponta de VENDA, então trocar de fonte não muda o critério, só a origem.
+ * /json/last serve para hoje e não para ontem; /json/daily aceita start_date e
+ * end_date, e é o que permite gravar o câmbio do dia em que a skin saiu.
+ *
+ * Pede um PERÍODO pelo mesmo motivo do PTAX: fim de semana não fecha.
+ */
+function awesomeNoDia(
+  moeda: "CNY" | "USD",
+  ate: Date,
+): Promise<TentativaDeCambio> {
+  const inicio = new Date(ate);
+  inicio.setUTCDate(inicio.getUTCDate() - JANELA_EM_DIAS);
+  const q = new URLSearchParams({
+    start_date: dataParaAwesome(inicio),
+    end_date: dataParaAwesome(ate),
+  });
+  return pedirAwesome(`daily/${moeda}-BRL/30?${q}`, (bruto) => {
+    const d = fechamentoAte(lerDiarioAwesome(bruto), ate);
+    return d ? { taxa: d.taxa, quando: d.quando, fonte: "AWESOMEAPI" } : null;
+  });
+}
+
+/**
+ * O câmbio de um dia, com a AwesomeAPI na frente.
+ *
+ * A ordem era PTAX primeiro, por ele ser a taxa oficial. Foi invertida porque
+ * o PTAX NÃO PUBLICA O YUAN: em produção ele serviu o dólar e devolveu vazio
+ * para CNY. Manter a fonte oficial na frente de uma moeda que ela não tem é
+ * gastar uma ida à rede para receber nada, em toda anotação de custo.
+ *
+ * O PTAX continua atrás, e ainda ganha quando a AwesomeAPI não responde. Para
+ * o dólar ele segue sendo quem cobre a falha com a taxa oficial.
  */
 export async function cambioDoDia(
   moeda: "CNY" | "USD",
   ate: Date,
-): Promise<CambioDoDia | null> {
+  { deHoje = false }: { deHoje?: boolean } = {},
+): Promise<TentativaDeCambio> {
+  const a = deHoje ? await awesomeAgora(moeda) : await awesomeNoDia(moeda, ate);
+  if (a.cambio) return a;
+
   const ptax = await cotacaoPtax(moeda, ate);
   if (ptax) {
-    return { taxa: ptax.taxa, quando: ptax.dataDoBoletim, fonte: "PTAX" };
+    return {
+      cambio: { taxa: ptax.taxa, quando: ptax.dataDoBoletim, fonte: "PTAX" },
+      notas: a.notas,
+    };
   }
-  return cambioAwesome(moeda, ate);
+  return {
+    cambio: null,
+    notas: [...a.notas, "PTAX: sem boletim para essa moeda na janela"],
+  };
 }
 
 /**
@@ -147,18 +212,24 @@ export async function cambioDoDia(
  * que veio continua valendo. Derrubar as duas por causa de uma seria jogar
  * fora informação boa.
  */
-export async function cotacaoDoDia(data: Date): Promise<
+export async function cotacaoDoDia(
+  data: Date,
+  opcoes?: { deHoje?: boolean },
+): Promise<
   | (Cotacao & {
       fonteCny: FonteDoCambio | null;
       fonteUsd: FonteDoCambio | null;
+      notasCny: string[];
+      notasUsd: string[];
     })
   | null
 > {
-  const [cny, usd] = await Promise.all([
-    cambioDoDia("CNY", data),
-    cambioDoDia("USD", data),
+  const [c, u] = await Promise.all([
+    cambioDoDia("CNY", data, opcoes),
+    cambioDoDia("USD", data, opcoes),
   ]);
-  if (!cny && !usd) return null;
+  const cny = c.cambio;
+  const usd = u.cambio;
   const dias = [cny?.quando, usd?.quando].filter((d): d is Date => d != null);
   return {
     cnyToBrl: cny?.taxa ?? null,
@@ -167,6 +238,9 @@ export async function cotacaoDoDia(data: Date): Promise<
     // acabaria creditando à AwesomeAPI um dólar que veio do Banco Central.
     fonteCny: cny?.fonte ?? null,
     fonteUsd: usd?.fonte ?? null,
+    // Só quando faltou: nota de sucesso seria ruído.
+    notasCny: cny ? [] : c.notas,
+    notasUsd: usd ? [] : u.notas,
     // A mais recente das duas: mostrar a mais velha faria a cotação parecer
     // mais defasada do que está.
     atualizadaEm: dias.length
@@ -175,7 +249,7 @@ export async function cotacaoDoDia(data: Date): Promise<
   };
 }
 
-/** A cotação mais recente que existe hoje. */
+/** A cotação de agora, pelo endpoint de tempo real. */
 export function buscarCotacao() {
-  return cotacaoDoDia(new Date());
+  return cotacaoDoDia(new Date(), { deHoje: true });
 }

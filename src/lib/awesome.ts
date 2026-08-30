@@ -103,6 +103,29 @@ export function fechamentoAte(
   return melhor;
 }
 
+/**
+ * Lê a resposta de /json/last, que é a cotação de AGORA.
+ *
+ * Endpoint diferente do /json/daily e formato diferente: aqui vem um OBJETO
+ * com uma chave por par, sem hífen ("CNYBRL"), e não uma lista. Usar o daily
+ * para perguntar o câmbio de hoje traz o fechamento de ontem, porque o de hoje
+ * ainda não existe.
+ */
+export function lerUltimaAwesome(
+  bruto: unknown,
+  par: string,
+): DiaAwesome | null {
+  if (!bruto || typeof bruto !== "object") return null;
+  const item = (bruto as Record<string, unknown>)[par.replace("-", "")];
+  if (!item || typeof item !== "object") return null;
+  const o = item as Record<string, unknown>;
+  const compra = numero(o.bid);
+  const venda = numero(o[CAMPO_DE_VENDA]);
+  const quando = lerInstante(o.timestamp);
+  if (compra == null || venda == null || quando == null) return null;
+  return { taxa: venda, compra, venda, quando };
+}
+
 /** AAAA-MM-DD no fuso de São Paulo. */
 function emSaoPaulo(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {

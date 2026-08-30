@@ -1010,23 +1010,40 @@ function Par({
   simbolo,
   valor,
   fonte,
+  notas,
 }: {
   simbolo: string;
   valor: number | null;
   fonte: string | null;
+  notas: string[];
 }) {
   return (
-    <p className="flex items-baseline justify-between gap-2">
-      <span>
-        1 {simbolo} ={" "}
-        <strong>{valor == null ? "-" : `R$ ${comoTaxa(valor)}`}</strong>
-      </span>
-      {valor != null && (
-        <span className="font-sans text-[10px] font-bold tracking-[0.1em] text-muted-foreground uppercase">
-          {fonte === "PTAX" ? "PTAX" : fonte === "AWESOMEAPI" ? "Mercado" : ""}
+    <div>
+      <p className="flex items-baseline justify-between gap-2">
+        <span>
+          1 {simbolo} ={" "}
+          <strong>{valor == null ? "-" : `R$ ${comoTaxa(valor)}`}</strong>
         </span>
+        {valor != null && (
+          <span className="font-sans text-[10px] font-bold tracking-[0.1em] text-muted-foreground uppercase">
+            {fonte === "PTAX"
+              ? "PTAX"
+              : fonte === "AWESOMEAPI"
+                ? "Mercado"
+                : ""}
+          </span>
+        )}
+      </p>
+      {/* O QUE CADA FONTE RESPONDEU, QUANDO NENHUMA TROUXE NADA.
+          Antes ficava só o traço, e um traço não diz se foi 404, timeout,
+          moeda inexistente ou janela sem fechamento. Sem isso, descobrir por
+          que uma moeda não vem exige acesso à rede de produção. */}
+      {valor == null && notas.length > 0 && (
+        <p className="font-sans text-[10px] leading-tight text-amber-400/80">
+          {notas.join(" · ")}
+        </p>
       )}
-    </p>
+    </div>
   );
 }
 
@@ -1036,6 +1053,9 @@ interface CotacaoNaTela {
   atualizadaEm: string | null;
   fonteCny: string | null;
   fonteUsd: string | null;
+  notasCny: string[];
+  notasUsd: string[];
+  salvas: boolean;
 }
 
 function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
@@ -1116,14 +1136,17 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         <DialogHeader>
           <DialogTitle>Taxas de câmbio</DialogTitle>
           <DialogDescription>
-            Rede de segurança. Cada entrega já guarda o câmbio do dia em que ela
-            saiu, e é essa taxa que o relatório usa. Estas aqui valem para as
-            linhas sem boletim próprio e para o dia em que as duas fontes
-            estiverem fora do ar.
+            Buscadas e salvas sozinhas ao abrir. Cada entrega já guarda o câmbio
+            do dia em que ela saiu, e é essa taxa que o relatório usa; estas
+            aqui são a retaguarda, para linhas sem câmbio próprio. Editar e
+            salvar continua valendo, para quando a sua taxa real de compra for
+            outra.
           </DialogDescription>
         </DialogHeader>
 
-        {/* A cotação de agora, para comparar e para preencher. */}
+        {/* A cotação de agora. Ela se salva sozinha: digitar a taxa era
+            trabalho que ninguém lembrava de refazer, e taxa esquecida converte
+            custo de skin por um câmbio de semanas atrás. */}
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
@@ -1150,25 +1173,36 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
                   simbolo="¥"
                   valor={cotacao.cnyToBrl}
                   fonte={cotacao.fonteCny}
+                  notas={cotacao.notasCny}
                 />
                 <Par
                   simbolo="$"
                   valor={cotacao.usdToBrl}
                   fonte={cotacao.fonteUsd}
+                  notas={cotacao.notasUsd}
                 />
               </div>
-              {cotacao.atualizadaEm && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  fechamento de {formatDateTime(new Date(cotacao.atualizadaEm))}
-                </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {[
+                  cotacao.atualizadaEm
+                    ? formatDateTime(new Date(cotacao.atualizadaEm))
+                    : null,
+                  cotacao.salvas ? "salvas automaticamente" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              {/* Sem nada para copiar, o botão seria um convite a um clique
+                  que não faz coisa nenhuma. */}
+              {(cotacao.cnyToBrl != null || cotacao.usdToBrl != null) && (
+                <button
+                  type="button"
+                  onClick={usarCotacao}
+                  className="mt-2 h-8 w-full rounded-lg border border-white/15 text-xs font-bold transition-colors hover:bg-white/5"
+                >
+                  Copiar para os campos
+                </button>
               )}
-              <button
-                type="button"
-                onClick={usarCotacao}
-                className="mt-2 h-8 w-full rounded-lg border border-white/15 text-xs font-bold transition-colors hover:bg-white/5"
-              >
-                Preencher com estas
-              </button>
             </>
           ) : (
             <p className="mt-2 text-xs text-muted-foreground">
