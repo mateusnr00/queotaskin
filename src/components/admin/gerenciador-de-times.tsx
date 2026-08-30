@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { semAcento } from "@/lib/busca";
 import {
   contraste,
   textoSobreACor,
@@ -74,9 +75,22 @@ export function GerenciadorDeTimes({
   storageLigado: boolean;
 }) {
   const [rascunho, setRascunho] = useState<Rascunho | null>(null);
+  // Busca. Com quarenta linhas, achar um time para editar virou rolagem, e a
+  // pessoa já sabe o nome do que procura.
+  const [busca, setBusca] = useState("");
 
-  const br = times.filter((t) => t.regiao === "BR");
-  const inter = times.filter((t) => t.regiao === "INTER");
+  const alvo = semAcento(busca);
+  const filtrados =
+    alvo === ""
+      ? times
+      : times.filter(
+          (t) =>
+            semAcento(t.nome).includes(alvo) ||
+            semAcento(t.tag).includes(alvo) ||
+            semAcento(t.id).includes(alvo),
+        );
+  const br = filtrados.filter((t) => t.regiao === "BR");
+  const inter = filtrados.filter((t) => t.regiao === "INTER");
 
   return (
     <div className="space-y-5">
@@ -101,6 +115,21 @@ export function GerenciadorDeTimes({
           escudo fica indisponível até as variáveis do Supabase existirem.
         </p>
       )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome, tag ou id"
+          aria-label="Buscar time"
+          className="h-9 w-full sm:max-w-xs"
+        />
+        {alvo !== "" && (
+          <p className="text-xs text-muted-foreground">
+            {filtrados.length} de {times.length}
+          </p>
+        )}
+      </div>
 
       {rascunho && (
         <Formulario

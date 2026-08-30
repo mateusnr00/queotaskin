@@ -27,6 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { semAcento } from "@/lib/busca";
 import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { salvarTimeDoCoracaoAction } from "@/server/actions/time-do-coracao";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
@@ -51,8 +53,14 @@ export function SeletorDeTime({
   // O escolhido vive no cliente para a linha mudar no ato, e não só quando o
   // servidor responder. O router.refresh depois reconcilia.
   const [escolhido, setEscolhido] = useState(atual);
-  const br = times.filter((t) => t.regiao === "BR");
-  const inter = times.filter((t) => t.regiao === "INTER");
+  // A busca. Passou a fazer falta quando a lista cresceu: com quarenta times,
+  // rolar até achar o seu no celular é trabalho, e o teclado de digitação
+  // rápida do select não ajuda em tela sem teclado físico.
+  const [busca, setBusca] = useState("");
+
+  const filtrados = filtrar(times, busca);
+  const br = filtrados.filter((t) => t.regiao === "BR");
+  const inter = filtrados.filter((t) => t.regiao === "INTER");
 
   // `string | null`: este Select entrega null quando a seleção é limpa, e
   // NENHUM quando a opção "não exibir" é escolhida. Os dois querem dizer a
@@ -82,6 +90,11 @@ export function SeletorDeTime({
       value={escolhido ?? NENHUM}
       onValueChange={escolher}
       disabled={salvando}
+      // Fechou, esquece a busca: reabrir mostrando o filtro da vez passada
+      // pareceria que metade dos times sumiu.
+      onOpenChange={(aberto) => {
+        if (!aberto) setBusca("");
+      }}
     >
       <SelectTrigger className="h-11 w-full" aria-label="Time do coração">
         {/* SelectValue com filho próprio, e não o texto da opção: assim a
@@ -100,15 +113,48 @@ export function SeletorDeTime({
       </SelectTrigger>
 
       <SelectContent>
-        <SelectItem value={NENHUM}>Não exibir time</SelectItem>
+        {/* O campo de busca dentro da lista.
+            stopPropagation nas teclas porque o select tem digitação rápida
+            própria: sem isso, cada letra digitada aqui saltaria a seleção para
+            um time começado por aquela letra, e o texto nunca entraria. */}
+        <div className="sticky top-0 z-10 bg-popover p-1">
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            placeholder="Buscar time"
+            aria-label="Buscar time"
+            className="h-9"
+          />
+        </div>
+
+        {busca === "" && (
+          <SelectItem value={NENHUM}>Não exibir time</SelectItem>
+        )}
         <Grupo titulo="Brasil" times={br} />
         <Grupo titulo="Internacionais" times={inter} />
+
+        {filtrados.length === 0 && (
+          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+            Nenhum time com esse nome.
+          </p>
+        )}
       </SelectContent>
     </Select>
   );
 }
 
+/** Casa por nome ou tag, ignorando acento e caixa. */
+function filtrar(times: readonly TimeDeCS2[], busca: string): TimeDeCS2[] {
+  const alvo = semAcento(busca);
+  if (alvo === "") return [...times];
+  return times.filter(
+    (t) => semAcento(t.nome).includes(alvo) || semAcento(t.tag).includes(alvo),
+  );
+}
+
 function Grupo({ titulo, times }: { titulo: string; times: readonly TimeDeCS2[] }) {
+  if (times.length === 0) return null;
   return (
     <SelectGroup>
       <SelectLabel>{titulo}</SelectLabel>
