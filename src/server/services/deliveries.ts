@@ -48,13 +48,13 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
     // Pendente primeiro, e dentro de cada grupo o mais recente no topo.
     // A fila existe para dizer o que falta fazer; o que já saiu é histórico e
     // não pode empurrar o trabalho de hoje para o fim da página.
-    // Pendente primeiro, e dentro de cada grupo o mais recente no topo. A fila
-    // existe para dizer o que falta fazer; o que já saiu é histórico e não pode
-    // empurrar o trabalho de hoje para o fim da página.
-    orderBy: [
-      { deliveredAt: { sort: "asc", nulls: "first" } },
-      { winnerDrawnAt: "desc" },
-    ],
+    // CRONOLÓGICA, do sorteio mais recente para o mais antigo.
+    //
+    // Antes vinha pendente primeiro, e isso embaralhava a leitura: uma entrega
+    // saía do lugar assim que era marcada, e a pessoa perdia de vista onde
+    // estava. Quem quer só o que falta usa o seletor de status; a ordem da
+    // lista é a do tempo, que não muda quando se mexe numa linha.
+    orderBy: [{ winnerDrawnAt: "desc" }],
     include: { prizes: { orderBy: { position: "asc" } } },
   });
   if (raffles.length === 0) return [];

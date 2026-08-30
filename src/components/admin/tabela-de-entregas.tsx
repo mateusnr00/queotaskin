@@ -85,11 +85,20 @@ import {
   salvarCustoDaEntregaAction,
   salvarTaxasAction,
 } from "@/server/actions/entregas";
+import type { DeliveryStatus } from "@prisma/client";
+
 import type { Delivery } from "@/server/services/deliveries";
 
 /** Filtro da lista. "PENDENTES" agrupa tudo que ainda dá trabalho. */
 const TODOS = "TODOS";
 const PENDENTES = "PENDENTES";
+
+/** Como o filtro escolhido aparece no botão fechado. */
+function rotuloDoFiltro(filtro: string): string {
+  if (filtro === TODOS) return "Todos os status";
+  if (filtro === PENDENTES) return "Pendentes";
+  return estadoDaEntrega(filtro as DeliveryStatus).rotulo;
+}
 
 export function TabelaDeEntregas({
   entregas,
@@ -98,8 +107,15 @@ export function TabelaDeEntregas({
   entregas: Delivery[];
   taxas: Taxas;
 }) {
-  // Abre em PENDENTES: a fila existe para dizer o que falta fazer.
-  const [filtro, setFiltro] = useState<string>(PENDENTES);
+  // Abre em TODOS.
+  //
+  // Abria em Pendentes, e isso fazia a linha SUMIR no instante em que o custo
+  // era anotado: a entrega mudava para Enviado e caía fora do filtro, sem
+  // nenhum aviso de que tinha ido para outro lugar. Parecia perda de dado.
+  //
+  // Com todas na tela, marcar uma entrega muda a cor do status e ela fica onde
+  // estava. Quem quer ver só o que falta troca no seletor, que continua ali.
+  const [filtro, setFiltro] = useState<string>(TODOS);
   const [busca, setBusca] = useState("");
   // Yuan por padrão: é a moeda em que a skin é comprada, e é o número que fica
   // gravado. Real e dólar são leituras. A escolha vale para a lista inteira,
@@ -188,7 +204,10 @@ export function TabelaDeEntregas({
       <div className="flex flex-wrap items-center gap-2">
         <Select value={filtro} onValueChange={(v) => setFiltro(v ?? TODOS)}>
           <SelectTrigger className="h-9 w-full sm:w-48" aria-label="Filtrar por status">
-            <SelectValue />
+            {/* O rótulo é escrito aqui, e não deixado para o componente: sem
+                isto ele mostra o VALOR cru ("TODOS", "PRIORIDADE"), que é como
+                o código chama o estado, não como a pessoa chama. */}
+            <SelectValue>{rotuloDoFiltro(filtro)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={PENDENTES}>Pendentes</SelectItem>

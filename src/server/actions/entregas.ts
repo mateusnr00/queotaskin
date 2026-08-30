@@ -134,18 +134,27 @@ export async function salvarCustoDaEntregaAction(
     });
     if (!rifa) return { ok: false, error: "Campanha não encontrada." };
 
-    // ANOTAR O CUSTO MARCA A ENTREGA COMO ENVIADA.
+    // O CUSTO E O ENVIO ANDAM JUNTOS, NOS DOIS SENTIDOS.
     //
     // Anotar quanto custou é o que se faz DEPOIS de comprar a skin do
     // fornecedor e mandar a oferta: as duas coisas acontecem no mesmo minuto, e
     // exigir dois gestos para registrar um só ato é onde a fila fica
     // desatualizada.
     //
-    // Duas exceções, e as duas por motivo. PIX já está concluída e o valor ali
-    // é o do dinheiro pago, não de uma skin comprada. E quem apaga o custo não
-    // está desfazendo o envio, só corrigindo um número digitado errado.
-    const jaConcluida = rifa.deliveryStatus === "ENVIADO" || rifa.deliveryStatus === "PIX";
-    const marcarEnviado = valor != null && !jaConcluida;
+    // E APAGAR O CUSTO DESFAZ O ENVIO. Eu tinha feito o contrário, tratando o
+    // apagar como conserto de número digitado errado, e estava errado: quem
+    // tira o valor está desfazendo o registro, e a entrega precisa voltar para
+    // a fila. Sem isso ela ficava presa em Enviado sem custo nenhum, que é um
+    // estado que não quer dizer nada.
+    //
+    // PIX fica de fora dos dois sentidos: ela é escolha explícita, o valor ali
+    // é o do dinheiro pago, e mexer nele não pode transformá-la em skin
+    // enviada nem devolvê-la para a fila.
+    const ehPix = rifa.deliveryStatus === "PIX";
+    const marcarEnviado =
+      valor != null && !ehPix && rifa.deliveryStatus !== "ENVIADO";
+    const desfazerEnvio =
+      valor == null && rifa.deliveryStatus === "ENVIADO";
 
     await prisma.raffle.update({
       where: { id: raffleId },
@@ -161,6 +170,13 @@ export async function salvarCustoDaEntregaAction(
               deliveredById: session.user.id,
             }
           : {}),
+        ...(desfazerEnvio
+          ? {
+              deliveryStatus: "AGUARDANDO" as const,
+              deliveredAt: null,
+              deliveredById: null,
+            }
+          : {}),
       },
     });
 
@@ -168,7 +184,11 @@ export async function salvarCustoDaEntregaAction(
       acao: "entrega.custo_alterado",
       tenantId,
       alvo: { tipo: "Raffle", id: raffleId, rotulo: rifa.title },
-      detalhes: { custo: valor, marcouEnviado: marcarEnviado },
+      detalhes: {
+        custo: valor,
+        marcouEnviado: marcarEnviado,
+        desfezEnvio: desfazerEnvio,
+      },
     });
 
     revalidatePath("/admin/entregas");
