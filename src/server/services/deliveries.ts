@@ -23,6 +23,8 @@ export interface Delivery {
   deliveryFxRate: number | null;
   /** O dia do boletim que gerou deliveryFxRate. */
   deliveryFxDate: Date | null;
+  /** De onde a taxa veio: "PTAX" ou "AWESOMEAPI". */
+  deliveryFxSource: string | null;
   /** Nome de quem marcou, quando a conta ainda existe. */
   deliveredBy: string | null;
   /** Comprador do número sorteado. Nulo se o título não foi vendido. */
@@ -131,6 +133,7 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       deliveryFxRate:
         raffle.deliveryFxRate != null ? Number(raffle.deliveryFxRate) : null,
       deliveryFxDate: raffle.deliveryFxDate,
+      deliveryFxSource: raffle.deliveryFxSource,
       deliveredBy: raffle.deliveredById
         ? (nomePorId.get(raffle.deliveredById) ?? null)
         : null,

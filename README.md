@@ -63,28 +63,88 @@ declarado não consta como vendido.
 ### Custo da skin e câmbio
 
 O custo é gravado em **yuan**, que é a moeda em que a skin é comprada do
-fornecedor e o único número que existiu de verdade. Real e dólar são
-leituras, calculadas com as taxas do painel. Guardar só a moeda paga é o
-que impede o histórico de mentir: se os três fossem gravados, a compra de
-seis meses atrás continuaria mostrando o real de hoje.
+fornecedor e o único número que existiu de verdade.
 
-As taxas ficam no botão **Taxas**, em Admin → Entregas. Ao abrir, o
-diálogo consulta a cotação de mercado na
-[AwesomeAPI](https://awesomeapi.com.br) e mostra o quanto a taxa salva já
-se distanciou dela; um botão preenche os campos com a cotação do momento.
+Junto com ele, cada entrega guarda o **câmbio de venda do dia em que ela
+saiu**: `Raffle.deliveryFxRate`, mais `deliveryFxDate` e `deliveryFxSource`,
+o dia do fechamento e a origem. É essa taxa que converte aquele custo no
+relatório, para sempre.
 
-A cotação **sugere, não decide**. Quem converte o custo no relatório é a
-taxa gravada, e isso é de propósito: com cotação ao vivo, um mês já
-fechado mudaria de valor a cada abertura da página, ao sabor do câmbio.
-Além disso, quem compra costuma pagar spread e tarifa em cima do câmbio de
-tela, e essa diferença só quem operou conhece.
+Isso não é preciosismo. Com uma taxa global única, atualizá-la reconverteria
+o gasto de julho pelo câmbio de hoje, e um mês já fechado mudaria de valor
+sem ninguém ter mexido nele. Com o fechamento gravado na linha, cada compra
+carrega o câmbio do dia dela. Os totais somam linha a linha e nunca
+convertem a soma.
 
-`AWESOMEAPI_TOKEN` é opcional. Sem chave a AwesomeAPI responde com cache e
-limite menor, o que basta para um botão clicado de vez em quando. A
-resposta fica em cache por 15 minutos, e a chave vai no cabeçalho
-`x-api-key`, não na query, para não acabar em log de acesso. Serviço fora
-do ar não trava nada: o diálogo diz que não conseguiu buscar e os campos
-seguem aceitando o valor digitado.
+**Venda, e não compra:** despesa em moeda estrangeira converte pela ponta em
+que se compra a moeda para pagar.
+
+#### Duas fontes, nessa ordem
+
+Primeiro o [PTAX do Banco Central](https://olinda.bcb.gov.br), que é a taxa
+oficial, a que a Receita espera, e não pede chave. Quando ele não publica
+aquela moeda ou está fora do ar, entra o fechamento diário da
+[AwesomeAPI](https://awesomeapi.com.br) (`/json/daily`, que aceita
+`start_date` e `end_date` e por isso também responde pelo passado, que é o
+que permite preencher entregas antigas).
+
+As duas usam a ponta de venda, então trocar de fonte muda a origem e não o
+critério. `deliveryFxSource` grava qual respondeu: taxa sem procedência não
+se reconcilia depois, e as duas moedas podem vir de lugares diferentes.
+
+`AWESOMEAPI_TOKEN` é opcional; sem ele a resposta vem de cache de um minuto,
+o que para fechamento de dia anterior dá no mesmo. A chave vai no cabeçalho
+`x-api-key`, não na query, para não acabar em log de acesso.
+
+#### As armadilhas, todas com teste
+
+Do PTAX:
+
+- a data vai em **MM-DD-YYYY**, formato americano; em `08-09` as duas
+  leituras existem e nenhuma quebra, só devolvem o dia errado;
+- **não há boletim em fim de semana nem feriado**, então a busca pede um
+  período de 12 dias e usa o último que existir, em vez de uma ida à rede
+  por dia;
+- há **mais de um boletim por dia** (abertura, intermediário, fechamento), e
+  o que vale é o de fechamento.
+
+Da AwesomeAPI:
+
+- o **timestamp vem em segundos num endpoint e em milissegundos no outro**,
+  como a própria documentação mostra; ler um pelo outro joga a data para o
+  ano 50 mil;
+- **só o primeiro item do array** traz `code`, `codein` e `create_date`.
+
+E de fuso, nas duas: o dia é calculado em **São Paulo**, não em UTC. Uma
+entrega das 22h de Brasília é 01h UTC do dia seguinte, e em UTC pediria o
+fechamento de um dia que ainda não aconteceu.
+
+#### O custo sempre salva
+
+Falha na busca **não impede gravar o custo**. O custo é o dado que a pessoa
+tem na mão; o câmbio é conferível e dá para preencher depois. Travar o
+salvamento por causa de um serviço de fora seria trocar um problema pequeno
+por um grande. A linha fica sem câmbio, e o relatório diz quantos yuans
+ficaram de fora em vez de mostrar um total parcial com cara de completo.
+
+As taxas em Admin → Entregas, botão **Taxas**, são a rede de segurança:
+valem para linhas sem fechamento próprio e para o dia em que as duas fontes
+estiverem fora do ar. O diálogo mostra o câmbio de hoje, com a fonte de cada
+moeda, e o quanto o campo destoa dele.
+
+#### Preenchendo entregas antigas
+
+```bash
+node scripts/backfill-cambio.mjs            # ensaio, não grava
+node scripts/backfill-cambio.mjs --gravar   # grava
+```
+
+Só toca em linha com custo e sem câmbio, então é retomável: rodar de novo
+continua de onde parou e nunca reescreve o que já existe. Faz um pedido por
+dia distinto, não por entrega, e usa a mesma ordem de fontes.
+
+Não virou migration de propósito: migration roda em transação dentro do
+build, e ir à rede lá dentro faria um serviço de fora derrubar o deploy.
 
 ### Tema
 

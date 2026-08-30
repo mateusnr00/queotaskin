@@ -19,7 +19,7 @@ import {
   getActiveTenantIdForAdmin,
 } from "@/lib/tenant";
 import { registrarLog } from "@/server/services/activity-log";
-import { buscarCotacao, cotacaoPtax } from "@/server/services/cotacao";
+import { buscarCotacao, cambioDoDia } from "@/server/services/cotacao";
 import type { ActionResult } from "@/server/actions/auth";
 
 const esquema = z.object({
@@ -178,7 +178,7 @@ export async function salvarCustoDaEntregaAction(
     // e travar o salvamento por causa do Banco Central seria trocar um
     // problema pequeno por um grande.
     const quando = rifa.deliveredAt ?? rifa.winnerDrawnAt ?? new Date();
-    const ptax = valor == null ? null : await cotacaoPtax("CNY", quando);
+    const cambio = valor == null ? null : await cambioDoDia("CNY", quando);
 
     await prisma.raffle.update({
       where: { id: raffleId },
@@ -189,8 +189,9 @@ export async function salvarCustoDaEntregaAction(
         deliveryCost: valor == null ? null : Number(valor.toFixed(2)),
         // Apagar o custo apaga o câmbio junto: taxa sem custo é sujeira que
         // ninguém vai conferir, e que confundiria quem lesse a linha depois.
-        deliveryFxRate: valor == null ? null : (ptax?.taxa ?? null),
-        deliveryFxDate: valor == null ? null : (ptax?.dataDoBoletim ?? null),
+        deliveryFxRate: valor == null ? null : (cambio?.taxa ?? null),
+        deliveryFxDate: valor == null ? null : (cambio?.quando ?? null),
+        deliveryFxSource: valor == null ? null : (cambio?.fonte ?? null),
         ...(marcarEnviado
           ? {
               deliveryStatus: "ENVIADO" as const,
@@ -216,8 +217,9 @@ export async function salvarCustoDaEntregaAction(
         custo: valor,
         marcouEnviado: marcarEnviado,
         desfezEnvio: desfazerEnvio,
-        ptax: ptax?.taxa ?? null,
-        ptaxDe: ptax?.dataDoBoletim?.toISOString() ?? null,
+        cambio: cambio?.taxa ?? null,
+        cambioDe: cambio?.quando?.toISOString() ?? null,
+        cambioFonte: cambio?.fonte ?? null,
       },
     });
 
@@ -288,6 +290,8 @@ export async function buscarCotacaoAction(): Promise<
     cnyToBrl: number | null;
     usdToBrl: number | null;
     atualizadaEm: string | null;
+    fonteCny: string | null;
+    fonteUsd: string | null;
   }>
 > {
   try {
@@ -304,6 +308,8 @@ export async function buscarCotacaoAction(): Promise<
         // Texto, e não Date: a data atravessa a fronteira servidor/cliente, e
         // ISO é o formato que sobrevive à travessia sem surpresa de fuso.
         atualizadaEm: c.atualizadaEm?.toISOString() ?? null,
+        fonteCny: c.fonteCny,
+        fonteUsd: c.fonteUsd,
       },
     };
   } catch {

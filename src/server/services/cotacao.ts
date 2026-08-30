@@ -9,9 +9,15 @@
 import {
   dataParaPtax,
   inicioDaJanela,
+  JANELA_EM_DIAS,
   lerPeriodoPtax,
   type CotacaoPtax,
 } from "@/lib/ptax";
+import {
+  dataParaAwesome,
+  fechamentoAte,
+  lerDiarioAwesome,
+} from "@/lib/awesome";
 import type { Cotacao } from "@/lib/cotacao";
 
 const BASE =
@@ -63,6 +69,77 @@ export async function cotacaoPtax(
   }
 }
 
+const AWESOME = "https://economia.awesomeapi.com.br/json/daily";
+
+/** De onde a taxa veio. Fica gravado na entrega: número sem procedência não
+ * se confere depois. */
+export type FonteDoCambio = "PTAX" | "AWESOMEAPI";
+
+export interface CambioDoDia {
+  taxa: number;
+  /** O dia do fechamento usado, que pode ser anterior ao pedido. */
+  quando: Date;
+  fonte: FonteDoCambio;
+}
+
+/**
+ * A retaguarda: o fechamento diário da AwesomeAPI.
+ *
+ * Existe porque o Banco Central não publica toda moeda e nem sempre está no
+ * ar, e porque deixar a entrega sem câmbio para sempre é pior do que gravar a
+ * taxa de uma fonte de mercado dizendo que foi dela que veio.
+ *
+ * Pede um PERÍODO pelo mesmo motivo do PTAX: fim de semana não tem fechamento.
+ * O token é opcional; sem ele a resposta vem de cache de um minuto, o que para
+ * fechamento de dia anterior dá no mesmo.
+ */
+async function cambioAwesome(
+  moeda: "CNY" | "USD",
+  ate: Date,
+): Promise<CambioDoDia | null> {
+  const inicio = new Date(ate);
+  inicio.setUTCDate(inicio.getUTCDate() - JANELA_EM_DIAS);
+  const token = process.env.AWESOMEAPI_TOKEN?.trim();
+  const q = new URLSearchParams({
+    start_date: dataParaAwesome(inicio),
+    end_date: dataParaAwesome(ate),
+  });
+  try {
+    const res = await fetch(`${AWESOME}/${moeda}-BRL/30?${q}`, {
+      // No cabeçalho e não na query: chave em URL acaba em log de acesso.
+      headers: token ? { "x-api-key": token } : undefined,
+      signal: AbortSignal.timeout(TIMEOUT_EM_MS),
+      next: { revalidate: VALIDADE_EM_SEGUNDOS },
+    });
+    // 404 é "essa moeda não existe", resposta legítima e não erro de rede.
+    if (!res.ok) return null;
+    const dia = fechamentoAte(lerDiarioAwesome(await res.json()), ate);
+    return dia
+      ? { taxa: dia.taxa, quando: dia.quando, fonte: "AWESOMEAPI" }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * O câmbio de um dia, com o oficial na frente.
+ *
+ * PTAX primeiro porque é a taxa que a Receita espera. A AwesomeAPI entra
+ * quando ele não responde por aquela moeda ou por aquele dia. As duas usam a
+ * ponta de VENDA, então trocar de fonte não muda o critério, só a origem.
+ */
+export async function cambioDoDia(
+  moeda: "CNY" | "USD",
+  ate: Date,
+): Promise<CambioDoDia | null> {
+  const ptax = await cotacaoPtax(moeda, ate);
+  if (ptax) {
+    return { taxa: ptax.taxa, quando: ptax.dataDoBoletim, fonte: "PTAX" };
+  }
+  return cambioAwesome(moeda, ate);
+}
+
 /**
  * As duas taxas de uma data, no formato que a tela e o banco usam.
  *
@@ -70,18 +147,26 @@ export async function cotacaoPtax(
  * que veio continua valendo. Derrubar as duas por causa de uma seria jogar
  * fora informação boa.
  */
-export async function cotacaoDoDia(data: Date): Promise<Cotacao | null> {
+export async function cotacaoDoDia(data: Date): Promise<
+  | (Cotacao & {
+      fonteCny: FonteDoCambio | null;
+      fonteUsd: FonteDoCambio | null;
+    })
+  | null
+> {
   const [cny, usd] = await Promise.all([
-    cotacaoPtax("CNY", data),
-    cotacaoPtax("USD", data),
+    cambioDoDia("CNY", data),
+    cambioDoDia("USD", data),
   ]);
   if (!cny && !usd) return null;
-  const dias = [cny?.dataDoBoletim, usd?.dataDoBoletim].filter(
-    (d): d is Date => d != null,
-  );
+  const dias = [cny?.quando, usd?.quando].filter((d): d is Date => d != null);
   return {
     cnyToBrl: cny?.taxa ?? null,
     usdToBrl: usd?.taxa ?? null,
+    // Uma por moeda: as duas podem vir de fontes diferentes, e um rótulo só
+    // acabaria creditando à AwesomeAPI um dólar que veio do Banco Central.
+    fonteCny: cny?.fonte ?? null,
+    fonteUsd: usd?.fonte ?? null,
     // A mais recente das duas: mostrar a mais velha faria a cotação parecer
     // mais defasada do que está.
     atualizadaEm: dias.length
@@ -91,6 +176,6 @@ export async function cotacaoDoDia(data: Date): Promise<Cotacao | null> {
 }
 
 /** A cotação mais recente que existe hoje. */
-export function buscarCotacao(): Promise<Cotacao | null> {
+export function buscarCotacao() {
   return cotacaoDoDia(new Date());
 }

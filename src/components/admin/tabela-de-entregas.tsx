@@ -972,6 +972,17 @@ function CampoDeCusto({
         if (e.key === "Escape") setTexto(comoTexto);
       }}
       placeholder={SIMBOLO[moedaDoCampo]}
+      // A procedência da taxa fica ao alcance do ponteiro. Um valor convertido
+      // sem dizer por qual câmbio não se confere depois.
+      title={
+        entrega.deliveryFxRate != null
+          ? `Convertido por ${entrega.deliveryFxRate}` +
+            ` (${entrega.deliveryFxSource ?? "fonte não registrada"}` +
+            (entrega.deliveryFxDate
+              ? `, ${formatDateTime(entrega.deliveryFxDate).slice(0, 10)})`
+              : ")")
+          : undefined
+      }
       aria-label={`Custo da entrega de ${entrega.raffleTitle}, em ${moedaDoCampo}`}
       className={cn(
         "h-8 text-right font-mono text-xs tabular-nums",
@@ -989,10 +1000,42 @@ const comoTaxa = (n: number) =>
     maximumFractionDigits: 4,
   });
 
+/**
+ * Uma linha da cotação, com a fonte ao lado.
+ *
+ * A fonte fica por moeda porque as duas podem vir de lugares diferentes: um
+ * rótulo só acabaria creditando à AwesomeAPI um dólar que veio do PTAX.
+ */
+function Par({
+  simbolo,
+  valor,
+  fonte,
+}: {
+  simbolo: string;
+  valor: number | null;
+  fonte: string | null;
+}) {
+  return (
+    <p className="flex items-baseline justify-between gap-2">
+      <span>
+        1 {simbolo} ={" "}
+        <strong>{valor == null ? "-" : `R$ ${comoTaxa(valor)}`}</strong>
+      </span>
+      {valor != null && (
+        <span className="font-sans text-[10px] font-bold tracking-[0.1em] text-muted-foreground uppercase">
+          {fonte === "PTAX" ? "PTAX" : fonte === "AWESOMEAPI" ? "Mercado" : ""}
+        </span>
+      )}
+    </p>
+  );
+}
+
 interface CotacaoNaTela {
   cnyToBrl: number | null;
   usdToBrl: number | null;
   atualizadaEm: string | null;
+  fonteCny: string | null;
+  fonteUsd: string | null;
 }
 
 function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
@@ -1073,10 +1116,10 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         <DialogHeader>
           <DialogTitle>Taxas de câmbio</DialogTitle>
           <DialogDescription>
-            Rede de segurança. Cada entrega já guarda o PTAX do dia em que ela
+            Rede de segurança. Cada entrega já guarda o câmbio do dia em que ela
             saiu, e é essa taxa que o relatório usa. Estas aqui valem para as
-            linhas sem boletim próprio e para o dia em que o Banco Central
-            estiver fora do ar.
+            linhas sem boletim próprio e para o dia em que as duas fontes
+            estiverem fora do ar.
           </DialogDescription>
         </DialogHeader>
 
@@ -1084,7 +1127,7 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
-              PTAX de hoje
+              Câmbio de hoje
             </span>
             <button
               type="button"
@@ -1102,29 +1145,23 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
 
           {cotacao ? (
             <>
-              <div className="mt-2 space-y-0.5 font-mono text-sm tabular-nums">
-                <p>
-                  1 ¥ ={" "}
-                  <strong>
-                    {cotacao.cnyToBrl == null
-                      ? "-"
-                      : `R$ ${comoTaxa(cotacao.cnyToBrl)}`}
-                  </strong>
-                </p>
-                <p>
-                  1 $ ={" "}
-                  <strong>
-                    {cotacao.usdToBrl == null
-                      ? "-"
-                      : `R$ ${comoTaxa(cotacao.usdToBrl)}`}
-                  </strong>
-                </p>
+              <div className="mt-2 space-y-1 font-mono text-sm tabular-nums">
+                <Par
+                  simbolo="¥"
+                  valor={cotacao.cnyToBrl}
+                  fonte={cotacao.fonteCny}
+                />
+                <Par
+                  simbolo="$"
+                  valor={cotacao.usdToBrl}
+                  fonte={cotacao.fonteUsd}
+                />
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {cotacao.atualizadaEm
-                  ? `Banco Central, boletim de ${formatDateTime(new Date(cotacao.atualizadaEm))}`
-                  : "Banco Central"}
-              </p>
+              {cotacao.atualizadaEm && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  fechamento de {formatDateTime(new Date(cotacao.atualizadaEm))}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={usarCotacao}
@@ -1173,7 +1210,7 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
 
           {longeDoMercado && (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-              O que está nos campos destoa do PTAX de hoje
+              O que está nos campos destoa do câmbio de hoje
               {distanciaCny == null
                 ? ""
                 : ` (o yuan em ${distanciaCny > 0 ? "+" : ""}${distanciaCny

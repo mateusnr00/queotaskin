@@ -13,6 +13,10 @@
 // Uso:
 //   node scripts/backfill-cambio.mjs            (mostra o que faria)
 //   node scripts/backfill-cambio.mjs --gravar   (grava)
+//
+// Tenta o PTAX primeiro, que é a taxa oficial, e cai para a AwesomeAPI quando
+// o Banco Central não responde por aquela moeda ou aquele dia. A fonte usada
+// fica gravada na linha.
 
 import { PrismaClient } from "@prisma/client";
 
@@ -21,6 +25,7 @@ const prisma = new PrismaClient();
 
 const BASE =
   "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaPeriodo(moeda=@moeda,dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)";
+const AWESOME = "https://economia.awesomeapi.com.br/json/daily";
 const JANELA_EM_DIAS = 12;
 
 const emSaoPaulo = (d) =>
@@ -76,6 +81,56 @@ async function ptaxDe(data) {
   return melhor;
 }
 
+/**
+ * A retaguarda, pelo fechamento diário da AwesomeAPI.
+ *
+ * O Banco Central não publica toda moeda e nem sempre está no ar. Deixar a
+ * entrega sem câmbio para sempre é pior do que gravar a taxa de uma fonte de
+ * mercado dizendo que foi dela que veio.
+ *
+ * ask é a VENDA na legenda da API, que é a mesma ponta escolhida no PTAX.
+ */
+async function awesomeDe(data) {
+  const ini = new Date(data);
+  ini.setUTCDate(ini.getUTCDate() - JANELA_EM_DIAS);
+  const aaaammdd = (d) => emSaoPaulo(d).replace(/-/g, "");
+  const q = new URLSearchParams({
+    start_date: aaaammdd(ini),
+    end_date: aaaammdd(data),
+  });
+  const token = process.env.AWESOMEAPI_TOKEN?.trim();
+  const res = await fetch(`${AWESOME}/CNY-BRL/30?${q}`, {
+    headers: token ? { "x-api-key": token } : undefined,
+    signal: AbortSignal.timeout(15000),
+  });
+  // 404 é "essa moeda não existe": resposta legítima, não erro de rede.
+  if (!res.ok) return null;
+  const lista = await res.json();
+  if (!Array.isArray(lista)) return null;
+  // Fim do dia pedido em São Paulo: o fechamento sai à tarde.
+  const teto = new Date(`${emSaoPaulo(data)}T23:59:59.999-03:00`).getTime();
+  let melhor = null;
+  for (const o of lista) {
+    const venda = Number(o?.ask);
+    const t = Number(o?.timestamp);
+    if (!Number.isFinite(venda) || venda <= 0 || !Number.isFinite(t)) continue;
+    // O timestamp vem em segundos num endpoint e em milissegundos no outro.
+    const quando = new Date(t > 1e11 ? t : t * 1000);
+    if (quando.getTime() > teto) continue;
+    if (!melhor || quando > melhor.dataDoBoletim) {
+      melhor = { taxa: venda, dataDoBoletim: quando, fonte: "AWESOMEAPI" };
+    }
+  }
+  return melhor;
+}
+
+/** PTAX na frente, porque é a oficial; AwesomeAPI quando ele não responde. */
+async function cambioDe(data) {
+  const p = await ptaxDe(data);
+  if (p) return { ...p, fonte: "PTAX" };
+  return awesomeDe(data);
+}
+
 const main = async () => {
   const alvo = await prisma.raffle.findMany({
     where: { deliveryCost: { not: null }, deliveryFxRate: null },
@@ -115,7 +170,7 @@ const main = async () => {
     const chave = emSaoPaulo(quando);
     if (!cache.has(chave)) {
       try {
-        cache.set(chave, await ptaxDe(quando));
+        cache.set(chave, await cambioDe(quando));
       } catch (e) {
         console.log(`  ! ${chave}: ${e.message}. Rode de novo depois.`);
         cache.set(chave, null);
@@ -131,12 +186,16 @@ const main = async () => {
     console.log(
       `  ${GRAVAR ? "+" : "?"} ${r.title} (${chave}): ¥ ${r.deliveryCost}` +
         ` x ${p.taxa} = R$ ${emReais.toFixed(2)}` +
-        ` (boletim de ${emSaoPaulo(p.dataDoBoletim)})`,
+        ` (${p.fonte}, ${emSaoPaulo(p.dataDoBoletim)})`,
     );
     if (GRAVAR) {
       await prisma.raffle.update({
         where: { id: r.id },
-        data: { deliveryFxRate: p.taxa, deliveryFxDate: p.dataDoBoletim },
+        data: {
+          deliveryFxRate: p.taxa,
+          deliveryFxDate: p.dataDoBoletim,
+          deliveryFxSource: p.fonte,
+        },
       });
       gravadas++;
     }

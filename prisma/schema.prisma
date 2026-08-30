@@ -671,6 +671,16 @@ model Raffle {
   /// conferível depois, em vez de um número sem procedência.
   deliveryFxDate DateTime?
 
+  /// De onde a taxa veio: "PTAX" ou "AWESOMEAPI".
+  ///
+  /// Duas fontes podem responder pela mesma moeda, e sem isto a taxa vira um
+  /// número sem procedência: não daria para reconciliar o relatório com o
+  /// boletim depois, nem para saber quais linhas usaram a oficial.
+  ///
+  /// Texto e não enum: é rótulo de origem, e acrescentar uma fonte não deveria
+  /// exigir migration de tipo.
+  deliveryFxSource String?
+
   /// Campanha exclusiva: nível mínimo (1–21) para conseguir reservar.
   /// NULL = aberta a todos. Quem já está em patente de prestígio passa em
   /// qualquer exigência. É o que dá consequência ao rank.
