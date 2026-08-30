@@ -14,7 +14,10 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
-import { assertRaffleInActiveTenant } from "@/lib/tenant";
+import {
+  assertRaffleInActiveTenant,
+  getActiveTenantIdForAdmin,
+} from "@/lib/tenant";
 import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
@@ -149,5 +152,50 @@ export async function salvarCustoDaEntregaAction(
     return { ok: true, data: { deliveryCost: valor } };
   } catch {
     return { ok: false, error: "Não foi possível salvar o custo." };
+  }
+}
+
+/**
+ * As taxas de câmbio usadas para ler o custo em real e em dólar.
+ *
+ * Digitadas, e não buscadas de uma API. Câmbio inventado por padrão vira
+ * relatório financeiro errado com cara de certo, e quem opera é quem sabe a
+ * que taxa comprou.
+ *
+ * Nulo apaga: sem taxa, a tela mostra só yuan e diz por quê, em vez de exibir
+ * uma conversão baseada em número velho.
+ */
+export async function salvarTaxasAction(
+  cnyToBrl: number | null,
+  usdToBrl: number | null,
+): Promise<ActionResult<null>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+    for (const v of [cnyToBrl, usdToBrl]) {
+      // Zero e negativo não são taxa: um vira divisão por zero, o outro vira
+      // valor negativo na tela.
+      if (v != null && (!Number.isFinite(v) || v <= 0 || v > 1000)) {
+        return { ok: false, error: "Taxa inválida." };
+      }
+    }
+
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { cnyToBrl, usdToBrl },
+    });
+
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { cnyToBrl, usdToBrl },
+    });
+
+    revalidatePath("/admin/entregas");
+    return { ok: true, data: null };
+  } catch {
+    return { ok: false, error: "Não foi possível salvar as taxas." };
   }
 }

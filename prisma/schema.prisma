@@ -331,6 +331,20 @@ model Tenant {
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
   logoShape                         LogoShape @default(RECTANGLE)
   siteDescription                   String?
+  /// Câmbio usado para converter o custo da entrega, digitado pelo painel.
+  ///
+  /// A skin é comprada do fornecedor em YUAN, e é isso que fica gravado em
+  /// Raffle.deliveryCost. Real e dólar são leituras dele.
+  ///
+  /// As taxas são digitadas, e não buscadas de uma API, de propósito: número
+  /// de câmbio inventado por padrão vira relatório financeiro errado com cara
+  /// de certo. Sem taxa cadastrada, a tela mostra só yuan e diz por quê.
+  ///
+  /// Quantos REAIS vale 1 yuan.
+  cnyToBrl                          Decimal?  @db.Decimal(12, 6)
+  /// Quantos REAIS vale 1 dólar.
+  usdToBrl                          Decimal?  @db.Decimal(12, 6)
+
   supportPhone                      String?
   supportEmail                      String?
   homeCampaignsTitle                String?

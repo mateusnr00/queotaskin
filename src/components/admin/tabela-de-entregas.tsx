@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
+  Coins,
   Copy,
   ExternalLink,
   Info,
@@ -56,8 +57,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { semAcento } from "@/lib/busca";
-import { formatBRL, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { lerReais } from "@/lib/dinheiro";
+import {
+  deYuan,
+  formatarMoeda,
+  paraYuan,
+  proximaMoeda,
+  SIMBOLO,
+  type Moeda,
+  type Taxas,
+} from "@/lib/moeda";
 import { numeroDoTitulo } from "@/lib/titulo";
 import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
 import {
@@ -68,6 +78,7 @@ import {
 import {
   marcarEntregaAction,
   salvarCustoDaEntregaAction,
+  salvarTaxasAction,
 } from "@/server/actions/entregas";
 import type { Delivery } from "@/server/services/deliveries";
 
@@ -75,16 +86,27 @@ import type { Delivery } from "@/server/services/deliveries";
 const TODOS = "TODOS";
 const PENDENTES = "PENDENTES";
 
-export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
+export function TabelaDeEntregas({
+  entregas,
+  taxas,
+}: {
+  entregas: Delivery[];
+  taxas: Taxas;
+}) {
   // Abre em PENDENTES: a fila existe para dizer o que falta fazer.
   const [filtro, setFiltro] = useState<string>(PENDENTES);
   const [busca, setBusca] = useState("");
+  // Yuan por padrão: é a moeda em que a skin é comprada, e é o número que fica
+  // gravado. Real e dólar são leituras. A escolha vale para a lista inteira,
+  // porque comparar custos em moedas diferentes não compara nada.
+  const [moeda, setMoeda] = useState<Moeda>("CNY");
 
   const qtdPendentes = entregas.filter((e) => pendente(e.status)).length;
   const semLink = entregas.filter(
     (e) => pendente(e.status) && e.winner && !e.winner.steamTradeUrl,
   ).length;
-  const gasto = entregas.reduce((t, e) => t + (e.deliveryCost ?? 0), 0);
+  const gastoEmYuan = entregas.reduce((t, e) => t + (e.deliveryCost ?? 0), 0);
+  const gasto = deYuan(gastoEmYuan, moeda, taxas);
 
   const visiveis = useMemo(() => {
     const alvo = semAcento(busca);
@@ -117,11 +139,11 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
             {qtdPendentes} pendente{qtdPendentes === 1 ? "" : "s"}
           </span>{" "}
           de {entregas.length}.
-          {gasto > 0 && (
+          {gastoEmYuan > 0 && (
             <>
               {" "}
               <span className="font-semibold text-foreground">
-                {formatBRL(gasto)}
+                {gasto == null ? formatarMoeda(gastoEmYuan, "CNY") : formatarMoeda(gasto, moeda)}
               </span>{" "}
               gastos com fornecedor.
             </>
@@ -164,11 +186,34 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
           aria-label="Buscar entrega"
           className="h-9 w-full sm:max-w-sm"
         />
+
+        {/* A moeda, num clique. Yuan, real, dólar, e volta. */}
+        <button
+          type="button"
+          onClick={() => setMoeda(proximaMoeda(moeda))}
+          title="Trocar a moeda dos custos"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition-colors hover:bg-muted"
+        >
+          <Coins className="h-3.5 w-3.5 text-muted-foreground" />
+          {SIMBOLO[moeda]} {moeda}
+        </button>
+
+        <DialogDeTaxas taxas={taxas} />
       </div>
+
+      {/* Sem taxa cadastrada não há como converter, e a tela diz isso em vez
+          de mostrar um número inventado. */}
+      {moeda !== "CNY" && gasto == null && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          Cadastre a taxa de câmbio em Taxas para ver os custos em{" "}
+          {moeda === "BRL" ? "real" : "dólar"}. Sem ela, os valores continuam
+          em yuan.
+        </p>
+      )}
 
       <div className="space-y-3 sm:hidden">
         {visiveis.map((e) => (
-          <Cartao key={e.raffleId} entrega={e} />
+          <Cartao key={e.raffleId} entrega={e} moeda={moeda} taxas={taxas} />
         ))}
         {visiveis.length === 0 && <Vazio total={entregas.length} />}
       </div>
@@ -182,7 +227,7 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
                 <TableHead className="min-w-[120px]">Link de troca</TableHead>
                 <TableHead className="text-right">Título</TableHead>
                 <TableHead className="min-w-[130px] text-right">
-                  Custo
+                  Custo ({moeda})
                 </TableHead>
                 <TableHead className="min-w-[150px]">Sorteado</TableHead>
                 <TableHead className="sticky right-0 min-w-[190px] bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
@@ -192,7 +237,7 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
             </TableHeader>
             <TableBody>
               {visiveis.map((e) => (
-                <Linha key={e.raffleId} entrega={e} />
+                <Linha key={e.raffleId} entrega={e} moeda={moeda} taxas={taxas} />
               ))}
             </TableBody>
           </Table>
@@ -223,7 +268,15 @@ function Ponto({ cor }: { cor: string }) {
   );
 }
 
-function Linha({ entrega }: { entrega: Delivery }) {
+function Linha({
+  entrega,
+  moeda,
+  taxas,
+}: {
+  entrega: Delivery;
+  moeda: Moeda;
+  taxas: Taxas;
+}) {
   const premio = entrega.prizes[0] ?? null;
 
   // Sem `opacity` na linha concluída: opacidade em elemento pai cria uma camada
@@ -278,7 +331,7 @@ function Linha({ entrega }: { entrega: Delivery }) {
       </TableCell>
 
       <TableCell className="text-right">
-        <CampoDeCusto entrega={entrega} />
+        <CampoDeCusto entrega={entrega} moeda={moeda} taxas={taxas} />
       </TableCell>
 
       <TableCell className="text-xs text-muted-foreground">
@@ -292,7 +345,15 @@ function Linha({ entrega }: { entrega: Delivery }) {
   );
 }
 
-function Cartao({ entrega }: { entrega: Delivery }) {
+function Cartao({
+  entrega,
+  moeda,
+  taxas,
+}: {
+  entrega: Delivery;
+  moeda: Moeda;
+  taxas: Taxas;
+}) {
   const premio = entrega.prizes[0] ?? null;
   const estado = estadoDaEntrega(entrega.status);
 
@@ -347,7 +408,7 @@ function Cartao({ entrega }: { entrega: Delivery }) {
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Custo</span>
         <div className="w-32">
-          <CampoDeCusto entrega={entrega} />
+          <CampoDeCusto entrega={entrega} moeda={moeda} taxas={taxas} />
         </div>
       </div>
 
@@ -591,28 +652,71 @@ function SeletorDeStatus({ entrega }: { entrega: Delivery }) {
 /**
  * O custo, editável na própria linha.
  *
- * Salva ao sair do campo e no Enter, e só quando o valor mudou: anotar preço é
- * digitar um número e seguir, não abrir um formulário.
+ * O campo mostra e aceita o valor na moeda ESCOLHIDA na barra, e converte para
+ * yuan na hora de gravar. Yuan é o que fica no banco porque é a moeda em que a
+ * skin foi comprada de verdade; o resto é leitura.
+ *
+ * Isso permite digitar em real quando foi em real que se pagou, sem obrigar a
+ * fazer a conta de cabeça antes.
+ *
+ * Salva ao sair do campo e no Enter, e só quando o valor mudou.
  */
-function CampoDeCusto({ entrega }: { entrega: Delivery }) {
+function CampoDeCusto({
+  entrega,
+  moeda,
+  taxas,
+}: {
+  entrega: Delivery;
+  moeda: Moeda;
+  taxas: Taxas;
+}) {
   const router = useRouter();
-  const gravado = entrega.deliveryCost;
-  const comoTexto = gravado == null ? "" : gravado.toFixed(2).replace(".", ",");
+  const emYuan = entrega.deliveryCost;
+  // Sem taxa, não dá para mostrar nem editar fora do yuan: o campo cai para
+  // yuan em vez de exibir vazio, que pareceria "custo não anotado".
+  const podeConverter = emYuan == null || deYuan(emYuan, moeda, taxas) != null;
+  const moedaDoCampo: Moeda = podeConverter ? moeda : "CNY";
+  const naMoeda =
+    emYuan == null ? null : deYuan(emYuan, moedaDoCampo, taxas);
+  const comoTexto =
+    naMoeda == null ? "" : naMoeda.toFixed(2).replace(".", ",");
+
   const [texto, setTexto] = useState(comoTexto);
   const [salvando, setSalvando] = useState(false);
+  // A moeda pode mudar embaixo do campo, e o texto tem que acompanhar. Guardar
+  // qual moeda o texto atual representa é o que evita gravar um número de real
+  // como se fosse yuan.
+  const [moedaDoTexto, setMoedaDoTexto] = useState(moedaDoCampo);
+  if (moedaDoTexto !== moedaDoCampo) {
+    setMoedaDoTexto(moedaDoCampo);
+    setTexto(comoTexto);
+  }
 
   async function salvar() {
-    const valor = lerReais(texto);
-    if (valor === gravado) return;
+    const digitado = lerReais(texto);
+    const novoEmYuan =
+      digitado == null ? null : paraYuan(digitado, moedaDoCampo, taxas);
+    // Compara com duas casas: reescrever "10,00" sobre 10 não é uma mudança.
+    const igual =
+      (novoEmYuan == null && emYuan == null) ||
+      (novoEmYuan != null &&
+        emYuan != null &&
+        Math.abs(novoEmYuan - emYuan) < 0.005);
+    if (igual) return;
+
     setSalvando(true);
-    const r = await salvarCustoDaEntregaAction(entrega.raffleId, valor);
+    const r = await salvarCustoDaEntregaAction(entrega.raffleId, novoEmYuan);
     setSalvando(false);
     if (!r.ok) {
       toast.error(r.error);
       setTexto(comoTexto);
       return;
     }
-    toast.success(valor == null ? "Custo apagado." : `Custo: ${formatBRL(valor)}`);
+    toast.success(
+      novoEmYuan == null
+        ? "Custo apagado."
+        : `Custo: ${formatarMoeda(novoEmYuan, "CNY")}`,
+    );
     router.refresh();
   }
 
@@ -627,12 +731,93 @@ function CampoDeCusto({ entrega }: { entrega: Delivery }) {
         if (e.key === "Enter") e.currentTarget.blur();
         if (e.key === "Escape") setTexto(comoTexto);
       }}
-      placeholder="R$"
-      aria-label={`Custo da entrega de ${entrega.raffleTitle}`}
+      placeholder={SIMBOLO[moedaDoCampo]}
+      aria-label={`Custo da entrega de ${entrega.raffleTitle}, em ${moedaDoCampo}`}
       className={cn(
         "h-8 text-right font-mono text-xs tabular-nums",
-        gravado != null && "border-emerald-500/40",
+        emYuan != null && "border-emerald-500/40",
       )}
     />
+  );
+}
+
+/** As taxas de câmbio, atrás de um botão, como na referência. */
+function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
+  const router = useRouter();
+  const [cny, setCny] = useState(
+    taxas.cnyToBrl == null ? "" : String(taxas.cnyToBrl).replace(".", ","),
+  );
+  const [usd, setUsd] = useState(
+    taxas.usdToBrl == null ? "" : String(taxas.usdToBrl).replace(".", ","),
+  );
+  const [salvando, setSalvando] = useState(false);
+  const [aberto, setAberto] = useState(false);
+
+  async function salvar() {
+    setSalvando(true);
+    const r = await salvarTaxasAction(lerReais(cny), lerReais(usd));
+    setSalvando(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    toast.success("Taxas salvas.");
+    setAberto(false);
+    router.refresh();
+  }
+
+  return (
+    <Dialog open={aberto} onOpenChange={setAberto}>
+      <DialogTrigger className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <Coins className="h-3.5 w-3.5" />
+        Taxas
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Taxas de câmbio</DialogTitle>
+          <DialogDescription>
+            Usadas para ler em real e em dólar o custo que foi pago em yuan.
+            Digitadas, e não buscadas de uma cotação automática: quem comprou é
+            quem sabe a que taxa comprou.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label htmlFor="taxa-cny" className="text-sm font-medium">
+              1 yuan vale quantos reais
+            </label>
+            <Input
+              id="taxa-cny"
+              value={cny}
+              inputMode="decimal"
+              onChange={(e) => setCny(e.target.value)}
+              placeholder="0,76"
+              className="font-mono"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="taxa-usd" className="text-sm font-medium">
+              1 dólar vale quantos reais
+            </label>
+            <Input
+              id="taxa-usd"
+              value={usd}
+              inputMode="decimal"
+              onChange={(e) => setUsd(e.target.value)}
+              placeholder="5,40"
+              className="font-mono"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={salvando}
+            onClick={salvar}
+            className="h-9 w-full rounded-lg bg-primary text-sm font-bold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-60"
+          >
+            {salvando ? "Salvando..." : "Salvar taxas"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
