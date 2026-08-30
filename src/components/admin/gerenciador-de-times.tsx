@@ -30,6 +30,7 @@ import {
   apagarTimeAction,
   enviarEscudoAction,
   removerEscudoAction,
+  salvarEscudoUrlAction,
   salvarTimeAction,
 } from "@/server/actions/times";
 
@@ -206,9 +207,14 @@ function Linha({
         <p className="truncate font-mono text-[11px] text-muted-foreground">
           {time.id} · {time.tag} · {time.cor}
           {torcedores > 0 && ` · ${torcedores} torcendo`}
-          {time.escudo ? " · escudo enviado" : " · sem escudo"}
         </p>
       </div>
+
+      {/* O link do escudo, na própria linha.
+          Colar trinta links abrindo o formulário trinta vezes seria absurdo:
+          aqui é colar e sair do campo. Salva no blur e no Enter, e só quando o
+          valor mudou, para passar o olho pela lista não gerar escrita. */}
+      <CampoDeLink time={time} />
 
       <div className="flex shrink-0 flex-wrap items-center gap-1">
         <input
@@ -281,6 +287,61 @@ function Linha({
           <span className="sr-only">Apagar</span>
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * O campo de link do escudo, direto na linha da lista.
+ *
+ * Salva ao sair do campo e no Enter, sem botão: um botão por linha em trinta
+ * linhas é trinta alvos a mais para errar, e o gesto natural depois de colar
+ * um link é sair do campo.
+ */
+function CampoDeLink({ time }: { time: TimeDoPainel }) {
+  const router = useRouter();
+  const [valor, setValor] = useState(time.escudo ?? "");
+  const [salvando, comTransicao] = useTransition();
+  // O que está no banco. Comparar com isto é o que evita salvar quando a
+  // pessoa só clicou no campo e saiu.
+  const gravado = time.escudo ?? "";
+
+  function salvar() {
+    if (valor.trim() === gravado) return;
+    comTransicao(async () => {
+      const r = await salvarEscudoUrlAction(time.id, valor);
+      if (!r.ok) {
+        toast.error(r.error);
+        setValor(gravado);
+        return;
+      }
+      toast.success(r.data.escudo ? "Escudo atualizado." : "Escudo removido.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex w-full min-w-0 items-center gap-2 sm:w-72">
+      <Input
+        value={valor}
+        disabled={salvando}
+        maxLength={2048}
+        onChange={(e) => setValor(e.target.value.trim())}
+        onBlur={salvar}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setValor(gravado);
+        }}
+        placeholder="https://... link do escudo"
+        aria-label={`Link do escudo de ${time.nome}`}
+        className={cn(
+          "h-9 font-mono text-[11px]",
+          salvando && "opacity-60",
+          // Verde discreto quando já tem link: dá para varrer a lista e ver
+          // quais faltam sem ler URL nenhuma.
+          gravado && "border-emerald-500/40",
+        )}
+      />
     </div>
   );
 }

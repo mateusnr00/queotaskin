@@ -151,6 +151,57 @@ export async function enviarEscudoAction(
   }
 }
 
+/**
+ * Grava só o link do escudo.
+ *
+ * Existe separada de salvarTimeAction porque o caso de uso é outro: colar
+ * trinta links em sequência, direto na lista, sem abrir o formulário de cada
+ * time. A ação inteira pediria nome, tag, cor e região a cada colagem, e
+ * qualquer um deles inválido faria a colagem falhar por um motivo que não tem
+ * nada a ver com o link.
+ *
+ * String vazia limpa, que é o mesmo que apagar o link no campo e sair.
+ */
+export async function salvarEscudoUrlAction(
+  id: string,
+  url: string,
+): Promise<ActionResult<{ escudo: string | null }>> {
+  try {
+    await getAdminOrThrow();
+    const limpo = url.trim();
+    // Só https. "javascript:" e "data:" num src colado por quem tem o painel
+    // viraria execução de script na página pública; "http:" quebraria o
+    // cadeado do navegador para todo visitante.
+    if (limpo !== "" && !limpo.startsWith("https://")) {
+      return { ok: false, error: "O link precisa começar com https://" };
+    }
+    if (limpo.length > 2048) {
+      return { ok: false, error: "Link longo demais." };
+    }
+
+    const time = await prisma.team.findUnique({
+      where: { id },
+      select: { nome: true },
+    });
+    if (!time) return { ok: false, error: "Time não encontrado." };
+
+    const escudo = limpo === "" ? null : limpo;
+    await prisma.team.update({ where: { id }, data: { escudo } });
+
+    await registrarLog({
+      acao: "time.editado",
+      alvo: { tipo: "Team", id, rotulo: time.nome },
+      detalhes: { escudo: escudo ? "link" : "removido" },
+    });
+
+    revalidatePath("/admin/times");
+    revalidatePath("/minha-conta");
+    return { ok: true, data: { escudo } };
+  } catch {
+    return { ok: false, error: "Não foi possível salvar o link." };
+  }
+}
+
 /** Tira o escudo e volta ao emblema de iniciais. */
 export async function removerEscudoAction(
   id: string,
