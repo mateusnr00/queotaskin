@@ -66,6 +66,25 @@ describe("situacaoDoPrazo", () => {
     expect(a).toEqual(b);
   });
 
+  it("na última hora o rótulo conta em minutos", () => {
+    // "faltam 0h" lido rápido é "acabou", e é justamente a faixa em que o
+    // número precisa ser exato.
+    const s = situacaoDoPrazo(SORTEIO, null, depois(71.5))!;
+    expect(s.estado).toBe("perto");
+    expect(s.rotulo).toBe("faltam 30min");
+    expect(s.curto).toBe("30min");
+  });
+
+  it("o rótulo curto é só o tempo, sem repetir o estado", () => {
+    // O selo fica ao lado das datas e do nome da skin: com a frase inteira
+    // ele empurrava o resto da linha para fora.
+    expect(situacaoDoPrazo(SORTEIO, null, depois(2))!.curto).toBe("70h");
+    expect(situacaoDoPrazo(SORTEIO, null, depois(80))!.curto).toBe("8h");
+    expect(situacaoDoPrazo(SORTEIO, depois(10), depois(200))!.curto).toBe(
+      "10h",
+    );
+  });
+
   it("sem data de sorteio devolve nulo, e não um prazo inventado", () => {
     expect(situacaoDoPrazo(null, null, new Date())).toBeNull();
   });

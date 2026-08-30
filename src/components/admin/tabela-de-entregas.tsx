@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
+  Clock,
   Coins,
   Copy,
   ExternalLink,
@@ -454,6 +455,15 @@ const COR_DO_PRAZO: Record<EstadoDoPrazo, string> = {
     "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
 };
 
+/** Qual dos tempos é este: o ícone diz o que o rótulo curto deixou de dizer. */
+const ICONE_DO_PRAZO: Record<EstadoDoPrazo, typeof Clock> = {
+  no_prazo: Clock,
+  perto: Clock,
+  atrasada: AlertTriangle,
+  cumprida: Check,
+  estourada: AlertTriangle,
+};
+
 function SeloDoPrazo({
   entrega,
   agora,
@@ -466,17 +476,19 @@ function SeloDoPrazo({
   if (!agora) return null;
   const s = situacaoDoPrazo(entrega.drawnAt, entrega.deliveredAt, agora);
   if (!s) return null;
+  const Icone = ICONE_DO_PRAZO[s.estado];
 
   return (
     <span
-      title={`Prazo de ${PRAZO_DE_ENTREGA_HORAS}h a partir do sorteio`}
+      title={`${s.rotulo} (prazo de ${PRAZO_DE_ENTREGA_HORAS}h a partir do sorteio)`}
       className={cn(
-        "mt-1 inline-flex w-fit items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-bold",
+        "inline-flex w-fit shrink-0 items-center gap-0.5 rounded-full border px-1 py-px align-middle text-[10px] font-bold tabular-nums",
         COR_DO_PRAZO[s.estado],
       )}
     >
-      {s.estado === "atrasada" && <AlertTriangle className="h-3 w-3" />}
-      {s.rotulo}
+      <Icone aria-hidden className="h-2.5 w-2.5" strokeWidth={2.5} />
+      {s.curto}
+      <span className="sr-only">{s.rotulo}</span>
     </span>
   );
 }
@@ -582,8 +594,10 @@ function Linha({
       </TableCell>
 
       <TableCell className="text-xs text-muted-foreground">
-        {entrega.deliveredAt ? formatDateTime(entrega.deliveredAt) : "-"}
-        <SeloDoPrazo entrega={entrega} agora={agora} />
+        <span className="inline-flex items-center gap-1.5">
+          {entrega.deliveredAt ? formatDateTime(entrega.deliveredAt) : "-"}
+          <SeloDoPrazo entrega={entrega} agora={agora} />
+        </span>
       </TableCell>
 
       <TableCell className="sticky right-0 bg-[#0e1013] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.8)]">
@@ -637,12 +651,12 @@ function Cartao({
               )}
               Sorteada {formatDateTime(entrega.drawnAt)}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {entrega.deliveredAt
                 ? `Enviada ${formatDateTime(entrega.deliveredAt)}`
                 : "Ainda não enviada"}
+              <SeloDoPrazo entrega={entrega} agora={agora} />
             </p>
-            <SeloDoPrazo entrega={entrega} agora={agora} />
           </div>
           <span
             className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
