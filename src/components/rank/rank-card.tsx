@@ -1,3 +1,6 @@
+import { Medal } from "lucide-react";
+
+import { Moldura } from "@/components/ui/moldura";
 import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
 import {
   MAX_LEVEL,
@@ -9,7 +12,16 @@ import {
   xpForLevel,
 } from "@/lib/rank";
 
-/** Painel com aresta de acento à esquerda, a marca visual do rank. */
+/**
+ * Painel do rank, na moldura do site, com a aresta de acento à esquerda.
+ *
+ * A borda cinza de 1px era de outro tempo: o resto do site (entrar, entregas,
+ * relatórios, meus títulos) usa a moldura de borda em gradiente, e esta era a
+ * única página que ainda misturava os dois desenhos.
+ *
+ * A aresta colorida fica: ela é a única coisa da tela que muda de cor com a
+ * patente, e é o que faz Prata e Global não parecerem o mesmo cartão.
+ */
 function Panel({
   color,
   children,
@@ -20,16 +32,16 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section
-      className={`relative overflow-hidden rounded-r-lg border border-l-0 border-[#232730] bg-[#141619] ${className}`}
-    >
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-[3px]"
-        style={{ backgroundColor: color }}
-      />
-      {children}
-    </section>
+    <Moldura className={className}>
+      <section className="relative">
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[3px]"
+          style={{ backgroundColor: color }}
+        />
+        {children}
+      </section>
+    </Moldura>
   );
 }
 
@@ -124,7 +136,9 @@ export function RankCard({
               ) : (
                 <>
                   Próximo:{" "}
-                  <b className="font-semibold text-foreground">{progress.nextLabel}</b>
+                  <b className="font-semibold text-foreground">
+                    {progress.nextLabel}
+                  </b>
                 </>
               )}
             </span>
@@ -174,99 +188,117 @@ export function RankLadder({ xp }: { xp: number }) {
   const current = rankProgress(xp).rank;
 
   return (
-    <section className="rounded-lg border border-[#232730] bg-[#141619] p-5">
-      <h2 className="text-sm font-bold tracking-wide">PATENTES</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        22 níveis. Uma missão: chegar ao Global. Depois disso, começa o
-        prestígio.
-      </p>
-      {/* Para que serve, e não só quais são. A escada estava listando patentes
+    <Moldura>
+      <section className="p-4 md:p-5">
+        {/* Título no mesmo formato das outras seções da conta. Em caixa alta
+            pequena ele lia como rótulo de campo, e não como o cabeçalho da
+            maior seção da página. */}
+        <h2 className="flex items-center gap-2 text-base font-bold">
+          <Medal aria-hidden className="h-4 w-4 text-muted-foreground" />
+          Patentes
+        </h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          22 níveis. Uma missão: chegar ao Global. Depois disso, começa o
+          prestígio.
+        </p>
+        {/* Para que serve, e não só quais são. A escada estava listando patentes
           sem dizer o que a pessoa ganha ao subir, e patente sem prêmio é só
           enfeite. */}
-      <p className="mt-2 mb-4 text-xs leading-relaxed text-muted-foreground">
-        Cada compra soma XP e te faz subir de patente. Patente alta libera
-        campanha exclusiva, inclusive sorteio grátis reservado para quem já
-        chegou lá.
-      </p>
+        <p className="mt-2 mb-4 text-xs leading-relaxed text-muted-foreground">
+          Cada compra soma XP e te faz subir de patente. Patente alta libera
+          campanha exclusiva, inclusive sorteio grátis reservado para quem já
+          chegou lá.
+        </p>
 
-      <ol className="space-y-2.5">
-        {TIERS.map((tier, index) => {
-          const last = TIERS[index + 1] ? TIERS[index + 1].from - 1 : MAX_LEVEL;
-          const active =
-            current.prestige == null &&
-            current.level >= tier.from &&
-            current.level <= last;
+        <ol className="space-y-2.5">
+          {TIERS.map((tier, index) => {
+            const last = TIERS[index + 1]
+              ? TIERS[index + 1].from - 1
+              : MAX_LEVEL;
+            const active =
+              current.prestige == null &&
+              current.level >= tier.from &&
+              current.level <= last;
 
-          return (
-            <li key={tier.name} className="flex items-center gap-3">
-              <span
-                className="w-20 shrink-0 text-[11px] font-bold uppercase leading-tight tracking-[0.08em] sm:w-24"
-                style={{ color: active ? tier.color : undefined }}
-                data-active={active}
-              >
-                <span className={active ? "" : "text-muted-foreground"}>{tier.name}</span>
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {Array.from({ length: last - tier.from + 1 }, (_, i) => {
-                  const level = tier.from + i;
-                  // Apaga só o que ainda não foi conquistado. Quem chegou ao
-                  // prestígio passou por toda a escada, apagá-la inteira
-                  // faria a conquista parecer o contrário do que é.
-                  const reached = xp >= xpForLevel(level);
-                  const isCurrent = active && current.level === level;
-                  return (
-                    <span
-                      key={level}
-                      title={`${nomeDoNivel(level)} · nível ${level}`}
-                      className={
-                        isCurrent
-                          ? "rounded-full ring-2 ring-offset-2 ring-offset-[#141619]"
-                          : undefined
-                      }
-                      style={
-                        isCurrent ? { ["--tw-ring-color" as string]: current.color } : undefined
-                      }
-                    >
-                      <RankBadge xp={xpForLevel(level)} size="md" muted={!reached} />
-                    </span>
-                  );
-                })}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-
-      <ol className="mt-4 space-y-1.5 border-t border-[#232730] pt-4">
-        {PRESTIGE_RANKS.map((prestige) => {
-          const reached = xp >= prestige.xp;
-          return (
-            <li
-              key={prestige.key}
-              className="flex items-center gap-3 rounded-md border px-3 py-2"
-              style={{
-                borderColor: reached ? `${prestige.color}55` : "#232730",
-                backgroundColor: reached ? `${prestige.color}0f` : undefined,
-              }}
-            >
-              <RankBadge xp={prestige.xp} size="md" muted={!reached} />
-              <div className="min-w-0 flex-1">
-                <p
-                  className="text-xs font-bold"
-                  style={{ color: reached ? prestige.color : undefined }}
+            return (
+              <li key={tier.name} className="flex items-center gap-3">
+                <span
+                  className="w-20 shrink-0 text-[11px] font-bold uppercase leading-tight tracking-[0.08em] sm:w-24"
+                  style={{ color: active ? tier.color : undefined }}
+                  data-active={active}
                 >
-                  <span className={reached ? "" : "text-muted-foreground"}>
-                    {prestige.label}
+                  <span className={active ? "" : "text-muted-foreground"}>
+                    {tier.name}
                   </span>
-                </p>
-              </div>
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
-                {prestige.xp.toLocaleString("pt-BR")}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from({ length: last - tier.from + 1 }, (_, i) => {
+                    const level = tier.from + i;
+                    // Apaga só o que ainda não foi conquistado. Quem chegou ao
+                    // prestígio passou por toda a escada, apagá-la inteira
+                    // faria a conquista parecer o contrário do que é.
+                    const reached = xp >= xpForLevel(level);
+                    const isCurrent = active && current.level === level;
+                    return (
+                      <span
+                        key={level}
+                        title={`${nomeDoNivel(level)} · nível ${level}`}
+                        className={
+                          isCurrent
+                            ? "rounded-full ring-2 ring-offset-2 ring-offset-[#141619]"
+                            : undefined
+                        }
+                        style={
+                          isCurrent
+                            ? { ["--tw-ring-color" as string]: current.color }
+                            : undefined
+                        }
+                      >
+                        <RankBadge
+                          xp={xpForLevel(level)}
+                          size="md"
+                          muted={!reached}
+                        />
+                      </span>
+                    );
+                  })}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+
+        <ol className="mt-4 space-y-1.5 border-t border-[#232730] pt-4">
+          {PRESTIGE_RANKS.map((prestige) => {
+            const reached = xp >= prestige.xp;
+            return (
+              <li
+                key={prestige.key}
+                className="flex items-center gap-3 rounded-md border px-3 py-2"
+                style={{
+                  borderColor: reached ? `${prestige.color}55` : "#232730",
+                  backgroundColor: reached ? `${prestige.color}0f` : undefined,
+                }}
+              >
+                <RankBadge xp={prestige.xp} size="md" muted={!reached} />
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="text-xs font-bold"
+                    style={{ color: reached ? prestige.color : undefined }}
+                  >
+                    <span className={reached ? "" : "text-muted-foreground"}>
+                      {prestige.label}
+                    </span>
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+                  {prestige.xp.toLocaleString("pt-BR")}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+    </Moldura>
   );
 }
