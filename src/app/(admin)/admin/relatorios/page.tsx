@@ -17,7 +17,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Etiqueta, Moldura, Placa } from "@/components/admin/moldura";
+import { Etiqueta, Moldura, Placa } from "@/components/ui/moldura";
 import {
   Select,
   SelectContent,

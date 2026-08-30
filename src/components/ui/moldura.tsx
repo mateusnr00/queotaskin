@@ -1,10 +1,10 @@
 /**
- * As peças de desenho do painel.
+ * As peças de desenho compartilhadas: moldura, etiqueta e placa.
  *
- * Nasceram dentro da tela de Entregas. Ao vestir Relatórios com o mesmo
- * desenho, copiar seria como as duas telas divergiriam no primeiro ajuste:
- * alguém mexe no raio de uma e esquece a outra, e o painel passa a ter dois
- * dialetos. Aqui é um só.
+ * Nasceram dentro da tela de Entregas, foram para Relatórios e agora servem
+ * também a Meus títulos, que é página pública. Por isso saíram de components/
+ * admin: copiar seria como as telas divergiriam no primeiro ajuste, alguém
+ * mexe no raio de uma e esquece as outras, e o site passa a ter três dialetos.
  *
  * A referência é o cartão de entrar e criar conta (BORDA_DE_AUTH): borda em
  * gradiente, cantos concêntricos e um fio de luz na aresta de cima.

@@ -60,7 +60,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Etiqueta, Moldura, Placa } from "@/components/admin/moldura";
+import { Etiqueta, Moldura, Placa } from "@/components/ui/moldura";
 import { semAcento } from "@/lib/busca";
 import { distanciaDoMercado, taxaDesatualizada } from "@/lib/cotacao";
 import { formatDateTime } from "@/lib/format";
