@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Relatórios" };
@@ -110,7 +111,23 @@ export default async function AdminReportsPage({
     ...(raffleId && { raffleId }),
   };
 
-  const [reservations, raffleOptions] = await Promise.all([
+  // O CUSTO DAS SKINS, no mesmo intervalo.
+  //
+  // O gasto é lançado na data em que a skin SAIU. Quando não há data de envio,
+  // que é o caso de prêmio pago em Pix, cai na data do sorteio: o dinheiro saiu
+  // por causa daquela campanha, e deixá-lo fora do relatório mostraria lucro
+  // que não existe.
+  const custoWhere: Prisma.RaffleWhereInput = {
+    tenantId,
+    deliveryCost: { not: null },
+    ...(raffleId && { id: raffleId }),
+    OR: [
+      { deliveredAt: { gte: from, lte: to } },
+      { deliveredAt: null, winnerDrawnAt: { gte: from, lte: to } },
+    ],
+  };
+
+  const [reservations, raffleOptions, entregas, tenant] = await Promise.all([
     prisma.reservation.findMany({
       where,
       orderBy: { paidAt: "asc" },
@@ -125,7 +142,24 @@ export default async function AdminReportsPage({
       orderBy: { createdAt: "desc" },
       select: { id: true, title: true },
     }),
+    prisma.raffle.findMany({
+      where: custoWhere,
+      select: {
+        deliveryCost: true,
+        deliveredAt: true,
+        winnerDrawnAt: true,
+      },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { cnyToBrl: true },
+    }),
   ]);
+
+  // O custo é gravado em YUAN. Sem a taxa cadastrada não há como somar com o
+  // faturamento, que é em real, e a tela diz isso em vez de misturar moedas.
+  const cnyToBrl = tenant?.cnyToBrl != null ? Number(tenant.cnyToBrl) : null;
+  const temTaxa = cnyToBrl != null && cnyToBrl > 0;
 
   // Agrega in-memory pelo bucket escolhido.
   // Para escalar (centenas de milhares de reservas), trocar pra query SQL
@@ -135,16 +169,32 @@ export default async function AdminReportsPage({
 
   const buckets = new Map<
     string,
-    { count: number; tickets: number; total: number }
+    { count: number; tickets: number; total: number; custo: number }
   >();
+  const vazio = () => ({ count: 0, tickets: 0, total: 0, custo: 0 });
 
   for (const r of reservations) {
     if (!r.paidAt) continue;
     const key = bucketKeyFn(r.paidAt);
-    const entry = buckets.get(key) ?? { count: 0, tickets: 0, total: 0 };
+    const entry = buckets.get(key) ?? vazio();
     entry.count += 1;
     entry.tickets += r._count.tickets;
     entry.total += Number(r.totalAmount);
+    buckets.set(key, entry);
+  }
+
+  // O custo entra nos mesmos baldes do faturamento, para a linha do período
+  // mostrar as duas pontas lado a lado.
+  let custoEmYuan = 0;
+  for (const e of entregas) {
+    const quando = e.deliveredAt ?? e.winnerDrawnAt;
+    if (!quando) continue;
+    const emYuan = Number(e.deliveryCost);
+    custoEmYuan += emYuan;
+    if (!temTaxa) continue;
+    const key = bucketKeyFn(quando);
+    const entry = buckets.get(key) ?? vazio();
+    entry.custo += emYuan * cnyToBrl!;
     buckets.set(key, entry);
   }
 
@@ -161,13 +211,22 @@ export default async function AdminReportsPage({
     (acc, r) => acc + Number(r.totalAmount),
     0
   );
+  const totalCusto = temTaxa ? custoEmYuan * cnyToBrl! : null;
+  const resultado = totalCusto == null ? null : totalRevenue - totalCusto;
+  // Margem sobre o faturamento. Sem faturamento não há percentual: dividir por
+  // zero daria Infinity na tela.
+  const margem =
+    resultado == null || totalRevenue === 0
+      ? null
+      : (resultado / totalRevenue) * 100;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Relatórios</h1>
         <p className="text-sm text-muted-foreground">
-          Vendas confirmadas (status PAGO) agrupadas pelo período escolhido.
+          Vendas confirmadas (status PAGO) e o custo das skins entregues, no
+          período escolhido.
         </p>
       </div>
 
@@ -247,8 +306,17 @@ export default async function AdminReportsPage({
         </div>
       </form>
 
+      {!temTaxa && custoEmYuan > 0 && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          Há {custoEmYuan.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}{" "}
+          yuan de custo no período, mas a taxa de câmbio não está cadastrada,
+          então ele não entra no resultado. Cadastre em Entregas, no botão
+          Taxas.
+        </p>
+      )}
+
       {/* Totais agregados */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardContent className="pt-4">
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -279,6 +347,46 @@ export default async function AdminReportsPage({
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Custo das skins
+            </div>
+            <div className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
+              {totalCusto == null ? "-" : formatBRL(totalCusto)}
+            </div>
+            <div className="text-[11px] text-muted-foreground tabular-nums">
+              ¥{" "}
+              {custoEmYuan.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Resultado
+            </div>
+            <div
+              className={cn(
+                "mt-1 text-2xl font-bold tabular-nums",
+                resultado != null &&
+                  (resultado >= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-red-600 dark:text-red-400"),
+              )}
+            >
+              {resultado == null ? "-" : formatBRL(resultado)}
+            </div>
+            {margem != null && (
+              <div className="text-[11px] text-muted-foreground tabular-nums">
+                margem de {margem.toFixed(1).replace(".", ",")}%
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabela agrupada */}
@@ -290,16 +398,18 @@ export default async function AdminReportsPage({
               <TableHead className="text-right">Reservas</TableHead>
               <TableHead className="text-right">Títulos</TableHead>
               <TableHead className="text-right">Faturamento</TableHead>
+              <TableHead className="text-right">Custo das skins</TableHead>
+              <TableHead className="text-right">Resultado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={6}
                   className="text-center text-muted-foreground py-10"
                 >
-                  Nenhuma venda no período selecionado.
+                  Nenhum lançamento no período selecionado.
                 </TableCell>
               </TableRow>
             ) : (
@@ -316,6 +426,19 @@ export default async function AdminReportsPage({
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
                     {formatBRL(data.total)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-amber-600 dark:text-amber-400">
+                    {data.custo > 0 ? formatBRL(data.custo) : "-"}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right font-semibold tabular-nums",
+                      data.total - data.custo >= 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400",
+                    )}
+                  >
+                    {formatBRL(data.total - data.custo)}
                   </TableCell>
                 </TableRow>
               ))
