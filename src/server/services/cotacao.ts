@@ -1,57 +1,96 @@
-// Busca a cotação do yuan e do dólar na AwesomeAPI.
+// Busca a cotação PTAX no Olinda, a API aberta do Banco Central.
 //
-// A leitura e as regras estão em src/lib/cotacao.ts, que é puro e testado.
-// Aqui fica só a ida à rede, que é o pedaço que não dá para testar sem
-// depender de um serviço de fora estar no ar.
+// A leitura e as regras estão em src/lib/ptax.ts, que é puro e testado. Aqui
+// fica só a ida à rede, que é o pedaço que não dá para testar sem depender de
+// um serviço de fora estar no ar.
+//
+// Sem chave: o Olinda é aberto. Nada para guardar, nada para rotacionar.
 
-import { lerCotacao, type Cotacao } from "@/lib/cotacao";
+import {
+  dataParaPtax,
+  inicioDaJanela,
+  lerPeriodoPtax,
+  type CotacaoPtax,
+} from "@/lib/ptax";
+import type { Cotacao } from "@/lib/cotacao";
 
-const URL_DA_COTACAO =
-  "https://economia.awesomeapi.com.br/json/last/CNY-BRL,USD-BRL";
+const BASE =
+  "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaPeriodo(moeda=@moeda,dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)";
+
+/** Rede lenta não pode segurar a tela esperando resposta. */
+const TIMEOUT_EM_MS = 8000;
 
 /**
  * Quanto tempo a resposta vale.
  *
- * Câmbio anda em minutos, não em segundos, e a taxa aqui é ponto de partida
- * para alguém digitar, não preço de execução de ordem. Quinze minutos deixa o
- * consumo em pouco mais de cem chamadas por dia no pior caso, contra as cem
- * mil mensais do plano gratuito.
+ * PTAX é boletim diário: buscar de novo dentro da mesma hora devolveria o
+ * mesmo número. Uma hora é folgado e mantém o Olinda longe de qualquer aperto.
  */
-const VALIDADE_EM_SEGUNDOS = 900;
-
-/** Rede lenta não pode segurar o diálogo de taxas aberto sem resposta. */
-const TIMEOUT_EM_MS = 6000;
+const VALIDADE_EM_SEGUNDOS = 3600;
 
 /**
- * A cotação de agora, ou nulo.
+ * A cotação PTAX de uma moeda no dia pedido, ou no último dia útil antes dele.
  *
- * Nulo, e não uma taxa qualquer: serviço fora do ar é motivo para a tela
- * dizer "não consegui buscar" e seguir aceitando o valor digitado, nunca para
- * preencher o campo com um número inventado.
+ * Pede um PERÍODO e não um dia, de propósito: fim de semana e feriado não têm
+ * boletim, e pedir dia a dia andando para trás seriam várias idas à rede para
+ * responder uma pergunta só. Com período, a mesma requisição já traz o último
+ * boletim que existe na janela.
  *
- * O token é opcional. A AwesomeAPI atende sem chave com resposta em cache e
- * limite menor, que já serve para um botão que alguém clica de vez em quando;
- * com AWESOMEAPI_TOKEN no ambiente, ele vai no cabeçalho. No cabeçalho e não
- * na query: chave em URL acaba em log de acesso e em histórico.
+ * Nulo quando não há boletim na janela inteira, ou quando a rede falhou. Nulo e
+ * não um número qualquer: taxa inventada vira custo errado no relatório com
+ * cara de custo certo.
  */
-export async function buscarCotacao(): Promise<Cotacao | null> {
-  const token = process.env.AWESOMEAPI_TOKEN?.trim();
+export async function cotacaoPtax(
+  moeda: "CNY" | "USD",
+  ate: Date,
+): Promise<CotacaoPtax | null> {
+  const q = new URLSearchParams({
+    "@moeda": `'${moeda}'`,
+    "@dataInicial": `'${dataParaPtax(inicioDaJanela(ate))}'`,
+    "@dataFinalCotacao": `'${dataParaPtax(ate)}'`,
+    $format: "json",
+  });
   try {
-    const res = await fetch(URL_DA_COTACAO, {
-      headers: token ? { "x-api-key": token } : undefined,
+    const res = await fetch(`${BASE}?${q}`, {
       signal: AbortSignal.timeout(TIMEOUT_EM_MS),
       next: { revalidate: VALIDADE_EM_SEGUNDOS },
     });
     if (!res.ok) return null;
-    const bruto: unknown = await res.json();
-    const cotacao = lerCotacao(bruto);
-    // Resposta que não trouxe nenhum dos dois pares é o mesmo que não ter
-    // resposta, e vale dizer isso em vez de mostrar dois campos vazios como se
-    // a busca tivesse dado certo.
-    if (cotacao.cnyToBrl == null && cotacao.usdToBrl == null) return null;
-    return cotacao;
+    return lerPeriodoPtax(await res.json());
   } catch {
     // Timeout, DNS, TLS, JSON quebrado: tudo cai aqui e vira "não consegui".
     return null;
   }
+}
+
+/**
+ * As duas taxas de uma data, no formato que a tela e o banco usam.
+ *
+ * As duas moedas são independentes: se o Olinda publicar uma e não a outra, a
+ * que veio continua valendo. Derrubar as duas por causa de uma seria jogar
+ * fora informação boa.
+ */
+export async function cotacaoDoDia(data: Date): Promise<Cotacao | null> {
+  const [cny, usd] = await Promise.all([
+    cotacaoPtax("CNY", data),
+    cotacaoPtax("USD", data),
+  ]);
+  if (!cny && !usd) return null;
+  const dias = [cny?.dataDoBoletim, usd?.dataDoBoletim].filter(
+    (d): d is Date => d != null,
+  );
+  return {
+    cnyToBrl: cny?.taxa ?? null,
+    usdToBrl: usd?.taxa ?? null,
+    // A mais recente das duas: mostrar a mais velha faria a cotação parecer
+    // mais defasada do que está.
+    atualizadaEm: dias.length
+      ? new Date(Math.max(...dias.map((d) => d.getTime())))
+      : null,
+  };
+}
+
+/** A cotação mais recente que existe hoje. */
+export function buscarCotacao(): Promise<Cotacao | null> {
+  return cotacaoDoDia(new Date());
 }

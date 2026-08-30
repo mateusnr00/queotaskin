@@ -71,6 +71,7 @@ import {
   paraYuan,
   proximaMoeda,
   SIMBOLO,
+  taxasDaEntrega,
   type Moeda,
   type Taxas,
 } from "@/lib/moeda";
@@ -147,7 +148,29 @@ export function TabelaDeEntregas({
     (e) => pendente(e.status) && e.winner && !e.winner.steamTradeUrl,
   ).length;
   const gastoEmYuan = entregas.reduce((t, e) => t + (e.deliveryCost ?? 0), 0);
-  const gasto = deYuan(gastoEmYuan, moeda, taxas);
+  // O TOTAL SOMA LINHA A LINHA, E NÃO CONVERTE A SOMA.
+  //
+  // Cada entrega tem o câmbio do dia dela: converter o total de yuan por uma
+  // taxa só aplicaria o boletim de hoje a compras de meses diferentes, que é
+  // exatamente o que a taxa por linha veio resolver.
+  //
+  // Nulo se qualquer linha com custo não tiver como ser convertida: um total
+  // parcial parece total, e ninguém desconfiaria dele.
+  const gasto = useMemo(() => {
+    if (moeda === "CNY") return gastoEmYuan;
+    let soma = 0;
+    for (const e of entregas) {
+      if (e.deliveryCost == null) continue;
+      const v = deYuan(
+        e.deliveryCost,
+        moeda,
+        taxasDaEntrega(taxas, e.deliveryFxRate),
+      );
+      if (v == null) return null;
+      soma += v;
+    }
+    return soma;
+  }, [entregas, moeda, taxas, gastoEmYuan]);
 
   const visiveis = useMemo(() => {
     const alvo = semAcento(busca);
@@ -887,11 +910,15 @@ function CampoDeCusto({
 }) {
   const router = useRouter();
   const emYuan = entrega.deliveryCost;
+  // A leitura em real desta linha é pelo boletim do dia dela, não pelo de hoje.
+  const taxasDaLinha = taxasDaEntrega(taxas, entrega.deliveryFxRate);
   // Sem taxa, não dá para mostrar nem editar fora do yuan: o campo cai para
   // yuan em vez de exibir vazio, que pareceria "custo não anotado".
-  const podeConverter = emYuan == null || deYuan(emYuan, moeda, taxas) != null;
+  const podeConverter =
+    emYuan == null || deYuan(emYuan, moeda, taxasDaLinha) != null;
   const moedaDoCampo: Moeda = podeConverter ? moeda : "CNY";
-  const naMoeda = emYuan == null ? null : deYuan(emYuan, moedaDoCampo, taxas);
+  const naMoeda =
+    emYuan == null ? null : deYuan(emYuan, moedaDoCampo, taxasDaLinha);
   const comoTexto = naMoeda == null ? "" : naMoeda.toFixed(2).replace(".", ",");
 
   const [texto, setTexto] = useState(comoTexto);
@@ -908,7 +935,7 @@ function CampoDeCusto({
   async function salvar() {
     const digitado = lerReais(texto);
     const novoEmYuan =
-      digitado == null ? null : paraYuan(digitado, moedaDoCampo, taxas);
+      digitado == null ? null : paraYuan(digitado, moedaDoCampo, taxasDaLinha);
     // Compara com duas casas: reescrever "10,00" sobre 10 não é uma mudança.
     const igual =
       (novoEmYuan == null && emYuan == null) ||
@@ -1046,9 +1073,10 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         <DialogHeader>
           <DialogTitle>Taxas de câmbio</DialogTitle>
           <DialogDescription>
-            Usadas para ler em real e em dólar o custo que foi pago em yuan. A
-            cotação de mercado sugere, mas quem salva é você: o relatório usa a
-            taxa gravada, senão um mês já fechado mudaria de valor todo dia.
+            Rede de segurança. Cada entrega já guarda o PTAX do dia em que ela
+            saiu, e é essa taxa que o relatório usa. Estas aqui valem para as
+            linhas sem boletim próprio e para o dia em que o Banco Central
+            estiver fora do ar.
           </DialogDescription>
         </DialogHeader>
 
@@ -1056,7 +1084,7 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
-              Cotação de mercado
+              PTAX de hoje
             </span>
             <button
               type="button"
@@ -1094,8 +1122,8 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {cotacao.atualizadaEm
-                  ? `AwesomeAPI, ${formatDateTime(new Date(cotacao.atualizadaEm))}`
-                  : "AwesomeAPI"}
+                  ? `Banco Central, boletim de ${formatDateTime(new Date(cotacao.atualizadaEm))}`
+                  : "Banco Central"}
               </p>
               <button
                 type="button"
@@ -1145,7 +1173,7 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
 
           {longeDoMercado && (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-              O que está nos campos destoa da cotação de agora
+              O que está nos campos destoa do PTAX de hoje
               {distanciaCny == null
                 ? ""
                 : ` (o yuan em ${distanciaCny > 0 ? "+" : ""}${distanciaCny

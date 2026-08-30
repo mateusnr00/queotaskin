@@ -653,6 +653,24 @@ model Raffle {
   /// centavo, e a soma da coluna é o número que interessa.
   deliveryCost  Decimal?  @db.Decimal(10, 2)
 
+  /// O PTAX de venda do dia em que ESTA entrega saiu: reais por yuan.
+  ///
+  /// Sem isto, o relatório converte todo o histórico pela taxa global do
+  /// painel, e o gasto de julho é reconvertido pelo câmbio de hoje toda vez
+  /// que alguém atualiza a taxa. Com a taxa gravada na linha, cada compra
+  /// carrega o câmbio do dia dela e o fechamento para de oscilar.
+  ///
+  /// Seis casas porque taxa não é dinheiro: 0,760500 arredondado para 0,76
+  /// erra R$ 0,42 numa compra de ¥ 850.
+  deliveryFxRate Decimal? @db.Decimal(12, 6)
+
+  /// O dia do boletim que gerou deliveryFxRate.
+  ///
+  /// Pode ser anterior ao envio: fim de semana e feriado não têm boletim, e o
+  /// que vale é o último dia útil. Guardar qual foi é o que torna a conversão
+  /// conferível depois, em vez de um número sem procedência.
+  deliveryFxDate DateTime?
+
   /// Campanha exclusiva: nível mínimo (1–21) para conseguir reservar.
   /// NULL = aberta a todos. Quem já está em patente de prestígio passa em
   /// qualquer exigência. É o que dá consequência ao rank.

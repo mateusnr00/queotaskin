@@ -19,6 +19,10 @@ export interface Delivery {
   deliveryNote: string | null;
   /** Quanto saiu do caixa para comprar a skin. Nulo é "ainda não anotado". */
   deliveryCost: number | null;
+  /** O PTAX do dia desta entrega. Nulo = converte pela taxa do painel. */
+  deliveryFxRate: number | null;
+  /** O dia do boletim que gerou deliveryFxRate. */
+  deliveryFxDate: Date | null;
   /** Nome de quem marcou, quando a conta ainda existe. */
   deliveredBy: string | null;
   /** Comprador do número sorteado. Nulo se o título não foi vendido. */
@@ -90,7 +94,9 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
   // relação declarada de propósito (ver o schema), então a busca é manual e
   // um id órfão simplesmente não vira nome, em vez de quebrar a tela.
   const idsDeQuemEntregou = [
-    ...new Set(raffles.map((r) => r.deliveredById).filter((v): v is string => !!v)),
+    ...new Set(
+      raffles.map((r) => r.deliveredById).filter((v): v is string => !!v),
+    ),
   ];
   const nomePorId = new Map(
     idsDeQuemEntregou.length > 0
@@ -122,6 +128,9 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       // vira número aqui, no mesmo lugar em que todo o resto é normalizado.
       deliveryCost:
         raffle.deliveryCost != null ? Number(raffle.deliveryCost) : null,
+      deliveryFxRate:
+        raffle.deliveryFxRate != null ? Number(raffle.deliveryFxRate) : null,
+      deliveryFxDate: raffle.deliveryFxDate,
       deliveredBy: raffle.deliveredById
         ? (nomePorId.get(raffle.deliveredById) ?? null)
         : null,
@@ -129,8 +138,10 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
         ? {
             reservationId: reservation.id,
             name: reservation.participantName,
-            phone: reservation.participantPhone ?? reservation.user?.phone ?? null,
-            email: reservation.participantEmail ?? reservation.user?.email ?? null,
+            phone:
+              reservation.participantPhone ?? reservation.user?.phone ?? null,
+            email:
+              reservation.participantEmail ?? reservation.user?.email ?? null,
             userId: reservation.user?.id ?? null,
             steamTradeUrl: reservation.user?.steamTradeUrl ?? null,
             steamId: reservation.user?.steamId ?? null,

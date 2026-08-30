@@ -19,7 +19,7 @@ import {
   getActiveTenantIdForAdmin,
 } from "@/lib/tenant";
 import { registrarLog } from "@/server/services/activity-log";
-import { buscarCotacao } from "@/server/services/cotacao";
+import { buscarCotacao, cotacaoPtax } from "@/server/services/cotacao";
 import type { ActionResult } from "@/server/actions/auth";
 
 const esquema = z.object({
@@ -134,7 +134,12 @@ export async function salvarCustoDaEntregaAction(
 
     const rifa = await prisma.raffle.findUnique({
       where: { id: raffleId },
-      select: { title: true, deliveryStatus: true },
+      select: {
+        title: true,
+        deliveryStatus: true,
+        deliveredAt: true,
+        winnerDrawnAt: true,
+      },
     });
     if (!rifa) return { ok: false, error: "Campanha não encontrada." };
 
@@ -159,6 +164,22 @@ export async function salvarCustoDaEntregaAction(
       valor != null && !ehPix && rifa.deliveryStatus !== "ENVIADO";
     const desfazerEnvio = valor == null && rifa.deliveryStatus === "ENVIADO";
 
+    // O CÂMBIO FICA GRAVADO NA LINHA, E NÃO SÓ NO PAINEL.
+    //
+    // A taxa buscada é a do DIA DESTA ENTREGA, e não a de hoje: é ela que
+    // converte este custo no relatório para sempre. Sem isso, atualizar a taxa
+    // do painel reconverteria o gasto de julho pelo câmbio de hoje.
+    //
+    // Data da entrega, com o sorteio como segunda opção: o custo pode ser
+    // anotado antes de a oferta sair, e aí ainda não há data de envio.
+    //
+    // Falha na busca não impede salvar o custo. O custo é o dado que a pessoa
+    // tem na mão; o câmbio é enfeite conferível que dá para preencher depois,
+    // e travar o salvamento por causa do Banco Central seria trocar um
+    // problema pequeno por um grande.
+    const quando = rifa.deliveredAt ?? rifa.winnerDrawnAt ?? new Date();
+    const ptax = valor == null ? null : await cotacaoPtax("CNY", quando);
+
     await prisma.raffle.update({
       where: { id: raffleId },
       data: {
@@ -166,6 +187,10 @@ export async function salvarCustoDaEntregaAction(
         // colado com três decimais viraria arredondamento silencioso do
         // Postgres.
         deliveryCost: valor == null ? null : Number(valor.toFixed(2)),
+        // Apagar o custo apaga o câmbio junto: taxa sem custo é sujeira que
+        // ninguém vai conferir, e que confundiria quem lesse a linha depois.
+        deliveryFxRate: valor == null ? null : (ptax?.taxa ?? null),
+        deliveryFxDate: valor == null ? null : (ptax?.dataDoBoletim ?? null),
         ...(marcarEnviado
           ? {
               deliveryStatus: "ENVIADO" as const,
@@ -191,6 +216,8 @@ export async function salvarCustoDaEntregaAction(
         custo: valor,
         marcouEnviado: marcarEnviado,
         desfezEnvio: desfazerEnvio,
+        ptax: ptax?.taxa ?? null,
+        ptaxDe: ptax?.dataDoBoletim?.toISOString() ?? null,
       },
     });
 

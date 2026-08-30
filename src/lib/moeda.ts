@@ -63,6 +63,30 @@ export function paraYuan(
   return (valor * taxas.usdToBrl) / taxas.cnyToBrl;
 }
 
+/**
+ * As taxas que valem para UMA entrega.
+ *
+ * O câmbio gravado na linha manda: ele é o boletim do dia em que aquela skin
+ * saiu, e é o que impede o histórico de ser reconvertido pelo câmbio de hoje.
+ * A taxa do painel é rede de segurança, para as linhas sem boletim próprio.
+ *
+ * O dólar continua vindo do painel: ele é leitura de conveniência na tela, não
+ * entra em relatório, e guardar um segundo boletim por linha só para isso seria
+ * pagar caro por pouco.
+ */
+export function taxasDaEntrega(
+  globais: Taxas,
+  cambioDaLinha: number | null,
+): Taxas {
+  return {
+    cnyToBrl:
+      cambioDaLinha != null && cambioDaLinha > 0
+        ? cambioDaLinha
+        : globais.cnyToBrl,
+    usdToBrl: globais.usdToBrl,
+  };
+}
+
 /** Formata com o símbolo da moeda e duas casas, no padrão brasileiro. */
 export function formatarMoeda(valor: number, moeda: Moeda): string {
   const n = valor.toLocaleString("pt-BR", {

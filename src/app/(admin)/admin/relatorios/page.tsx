@@ -224,6 +224,7 @@ export default async function AdminReportsPage({
       where: custoWhere,
       select: {
         deliveryCost: true,
+        deliveryFxRate: true,
         deliveredAt: true,
         winnerDrawnAt: true,
       },
@@ -234,10 +235,17 @@ export default async function AdminReportsPage({
     }),
   ]);
 
-  // O custo é gravado em YUAN. Sem a taxa cadastrada não há como somar com o
-  // faturamento, que é em real, e a tela diz isso em vez de misturar moedas.
-  const cnyToBrl = tenant?.cnyToBrl != null ? Number(tenant.cnyToBrl) : null;
-  const temTaxa = cnyToBrl != null && cnyToBrl > 0;
+  // O custo é gravado em YUAN, e cada entrega carrega o PTAX do dia em que ela
+  // saiu. A taxa do painel é a rede de segurança, para as linhas gravadas antes
+  // de o câmbio por entrega existir e para o dia em que o Olinda falhou.
+  //
+  // Converter linha a linha é o que torna o fechamento estável: pela taxa
+  // global, atualizá-la reconverteria o gasto de julho pelo câmbio de hoje, e o
+  // mês fechado mudaria de valor sem ninguém ter mexido nele.
+  const taxaDoPainel =
+    tenant?.cnyToBrl != null && Number(tenant.cnyToBrl) > 0
+      ? Number(tenant.cnyToBrl)
+      : null;
 
   // Agrega in-memory pelo bucket escolhido.
   // Para escalar (centenas de milhares de reservas), trocar pra query SQL
@@ -264,15 +272,29 @@ export default async function AdminReportsPage({
   // O custo entra nos mesmos baldes do faturamento, para a linha do período
   // mostrar as duas pontas lado a lado.
   let custoEmYuan = 0;
+  let custoEmReais = 0;
+  /** O que não teve como converter: nem boletim próprio, nem taxa no painel. */
+  let yuanSemTaxa = 0;
   for (const e of entregas) {
     const quando = e.deliveredAt ?? e.winnerDrawnAt;
     if (!quando) continue;
     const emYuan = Number(e.deliveryCost);
     custoEmYuan += emYuan;
-    if (!temTaxa) continue;
+
+    const daLinha =
+      e.deliveryFxRate != null && Number(e.deliveryFxRate) > 0
+        ? Number(e.deliveryFxRate)
+        : null;
+    const taxa = daLinha ?? taxaDoPainel;
+    if (taxa == null) {
+      yuanSemTaxa += emYuan;
+      continue;
+    }
+    const emReais = emYuan * taxa;
+    custoEmReais += emReais;
     const key = bucketKeyFn(quando);
     const entry = buckets.get(key) ?? vazio();
-    entry.custo += emYuan * cnyToBrl!;
+    entry.custo += emReais;
     buckets.set(key, entry);
   }
 
@@ -290,7 +312,11 @@ export default async function AdminReportsPage({
     (acc, r) => acc + Number(r.totalAmount),
     0,
   );
-  const totalCusto = temTaxa ? custoEmYuan * cnyToBrl! : null;
+  // Traço quando NADA converteu: R$ 0,00 com custo em yuan na tela seria a
+  // tela afirmando que a premiação saiu de graça. Quando parte converteu, o
+  // total mostra o que dá e o aviso diz o que ficou de fora.
+  const totalCusto =
+    yuanSemTaxa > 0 && custoEmReais === 0 ? null : custoEmReais;
   const resultado = totalCusto == null ? null : totalRevenue - totalCusto;
   // Margem sobre o faturamento. Sem faturamento não há percentual: dividir por
   // zero daria Infinity na tela.
@@ -457,12 +483,12 @@ export default async function AdminReportsPage({
         </form>
       </Moldura>
 
-      {!temTaxa && custoEmYuan > 0 && (
+      {yuanSemTaxa > 0 && (
         <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-          Há {custoEmYuan.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}{" "}
-          yuan de custo no período, mas a taxa de câmbio não está cadastrada,
-          então ele não entra no resultado. Cadastre em Entregas, no botão
-          Taxas.
+          {yuanSemTaxa.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}{" "}
+          yuan de custo ficaram de fora do resultado: essas entregas não têm o
+          câmbio do dia gravado e não há taxa cadastrada no painel. Cadastre em
+          Entregas, no botão Taxas.
         </p>
       )}
 
@@ -481,7 +507,7 @@ export default async function AdminReportsPage({
           nota={`¥ ${custoEmYuan.toLocaleString("pt-BR", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-          })} com fornecedor`}
+          })} pelo PTAX do dia de cada entrega`}
           icone={<Coins className="h-3.5 w-3.5" />}
           tom="custo"
           destaque
