@@ -1,22 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import {
-  ChevronDown,
-  CircleDollarSign,
-  Clock,
-  Hash,
-  Ticket,
-  TicketCheck,
-  Trophy,
-} from "lucide-react";
+import { ChevronDown, Clock, Ticket, TicketCheck } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
-import { Etiqueta, Moldura, Placa } from "@/components/ui/moldura";
+import { Etiqueta, Moldura } from "@/components/ui/moldura";
 
 export const metadata: Metadata = { title: "Meus títulos" };
 
@@ -125,16 +117,9 @@ export default async function MyTicketsPage({
       ? reservations
       : reservations.filter((r) => abaDa(r) === abaAtiva);
 
-  // Os números das placas. Só o que foi pago conta: reserva pendente ainda não
-  // é título na mão, e somá-la diria que a pessoa tem mais do que tem.
-  const pagas = reservations.filter((r) => r.status === "PAID");
-  const meusNumeros = pagas.reduce((t, r) => t + r.tickets.length, 0);
-  const investido = pagas.reduce((t, r) => t + Number(r.totalAmount), 0);
-  const ganhou = pagas.filter((r) => venceu(r)).length;
-
   return (
     <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
-      <header className="space-y-4">
+      <header>
         <div>
           <Etiqueta icone={<Ticket aria-hidden className="h-3 w-3" />}>
             Minhas reservas
@@ -148,44 +133,6 @@ export default async function MyTicketsPage({
               : "Cada compra, os números dela e em que pé está o sorteio."}
           </p>
         </div>
-
-        {reservations.length > 0 && (
-          /* Três números, e não a contagem das abas de novo: as abas já dizem
-             quantas reservas há em cada situação. O que falta é o tamanho do
-             que a pessoa tem em jogo. */
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Placa
-              rotulo="Participando"
-              valor={String(contagem.participando)}
-              nota={contagem.participando === 1 ? "sorteio" : "sorteios"}
-              icone={<Ticket className="h-3.5 w-3.5" />}
-            />
-            <Placa
-              rotulo="Meus números"
-              valor={meusNumeros.toLocaleString("pt-BR")}
-              nota="em reservas pagas"
-              icone={<Hash className="h-3.5 w-3.5" />}
-            />
-            {/* Quando houve vitória, ela toma o lugar do valor investido: é a
-                notícia, e ficar escondida atrás de uma aba seria escondê-la. */}
-            {ganhou > 0 ? (
-              <Placa
-                rotulo="Você ganhou"
-                valor={String(ganhou)}
-                nota={ganhou === 1 ? "sorteio" : "sorteios"}
-                icone={<Trophy className="h-3.5 w-3.5" />}
-                tom="bom"
-              />
-            ) : (
-              <Placa
-                rotulo="Total investido"
-                valor={formatBRL(investido)}
-                nota="em reservas pagas"
-                icone={<CircleDollarSign className="h-3.5 w-3.5" />}
-              />
-            )}
-          </div>
-        )}
       </header>
 
       {contagem.aguardando > 0 && (
@@ -312,15 +259,6 @@ type ReservationWithRaffle = Awaited<
   tickets: { number: number }[];
 };
 
-/** O número sorteado está entre os desta reserva. */
-function venceu(r: {
-  raffle: { winnerTicketNumber: number | null };
-  tickets: { number: number }[];
-}): boolean {
-  const n = r.raffle.winnerTicketNumber;
-  return n != null && r.tickets.some((t) => t.number === n);
-}
-
 function CartaoDaReserva({
   reservation,
   now,
@@ -344,14 +282,11 @@ function CartaoDaReserva({
   // expirado: a próxima visita à campanha libera os números.
   const aindaPendente = isPending && reservation.expiresAt.getTime() > now;
   const sorteado = reservation.raffle.winnerDrawnAt != null;
-  const ganhou = isPaid && venceu(reservation);
   const href =
     isPaid || aindaPendente ? `/comprovante/${reservation.id}` : null;
 
   return (
-    <Moldura
-      className={cn(ganhou && "shadow-[0_0_60px_-30px_rgba(16,185,129,0.7)]")}
-    >
+    <Moldura>
       <div className="flex gap-3 p-3">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-white/[0.04] sm:h-24 sm:w-24">
           {cover ? (
@@ -389,7 +324,6 @@ function CartaoDaReserva({
               status={reservation.status}
               aindaPendente={aindaPendente}
               sorteado={sorteado}
-              ganhou={ganhou}
             />
             {/* Some quando não dá para saber, em vez de afirmar zero. Numa
                 campanha gratuita não há preço para dividir, e "0 títulos" numa
@@ -454,27 +388,18 @@ function Selo({
   status,
   aindaPendente,
   sorteado,
-  ganhou,
 }: {
   status: ReservationWithRaffle["status"];
   aindaPendente: boolean;
   sorteado: boolean;
-  ganhou: boolean;
 }) {
   const base =
     "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase";
 
   if (status === "PAID") {
-    if (ganhou) {
-      return (
-        <span className={cn(base, "bg-emerald-500/15 text-emerald-400")}>
-          Você ganhou
-        </span>
-      );
-    }
     if (sorteado) {
-      // Sorteada e sem prêmio: "Pago" seria verdade e mesmo assim enganoso,
-      // porque some a informação que a pessoa procura, que é se acabou.
+      // Sorteada: "Pago" seria verdade e mesmo assim enganoso, porque some a
+      // informação que a pessoa procura, que é se aquilo ainda está de pé.
       return (
         <span className={cn(base, "bg-white/[0.06] text-muted-foreground")}>
           Encerrado
