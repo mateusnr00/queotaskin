@@ -28,6 +28,7 @@ import {
   Coins,
   Copy,
   ExternalLink,
+  RefreshCw,
   Info,
   PackageCheck,
   Search,
@@ -61,6 +62,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Etiqueta, Moldura, Placa } from "@/components/admin/moldura";
 import { semAcento } from "@/lib/busca";
+import { distanciaDoMercado, taxaDesatualizada } from "@/lib/cotacao";
 import { formatDateTime } from "@/lib/format";
 import { lerReais } from "@/lib/dinheiro";
 import {
@@ -81,6 +83,7 @@ import {
 import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
 import { ESTADOS_DA_ENTREGA, estadoDaEntrega, pendente } from "@/lib/entrega";
 import {
+  buscarCotacaoAction,
   marcarEntregaAction,
   salvarCustoDaEntregaAction,
   salvarTaxasAction,
@@ -952,6 +955,19 @@ function CampoDeCusto({
 }
 
 /** As taxas de câmbio, atrás de um botão, como na referência. */
+/** Uma taxa de câmbio tem casas que o dinheiro não tem: 0,7601, não 0,76. */
+const comoTaxa = (n: number) =>
+  n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
+
+interface CotacaoNaTela {
+  cnyToBrl: number | null;
+  usdToBrl: number | null;
+  atualizadaEm: string | null;
+}
+
 function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
   const router = useRouter();
   const [cny, setCny] = useState(
@@ -962,6 +978,34 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
   );
   const [salvando, setSalvando] = useState(false);
   const [aberto, setAberto] = useState(false);
+  const [cotacao, setCotacao] = useState<CotacaoNaTela | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [erroDaCotacao, setErroDaCotacao] = useState<string | null>(null);
+
+  async function buscar() {
+    setBuscando(true);
+    setErroDaCotacao(null);
+    const r = await buscarCotacaoAction();
+    setBuscando(false);
+    if (!r.ok) {
+      setErroDaCotacao(r.error);
+      return;
+    }
+    setCotacao(r.data);
+  }
+
+  // Busca sozinho ao abrir: a comparação entre o que está salvo e o mercado é
+  // a razão de abrir este diálogo, e escondê-la atrás de mais um clique faria
+  // com que ninguém a visse. A resposta fica em cache por quinze minutos, então
+  // abrir e fechar não gasta cota.
+  useEffect(() => {
+    if (!aberto || cotacao || buscando || erroDaCotacao) return;
+    // Adiado por um quadro: chamar setState direto no corpo do efeito dispara
+    // renderização em cascata, e o compilador do React trata isso como erro.
+    const t = setTimeout(() => void buscar(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto]);
 
   async function salvar() {
     setSalvando(true);
@@ -976,6 +1020,22 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
     router.refresh();
   }
 
+  function usarCotacao() {
+    if (!cotacao) return;
+    if (cotacao.cnyToBrl != null) setCny(comoTaxa(cotacao.cnyToBrl));
+    if (cotacao.usdToBrl != null) setUsd(comoTaxa(cotacao.usdToBrl));
+  }
+
+  // O aviso compara o que está NO CAMPO, e não o que está salvo: quem acabou de
+  // digitar um número quer saber se aquele número destoa, não o antigo.
+  const longeDoMercado =
+    taxaDesatualizada(lerReais(cny), cotacao?.cnyToBrl ?? null) ||
+    taxaDesatualizada(lerReais(usd), cotacao?.usdToBrl ?? null);
+  const distanciaCny = distanciaDoMercado(
+    lerReais(cny),
+    cotacao?.cnyToBrl ?? null,
+  );
+
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
       <DialogTrigger className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
@@ -986,11 +1046,75 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         <DialogHeader>
           <DialogTitle>Taxas de câmbio</DialogTitle>
           <DialogDescription>
-            Usadas para ler em real e em dólar o custo que foi pago em yuan.
-            Digitadas, e não buscadas de uma cotação automática: quem comprou é
-            quem sabe a que taxa comprou.
+            Usadas para ler em real e em dólar o custo que foi pago em yuan. A
+            cotação de mercado sugere, mas quem salva é você: o relatório usa a
+            taxa gravada, senão um mês já fechado mudaria de valor todo dia.
           </DialogDescription>
         </DialogHeader>
+
+        {/* A cotação de agora, para comparar e para preencher. */}
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+              Cotação de mercado
+            </span>
+            <button
+              type="button"
+              onClick={buscar}
+              disabled={buscando}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+            >
+              <RefreshCw
+                aria-hidden
+                className={cn("h-3 w-3", buscando && "animate-spin")}
+              />
+              {buscando ? "Buscando" : "Atualizar"}
+            </button>
+          </div>
+
+          {cotacao ? (
+            <>
+              <div className="mt-2 space-y-0.5 font-mono text-sm tabular-nums">
+                <p>
+                  1 ¥ ={" "}
+                  <strong>
+                    {cotacao.cnyToBrl == null
+                      ? "-"
+                      : `R$ ${comoTaxa(cotacao.cnyToBrl)}`}
+                  </strong>
+                </p>
+                <p>
+                  1 $ ={" "}
+                  <strong>
+                    {cotacao.usdToBrl == null
+                      ? "-"
+                      : `R$ ${comoTaxa(cotacao.usdToBrl)}`}
+                  </strong>
+                </p>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {cotacao.atualizadaEm
+                  ? `AwesomeAPI, ${formatDateTime(new Date(cotacao.atualizadaEm))}`
+                  : "AwesomeAPI"}
+              </p>
+              <button
+                type="button"
+                onClick={usarCotacao}
+                className="mt-2 h-8 w-full rounded-lg border border-white/15 text-xs font-bold transition-colors hover:bg-white/5"
+              >
+                Preencher com estas
+              </button>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {buscando
+                ? "Consultando..."
+                : (erroDaCotacao ??
+                  "Sem cotação no momento. Os campos abaixo continuam valendo.")}
+            </p>
+          )}
+        </div>
+
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label htmlFor="taxa-cny" className="text-sm font-medium">
@@ -1001,7 +1125,7 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
               value={cny}
               inputMode="decimal"
               onChange={(e) => setCny(e.target.value)}
-              placeholder="0,76"
+              placeholder="0,7601"
               className="font-mono"
             />
           </div>
@@ -1014,10 +1138,24 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
               value={usd}
               inputMode="decimal"
               onChange={(e) => setUsd(e.target.value)}
-              placeholder="5,40"
+              placeholder="5,4102"
               className="font-mono"
             />
           </div>
+
+          {longeDoMercado && (
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              O que está nos campos destoa da cotação de agora
+              {distanciaCny == null
+                ? ""
+                : ` (o yuan em ${distanciaCny > 0 ? "+" : ""}${distanciaCny
+                    .toFixed(1)
+                    .replace(".", ",")}%)`}
+              . Se foi de propósito, por causa de spread ou tarifa do
+              fornecedor, pode salvar assim mesmo.
+            </p>
+          )}
+
           <button
             type="button"
             disabled={salvando}

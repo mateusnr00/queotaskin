@@ -19,6 +19,7 @@ import {
   getActiveTenantIdForAdmin,
 } from "@/lib/tenant";
 import { registrarLog } from "@/server/services/activity-log";
+import { buscarCotacao } from "@/server/services/cotacao";
 import type { ActionResult } from "@/server/actions/auth";
 
 const esquema = z.object({
@@ -124,7 +125,10 @@ export async function salvarCustoDaEntregaAction(
     const session = await getAdminOrThrow();
     const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
-    if (valor != null && (!Number.isFinite(valor) || valor < 0 || valor > 99_999_999)) {
+    if (
+      valor != null &&
+      (!Number.isFinite(valor) || valor < 0 || valor > 99_999_999)
+    ) {
       return { ok: false, error: "Valor inválido." };
     }
 
@@ -153,8 +157,7 @@ export async function salvarCustoDaEntregaAction(
     const ehPix = rifa.deliveryStatus === "PIX";
     const marcarEnviado =
       valor != null && !ehPix && rifa.deliveryStatus !== "ENVIADO";
-    const desfazerEnvio =
-      valor == null && rifa.deliveryStatus === "ENVIADO";
+    const desfazerEnvio = valor == null && rifa.deliveryStatus === "ENVIADO";
 
     await prisma.raffle.update({
       where: { id: raffleId },
@@ -240,5 +243,43 @@ export async function salvarTaxasAction(
     return { ok: true, data: null };
   } catch {
     return { ok: false, error: "Não foi possível salvar as taxas." };
+  }
+}
+
+/**
+ * A cotação de mercado do yuan e do dólar, para sugerir no diálogo de taxas.
+ *
+ * Só sugere: quem salva é a ação de cima, com o número que a pessoa confirmou.
+ * O relatório financeiro usa a taxa GRAVADA, e não esta, senão um período já
+ * fechado mudaria de valor a cada abertura da página, ao sabor do câmbio.
+ *
+ * Exige admin porque é o painel que a usa, e porque uma rota aberta viraria um
+ * proxy de graça para a cota de requisições da conta.
+ */
+export async function buscarCotacaoAction(): Promise<
+  ActionResult<{
+    cnyToBrl: number | null;
+    usdToBrl: number | null;
+    atualizadaEm: string | null;
+  }>
+> {
+  try {
+    await getAdminOrThrow();
+    const c = await buscarCotacao();
+    if (!c) {
+      return { ok: false, error: "Não foi possível buscar a cotação agora." };
+    }
+    return {
+      ok: true,
+      data: {
+        cnyToBrl: c.cnyToBrl,
+        usdToBrl: c.usdToBrl,
+        // Texto, e não Date: a data atravessa a fronteira servidor/cliente, e
+        // ISO é o formato que sobrevive à travessia sem surpresa de fuso.
+        atualizadaEm: c.atualizadaEm?.toISOString() ?? null,
+      },
+    };
+  } catch {
+    return { ok: false, error: "Não foi possível buscar a cotação agora." };
   }
 }

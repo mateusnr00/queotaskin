@@ -60,6 +60,32 @@ ganhador, contato, link de troca copiável e os prêmios a enviar. A tela
 sinaliza quem ainda não cadastrou o link e alerta quando o número
 declarado não consta como vendido.
 
+### Custo da skin e câmbio
+
+O custo é gravado em **yuan**, que é a moeda em que a skin é comprada do
+fornecedor e o único número que existiu de verdade. Real e dólar são
+leituras, calculadas com as taxas do painel. Guardar só a moeda paga é o
+que impede o histórico de mentir: se os três fossem gravados, a compra de
+seis meses atrás continuaria mostrando o real de hoje.
+
+As taxas ficam no botão **Taxas**, em Admin → Entregas. Ao abrir, o
+diálogo consulta a cotação de mercado na
+[AwesomeAPI](https://awesomeapi.com.br) e mostra o quanto a taxa salva já
+se distanciou dela; um botão preenche os campos com a cotação do momento.
+
+A cotação **sugere, não decide**. Quem converte o custo no relatório é a
+taxa gravada, e isso é de propósito: com cotação ao vivo, um mês já
+fechado mudaria de valor a cada abertura da página, ao sabor do câmbio.
+Além disso, quem compra costuma pagar spread e tarifa em cima do câmbio de
+tela, e essa diferença só quem operou conhece.
+
+`AWESOMEAPI_TOKEN` é opcional. Sem chave a AwesomeAPI responde com cache e
+limite menor, o que basta para um botão clicado de vez em quando. A
+resposta fica em cache por 15 minutos, e a chave vai no cabeçalho
+`x-api-key`, não na query, para não acabar em log de acesso. Serviço fora
+do ar não trava nada: o diálogo diz que não conseguiu buscar e os campos
+seguem aceitando o valor digitado.
+
 ### Tema
 
 O preset `cs2` (Admin → Personalizar tema) usa o laranja do HUD do
