@@ -41,6 +41,7 @@ import type { Draw, DrawStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { nomeCurto } from "@/lib/nome-curto";
+import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { registrarLog } from "@/server/services/activity-log";
 import { VENDIDO } from "@/server/services/vendidos";
 import {
@@ -743,6 +744,13 @@ export interface EstadoPublicoDoSorteio {
     numero: number;
     /** Só a partir de `winnerRevealAt`. Antes disso vem null. */
     ganhador: string | null;
+    /**
+     * O time para quem o ganhador torce, ao lado do nome dele.
+     *
+     * Sai junto com o nome e pela mesma chave: antes da revelação, nome e time
+     * seriam duas pistas de quem ganhou, e o time estreita muito o palpite.
+     */
+    time: TimeDeCS2 | null;
   } | null;
 
   erro: string | null;
@@ -772,6 +780,8 @@ export function estadoPublico(
   agora: Date,
   semente?: { serverSeed: string; serverSeedHash: string } | null,
   amostraDeTitulos: number[] = [],
+  /** Já resolvido por quem carregou: esta função é pura sobre o que recebe. */
+  timeDoGanhador: TimeDeCS2 | null = null,
 ): EstadoPublicoDoSorteio {
   const situacao = situacaoDe(draw);
   const mostrarNumero = podeMostrarNumero(situacao, agora);
@@ -826,6 +836,7 @@ export function estadoPublico(
         ? {
             numero: draw.winningNumber,
             ganhador: mostrarGanhador ? draw.winnerName : null,
+            time: mostrarGanhador ? timeDoGanhador : null,
           }
         : null,
 
@@ -931,13 +942,46 @@ export async function carregarEstadoPublico(
 
   // A semente entra inteira aqui e `estadoPublico` decide o que sai. A decisão
   // fica num lugar só, e não repartida entre quem busca e quem monta.
+  // O time de quem ganhou, para o emblema aparecer ao lado do nome na
+  // revelação. Só é buscado quando existe conta ligada: compra feita sem login
+  // não tem time, e aí a consulta seria em vão.
+  const timeDoGanhador = atualizado.winnerUserId
+    ? await timeDoUsuario(atualizado.winnerUserId)
+    : null;
+
   return estadoPublico(
     atualizado,
     rifa,
     agora,
     semente,
     amostra,
+    timeDoGanhador,
   );
+}
+
+/**
+ * O time para quem uma conta torce, pronto para a tela.
+ *
+ * Duas idas ao banco em vez de um join porque Team não tem relação declarada
+ * com User: o campo guarda o id como texto, justamente para um time que saia
+ * da lista não arrastar a conta de ninguém junto.
+ */
+async function timeDoUsuario(userId: string): Promise<TimeDeCS2 | null> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { favoriteTeamId: true },
+  });
+  if (!u?.favoriteTeamId) return null;
+  const t = await prisma.team.findUnique({ where: { id: u.favoriteTeamId } });
+  if (!t) return null;
+  return {
+    id: t.id,
+    nome: t.nome,
+    tag: t.tag,
+    cor: t.cor,
+    regiao: t.regiao === "BR" ? "BR" : "INTER",
+    escudo: t.escudo,
+  };
 }
 
 /** Status em português, para o painel. */

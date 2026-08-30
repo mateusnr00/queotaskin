@@ -45,6 +45,7 @@ import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
 import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
 import { useSom } from "@/components/sorteio/usar-som";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 
 /** Os últimos segundos, quando a contagem troca de cara. */
@@ -671,8 +672,18 @@ function Revelacao({
                   <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
                     Temos um ganhador
                   </p>
-                  <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                  {/* O nome e, ao lado, o emblema do time para quem essa
+                      pessoa torce. Era o lugar que faltava: o emblema estava
+                      ligado nas listas de prêmios e não aqui, que é onde todo
+                      mundo olha quando o sorteio acaba. */}
+                  <p className="flex flex-wrap items-center justify-center gap-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
                     {ganhador}
+                    {estado.resultado?.time && (
+                      <EmblemaDoTime
+                        time={estado.resultado.time}
+                        tamanho="lg"
+                      />
+                    )}
                   </p>
 
                   {/* O canhoto: o pedaço de papel que sai do pote. É o que
