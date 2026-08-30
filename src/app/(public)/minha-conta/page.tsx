@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { AlertTriangle, TicketCheck } from "lucide-react";
@@ -19,6 +20,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SeletorDeTime } from "@/components/times/seletor-de-time";
 import { listarTimesAtivos } from "@/server/services/times";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
@@ -57,6 +59,8 @@ export default async function MyAccountPage() {
   if (!user) notFound();
 
   const times = await listarTimesAtivos();
+  const timeDoCoracao =
+    times.find((t) => t.id === user.favoriteTeamId) ?? null;
 
   const paidReservations = await prisma.reservation.count({
     where: {
@@ -194,7 +198,19 @@ export default async function MyAccountPage() {
           <section className="rounded-xl border bg-card p-4">
             <h2 className="mb-3 text-base font-bold">Dados de acesso</h2>
             <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <Row label="Nome" value={user.name} />
+              {/* O emblema ao lado do próprio nome, que é como ele vai
+                  aparecer para os outros nas listas de ganhadores. Serve de
+                  confirmação: dá para ver aqui que o time está mesmo salvo,
+                  sem precisar ganhar um sorteio para descobrir. */}
+              <Row
+                label="Nome"
+                value={user.name}
+                emblema={
+                  timeDoCoracao ? (
+                    <EmblemaDoTime time={timeDoCoracao} tamanho="md" />
+                  ) : null
+                }
+              />
               <Row
                 label="Celular"
                 value={user.phone ? formatPhone(user.phone) : "-"}
@@ -245,13 +261,25 @@ export default async function MyAccountPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  emblema,
+}: {
+  label: string;
+  value: string;
+  /** Desenhado ao lado do valor. Hoje só o nome usa, com o time. */
+  emblema?: ReactNode;
+}) {
   return (
     <div className="rounded-lg border bg-muted/30 px-3 py-2">
       <dt className="text-[0.65rem] tracking-wider text-muted-foreground uppercase">
         {label}
       </dt>
-      <dd className="text-sm font-semibold">{value}</dd>
+      <dd className="flex items-center gap-2 text-sm font-semibold">
+        <span className="min-w-0 truncate">{value}</span>
+        {emblema}
+      </dd>
     </div>
   );
 }
