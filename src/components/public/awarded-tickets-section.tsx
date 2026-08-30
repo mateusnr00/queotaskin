@@ -6,6 +6,7 @@
 // lista. Linha do contemplado ganha highlight emerald sólido.
 
 import type { SkinRarity } from "@prisma/client";
+import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Trophy } from "lucide-react";
 
@@ -30,8 +31,8 @@ export interface PublicAwardedTicket {
   prizeDescription: string;
   skinRarity: SkinRarity | null;
   participantName: string | null;
-  /** Time do ganhador, quando o titulo esta ligado a uma conta. */
-  participantTeamId: string | null;
+  /** Time do ganhador, resolvido no servidor. Nulo quando não há conta. */
+  time: TimeDeCS2 | null;
 }
 
 interface Props {
@@ -68,7 +69,7 @@ export function AwardedTicketsSection({
           premio={t.prizeDescription}
           raridade={t.skinRarity}
           ganhador={t.participantName}
-          timeDoGanhador={t.participantTeamId}
+          time={t.time}
           rotuloVago="Em jogo"
         />
       ))}

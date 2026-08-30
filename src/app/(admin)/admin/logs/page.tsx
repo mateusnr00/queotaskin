@@ -51,6 +51,7 @@ const NOME_DO_TIPO: Record<TipoDeAlvo, string> = {
   Reservation: "reserva",
   Payment: "pagamento",
   SkinTemplate: "skin do catálogo",
+  Team: "time",
   Tenant: "painel",
 };
 

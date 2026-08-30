@@ -1,0 +1,423 @@
+"use client";
+
+// A tela de times do painel: cadastrar, editar, enviar escudo, desativar,
+// apagar.
+//
+// Uma lista com formulário embutido, e não uma página por time: são trinta
+// linhas curtas, e navegar para uma tela só para trocar uma cor seria pior do
+// que editar no lugar.
+//
+// A PRÉ-VISUALIZAÇÃO NÃO É ENFEITE
+//
+// O emblema aparece do lado do campo enquanto se digita, com a cor escolhida e
+// a tag escolhida, porque é exatamente assim que ele vai sair ao lado do nome
+// de quem torce. Sem isso, escolher cor é escolher no escuro e só descobrir o
+// resultado no site público.
+
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { ImagePlus, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import type { RegiaoDoTime, TimeDeCS2 } from "@/lib/times-cs2";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
+import {
+  apagarTimeAction,
+  enviarEscudoAction,
+  removerEscudoAction,
+  salvarTimeAction,
+} from "@/server/actions/times";
+
+type TimeDoPainel = TimeDeCS2 & { ativo: boolean; ordem: number };
+
+interface Rascunho {
+  id: string | null;
+  nome: string;
+  tag: string;
+  cor: string;
+  regiao: RegiaoDoTime;
+  ordem: number;
+  ativo: boolean;
+}
+
+const NOVO: Rascunho = {
+  id: null,
+  nome: "",
+  tag: "",
+  cor: "#ef4444",
+  regiao: "BR",
+  ordem: 0,
+  ativo: true,
+};
+
+export function GerenciadorDeTimes({
+  times,
+  torcedores,
+  storageLigado,
+}: {
+  times: TimeDoPainel[];
+  torcedores: Record<string, number>;
+  storageLigado: boolean;
+}) {
+  const [rascunho, setRascunho] = useState<Rascunho | null>(null);
+
+  const br = times.filter((t) => t.regiao === "BR");
+  const inter = times.filter((t) => t.regiao === "INTER");
+
+  return (
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Times</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {times.length} cadastrados. O participante escolhe um em Minha
+            Conta, e o emblema aparece ao lado do nome dele nas listas de
+            ganhadores.
+          </p>
+        </div>
+        <Button type="button" onClick={() => setRascunho(NOVO)}>
+          <Plus className="h-4 w-4" />
+          Novo time
+        </Button>
+      </header>
+
+      {!storageLigado && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          Storage não configurado: dá para cadastrar times, mas o envio de
+          escudo fica indisponível até as variáveis do Supabase existirem.
+        </p>
+      )}
+
+      {rascunho && (
+        <Formulario
+          rascunho={rascunho}
+          aoFechar={() => setRascunho(null)}
+        />
+      )}
+
+      <Grupo titulo="Brasil" times={br} torcedores={torcedores} aoEditar={setRascunho} storageLigado={storageLigado} />
+      <Grupo titulo="Internacionais" times={inter} torcedores={torcedores} aoEditar={setRascunho} storageLigado={storageLigado} />
+    </div>
+  );
+}
+
+function Grupo({
+  titulo,
+  times,
+  torcedores,
+  aoEditar,
+  storageLigado,
+}: {
+  titulo: string;
+  times: TimeDoPainel[];
+  torcedores: Record<string, number>;
+  aoEditar: (r: Rascunho) => void;
+  storageLigado: boolean;
+}) {
+  if (times.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase">
+        {titulo}
+      </h2>
+      <div className="grid gap-2">
+        {times.map((t) => (
+          <Linha
+            key={t.id}
+            time={t}
+            torcedores={torcedores[t.id] ?? 0}
+            aoEditar={aoEditar}
+            storageLigado={storageLigado}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Linha({
+  time,
+  torcedores,
+  aoEditar,
+  storageLigado,
+}: {
+  time: TimeDoPainel;
+  torcedores: number;
+  aoEditar: (r: Rascunho) => void;
+  storageLigado: boolean;
+}) {
+  const router = useRouter();
+  const [ocupado, comTransicao] = useTransition();
+  const arquivo = useRef<HTMLInputElement>(null);
+
+  function enviarEscudo(file: File) {
+    const fd = new FormData();
+    fd.set("id", time.id);
+    fd.set("arquivo", file);
+    comTransicao(async () => {
+      const r = await enviarEscudoAction(fd);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Escudo enviado.");
+      router.refresh();
+    });
+  }
+
+  function apagar() {
+    comTransicao(async () => {
+      const r = await apagarTimeAction(time.id);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Time apagado.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3",
+        !time.ativo && "opacity-60",
+      )}
+    >
+      <EmblemaDoTime time={time} tamanho="lg" />
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">
+          {time.nome}
+          {!time.ativo && (
+            <span className="ml-2 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+              Desativado
+            </span>
+          )}
+        </p>
+        <p className="truncate font-mono text-[11px] text-muted-foreground">
+          {time.id} · {time.tag} · {time.cor}
+          {torcedores > 0 && ` · ${torcedores} torcendo`}
+          {time.escudo ? " · escudo enviado" : " · sem escudo"}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-1">
+        <input
+          ref={arquivo}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) enviarEscudo(f);
+            e.target.value = "";
+          }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={ocupado || !storageLigado}
+          title={storageLigado ? "Enviar escudo" : "Storage não configurado"}
+          onClick={() => arquivo.current?.click()}
+        >
+          {time.escudo ? <Upload className="h-4 w-4" /> : <ImagePlus className="h-4 w-4" />}
+          <span className="sr-only">Enviar escudo</span>
+        </Button>
+        {time.escudo && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={ocupado}
+            title="Remover escudo"
+            onClick={() =>
+              comTransicao(async () => {
+                const r = await removerEscudoAction(time.id);
+                if (!r.ok) {
+                  toast.error(r.error);
+                  return;
+                }
+                toast.success("Escudo removido.");
+                router.refresh();
+              })
+            }
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Remover escudo</span>
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={ocupado}
+          onClick={() => aoEditar({ ...time, id: time.id })}
+        >
+          <Pencil className="h-4 w-4" />
+          <span className="sr-only">Editar</span>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={ocupado}
+          // Sem confirmação porque a ação já recusa quando há torcida, que é o
+          // caso perigoso. Time sem torcedor não tem o que perder.
+          title={torcedores > 0 ? "Tem torcida: desative em vez de apagar" : "Apagar"}
+          onClick={apagar}
+          className="text-destructive hover:text-destructive"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span className="sr-only">Apagar</span>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Formulario({
+  rascunho,
+  aoFechar,
+}: {
+  rascunho: Rascunho;
+  aoFechar: () => void;
+}) {
+  const router = useRouter();
+  const [d, setD] = useState(rascunho);
+  const [salvando, comTransicao] = useTransition();
+
+  function salvar() {
+    comTransicao(async () => {
+      const r = await salvarTimeAction(d);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(rascunho.id ? "Time atualizado." : "Time cadastrado.");
+      aoFechar();
+      router.refresh();
+    });
+  }
+
+  // O emblema como ele vai sair, com o que está digitado agora.
+  const previa: TimeDeCS2 = {
+    id: d.id ?? "novo",
+    nome: d.nome || "Time",
+    tag: d.tag || "??",
+    cor: /^#[0-9a-fA-F]{6}$/.test(d.cor) ? d.cor.toLowerCase() : "#ef4444",
+    regiao: d.regiao,
+    escudo: null,
+  };
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="mb-4 flex items-center gap-3">
+        <EmblemaDoTime time={previa} tamanho="lg" />
+        <div>
+          <p className="text-sm font-bold">
+            {rascunho.id ? "Editar time" : "Novo time"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {rascunho.id
+              ? `id ${rascunho.id}, que não muda: é a chave gravada em quem torce.`
+              : "O id sai do nome e não muda depois."}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="time-nome">Nome</Label>
+          <Input
+            id="time-nome"
+            value={d.nome}
+            maxLength={40}
+            onChange={(e) => setD({ ...d, nome: e.target.value })}
+            placeholder="FURIA"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="time-tag">Tag (2 a 4 letras)</Label>
+          <Input
+            id="time-tag"
+            value={d.tag}
+            maxLength={4}
+            onChange={(e) => setD({ ...d, tag: e.target.value })}
+            placeholder="FUR"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="time-cor">Cor do emblema</Label>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              aria-label="Escolher cor"
+              value={/^#[0-9a-fA-F]{6}$/.test(d.cor) ? d.cor : "#ef4444"}
+              onChange={(e) => setD({ ...d, cor: e.target.value.toLowerCase() })}
+              className="h-9 w-12 shrink-0 cursor-pointer rounded-md border bg-transparent"
+            />
+            <Input
+              id="time-cor"
+              value={d.cor}
+              maxLength={7}
+              onChange={(e) => setD({ ...d, cor: e.target.value.toLowerCase() })}
+              placeholder="#ef4444"
+              className="font-mono"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="time-regiao">Região</Label>
+          <select
+            id="time-regiao"
+            value={d.regiao}
+            onChange={(e) =>
+              setD({ ...d, regiao: e.target.value as RegiaoDoTime })
+            }
+            className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+          >
+            <option value="BR">Brasil</option>
+            <option value="INTER">Internacional</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="time-ordem">Ordem na lista</Label>
+          <Input
+            id="time-ordem"
+            type="number"
+            min={0}
+            max={999}
+            value={d.ordem}
+            onChange={(e) => setD({ ...d, ordem: Number(e.target.value) })}
+          />
+        </div>
+        <div className="flex items-end gap-3 pb-1">
+          <Switch
+            id="time-ativo"
+            checked={d.ativo}
+            onCheckedChange={(v) => setD({ ...d, ativo: v })}
+          />
+          <Label htmlFor="time-ativo" className="cursor-pointer">
+            Aparece no seletor
+          </Label>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button type="button" disabled={salvando} onClick={salvar}>
+          {salvando ? "Salvando..." : "Salvar"}
+        </Button>
+        <Button type="button" variant="ghost" disabled={salvando} onClick={aoFechar}>
+          Cancelar
+        </Button>
+      </div>
+    </div>
+  );
+}

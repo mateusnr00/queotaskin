@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { timePorId, timesPorRegiao, type TimeDeCS2 } from "@/lib/times-cs2";
+import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { salvarTimeDoCoracaoAction } from "@/server/actions/time-do-coracao";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 
@@ -38,13 +38,21 @@ import { EmblemaDoTime } from "@/components/times/emblema-do-time";
  */
 const NENHUM = "__nenhum__";
 
-export function SeletorDeTime({ atual }: { atual: string | null }) {
+export function SeletorDeTime({
+  atual,
+  times,
+}: {
+  atual: string | null;
+  /** A lista vem do servidor: os times moram no banco desde a migration. */
+  times: readonly TimeDeCS2[];
+}) {
   const router = useRouter();
   const [salvando, comTransicao] = useTransition();
   // O escolhido vive no cliente para a linha mudar no ato, e não só quando o
   // servidor responder. O router.refresh depois reconcilia.
   const [escolhido, setEscolhido] = useState(atual);
-  const { br, inter } = timesPorRegiao();
+  const br = times.filter((t) => t.regiao === "BR");
+  const inter = times.filter((t) => t.regiao === "INTER");
 
   // `string | null`: este Select entrega null quando a seleção é limpa, e
   // NENHUM quando a opção "não exibir" é escolhida. Os dois querem dizer a
@@ -67,7 +75,7 @@ export function SeletorDeTime({ atual }: { atual: string | null }) {
     });
   }
 
-  const time = timePorId(escolhido);
+  const time = times.find((t) => t.id === escolhido) ?? null;
 
   return (
     <Select

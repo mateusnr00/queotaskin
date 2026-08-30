@@ -13,19 +13,20 @@ import {
   BarChart3,
   Boxes,
   LayoutDashboard,
+  Megaphone,
   Menu,
   MessageSquare,
   PackageCheck,
   Palette,
   ScrollText,
   Settings,
+  Shield,
   TicketCheck,
   Trophy,
   UserCog,
   Users2,
   Wallet,
   X,
-  Megaphone,
 } from "lucide-react";
 
 import { logoutAction } from "@/server/actions/auth";
@@ -43,6 +44,7 @@ const NAV_GERAL = [
   // Compras, com abas, busca, marcar paga e WhatsApp. Duas telas para o
   // mesmo dado obrigam a lembrar por qual delas se chega no que se quer.
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
+  { href: "/admin/times", label: "Times", icon: Shield },
   { href: "/admin/clientes", label: "Clientes", icon: Users2 },
   // Separado de Clientes porque aquela lista ordena por gasto, e quem é
   // da equipe quase nunca compra: procurar um admin lá é procurar no fim.

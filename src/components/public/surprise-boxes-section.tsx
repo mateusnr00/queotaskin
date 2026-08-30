@@ -12,6 +12,7 @@
 // já tem dono.
 
 import type { SkinRarity } from "@prisma/client";
+import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
@@ -31,8 +32,8 @@ export interface CaixaPublica {
   raridade: SkinRarity | null;
   /** Nome de quem levou, quando já foi aberta. */
   ganhador: string | null;
-  /** Time do ganhador, quando a compra estava ligada a uma conta. */
-  timeDoGanhador: string | null;
+  /** Time do ganhador, resolvido no servidor. Nulo quando não há conta. */
+  time: TimeDeCS2 | null;
 }
 
 export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
@@ -71,7 +72,7 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
             premio={c.premio}
             raridade={c.raridade}
             ganhador={c.ganhador}
-            timeDoGanhador={c.timeDoGanhador}
+            time={c.time}
             rotuloVago="Disponível"
           />
         ))}

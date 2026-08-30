@@ -17,6 +17,7 @@ import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { numeroDoTitulo, ordemEmbaralhada } from "@/lib/titulo";
+import { mapaDeTimes } from "@/server/services/times";
 import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
@@ -294,6 +295,11 @@ export default async function PublicRaffleDetailPage({
   // sorteio, que guarda tudo.
   const sorteioConcluido = raffle.winnerTicketNumber != null;
 
+  // Um mapa id -> time para a página inteira. As listas de ganhadores têm N
+  // ids e não podem fazer N consultas; o mapa inclui os desativados, para quem
+  // já torcia por um time arquivado não perder o emblema.
+  const times = await mapaDeTimes();
+
   const showAwarded =
     raffle.awardedTicketsEnabled && raffle.awardedTicketsShowList;
   const awardedNumbers = raffle.awardedTickets.map((a) => a.number);
@@ -331,7 +337,9 @@ export default async function PublicRaffleDetailPage({
       prizeDescription: a.prizeDescription,
       skinRarity: a.skinRarity,
       participantName: participantByNumber.get(a.number) ?? null,
-      participantTeamId: teamByNumber.get(a.number) ?? null,
+      // Resolvido aqui, no servidor: as linhas rodam no cliente e não têm como
+      // consultar o banco de times.
+      time: times.get(teamByNumber.get(a.number) ?? "") ?? null,
     }),
   );
   // ── Caixas surpresas na página pública ──
@@ -362,8 +370,9 @@ export default async function PublicRaffleDetailPage({
         ? (p.claimedByBox?.reservation.participantName ?? null)
         : null,
       // Segue a mesma chave do nome: sem "exibir ganhadores", nem o time sai.
-      timeDoGanhador: raffle.surpriseBoxExibirGanhadores
-        ? (p.claimedByBox?.reservation.user?.favoriteTeamId ?? null)
+      time: raffle.surpriseBoxExibirGanhadores
+        ? (times.get(p.claimedByBox?.reservation.user?.favoriteTeamId ?? "") ??
+          null)
         : null,
       aberto: Boolean(p.claimedAt),
     }));

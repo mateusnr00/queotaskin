@@ -41,6 +41,24 @@ export async function uploadRaffleImage(
   raffleId: string,
   file: File
 ): Promise<{ url: string; path: string }> {
+  return uploadImagem(`raffles/${raffleId}`, file);
+}
+
+/**
+ * Envia uma imagem para uma pasta qualquer do bucket.
+ *
+ * Nasceu quando o escudo de time precisou subir: a função anterior cravava
+ * `raffles/<id>/` no caminho, e escudo não é imagem de campanha. Em vez de uma
+ * segunda função com as mesmas checagens copiadas, esta virou a de baixo e a
+ * de campanha passou a chamá-la. Checagem de segurança duplicada é checagem
+ * que um dia diverge.
+ *
+ * @param pasta Prefixo no bucket, sem barra no fim. Ex.: "times".
+ */
+export async function uploadImagem(
+  pasta: string,
+  file: File
+): Promise<{ url: string; path: string }> {
   const client = getStorageClient();
   const bucket = readEnv("SUPABASE_STORAGE_BUCKET");
   if (!client || !bucket) {
@@ -61,7 +79,7 @@ export async function uploadRaffleImage(
   }
 
   const ext = guessExtension(file);
-  const path = `raffles/${raffleId}/${nanoid(10)}.${ext}`;
+  const path = `${pasta}/${nanoid(10)}.${ext}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error } = await client.storage.from(bucket).upload(path, buffer, {

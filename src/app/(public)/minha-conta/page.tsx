@@ -18,6 +18,7 @@ import { XP_MULTIPLIER_TIERS } from "@/lib/xp/config";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SeletorDeTime } from "@/components/times/seletor-de-time";
+import { listarTimesAtivos } from "@/server/services/times";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
@@ -54,6 +55,8 @@ export default async function MyAccountPage() {
     },
   });
   if (!user) notFound();
+
+  const times = await listarTimesAtivos();
 
   const paidReservations = await prisma.reservation.count({
     where: {
@@ -185,7 +188,7 @@ export default async function MyAccountPage() {
               Aparece ao lado do seu nome nas listas de ganhadores. Escolher é
               opcional, e dá para tirar quando quiser.
             </p>
-            <SeletorDeTime atual={user.favoriteTeamId} />
+            <SeletorDeTime atual={user.favoriteTeamId} times={times} />
           </section>
 
           <section className="rounded-xl border bg-card p-4">

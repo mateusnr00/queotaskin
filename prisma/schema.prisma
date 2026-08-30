@@ -1783,6 +1783,39 @@ model Draw {
 /// O compromisso (`serverSeedHash`) é público desde o primeiro dia e aparece
 /// na página da campanha. A semente em si só é publicada depois que o número
 /// vencedor já é público, e `revealedAt` é o carimbo desse momento.
+/// Os times de CS2 para quem o participante torce.
+///
+/// Nasceu como constante em src/lib/times-cs2.ts, e a lista fixa em código
+/// estava certa enquanto ninguém precisava mexer nela. Passou a estar errada
+/// quando o pedido virou "quero enviar o escudo e adicionar times novos":
+/// isso é cadastro, e cadastro não mora em deploy.
+///
+/// O `id` continua sendo o slug, o mesmo que já está gravado em
+/// User.favoriteTeamId. Manter a mesma chave é o que faz a migração ser só
+/// mudar de onde a lista é lida, sem tocar em conta nenhuma.
+model Team {
+  /// Slug. É o que User.favoriteTeamId guarda.
+  id     String  @id
+  nome   String
+  /// Duas a quatro letras. É o que o emblema mostra quando não há escudo.
+  tag    String
+  /// Acento do emblema de reserva, em hex de seis dígitos.
+  cor    String
+  regiao String
+  /// URL do escudo no Storage. Vazio cai no emblema de iniciais.
+  escudo String?
+  /// Ordem na lista. Empate desfeito pelo nome.
+  ordem  Int     @default(0)
+  /// Time desativado some do seletor mas NÃO é apagado: quem já torcia por ele
+  /// continua com o id na conta, e o emblema continua desenhando.
+  ativo  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ativo, regiao, ordem])
+}
+
 model DrawSeed {
   raffleId String @id
   raffle   Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
