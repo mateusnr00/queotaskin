@@ -1,17 +1,21 @@
 "use client";
 
-// A fila de entregas em TABELA, e não em cartões.
+// A fila de entregas.
 //
-// Eram cartões grandes, um por campanha, cada um com quase quinhentos pixels de
-// altura: para ver cinco entregas era preciso rolar a tela inteira duas vezes.
-// A tela existe para operar, com a Steam aberta do lado, e operar é varrer uma
-// lista, não ler cinco fichas.
+// Tabela no desktop, cartões no celular. Tabela numa tela de 390px vira
+// rolagem lateral, e a pessoa arrasta para ler cada coluna perdendo de vista a
+// linha em que estava; empilhado, cada entrega é um bloco fechado. No desktop a
+// tabela ganha, porque ali comparar linhas é o que diz o que falta fazer.
 //
-// Em linha, as cinco cabem numa tela só, e a comparação entre elas, que é o que
-// diz o que falta fazer, acontece de relance.
+// O NOME DO GANHADOR NÃO FICA NA LISTA
 //
-// A tabela rola dentro do próprio quadro no celular. É o combinado do projeto:
-// conteúdo largo rola na caixa dele, e a página nunca ganha rolagem lateral.
+// Ele ocupava uma coluna inteira e não serve para operar: para comprar e enviar
+// a skin, o que se usa é o nome do item e o link de troca. O nome, o telefone,
+// o e-mail e o SteamID ficam atrás do botão de informações, que é onde se olha
+// quando é preciso falar com a pessoa.
+//
+// Isso também tira dado pessoal de uma tela que fica aberta o dia todo, às
+// vezes com alguém do lado.
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,8 +26,8 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Info,
   PackageCheck,
-  Undo2,
 } from "lucide-react";
 
 import {
@@ -34,50 +38,64 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { semAcento } from "@/lib/busca";
-import { formatDateTime } from "@/lib/format";
+import { formatBRL, formatDateTime } from "@/lib/format";
+import { lerReais } from "@/lib/dinheiro";
 import { numeroDoTitulo } from "@/lib/titulo";
 import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
+import {
+  ESTADOS_DA_ENTREGA,
+  estadoDaEntrega,
+  pendente,
+} from "@/lib/entrega";
 import {
   marcarEntregaAction,
   salvarCustoDaEntregaAction,
 } from "@/server/actions/entregas";
-import { formatBRL } from "@/lib/format";
-import { lerReais } from "@/lib/dinheiro";
 import type { Delivery } from "@/server/services/deliveries";
 
-type Filtro = "TODAS" | "PENDENTES" | "ENTREGUES";
-
-const FILTROS: { chave: Filtro; rotulo: string }[] = [
-  { chave: "PENDENTES", rotulo: "Pendentes" },
-  { chave: "ENTREGUES", rotulo: "Entregues" },
-  { chave: "TODAS", rotulo: "Todas" },
-];
+/** Filtro da lista. "PENDENTES" agrupa tudo que ainda dá trabalho. */
+const TODOS = "TODOS";
+const PENDENTES = "PENDENTES";
 
 export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
-  // Abre em PENDENTES: a fila existe para dizer o que falta fazer, e o que já
-  // saiu é histórico. Quem quer o histórico troca de aba.
-  const [filtro, setFiltro] = useState<Filtro>("PENDENTES");
+  // Abre em PENDENTES: a fila existe para dizer o que falta fazer.
+  const [filtro, setFiltro] = useState<string>(PENDENTES);
   const [busca, setBusca] = useState("");
 
-  const pendentes = entregas.filter((e) => e.deliveredAt == null).length;
-  // O total é a razão de anotar o custo: uma coluna de valores sem soma é uma
-  // coluna de valores.
-  const gasto = entregas.reduce((t, e) => t + (e.deliveryCost ?? 0), 0);
-  const semCusto = entregas.filter((e) => e.deliveryCost == null).length;
+  const qtdPendentes = entregas.filter((e) => pendente(e.status)).length;
   const semLink = entregas.filter(
-    (e) => e.deliveredAt == null && e.winner && !e.winner.steamTradeUrl,
+    (e) => pendente(e.status) && e.winner && !e.winner.steamTradeUrl,
   ).length;
+  const gasto = entregas.reduce((t, e) => t + (e.deliveryCost ?? 0), 0);
 
   const visiveis = useMemo(() => {
     const alvo = semAcento(busca);
     return entregas.filter((e) => {
-      if (filtro === "PENDENTES" && e.deliveredAt != null) return false;
-      if (filtro === "ENTREGUES" && e.deliveredAt == null) return false;
+      if (filtro === PENDENTES && !pendente(e.status)) return false;
+      if (filtro !== PENDENTES && filtro !== TODOS && e.status !== filtro) {
+        return false;
+      }
       if (alvo === "") return true;
+      // A busca ainda olha o nome do ganhador, mesmo ele não estando na tela:
+      // "o pedido do Mateus" é como a pessoa lembra da entrega.
       const campos = [
         e.raffleTitle,
         e.winner?.name ?? "",
@@ -96,18 +114,16 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">
-            {pendentes} pendente{pendentes === 1 ? "" : "s"}
+            {qtdPendentes} pendente{qtdPendentes === 1 ? "" : "s"}
           </span>{" "}
-          de {entregas.length}. Ganhador, skin e link de troca de cada campanha
-          sorteada.
+          de {entregas.length}.
           {gasto > 0 && (
             <>
               {" "}
               <span className="font-semibold text-foreground">
                 {formatBRL(gasto)}
               </span>{" "}
-              gastos com fornecedor
-              {semCusto > 0 && `, ${semCusto} sem custo anotado`}.
+              gastos com fornecedor.
             </>
           )}
         </p>
@@ -126,23 +142,21 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border p-0.5">
-          {FILTROS.map((f) => (
-            <button
-              key={f.chave}
-              type="button"
-              onClick={() => setFiltro(f.chave)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                filtro === f.chave
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {f.rotulo}
-            </button>
-          ))}
-        </div>
+        <Select value={filtro} onValueChange={(v) => setFiltro(v ?? TODOS)}>
+          <SelectTrigger className="h-9 w-full sm:w-48" aria-label="Filtrar por status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={PENDENTES}>Pendentes</SelectItem>
+            <SelectItem value={TODOS}>Todos os status</SelectItem>
+            {ESTADOS_DA_ENTREGA.map((e) => (
+              <SelectItem key={e.chave} value={e.chave}>
+                <Ponto cor={e.cor} />
+                {e.rotulo}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
@@ -152,24 +166,11 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
         />
       </div>
 
-      {/* CARTÕES no celular, TABELA no desktop.
-          Tabela numa tela de 390px vira rolagem lateral: a pessoa arrasta para
-          ler cada coluna e perde de vista a linha em que estava. Empilhado,
-          cada entrega é um bloco fechado, com tudo à mão e nada escondido fora
-          da tela.
-          No desktop a tabela ganha, porque ali a comparação entre linhas é o
-          que diz o que falta fazer. */}
       <div className="space-y-3 sm:hidden">
         {visiveis.map((e) => (
           <Cartao key={e.raffleId} entrega={e} />
         ))}
-        {visiveis.length === 0 && (
-          <p className="rounded-xl border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
-            {entregas.length === 0
-              ? "Nenhuma campanha sorteada ainda."
-              : "Nada aqui com esse filtro."}
-          </p>
-        )}
+        {visiveis.length === 0 && <Vazio total={entregas.length} />}
       </div>
 
       <div className="hidden overflow-hidden rounded-xl border bg-card sm:block">
@@ -177,21 +178,15 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[240px]">Skin</TableHead>
-                <TableHead className="min-w-[180px]">Ganhador</TableHead>
+                <TableHead className="min-w-[260px]">Skin</TableHead>
                 <TableHead className="min-w-[120px]">Link de troca</TableHead>
                 <TableHead className="text-right">Título</TableHead>
                 <TableHead className="min-w-[130px] text-right">
                   Custo
                 </TableHead>
                 <TableHead className="min-w-[150px]">Sorteado</TableHead>
-                {/* A coluna de ação fica GRUDADA na direita.
-                    Sem isso, no celular ela some fora da rolagem horizontal e
-                    marcar uma entrega exige arrastar a tabela primeiro, toda
-                    vez, para cada linha. Grudada, o resto passa por baixo dela
-                    e o botão está sempre onde a mão espera. */}
-                <TableHead className="sticky right-0 min-w-[190px] bg-card text-right shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
-                  Entrega
+                <TableHead className="sticky right-0 min-w-[190px] bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
+                  Status
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -202,49 +197,44 @@ export function TabelaDeEntregas({ entregas }: { entregas: Delivery[] }) {
             </TableBody>
           </Table>
         </div>
-
-        {visiveis.length === 0 && (
-          <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-            {entregas.length === 0
-              ? "Nenhuma campanha sorteada ainda."
-              : "Nada aqui com esse filtro."}
-          </p>
-        )}
+        {visiveis.length === 0 && <Vazio total={entregas.length} />}
       </div>
     </div>
   );
 }
 
+function Vazio({ total }: { total: number }) {
+  return (
+    <p className="rounded-xl border bg-card px-4 py-12 text-center text-sm text-muted-foreground sm:border-0">
+      {total === 0
+        ? "Nenhuma campanha sorteada ainda."
+        : "Nada aqui com esse filtro."}
+    </p>
+  );
+}
+
+function Ponto({ cor }: { cor: string }) {
+  return (
+    <span
+      aria-hidden
+      className="mr-2 inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: cor }}
+    />
+  );
+}
+
 function Linha({ entrega }: { entrega: Delivery }) {
   const premio = entrega.prizes[0] ?? null;
-  const entregue = entrega.deliveredAt != null;
 
-  // Sem `opacity` na linha entregue: opacidade em elemento pai cria uma camada
-  // de composição própria, e dentro dela `position: sticky` para de grudar, o
-  // que quebraria a coluna de ação. Ela recua pela COR do texto, que não tem
-  // esse efeito colateral.
-
+  // Sem `opacity` na linha concluída: opacidade em elemento pai cria uma camada
+  // de composição própria, e dentro dela `position: sticky` para de funcionar,
+  // o que quebraria a coluna de status. Ela recua pela cor do texto.
   return (
-    <TableRow className={cn(entregue && "text-muted-foreground")}>
+    <TableRow className={cn(!pendente(entrega.status) && "text-muted-foreground")}>
       <TableCell>
         <div className="flex items-center gap-2.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40">
-            {premio?.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={premio.imageUrl}
-                alt=""
-                className="h-full w-full object-contain p-0.5"
-              />
-            ) : (
-              <PackageCheck className="h-4 w-4 text-muted-foreground" />
-            )}
-          </span>
+          <Miniatura premio={premio} />
           <div className="min-w-0">
-            {/* O nome com botão de copiar, do mesmo jeito que o link de
-                troca: é o texto que vai colado na busca do fornecedor, e
-                digitar "'Two Times' McCoy | TACP Cavalry" à mão é onde o erro
-                de entrega nasce. */}
             <p className="flex items-center gap-1">
               <span
                 className="truncate text-sm font-semibold"
@@ -256,7 +246,11 @@ function Linha({ entrega }: { entrega: Delivery }) {
               >
                 {nomeDaSkin(entrega)}
               </span>
-              <BotaoDeCopia valor={nomeDaSkin(entrega)} rotulo="Copiar nome da skin" />
+              <BotaoDeCopia
+                valor={nomeDaSkin(entrega)}
+                rotulo="Copiar nome da skin"
+              />
+              <FichaDoGanhador entrega={entrega} />
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {premio?.skinWear && (
@@ -276,40 +270,7 @@ function Linha({ entrega }: { entrega: Delivery }) {
       </TableCell>
 
       <TableCell>
-        {entrega.winner ? (
-          <>
-            <p className="text-sm font-medium">{entrega.winner.name}</p>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {entrega.winner.phone ?? "sem telefone"}
-            </p>
-          </>
-        ) : (
-          <p className="text-xs text-destructive">
-            Título {entrega.ticketNumber} não consta como vendido.
-          </p>
-        )}
-      </TableCell>
-
-      <TableCell>
-        {entrega.winner?.steamTradeUrl ? (
-          <div className="flex items-center gap-1">
-            <BotaoDeCopia valor={entrega.winner.steamTradeUrl} />
-            <a
-              href={entrega.winner.steamTradeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Abrir na Steam"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span className="sr-only">Abrir na Steam</span>
-            </a>
-          </div>
-        ) : (
-          <span className="text-xs text-amber-600 dark:text-amber-400">
-            não cadastrado
-          </span>
-        )}
+        <LinkDeTroca entrega={entrega} />
       </TableCell>
 
       <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
@@ -324,8 +285,8 @@ function Linha({ entrega }: { entrega: Delivery }) {
         {formatDateTime(entrega.drawnAt)}
       </TableCell>
 
-      <TableCell className="sticky right-0 bg-card text-right shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
-        <AcaoDeEntrega entrega={entrega} />
+      <TableCell className="sticky right-0 bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
+        <SeletorDeStatus entrega={entrega} />
       </TableCell>
     </TableRow>
   );
@@ -333,28 +294,12 @@ function Linha({ entrega }: { entrega: Delivery }) {
 
 function Cartao({ entrega }: { entrega: Delivery }) {
   const premio = entrega.prizes[0] ?? null;
-  const entregue = entrega.deliveredAt != null;
+  const estado = estadoDaEntrega(entrega.status);
 
   return (
-    <article
-      className={cn(
-        "space-y-3 rounded-xl border bg-card p-3",
-        entregue && "border-emerald-500/30",
-      )}
-    >
+    <article className="space-y-3 rounded-xl border bg-card p-3">
       <div className="flex items-start gap-2.5">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40">
-          {premio?.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={premio.imageUrl}
-              alt=""
-              className="h-full w-full object-contain p-0.5"
-            />
-          ) : (
-            <PackageCheck className="h-5 w-5 text-muted-foreground" />
-          )}
-        </span>
+        <Miniatura premio={premio} grande />
         <div className="min-w-0 flex-1">
           <p className="flex items-start gap-1">
             <span
@@ -367,7 +312,10 @@ function Cartao({ entrega }: { entrega: Delivery }) {
             >
               {nomeDaSkin(entrega)}
             </span>
-            <BotaoDeCopia valor={nomeDaSkin(entrega)} rotulo="Copiar nome da skin" />
+            <BotaoDeCopia
+              valor={nomeDaSkin(entrega)}
+              rotulo="Copiar nome da skin"
+            />
           </p>
           <p className="text-xs text-muted-foreground">
             {premio?.skinWear && (
@@ -383,43 +331,17 @@ function Cartao({ entrega }: { entrega: Delivery }) {
             {formatDateTime(entrega.drawnAt)}
           </p>
         </div>
-        {entregue && (
-          <PackageCheck className="h-4 w-4 shrink-0 text-emerald-500" />
-        )}
+        <span
+          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+          style={{ backgroundColor: `${estado.cor}22`, color: estado.cor }}
+        >
+          {estado.rotulo}
+        </span>
       </div>
 
-      <div className="rounded-lg border bg-muted/20 p-2.5">
-        {entrega.winner ? (
-          <>
-            <p className="text-sm font-semibold">{entrega.winner.name}</p>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {entrega.winner.phone ?? "sem telefone"}
-            </p>
-            {entrega.winner.steamTradeUrl ? (
-              <div className="mt-1.5 flex items-center gap-1">
-                <BotaoDeCopia valor={entrega.winner.steamTradeUrl} />
-                <a
-                  href={entrega.winner.steamTradeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Abrir na Steam
-                </a>
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                Link de troca não cadastrado.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-destructive">
-            Título {entrega.ticketNumber} não consta como vendido nesta
-            campanha.
-          </p>
-        )}
+      <div className="flex flex-wrap items-center gap-2">
+        <LinkDeTroca entrega={entrega} comRotulo />
+        <FichaDoGanhador entrega={entrega} comRotulo />
       </div>
 
       <div className="flex items-center gap-2">
@@ -429,10 +351,150 @@ function Cartao({ entrega }: { entrega: Delivery }) {
         </div>
       </div>
 
-      <div className="flex justify-end border-t pt-2.5">
-        <AcaoDeEntrega entrega={entrega} />
+      <div className="border-t pt-2.5">
+        <SeletorDeStatus entrega={entrega} />
       </div>
     </article>
+  );
+}
+
+function Miniatura({
+  premio,
+  grande,
+}: {
+  premio: Delivery["prizes"][number] | null;
+  grande?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40",
+        grande ? "h-12 w-12" : "h-10 w-10",
+      )}
+    >
+      {premio?.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={premio.imageUrl}
+          alt=""
+          className="h-full w-full object-contain p-0.5"
+        />
+      ) : (
+        <PackageCheck className="h-4 w-4 text-muted-foreground" />
+      )}
+    </span>
+  );
+}
+
+function LinkDeTroca({
+  entrega,
+  comRotulo,
+}: {
+  entrega: Delivery;
+  comRotulo?: boolean;
+}) {
+  if (!entrega.winner?.steamTradeUrl) {
+    return (
+      <span className="text-xs text-amber-600 dark:text-amber-400">
+        sem link de troca
+      </span>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <BotaoDeCopia valor={entrega.winner.steamTradeUrl} />
+      <a
+        href={entrega.winner.steamTradeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Abrir na Steam"
+        className={cn(
+          "inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          comRotulo ? "px-2 text-xs font-semibold" : "w-8",
+        )}
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        {comRotulo ? "Abrir na Steam" : <span className="sr-only">Abrir na Steam</span>}
+      </a>
+    </div>
+  );
+}
+
+/**
+ * Os dados de quem ganhou, atrás de um botão.
+ *
+ * Eles saíram da lista porque não servem para operar: comprar e enviar a skin
+ * usa o nome do item e o link de troca. Nome, telefone e e-mail servem para
+ * FALAR com a pessoa, que é outra tarefa e acontece bem menos.
+ */
+function FichaDoGanhador({
+  entrega,
+  comRotulo,
+}: {
+  entrega: Delivery;
+  comRotulo?: boolean;
+}) {
+  const g = entrega.winner;
+  return (
+    <Dialog>
+      <DialogTrigger
+        title="Dados do ganhador"
+        className={cn(
+          "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          comRotulo ? "px-2 text-xs font-semibold" : "w-8",
+        )}
+      >
+        <Info className="h-3.5 w-3.5" />
+        {comRotulo ? "Ganhador" : <span className="sr-only">Dados do ganhador</span>}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ganhador</DialogTitle>
+          <DialogDescription>{entrega.raffleTitle}</DialogDescription>
+        </DialogHeader>
+        {g ? (
+          <dl className="space-y-2 text-sm">
+            <Dado rotulo="Nome" valor={g.name} />
+            <Dado rotulo="Celular" valor={g.phone} copiavel />
+            <Dado rotulo="E-mail" valor={g.email} copiavel />
+            <Dado rotulo="SteamID64" valor={g.steamId} copiavel />
+            <Dado
+              rotulo="Título"
+              valor={numeroDoTitulo(entrega.ticketNumber, entrega.totalNumbers)}
+            />
+          </dl>
+        ) : (
+          <p className="text-sm text-destructive">
+            O título {entrega.ticketNumber} não consta como vendido nesta
+            campanha. Confira o resultado declarado.
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Dado({
+  rotulo,
+  valor,
+  copiavel,
+}: {
+  rotulo: string;
+  valor: string | null;
+  copiavel?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/30 px-3 py-2">
+      <dt className="text-[0.65rem] tracking-wider text-muted-foreground uppercase">
+        {rotulo}
+      </dt>
+      <dd className="flex items-center gap-1 text-sm font-semibold">
+        <span className="min-w-0 flex-1 break-all">{valor ?? "-"}</span>
+        {copiavel && valor && (
+          <BotaoDeCopia valor={valor} rotulo={`Copiar ${rotulo}`} />
+        )}
+      </dd>
+    </div>
   );
 }
 
@@ -454,7 +516,7 @@ function BotaoDeCopia({
         setCopiado(true);
         setTimeout(() => setCopiado(false), 1500);
       }}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       {copiado ? (
         <Check className="h-4 w-4 text-emerald-500" />
@@ -472,19 +534,71 @@ function nomeDaSkin(entrega: Delivery): string {
   return p?.skinName ?? p?.description ?? entrega.raffleTitle;
 }
 
+function SeletorDeStatus({ entrega }: { entrega: Delivery }) {
+  const router = useRouter();
+  const [salvando, setSalvando] = useState(false);
+  const [status, setStatus] = useState(entrega.status);
+  const estado = estadoDaEntrega(status);
+
+  async function trocar(valor: string | null) {
+    if (!valor || valor === status) return;
+    const anterior = status;
+    setStatus(valor as typeof status);
+    setSalvando(true);
+    const r = await marcarEntregaAction({
+      raffleId: entrega.raffleId,
+      status: valor,
+      observacao: entrega.deliveryNote,
+    });
+    setSalvando(false);
+    if (!r.ok) {
+      // Volta ao anterior: deixar o novo na tela depois de o servidor recusar
+      // mostraria um estado que não existe no banco.
+      setStatus(anterior);
+      toast.error(r.error);
+      return;
+    }
+    toast.success(`Status: ${estadoDaEntrega(valor as typeof status).rotulo}`);
+    router.refresh();
+  }
+
+  return (
+    <Select value={status} onValueChange={trocar} disabled={salvando}>
+      <SelectTrigger
+        className="h-9 w-full"
+        aria-label={`Status da entrega de ${entrega.raffleTitle}`}
+        style={{ borderColor: `${estado.cor}66` }}
+      >
+        <SelectValue>
+          <span className="flex items-center">
+            <Ponto cor={estado.cor} />
+            {estado.rotulo}
+          </span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {ESTADOS_DA_ENTREGA.map((e) => (
+          <SelectItem key={e.chave} value={e.chave}>
+            <Ponto cor={e.cor} />
+            {e.rotulo}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 /**
  * O custo, editável na própria linha.
  *
- * Salva ao sair do campo e no Enter, e só quando o valor mudou, igual ao campo
- * de escudo dos times: anotar preço é digitar um número e seguir, não abrir um
- * formulário.
+ * Salva ao sair do campo e no Enter, e só quando o valor mudou: anotar preço é
+ * digitar um número e seguir, não abrir um formulário.
  */
 function CampoDeCusto({ entrega }: { entrega: Delivery }) {
   const router = useRouter();
   const gravado = entrega.deliveryCost;
-  const [texto, setTexto] = useState(
-    gravado == null ? "" : gravado.toFixed(2).replace(".", ","),
-  );
+  const comoTexto = gravado == null ? "" : gravado.toFixed(2).replace(".", ",");
+  const [texto, setTexto] = useState(comoTexto);
   const [salvando, setSalvando] = useState(false);
 
   async function salvar() {
@@ -495,7 +609,7 @@ function CampoDeCusto({ entrega }: { entrega: Delivery }) {
     setSalvando(false);
     if (!r.ok) {
       toast.error(r.error);
-      setTexto(gravado == null ? "" : gravado.toFixed(2).replace(".", ","));
+      setTexto(comoTexto);
       return;
     }
     toast.success(valor == null ? "Custo apagado." : `Custo: ${formatBRL(valor)}`);
@@ -511,9 +625,7 @@ function CampoDeCusto({ entrega }: { entrega: Delivery }) {
       onBlur={salvar}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
-        if (e.key === "Escape") {
-          setTexto(gravado == null ? "" : gravado.toFixed(2).replace(".", ","));
-        }
+        if (e.key === "Escape") setTexto(comoTexto);
       }}
       placeholder="R$"
       aria-label={`Custo da entrega de ${entrega.raffleTitle}`}
@@ -522,102 +634,5 @@ function CampoDeCusto({ entrega }: { entrega: Delivery }) {
         gravado != null && "border-emerald-500/40",
       )}
     />
-  );
-}
-
-function AcaoDeEntrega({ entrega }: { entrega: Delivery }) {
-  const router = useRouter();
-  const [salvando, setSalvando] = useState(false);
-  const [abrindoNota, setAbrindoNota] = useState(false);
-  const [observacao, setObservacao] = useState("");
-
-  async function salvar(marcar: boolean) {
-    setSalvando(true);
-    const r = await marcarEntregaAction({
-      raffleId: entrega.raffleId,
-      entregue: marcar,
-      observacao: marcar ? observacao : null,
-    });
-    setSalvando(false);
-    if (!r.ok) {
-      toast.error(r.error);
-      return;
-    }
-    setAbrindoNota(false);
-    setObservacao("");
-    toast.success(marcar ? "Entrega registrada." : "Entrega desmarcada.");
-    router.refresh();
-  }
-
-  if (entrega.deliveredAt != null) {
-    return (
-      <div className="flex flex-col items-end gap-0.5">
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-          <PackageCheck className="h-3.5 w-3.5" />
-          {formatDateTime(entrega.deliveredAt)}
-        </span>
-        {(entrega.deliveredBy || entrega.deliveryNote) && (
-          <span className="max-w-[220px] truncate text-[11px] text-muted-foreground">
-            {[entrega.deliveredBy, entrega.deliveryNote]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={salvando}
-          onClick={() => salvar(false)}
-          className="-mr-2 h-7 text-muted-foreground"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-          Desmarcar
-        </Button>
-      </div>
-    );
-  }
-
-  if (!abrindoNota) {
-    return (
-      <Button
-        type="button"
-        size="sm"
-        disabled={salvando}
-        onClick={() => setAbrindoNota(true)}
-      >
-        <PackageCheck className="h-4 w-4" />
-        Entregue
-      </Button>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-end gap-1">
-      <Input
-        autoFocus
-        value={observacao}
-        onChange={(e) => setObservacao(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") salvar(true);
-          if (e.key === "Escape") setAbrindoNota(false);
-        }}
-        placeholder="Observação"
-        maxLength={500}
-        className="h-8 w-36"
-      />
-      <Button type="button" size="sm" disabled={salvando} onClick={() => salvar(true)}>
-        <Check className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        disabled={salvando}
-        onClick={() => setAbrindoNota(false)}
-      >
-        Cancelar
-      </Button>
-    </div>
   );
 }

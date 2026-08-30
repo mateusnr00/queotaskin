@@ -82,6 +82,21 @@ enum RaffleModality {
 }
 
 /// Fases do sorteio ao vivo. A ordem aqui é a ordem em que acontecem.
+/// Em que pé está a entrega da skin ao ganhador.
+///
+/// Era um booleano disfarçado: `deliveredAt` nulo ou preenchido. Isso conta
+/// duas histórias e a fila tem mais do que duas: skin que precisa sair na
+/// frente, compra que deu errado, envio que precisa ser refeito, e prêmio pago
+/// em dinheiro em vez de item.
+enum DeliveryStatus {
+  PRIORIDADE // sai na frente das outras
+  AGUARDANDO // estado inicial de toda campanha sorteada
+  ENVIADO // a oferta saiu e o ganhador recebeu
+  ERRO // a compra ou a troca falhou; exige olho humano
+  REENVIO // saiu, voltou, precisa sair de novo
+  PIX // pago em dinheiro, e não em skin
+}
+
 enum DrawStatus {
   WAITING_DRAW // campanha encerrada, esperando a hora marcada
   COUNTDOWN // os segundos finais, contando na tela
@@ -601,8 +616,11 @@ model Raffle {
   /// e quem operava precisava lembrar de cor. Marcar aqui é o que separa a
   /// fila do histórico.
   ///
-  /// Nulo é pendente. Não há enum porque não há terceiro estado: ou saiu, e
-  /// então existe uma data, ou não saiu.
+  /// Em que pé está a entrega. Ver o enum para o significado de cada estado.
+  deliveryStatus DeliveryStatus @default(AGUARDANDO)
+
+  /// Quando a skin de fato saiu. Preenchido ao entrar em ENVIADO e limpo ao
+  /// sair dele: é a data da entrega, e não a data da última mexida no status.
   deliveredAt   DateTime?
   /// Quem marcou. Sem relação declarada de propósito: é registro de auditoria,
   /// e apagar a conta de um operador não pode apagar o histórico de entrega.

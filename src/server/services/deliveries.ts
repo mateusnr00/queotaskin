@@ -1,3 +1,5 @@
+import type { DeliveryStatus } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 import { toSkinPrize } from "@/lib/prize-mapper";
 import type { SkinPrize } from "@/components/cs2/skin-card";
@@ -11,7 +13,8 @@ export interface Delivery {
   totalNumbers: number;
   drawnAt: Date | null;
   note: string | null;
-  /** Quando a skin saiu. Nulo é pendente: ver a nota no schema. */
+  status: DeliveryStatus;
+  /** Quando a skin de fato saiu. Só existe em ENVIADO. */
   deliveredAt: Date | null;
   deliveryNote: string | null;
   /** Quanto saiu do caixa para comprar a skin. Nulo é "ainda não anotado". */
@@ -45,7 +48,13 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
     // Pendente primeiro, e dentro de cada grupo o mais recente no topo.
     // A fila existe para dizer o que falta fazer; o que já saiu é histórico e
     // não pode empurrar o trabalho de hoje para o fim da página.
-    orderBy: [{ deliveredAt: { sort: "asc", nulls: "first" } }, { winnerDrawnAt: "desc" }],
+    // Pendente primeiro, e dentro de cada grupo o mais recente no topo. A fila
+    // existe para dizer o que falta fazer; o que já saiu é histórico e não pode
+    // empurrar o trabalho de hoje para o fim da página.
+    orderBy: [
+      { deliveredAt: { sort: "asc", nulls: "first" } },
+      { winnerDrawnAt: "desc" },
+    ],
     include: { prizes: { orderBy: { position: "asc" } } },
   });
   if (raffles.length === 0) return [];
@@ -106,6 +115,7 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       totalNumbers: raffle.totalNumbers,
       drawnAt: raffle.winnerDrawnAt,
       note: raffle.winnerNote,
+      status: raffle.deliveryStatus,
       deliveredAt: raffle.deliveredAt,
       deliveryNote: raffle.deliveryNote,
       // Decimal do Prisma não atravessa a fronteira servidor/cliente, então

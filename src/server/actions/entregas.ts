@@ -1,14 +1,13 @@
 "use server";
 
-// Marcar uma entrega como feita, ou desfazer.
+// O estado da entrega e o custo dela.
 //
-// A fila de /admin/entregas já dizia quem ganhou, o que ganhou e para onde
-// enviar. O que faltava era dizer o que JÁ SAIU: sem isso, campanha sorteada
-// há um mês fica do lado da de ontem e quem opera precisa lembrar de cor.
+// A fila de /admin/entregas diz quem ganhou, o que ganhou e para onde enviar.
+// Estas ações são o que a torna operável: em que pé cada entrega está, e quanto
+// custou comprar a skin.
 //
-// Desfazer existe porque marcar errado é o erro mais provável aqui: são vários
-// cards parecidos numa lista, e um toque no lugar errado não pode virar um
-// registro que ninguém consegue corrigir.
+// Trocar de estado é sempre reversível, e isso não é enfeite: são várias linhas
+// parecidas numa lista, e o erro mais provável é mexer na linha errada.
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -21,24 +20,41 @@ import type { ActionResult } from "@/server/actions/auth";
 
 const esquema = z.object({
   raffleId: z.string().min(1),
-  entregue: z.boolean(),
-  // Número da oferta na Steam, combinação feita, o que for. Teto porque é
-  // campo livre exposto a quem tem o painel, e texto sem limite vira problema
-  // de armazenamento e de tela.
+  status: z.enum([
+    "PRIORIDADE",
+    "AGUARDANDO",
+    "ENVIADO",
+    "ERRO",
+    "REENVIO",
+    "PIX",
+  ]),
+  // Número da oferta na Steam, motivo do erro, o que for. Teto porque é campo
+  // livre exposto a quem tem o painel, e texto sem limite vira problema de
+  // armazenamento e de tela.
   observacao: z.string().max(500).optional().nullable(),
 });
 
+/**
+ * Troca o estado da entrega.
+ *
+ * Era "marcar entregue" e "desmarcar", um booleano. A fila tem mais do que dois
+ * estados, então virou uma troca só, com o estado vindo do seletor.
+ *
+ * `deliveredAt` continua sendo a data em que a skin SAIU, e não a data da
+ * última mexida: entra ao chegar em ENVIADO e é limpa ao sair dele. Se ficasse
+ * gravada, uma entrega que voltou para REENVIO continuaria dizendo que foi
+ * entregue em tal dia, o que é falso.
+ */
 export async function marcarEntregaAction(
   raw: unknown,
-): Promise<ActionResult<{ deliveredAt: string | null }>> {
+): Promise<ActionResult<{ status: string }>> {
   const parsed = esquema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Dados inválidos" };
 
   try {
     const session = await getAdminOrThrow();
-    // Sem esta checagem, o id de uma campanha de OUTRO painel marcaria entrega
-    // aqui: o id vem do cliente. Ela também devolve o tenant da campanha, que
-    // é o que vai para o log.
+    // Sem esta checagem, o id de uma campanha de OUTRO painel seria alterável
+    // daqui: o id vem do cliente. Ela também devolve o tenant, que vai no log.
     const tenantId = await assertRaffleInActiveTenant(
       parsed.data.raffleId,
       session.user,
@@ -49,42 +65,38 @@ export async function marcarEntregaAction(
       select: { title: true, winnerTicketNumber: true },
     });
     if (!rifa) return { ok: false, error: "Campanha não encontrada." };
-    // Entrega de campanha sem ganhador não existe, e deixar marcar criaria um
+    // Entrega de campanha sem ganhador não existe, e deixar mexer criaria um
     // registro que não quer dizer nada.
     if (rifa.winnerTicketNumber == null) {
       return { ok: false, error: "Esta campanha ainda não tem ganhador." };
     }
 
-    const agora = new Date();
+    const enviado = parsed.data.status === "ENVIADO";
     const observacao = parsed.data.observacao?.trim() || null;
-    const atualizada = await prisma.raffle.update({
+
+    await prisma.raffle.update({
       where: { id: parsed.data.raffleId },
-      data: parsed.data.entregue
-        ? {
-            deliveredAt: agora,
-            deliveredById: session.user.id,
-            deliveryNote: observacao,
-          }
-        : // Desfazer limpa os três: meia marcação, com data apagada mas autor
-          // mantido, mentiria no histórico.
-          { deliveredAt: null, deliveredById: null, deliveryNote: null },
+      data: {
+        deliveryStatus: parsed.data.status,
+        deliveredAt: enviado ? new Date() : null,
+        deliveredById: enviado ? session.user.id : null,
+        deliveryNote: observacao,
+      },
     });
 
     await registrarLog({
-      acao: parsed.data.entregue
-        ? "entrega.marcada"
-        : "entrega.desmarcada",
+      acao: "entrega.marcada",
       tenantId,
       alvo: { tipo: "Raffle", id: parsed.data.raffleId, rotulo: rifa.title },
-      detalhes: { titulo: rifa.winnerTicketNumber, observacao },
+      detalhes: {
+        titulo: rifa.winnerTicketNumber,
+        status: parsed.data.status,
+        observacao,
+      },
     });
 
     revalidatePath("/admin/entregas");
-
-    return {
-      ok: true,
-      data: { deliveredAt: atualizada.deliveredAt?.toISOString() ?? null },
-    };
+    return { ok: true, data: { status: parsed.data.status } };
   } catch {
     return { ok: false, error: "Não foi possível salvar." };
   }
