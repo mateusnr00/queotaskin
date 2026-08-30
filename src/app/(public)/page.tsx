@@ -21,8 +21,29 @@ import {
 } from "@/lib/vitrine";
 import { notFound } from "next/navigation";
 
-const MAX_RAFFLES = 12;
-const MAX_WINNERS = 6;
+// Sete campanhas ativas na home: uma principal e seis embaixo.
+//
+// Eram doze, ou seja, uma principal e onze na grade. O pedido foi "até 7, uma
+// principal e 5 embaixo", e os dois números não fecham: 1 + 5 dá 6.
+//
+// Fiquei com SETE, que é o teto que foi dito, e ele também é o que fecha a
+// grade: são duas colunas, então seis embaixo formam três linhas cheias, e
+// cinco deixariam um cartão sozinho na última. Se a intenção era seis no
+// total, é trocar este número por 6.
+//
+// As campanhas que não couberem continuam na página /sorteios, que existe para
+// isso e não tem teto.
+const MAX_RAFFLES = 7;
+// Quatro cartões, somando as duas origens.
+//
+// Eram seis de CADA, ou seja, até doze na página, e doze cartões de ganhador
+// no fim da home é mais rolagem do que informação: quem chega quer ver que
+// alguém ganhou, não auditar o histórico. Quatro provam o ponto.
+//
+// Cada consulta ainda busca quatro, porque a mistura das duas listas acontece
+// depois: buscar dois de cada deixaria de fora o caso em que os quatro mais
+// recentes vieram todos da mesma origem.
+const MAX_WINNERS = 4;
 
 // Home pública, layout inspirado no Sorteamos:
 // 2 colunas no desktop (Campanhas | Ganhadores). Mobile empilha.
@@ -195,7 +216,52 @@ export default async function HomePage() {
   // colunas era montado só pelo toggle do admin: sem nenhum sorteio realizado,
   // a segunda coluna vinha vazia e empurrava todo o conteúdo pra esquerda,
   // deixando um vão do tamanho dela à direita.
-  const temGanhador = awarded.length > 0 || sorteados.length > 0;
+  // As duas origens viram uma lista só, mais recente primeiro, cortada em
+  // MAX_WINNERS. Antes elas eram desenhadas em sequência, sorteios e depois
+  // premiados, e o resultado era uma página com o dobro dos cartões e uma
+  // ordem que não era cronológica nem nada.
+  const ganhadores = [
+    ...sorteados.map((d) => ({
+      chave: `sorteio-${d.id}`,
+      drawDate: d.drawExecutedAt,
+      raffleTitle: d.raffle.title,
+      raffleSlug: d.raffle.slug,
+      coverUrl: d.raffle.images[0]?.url ?? null,
+      prizeDescription: d.raffle.prizes[0]?.description ?? d.raffle.title,
+      number: d.winningNumber!,
+      totalNumbers: d.raffle.totalNumbers,
+      // O nome congelado no sorteio manda: foi gravado no instante do
+      // resultado e não muda se a conta for renomeada depois.
+      winnerName:
+        d.winnerName ??
+        winnerByKey.get(`${d.raffle.id}:${d.winningNumber}`)?.name ??
+        "Ganhador",
+      winnerPhone:
+        winnerByKey.get(`${d.raffle.id}:${d.winningNumber}`)?.phone ?? null,
+      selo: "Sorteio da campanha",
+      href: `/sorteio/${d.publicId}`,
+    })),
+    ...awarded.map((a) => ({
+      chave: `premiado-${a.id}`,
+      drawDate: a.raffle.drawDate,
+      raffleTitle: a.raffle.title,
+      raffleSlug: a.raffle.slug,
+      coverUrl: a.raffle.images[0]?.url ?? null,
+      prizeDescription: a.prizeDescription,
+      number: a.number,
+      totalNumbers: a.raffle.totalNumbers,
+      winnerName: winnerByKey.get(`${a.raffleId}:${a.number}`)?.name ?? "Ganhador",
+      winnerPhone: winnerByKey.get(`${a.raffleId}:${a.number}`)?.phone ?? null,
+      selo: "Título premiado",
+      href: undefined as string | undefined,
+    })),
+  ]
+    // Sem data vai para o fim, e não para o topo: `null` comparado com número
+    // daria NaN e embaralharia a lista inteira.
+    .sort((a, b) => (b.drawDate?.getTime() ?? 0) - (a.drawDate?.getTime() ?? 0))
+    .slice(0, MAX_WINNERS);
+
+  const temGanhador = ganhadores.length > 0;
   const mostrarGanhadores = showWinners && temGanhador;
 
   return (
@@ -246,53 +312,9 @@ export default async function HomePage() {
               caption="quem já levou pra casa"
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              {/* O ganhador do sorteio vem primeiro: é o prêmio da campanha
-                  inteira, e título premiado é prêmio instantâneo. */}
-              {sorteados.map((d) => {
-                const win = winnerByKey.get(
-                  `${d.raffle.id}:${d.winningNumber}`,
-                );
-                return (
-                  <WinnerCard
-                    key={d.id}
-                    raffleTitle={d.raffle.title}
-                    raffleSlug={d.raffle.slug}
-                    coverUrl={d.raffle.images[0]?.url ?? null}
-                    prizeDescription={
-                      d.raffle.prizes[0]?.description ?? d.raffle.title
-                    }
-                    number={d.winningNumber!}
-                    totalNumbers={d.raffle.totalNumbers}
-                    drawDate={d.drawExecutedAt}
-                    // O nome congelado no sorteio manda: ele foi gravado no
-                    // instante do resultado e não muda se a conta for
-                    // renomeada depois.
-                    winnerName={d.winnerName ?? win?.name ?? "Ganhador"}
-                    winnerPhone={win?.phone ?? null}
-                    selo="Sorteio da campanha"
-                    href={`/sorteio/${d.publicId}`}
-                  />
-                );
-              })}
-
-              {awarded.map((a) => {
-                const win = winnerByKey.get(`${a.raffleId}:${a.number}`);
-                return (
-                  <WinnerCard
-                    key={a.id}
-                    raffleTitle={a.raffle.title}
-                    raffleSlug={a.raffle.slug}
-                    coverUrl={a.raffle.images[0]?.url ?? null}
-                    prizeDescription={a.prizeDescription}
-                    number={a.number}
-                    totalNumbers={a.raffle.totalNumbers}
-                    drawDate={a.raffle.drawDate}
-                    winnerName={win?.name ?? "Ganhador"}
-                    winnerPhone={win?.phone ?? null}
-                    selo="Título premiado"
-                  />
-                );
-              })}
+              {ganhadores.map(({ chave, ...cartao }) => (
+                <WinnerCard key={chave} {...cartao} />
+              ))}
             </div>
           </section>
         )}
@@ -374,7 +396,19 @@ function WinnerCard({
   href?: string;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3 shadow-sm">
+    // O CARTÃO INTEIRO é o link, e não só o título.
+    //
+    // Antes só o nome da campanha levava para algum lugar: uma linha de texto
+    // pequena, com line-clamp de uma linha, no meio do cartão. No celular isso
+    // é um alvo de uns dez pixels de altura, cercado de texto que parece
+    // clicável e não é. Acertar dava trabalho, e errar não fazia nada.
+    //
+    // Agora o alvo é o cartão todo. Nada aqui dentro é interativo, então não
+    // há link dentro de link: o título virou texto comum.
+    <Link
+      href={href ?? `/${raffleSlug}`}
+      className="block rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/40 active:bg-muted/60"
+    >
       <div className="flex gap-3">
         <div className="relative h-20 w-20 shrink-0 rounded-lg overflow-hidden bg-muted">
           {coverUrl ? (
@@ -397,12 +431,7 @@ function WinnerCard({
             </div>
           )}
           <div className="font-bold text-sm truncate">{winnerName}</div>
-          <Link
-            href={href ?? `/${raffleSlug}`}
-            className="block text-muted-foreground line-clamp-1 hover:text-foreground"
-          >
-            {raffleTitle}
-          </Link>
+          <div className="text-muted-foreground line-clamp-1">{raffleTitle}</div>
           <div className="text-muted-foreground">
             Prêmio: <span className="text-foreground">{prizeDescription}</span>
           </div>
@@ -421,7 +450,6 @@ function WinnerCard({
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
-
