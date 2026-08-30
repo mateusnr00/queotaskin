@@ -130,22 +130,45 @@ export async function salvarCustoDaEntregaAction(
 
     const rifa = await prisma.raffle.findUnique({
       where: { id: raffleId },
-      select: { title: true },
+      select: { title: true, deliveryStatus: true },
     });
     if (!rifa) return { ok: false, error: "Campanha não encontrada." };
 
+    // ANOTAR O CUSTO MARCA A ENTREGA COMO ENVIADA.
+    //
+    // Anotar quanto custou é o que se faz DEPOIS de comprar a skin do
+    // fornecedor e mandar a oferta: as duas coisas acontecem no mesmo minuto, e
+    // exigir dois gestos para registrar um só ato é onde a fila fica
+    // desatualizada.
+    //
+    // Duas exceções, e as duas por motivo. PIX já está concluída e o valor ali
+    // é o do dinheiro pago, não de uma skin comprada. E quem apaga o custo não
+    // está desfazendo o envio, só corrigindo um número digitado errado.
+    const jaConcluida = rifa.deliveryStatus === "ENVIADO" || rifa.deliveryStatus === "PIX";
+    const marcarEnviado = valor != null && !jaConcluida;
+
     await prisma.raffle.update({
       where: { id: raffleId },
-      // Duas casas na entrada também, e não só no banco: sem isto, um valor
-      // colado com três decimais viraria arredondamento silencioso do Postgres.
-      data: { deliveryCost: valor == null ? null : Number(valor.toFixed(2)) },
+      data: {
+        // Duas casas na entrada também, e não só no banco: sem isto, um valor
+        // colado com três decimais viraria arredondamento silencioso do
+        // Postgres.
+        deliveryCost: valor == null ? null : Number(valor.toFixed(2)),
+        ...(marcarEnviado
+          ? {
+              deliveryStatus: "ENVIADO" as const,
+              deliveredAt: new Date(),
+              deliveredById: session.user.id,
+            }
+          : {}),
+      },
     });
 
     await registrarLog({
       acao: "entrega.custo_alterado",
       tenantId,
       alvo: { tipo: "Raffle", id: raffleId, rotulo: rifa.title },
-      detalhes: { custo: valor },
+      detalhes: { custo: valor, marcouEnviado: marcarEnviado },
     });
 
     revalidatePath("/admin/entregas");

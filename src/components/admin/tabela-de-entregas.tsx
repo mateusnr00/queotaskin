@@ -17,7 +17,7 @@
 // Isso também tira dado pessoal de uma tela que fica aberta o dia todo, às
 // vezes com alguém do lado.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -69,6 +69,11 @@ import {
   type Taxas,
 } from "@/lib/moeda";
 import { numeroDoTitulo } from "@/lib/titulo";
+import {
+  PRAZO_DE_ENTREGA_HORAS,
+  situacaoDoPrazo,
+  type EstadoDoPrazo,
+} from "@/lib/prazo";
 import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
 import {
   ESTADOS_DA_ENTREGA,
@@ -100,6 +105,23 @@ export function TabelaDeEntregas({
   // gravado. Real e dólar são leituras. A escolha vale para a lista inteira,
   // porque comparar custos em moedas diferentes não compara nada.
   const [moeda, setMoeda] = useState<Moeda>("CNY");
+  // O relógio entra DEPOIS de montar. Calculado durante a renderização, o
+  // servidor e o navegador contariam horas em instantes diferentes e a
+  // hidratação brigaria; o selo do prazo simplesmente aparece um quadro depois.
+  const [agora, setAgora] = useState<Date | null>(null);
+  useEffect(() => {
+    // O primeiro valor sai por setTimeout(0), e não direto: chamar setState no
+    // corpo do efeito dispara renderização em cascata, e o compilador do React
+    // recusa, com razão. O atraso de um quadro não é perceptível.
+    const primeiro = setTimeout(() => setAgora(new Date()), 0);
+    // De minuto em minuto: "faltam 3h" que não vira "faltam 2h" com a tela
+    // aberta o dia todo é um aviso que mente.
+    const id = setInterval(() => setAgora(new Date()), 60_000);
+    return () => {
+      clearTimeout(primeiro);
+      clearInterval(id);
+    };
+  }, []);
 
   const qtdPendentes = entregas.filter((e) => pendente(e.status)).length;
   const semLink = entregas.filter(
@@ -213,7 +235,13 @@ export function TabelaDeEntregas({
 
       <div className="space-y-3 sm:hidden">
         {visiveis.map((e) => (
-          <Cartao key={e.raffleId} entrega={e} moeda={moeda} taxas={taxas} />
+          <Cartao
+            key={e.raffleId}
+            entrega={e}
+            moeda={moeda}
+            taxas={taxas}
+            agora={agora}
+          />
         ))}
         {visiveis.length === 0 && <Vazio total={entregas.length} />}
       </div>
@@ -229,6 +257,7 @@ export function TabelaDeEntregas({
                   Custo ({moeda})
                 </TableHead>
                 <TableHead className="min-w-[150px]">Sorteado</TableHead>
+                <TableHead className="min-w-[170px]">Enviado</TableHead>
                 <TableHead className="sticky right-0 min-w-[190px] bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
                   Status
                 </TableHead>
@@ -236,7 +265,13 @@ export function TabelaDeEntregas({
             </TableHeader>
             <TableBody>
               {visiveis.map((e) => (
-                <Linha key={e.raffleId} entrega={e} moeda={moeda} taxas={taxas} />
+                <Linha
+                  key={e.raffleId}
+                  entrega={e}
+                  moeda={moeda}
+                  taxas={taxas}
+                  agora={agora}
+                />
               ))}
             </TableBody>
           </Table>
@@ -244,6 +279,48 @@ export function TabelaDeEntregas({
         {visiveis.length === 0 && <Vazio total={entregas.length} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * O selo do prazo: quanto falta, quanto atrasou, ou em quanto tempo saiu.
+ *
+ * Pequeno de propósito. Ele não é a informação principal da linha, é o aviso
+ * que faz a pessoa olhar duas vezes para a linha certa.
+ */
+const COR_DO_PRAZO: Record<EstadoDoPrazo, string> = {
+  no_prazo: "border-white/15 text-muted-foreground",
+  perto: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  atrasada: "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400",
+  cumprida:
+    "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  estourada: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+};
+
+function SeloDoPrazo({
+  entrega,
+  agora,
+}: {
+  entrega: Delivery;
+  agora: Date | null;
+}) {
+  // Sem relógio ainda (primeiro quadro) ou sem data de sorteio, não há o que
+  // dizer, e um selo vazio seria pior do que selo nenhum.
+  if (!agora) return null;
+  const s = situacaoDoPrazo(entrega.drawnAt, entrega.deliveredAt, agora);
+  if (!s) return null;
+
+  return (
+    <span
+      title={`Prazo de ${PRAZO_DE_ENTREGA_HORAS}h a partir do sorteio`}
+      className={cn(
+        "mt-1 inline-flex w-fit items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-bold",
+        COR_DO_PRAZO[s.estado],
+      )}
+    >
+      {s.estado === "atrasada" && <AlertTriangle className="h-3 w-3" />}
+      {s.rotulo}
+    </span>
   );
 }
 
@@ -271,10 +348,12 @@ function Linha({
   entrega,
   moeda,
   taxas,
+  agora,
 }: {
   entrega: Delivery;
   moeda: Moeda;
   taxas: Taxas;
+  agora: Date | null;
 }) {
   const premio = entrega.prizes[0] ?? null;
 
@@ -325,6 +404,11 @@ function Linha({
         {formatDateTime(entrega.drawnAt)}
       </TableCell>
 
+      <TableCell className="text-xs text-muted-foreground">
+        {entrega.deliveredAt ? formatDateTime(entrega.deliveredAt) : "-"}
+        <SeloDoPrazo entrega={entrega} agora={agora} />
+      </TableCell>
+
       <TableCell className="sticky right-0 bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
         <SeletorDeStatus entrega={entrega} />
       </TableCell>
@@ -336,10 +420,12 @@ function Cartao({
   entrega,
   moeda,
   taxas,
+  agora,
 }: {
   entrega: Delivery;
   moeda: Moeda;
   taxas: Taxas;
+  agora: Date | null;
 }) {
   const premio = entrega.prizes[0] ?? null;
   const estado = estadoDaEntrega(entrega.status);
@@ -371,8 +457,14 @@ function Cartao({
                 {WEAR_SHORT[premio.skinWear]}
               </span>
             )}
-            {formatDateTime(entrega.drawnAt)}
+            Sorteada {formatDateTime(entrega.drawnAt)}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {entrega.deliveredAt
+              ? `Enviada ${formatDateTime(entrega.deliveredAt)}`
+              : "Ainda não enviada"}
+          </p>
+          <SeloDoPrazo entrega={entrega} agora={agora} />
         </div>
         <span
           className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
