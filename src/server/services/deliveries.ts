@@ -9,6 +9,11 @@ export interface Delivery {
   ticketNumber: number;
   drawnAt: Date | null;
   note: string | null;
+  /** Quando a skin saiu. Nulo é pendente: ver a nota no schema. */
+  deliveredAt: Date | null;
+  deliveryNote: string | null;
+  /** Nome de quem marcou, quando a conta ainda existe. */
+  deliveredBy: string | null;
   /** Comprador do número sorteado. Nulo se o título não foi vendido. */
   winner: {
     reservationId: string;
@@ -33,7 +38,10 @@ export interface Delivery {
 export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
   const raffles = await prisma.raffle.findMany({
     where: { tenantId, winnerTicketNumber: { not: null } },
-    orderBy: [{ winnerDrawnAt: "desc" }],
+    // Pendente primeiro, e dentro de cada grupo o mais recente no topo.
+    // A fila existe para dizer o que falta fazer; o que já saiu é histórico e
+    // não pode empurrar o trabalho de hoje para o fim da página.
+    orderBy: [{ deliveredAt: { sort: "asc", nulls: "first" } }, { winnerDrawnAt: "desc" }],
     include: { prizes: { orderBy: { position: "asc" } } },
   });
   if (raffles.length === 0) return [];
@@ -65,6 +73,23 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
 
   const ticketByRaffle = new Map(winningTickets.map((t) => [t.raffleId, t]));
 
+  // Os nomes de quem marcou entrega, numa query só. `deliveredById` não tem
+  // relação declarada de propósito (ver o schema), então a busca é manual e
+  // um id órfão simplesmente não vira nome, em vez de quebrar a tela.
+  const idsDeQuemEntregou = [
+    ...new Set(raffles.map((r) => r.deliveredById).filter((v): v is string => !!v)),
+  ];
+  const nomePorId = new Map(
+    idsDeQuemEntregou.length > 0
+      ? (
+          await prisma.user.findMany({
+            where: { id: { in: idsDeQuemEntregou } },
+            select: { id: true, name: true },
+          })
+        ).map((u) => [u.id, u.name])
+      : [],
+  );
+
   return raffles.map((raffle) => {
     const ticket = ticketByRaffle.get(raffle.id);
     const reservation = ticket?.reservation ?? null;
@@ -76,6 +101,11 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       ticketNumber: raffle.winnerTicketNumber!,
       drawnAt: raffle.winnerDrawnAt,
       note: raffle.winnerNote,
+      deliveredAt: raffle.deliveredAt,
+      deliveryNote: raffle.deliveryNote,
+      deliveredBy: raffle.deliveredById
+        ? (nomePorId.get(raffle.deliveredById) ?? null)
+        : null,
       winner: reservation
         ? {
             reservationId: reservation.id,

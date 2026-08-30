@@ -7,8 +7,10 @@ import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { listDeliveries } from "@/server/services/deliveries";
 import { SkinCard } from "@/components/cs2/skin-card";
 import { CopyButton } from "@/components/admin/copy-button";
+import { BotaoDeEntrega } from "@/components/admin/botao-de-entrega";
 import { formatDateTime } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Entregas" };
 
@@ -22,6 +24,8 @@ export default async function AdminDeliveriesPage() {
   const missingTradeUrl = deliveries.filter(
     (d) => d.winner && !d.winner.steamTradeUrl,
   ).length;
+  // O que a tela existe para responder: quantas skins ainda não saíram.
+  const pendentes = deliveries.filter((d) => d.deliveredAt == null).length;
 
   return (
     <div className="space-y-5">
@@ -29,6 +33,15 @@ export default async function AdminDeliveriesPage() {
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Entregas</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Campanhas sorteadas e os dados de envio de cada ganhador.
+          {deliveries.length > 0 && (
+            <>
+              {" "}
+              <span className="font-semibold text-foreground">
+                {pendentes} pendente{pendentes === 1 ? "" : "s"}
+              </span>{" "}
+              de {deliveries.length}.
+            </>
+          )}
         </p>
       </header>
 
@@ -51,7 +64,15 @@ export default async function AdminDeliveriesPage() {
       ) : (
         <div className="grid gap-4">
           {deliveries.map((delivery) => (
-            <article key={delivery.raffleId} className="rounded-xl border bg-card">
+            <article
+              key={delivery.raffleId}
+              className={cn(
+                "rounded-xl border bg-card transition-colors",
+                // Entregue recua: continua legível, mas para de disputar
+                // atenção com o que ainda falta fazer.
+                delivery.deliveredAt != null && "opacity-60",
+              )}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3 border-b p-4">
                 <div className="min-w-0">
                   <Link
@@ -64,11 +85,30 @@ export default async function AdminDeliveriesPage() {
                     Sorteado em {formatDateTime(delivery.drawnAt)}
                     {delivery.note && ` · ${delivery.note}`}
                   </p>
+                  {delivery.deliveredAt != null && (
+                    <p className="mt-1 inline-flex flex-wrap items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <PackageCheck className="h-3.5 w-3.5 shrink-0" />
+                      Entregue em {formatDateTime(delivery.deliveredAt)}
+                      {delivery.deliveredBy && ` por ${delivery.deliveredBy}`}
+                      {delivery.deliveryNote && (
+                        <span className="font-normal text-muted-foreground">
+                          {" "}
+                          {delivery.deliveryNote}
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 font-mono text-lg font-bold text-amber-600 dark:text-amber-400">
-                  <PackageCheck className="h-4 w-4" />
-                  {delivery.ticketNumber}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 font-mono text-lg font-bold text-amber-600 dark:text-amber-400">
+                    <PackageCheck className="h-4 w-4" />
+                    {delivery.ticketNumber}
+                  </span>
+                  <BotaoDeEntrega
+                    raffleId={delivery.raffleId}
+                    entregue={delivery.deliveredAt != null}
+                  />
+                </div>
               </div>
 
               <div className="grid gap-4 p-4 md:grid-cols-2">

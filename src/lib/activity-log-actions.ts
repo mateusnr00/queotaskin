@@ -37,6 +37,10 @@ export const ACOES = {
   "sorteio.agendado": "agendou o sorteio ao vivo de",
   "sorteio.numero_gerado": "sorteou o número de",
   "sorteio.finalizado": "encerrou o sorteio ao vivo de",
+  // A entrega da skin. Quem marcou e quando é o que responde "essa skin já
+  // saiu?" meses depois, quando a memória de quem operou não serve mais.
+  "entrega.marcada": "marcou como entregue",
+  "entrega.desmarcada": "desmarcou a entrega de",
   "config.pagamento_alterada": "alterou as credenciais de pagamento",
   "config.site_alterada": "alterou as configurações do site",
   "config.mensagens_alterada": "alterou as mensagens automáticas",

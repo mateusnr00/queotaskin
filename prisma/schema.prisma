@@ -594,6 +594,23 @@ model Raffle {
   winnerDrawnAt      DateTime?
   winnerNote         String?   @db.Text
 
+  /// Controle de entrega da skin principal, para a fila de /admin/entregas.
+  ///
+  /// A tela já listava ganhador, prêmio e link de troca, mas nada dizia o que
+  /// já tinha saído: campanha sorteada há um mês ficava do lado da de ontem,
+  /// e quem operava precisava lembrar de cor. Marcar aqui é o que separa a
+  /// fila do histórico.
+  ///
+  /// Nulo é pendente. Não há enum porque não há terceiro estado: ou saiu, e
+  /// então existe uma data, ou não saiu.
+  deliveredAt   DateTime?
+  /// Quem marcou. Sem relação declarada de propósito: é registro de auditoria,
+  /// e apagar a conta de um operador não pode apagar o histórico de entrega.
+  deliveredById String?
+  /// Observação da entrega: número da oferta na Steam, combinação feita, o que
+  /// for. Livre porque cada entrega tem a sua história.
+  deliveryNote  String?   @db.Text
+
   /// Campanha exclusiva: nível mínimo (1–21) para conseguir reservar.
   /// NULL = aberta a todos. Quem já está em patente de prestígio passa em
   /// qualquer exigência. É o que dá consequência ao rank.
