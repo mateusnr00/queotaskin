@@ -24,7 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { RegiaoDoTime, TimeDeCS2 } from "@/lib/times-cs2";
+import {
+  contraste,
+  textoSobreACor,
+  type RegiaoDoTime,
+  type TimeDeCS2,
+} from "@/lib/times-cs2";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import {
   apagarTimeAction,
@@ -382,6 +387,17 @@ function Formulario({
     escudo: d.escudo.startsWith("https://") ? d.escudo : null,
   };
 
+  // O contraste entre a TAG e a cor escolhida.
+  //
+  // A tag é a identidade do time enquanto não houver escudo, e cor de meio de
+  // escala deixa ela quase ilegível: nem o branco nem o preto salvam. Sem este
+  // aviso, dá para cadastrar dez times seguidos com cores ruins e só descobrir
+  // olhando o site, quando já são dez para corrigir.
+  //
+  // 4,5:1 é o piso da WCAG para texto pequeno, e a tag é pequena.
+  const razao = contraste(previa.cor, textoSobreACor(previa.cor));
+  const corFraca = razao < 4.5;
+
   return (
     <div className="rounded-xl border bg-card p-4">
       <div className="mb-4 flex items-center gap-3">
@@ -438,6 +454,13 @@ function Formulario({
               className="font-mono"
             />
           </div>
+          {corFraca && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              A tag fica difícil de ler nessa cor ({razao.toFixed(1)}:1, o
+              mínimo é 4,5:1). Escureça ou clareie um pouco. Só afeta quem não
+              tiver escudo.
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="time-regiao">Região</Label>
