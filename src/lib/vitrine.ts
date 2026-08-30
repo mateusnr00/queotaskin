@@ -42,6 +42,35 @@ export const ORDEM_DA_VITRINE = [
 ];
 
 /**
+ * O orderBy da LISTA DO PAINEL, que não é a mesma da vitrine.
+ *
+ * A vitrine pública só mostra campanha viva, então lá a ordem é a de exibição
+ * e pronto. O painel mostra tudo, e sem agrupar por situação as encerradas
+ * apareciam entre as que ainda vendem: um sorteio em 100%, acabado, sentado
+ * acima de uma campanha em 0% que precisa de atenção hoje.
+ *
+ * 1. SITUAÇÃO. Na ordem do enum: rascunho, ativa, encerrada, cancelada. O que
+ *    ainda dá trabalho fica em cima e o que acabou desce. Rascunho vem antes
+ *    de ativa porque é campanha começada e não terminada, e é onde some o
+ *    trabalho de alguém.
+ *
+ * 2. DENTRO DAS ENCERRADAS, quem AINDA NÃO foi sorteada primeiro. Ela é a que
+ *    pede ação: fechou a venda e o sorteio não saiu. Depois vêm as sorteadas,
+ *    da mais recente para a mais antiga, que é como se procura a de ontem.
+ *
+ * 3. Daí em diante a ordem de sempre: principal, a ordem manual das setinhas
+ *    do cartão, e a data de criação. Agrupar por situação não podia atropelar
+ *    a ordenação à mão, que é do dono da operação.
+ */
+export const ORDEM_DO_PAINEL = [
+  { status: "asc" as const },
+  { winnerDrawnAt: { sort: "desc" as const, nulls: "first" as const } },
+  { principal: "desc" as const },
+  { ordem: "asc" as const },
+  { createdAt: "desc" as const },
+];
+
+/**
  * Separa a principal do resto.
  *
  * A principal é a marcada no painel. Sem nenhuma marcada, a primeira da ordem

@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { ORDEM_DA_VITRINE } from "@/lib/vitrine";
+import { ORDEM_DO_PAINEL } from "@/lib/vitrine";
 import { buttonVariants } from "@/components/ui/button";
 import { RaffleCard } from "@/components/admin/raffle-card";
 import { RafflesFilters } from "@/components/admin/raffles-filters";
@@ -66,7 +66,7 @@ export default async function AdminRafflesListPage({
     prisma.raffle.count({ where }),
     prisma.raffle.findMany({
       where,
-      orderBy: ORDEM_DA_VITRINE,
+      orderBy: ORDEM_DO_PAINEL,
       take: PAGE_SIZE,
       skip: (page - 1) * PAGE_SIZE,
       select: {
