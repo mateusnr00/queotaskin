@@ -1,7 +1,16 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { AlertTriangle, TicketCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Send,
+  Shield,
+  TicketCheck,
+  UserRound,
+} from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
@@ -15,11 +24,11 @@ import { getUserXp, xpHistory } from "@/server/services/xp";
 import { TETO_DE_BOOST, estadoDoBoost } from "@/server/services/boost";
 import { CardDeBoost } from "@/components/rank/card-de-boost";
 import { XP_MULTIPLIER_TIERS } from "@/lib/xp/config";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { timePorId } from "@/lib/times-cs2";
-import { EmblemaDoTime } from "@/components/times/emblema-do-time";
+import { Etiqueta, Moldura } from "@/components/ui/moldura";
 import { SeletorDeTime } from "@/components/times/seletor-de-time";
+import { listarTimesAtivos } from "@/server/services/times";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
@@ -57,7 +66,8 @@ export default async function MyAccountPage() {
   });
   if (!user) notFound();
 
-  const timeDoCoracao = timePorId(user.favoriteTeamId);
+  const times = await listarTimesAtivos();
+  const timeDoCoracao = times.find((t) => t.id === user.favoriteTeamId) ?? null;
 
   const paidReservations = await prisma.reservation.count({
     where: {
@@ -79,7 +89,9 @@ export default async function MyAccountPage() {
         // O gasto acumulado NÃO vai para a interface. Ele existe aqui só para
         // resolver o GOAT, que é o único degrau com exigência financeira.
         prisma.userProgress.findUnique({
-          where: { userId_tenantId: { userId: session.user.id, tenantId: tenant.id } },
+          where: {
+            userId_tenantId: { userId: session.user.id, tenantId: tenant.id },
+          },
           select: { totalSpent: true },
         }),
       ])
@@ -88,9 +100,14 @@ export default async function MyAccountPage() {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 md:py-8">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Minha conta</h1>
-        <p className="text-sm text-muted-foreground">
-          Olá, {user.name.split(" ")[0]}! Mantenha seus dados de entrega em dia.
+        <Etiqueta icone={<UserRound aria-hidden className="h-3 w-3" />}>
+          Minha conta
+        </Etiqueta>
+        <h1 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
+          Olá, {user.name.split(" ")[0]}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Sua patente, o link que faz a skin chegar e seus dados de acesso.
         </p>
       </header>
 
@@ -99,7 +116,7 @@ export default async function MyAccountPage() {
           divide espaço com nada: é o único item da página que representa uma
           perda concreta. */}
       {!user.steamTradeUrl && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           <div className="text-sm">
             <p className="font-semibold text-amber-700 dark:text-amber-300">
@@ -113,17 +130,17 @@ export default async function MyAccountPage() {
         </div>
       )}
 
-      {/* Duas colunas no desktop, e não uma pilha de seis cartões iguais.
-          A página respondia duas perguntas diferentes com o mesmo peso
-          visual, uma embaixo da outra, dentro de um terço da tela: à
-          esquerda fica "como estou indo", à direita "meus dados". Cada
-          coluna tem um assunto, e o olho escolhe antes de ler. */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-start">
-        {/* min-w-0 nos dois: item de grid nasce com `min-width: auto`, então o
-            conteúdo mais largo de dentro empurra a coluna inteira. O card de
-            Boost tem cinco faixas num rolador horizontal, e sem isto ele
-            esticava a página para 510px num telefone de 360, com rolagem
-            lateral de verdade. Medida no navegador, não deduzida. */}
+      {/* Uma coluna só, em qualquer largura.
+          Eram duas no desktop, com a da direita fixa acompanhando a rolagem.
+          A ideia era separar "como estou indo" de "meus dados", mas na prática
+          a da esquerda terminava cedo e sobrava meia tela vazia ao lado de uma
+          coluna estreita, com os cartões da direita espremidos em pouco mais
+          de um terço da largura. Empilhado, cada cartão usa a largura inteira
+          e a leitura é uma só, de cima para baixo. */}
+      <div className="space-y-5">
+        {/* min-w-0 continua: o card de Boost tem cinco faixas num rolador
+            horizontal, e sem isto ele esticava a página para 510px num telefone
+            de 360, com rolagem lateral de verdade. Medida no navegador. */}
         <div className="min-w-0 space-y-5">
           {rankOn && (
             <>
@@ -143,85 +160,123 @@ export default async function MyAccountPage() {
           )}
         </div>
 
-        {/* A coluna acompanha a rolagem no desktop: a da esquerda é longa, e
-            sem isto a entrega da Steam saía da tela enquanto a pessoa lia o
-            extrato. */}
-        <div className="min-w-0 space-y-5 lg:sticky lg:top-6">
-          <section className="rounded-xl border bg-card p-4">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <h2 className="text-base font-bold">Entrega na Steam</h2>
-              {/* O estado dito no cabeçalho, e não deduzido do campo abaixo.
+        <div className="min-w-0 space-y-5">
+          <Moldura>
+            <section className="p-4 md:p-5">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-base font-bold">
+                  <Send aria-hidden className="h-4 w-4 text-muted-foreground" />
+                  Entrega na Steam
+                </h2>
+                {/* O estado dito no cabeçalho, e não deduzido do campo abaixo.
                   A pergunta de quem abre esta seção é "estou pronto para
                   receber?", e ela merece resposta antes do formulário. */}
-              <span
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                  user.steamTradeUrl
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                    : "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-                )}
-              >
-                {user.steamTradeUrl ? "Pronto" : "Pendente"}
-              </span>
-            </div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {settings?.steamDeliveryNotice || STEAM_DELIVERY_NOTICE}
-            </p>
-            <SteamTradeUrlForm
-              current={user.steamTradeUrl}
-              notice="Steam → Inventário → Ofertas de troca → Quem pode enviar ofertas."
-            />
-            {user.steamId && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                SteamID64 identificado:{" "}
-                <span className="font-mono">{user.steamId}</span>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                    user.steamTradeUrl
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                  )}
+                >
+                  {user.steamTradeUrl ? "Pronto" : "Pendente"}
+                </span>
+              </div>
+              <p className="mb-4 text-sm text-muted-foreground">
+                {settings?.steamDeliveryNotice || STEAM_DELIVERY_NOTICE}
               </p>
-            )}
-          </section>
+              <SteamTradeUrlForm
+                current={user.steamTradeUrl}
+                notice="Steam → Inventário → Ofertas de troca → Quem pode enviar ofertas."
+              />
+              {user.steamId && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  SteamID64 identificado:{" "}
+                  <span className="font-mono">{user.steamId}</span>
+                </p>
+              )}
+            </section>
+          </Moldura>
 
           {/* Time do coração. Fica abaixo da entrega da Steam porque é
               cosmético e a entrega é o que decide se a skin chega. */}
-          <section className="rounded-xl border bg-card p-4">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <h2 className="text-base font-bold">Time do coração</h2>
-              {timeDoCoracao && (
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold">
-                  <EmblemaDoTime time={timeDoCoracao} tamanho="sm" />
-                  {timeDoCoracao.nome}
+          <Moldura>
+            <section className="p-4 md:p-5">
+              {/* Sem selo repetindo o time no cabeçalho: a própria linha do
+                seletor já mostra o emblema e o nome, logo abaixo. */}
+              <h2 className="mb-1 flex items-center gap-2 text-base font-bold">
+                <Shield aria-hidden className="h-4 w-4 text-muted-foreground" />
+                Time do coração
+              </h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Aparece ao lado do seu nome nas listas de ganhadores. Escolher é
+                opcional, e dá para tirar quando quiser.
+              </p>
+              <SeletorDeTime atual={user.favoriteTeamId} times={times} />
+            </section>
+          </Moldura>
+
+          <Moldura>
+            <section className="p-4 md:p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-base font-bold">
+                <UserRound
+                  aria-hidden
+                  className="h-4 w-4 text-muted-foreground"
+                />
+                Dados de acesso
+              </h2>
+              <dl className="grid gap-2 sm:grid-cols-2">
+                {/* O emblema ao lado do próprio nome, que é como ele vai
+                  aparecer para os outros nas listas de ganhadores. Serve de
+                  confirmação: dá para ver aqui que o time está mesmo salvo,
+                  sem precisar ganhar um sorteio para descobrir. */}
+                <Row
+                  label="Nome"
+                  value={user.name}
+                  emblema={
+                    timeDoCoracao ? (
+                      <EmblemaDoTime time={timeDoCoracao} tamanho="md" />
+                    ) : null
+                  }
+                />
+                <Row
+                  label="Celular"
+                  value={user.phone ? formatPhone(user.phone) : "-"}
+                />
+                <Row label="E-mail" value={user.email ?? "-"} />
+                <Row label="Campanhas pagas" value={String(paidReservations)} />
+              </dl>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Seu login é feito com nome + celular. Para corrigir algum desses
+                dados, fale com o suporte.
+              </p>
+            </section>
+          </Moldura>
+
+          {/* Linha de ação, e não um botão fino de contorno.
+              Como botão vazado de largura inteira ele parecia divisória entre
+              seções, e o único caminho que sai desta página passava
+              despercebido. */}
+          <Moldura>
+            <Link
+              href="/meus-titulos"
+              className="group flex items-center gap-3 p-4 transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.03]"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03]">
+                <TicketCheck aria-hidden className="h-4 w-4 text-primary" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold">Meus títulos</span>
+                <span className="block text-xs text-muted-foreground">
+                  Suas reservas, os números de cada uma e o resultado.
                 </span>
-              )}
-            </div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Aparece ao lado do seu nome nas listas de ganhadores. Escolher é
-              opcional, e dá para tirar quando quiser.
-            </p>
-            <SeletorDeTime atual={user.favoriteTeamId} />
-          </section>
-
-          <section className="rounded-xl border bg-card p-4">
-            <h2 className="mb-3 text-base font-bold">Dados de acesso</h2>
-            <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <Row label="Nome" value={user.name} />
-              <Row
-                label="Celular"
-                value={user.phone ? formatPhone(user.phone) : "-"}
+              </span>
+              <ChevronRight
+                aria-hidden
+                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5"
               />
-              <Row label="E-mail" value={user.email ?? "-"} />
-              <Row label="Campanhas pagas" value={String(paidReservations)} />
-            </dl>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Seu login é feito com nome + celular. Para corrigir algum desses
-              dados, fale com o suporte.
-            </p>
-          </section>
-
-          <Link
-            href="/meus-titulos"
-            className={cn(buttonVariants({ variant: "outline" }), "w-full")}
-          >
-            <TicketCheck className="mr-2 h-4 w-4" />
-            Ver meus títulos
-          </Link>
+            </Link>
+          </Moldura>
         </div>
       </div>
 
@@ -231,14 +286,36 @@ export default async function MyAccountPage() {
           uma lista inteira para chegar no campo que resolve o aviso. Aqui ele
           fica depois da ação, e no desktop ganha a largura toda, que é o que
           uma lista quer. */}
+      {/* Sanfona, e fechada por padrão.
+          São dez lançamentos, e eles são consulta: a pessoa abre quando quer
+          conferir de onde veio o XP, não toda vez que entra na conta. Aberto
+          por padrão, ele empurrava as patentes para fora da tela em qualquer
+          largura.
+
+          `details` puro: abre e fecha sem JavaScript nenhum, e a contagem no
+          resumo já responde "tem coisa aí dentro?" sem precisar abrir. */}
       {rankOn && (
-        <section className="rounded-xl border bg-card p-4">
-          <h2 className="mb-1 text-base font-bold">Extrato de XP</h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Últimos lançamentos da sua conta.
-          </p>
-          <XpHistory entries={history} />
-        </section>
+        <Moldura>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-2 p-4 transition-colors hover:bg-white/[0.03] [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold">Extrato de XP</span>
+                <span className="block text-sm text-muted-foreground">
+                  {history.length === 0
+                    ? "Nenhum lançamento ainda."
+                    : `${history.length} lançamento${history.length === 1 ? "" : "s"} na sua conta.`}
+                </span>
+              </span>
+              <ChevronDown
+                aria-hidden
+                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-open:rotate-180"
+              />
+            </summary>
+            <div className="border-t border-white/[0.06] p-4">
+              <XpHistory entries={history} />
+            </div>
+          </details>
+        </Moldura>
       )}
 
       {/* Sem sanfona, e essa foi uma correção.
@@ -252,13 +329,25 @@ export default async function MyAccountPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  emblema,
+}: {
+  label: string;
+  value: string;
+  /** Desenhado ao lado do valor. Hoje só o nome usa, com o time. */
+  emblema?: ReactNode;
+}) {
   return (
-    <div className="rounded-lg border bg-muted/30 px-3 py-2">
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
       <dt className="text-[0.65rem] tracking-wider text-muted-foreground uppercase">
         {label}
       </dt>
-      <dd className="text-sm font-semibold">{value}</dd>
+      <dd className="flex items-center gap-2 text-sm font-semibold">
+        <span className="min-w-0 truncate">{value}</span>
+        {emblema}
+      </dd>
     </div>
   );
 }

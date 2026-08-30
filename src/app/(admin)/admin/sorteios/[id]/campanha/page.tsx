@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ChevronRight, Link2 } from "lucide-react";
+import { Link2 } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -60,37 +60,17 @@ export default async function CampanhaPage({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <Link2 className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 space-y-1">
-            <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Link href="/admin/sorteios" className="hover:text-foreground">
-                Sorteios
-              </Link>
-              <ChevronRight className="h-3 w-3" />
-              <Link
-                href={`/admin/sorteios/${raffle.id}/editar`}
-                className="max-w-56 truncate hover:text-foreground"
-              >
-                {raffle.title}
-              </Link>
-              <ChevronRight className="h-3 w-3" />
-              <span>Campanha</span>
-            </nav>
-            <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-              Links de campanha
-            </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Um link por lugar onde você divulga. Use o link certo em cada
-              canal e o painel passa a dizer de onde vem cada venda, em vez de
-              tudo chegar como tráfego direto.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Campanhas"
+        icone={<Link2 aria-hidden className="h-3 w-3" />}
+        titulo="Links de campanha"
+        descricao="Um link por lugar onde você divulga. Use o link certo em cada canal e o painel passa a dizer de onde vem cada venda, em vez de tudo chegar como tráfego direto."
+        migalha={[
+          { rotulo: "Sorteios", href: "/admin/sorteios" },
+          { rotulo: raffle.title, href: `/admin/sorteios/${raffle.id}/editar` },
+          { rotulo: "Campanha" },
+        ]}
+      />
 
       <LinksDeCampanha base={base} slug={raffle.slug} linhas={linhas} />
     </div>

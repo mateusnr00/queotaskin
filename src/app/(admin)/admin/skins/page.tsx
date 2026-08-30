@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Boxes } from "lucide-react";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -22,23 +23,13 @@ export default async function SkinsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <Boxes className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-              Catálogo de skins
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Cadastre a skin uma vez com a ficha e a foto. Ao criar um
-              sorteio, escolher ela do catálogo já preenche o prêmio e a capa,
-              sem redigitar nada nem reenviar a imagem.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Acervo"
+        icone={<Boxes aria-hidden className="h-3 w-3" />}
+        titulo="Catálogo de skins"
+        descricao="Cadastre a skin uma vez com a ficha e a foto. Ao criar um sorteio, escolher ela do catálogo já preenche o prêmio e a capa, sem redigitar nada nem reenviar a imagem."
+        migalha={[{ rotulo: "Admin", href: "/admin" }, { rotulo: "Catálogo" }]}
+      />
 
       <SkinCatalogo
         skins={skins.map((s) => ({

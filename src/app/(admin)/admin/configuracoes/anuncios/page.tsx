@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import { Megaphone } from "lucide-react";
 
 import { prisma } from "@/lib/db";
@@ -23,23 +24,17 @@ export default async function AnunciosPage() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <Megaphone className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-              Anúncios
-            </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Ligue os pixels para medir o que o anúncio traz, e monte o link
-              com as marcas de origem para saber de qual campanha veio cada
-              venda.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Ajustes"
+        icone={<Megaphone aria-hidden className="h-3 w-3" />}
+        titulo="Anúncios"
+        descricao="Ligue os pixels para medir o que o anúncio traz, e monte o link com as marcas de origem para saber de qual campanha veio cada venda."
+        migalha={[
+          { rotulo: "Admin", href: "/admin" },
+          { rotulo: "Configurações", href: "/admin/configuracoes" },
+          { rotulo: "Anúncios" },
+        ]}
+      />
 
       <FormularioDeAnuncios
         ids={{

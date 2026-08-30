@@ -9,6 +9,7 @@ import {
   nomeDoNivel,
   NOMES_DE_NIVEL,
   prestigeFromXp,
+  rankDoPrestigio,
   rankFromXp,
   rankProgress,
   tierForLevel,
@@ -67,7 +68,9 @@ describe("xpForLevel / levelFromXp", () => {
   it("a tabela cobre 0 a 21 e sempre sobe", () => {
     expect(XP_POR_NIVEL).toHaveLength(MAX_LEVEL + 1);
     for (let n = 1; n <= MAX_LEVEL; n++) {
-      expect(XP_POR_NIVEL[n]!, `nível ${n}`).toBeGreaterThan(XP_POR_NIVEL[n - 1]!);
+      expect(XP_POR_NIVEL[n]!, `nível ${n}`).toBeGreaterThan(
+        XP_POR_NIVEL[n - 1]!,
+      );
     }
   });
 
@@ -75,7 +78,9 @@ describe("xpForLevel / levelFromXp", () => {
     let anterior = XP_POR_NIVEL[1]! - XP_POR_NIVEL[0]!;
     for (let n = 2; n <= MAX_LEVEL; n++) {
       const degrau = XP_POR_NIVEL[n]! - XP_POR_NIVEL[n - 1]!;
-      expect(degrau, `degrau até o nível ${n}`).toBeGreaterThanOrEqual(anterior);
+      expect(degrau, `degrau até o nível ${n}`).toBeGreaterThanOrEqual(
+        anterior,
+      );
       anterior = degrau;
     }
   });
@@ -192,7 +197,7 @@ describe("rankProgress", () => {
   it("dentro do prestígio aponta a patente seguinte", () => {
     const p = rankProgress(350_000); // MVP
     expect(p.rank.label).toBe("MVP");
-    expect(p.nextLabel).toBe("Pro Player");
+    expect(p.nextLabel).toBe("PRO");
     expect(p.xpToNext).toBe(75_000); // 425.000 − 350.000
   });
 
@@ -324,5 +329,29 @@ describe("desenho dos selos", () => {
       expect(CONTORNOS[forma].externo.length).toBeGreaterThan(0);
       expect(CONTORNOS[forma].interno.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("rankDoPrestigio", () => {
+  it("cada patente desenha o selo dela, e não o que os XP resolveriam", () => {
+    // O bug que motivou esta função: a lista de patentes montava cada linha
+    // com rankFromXp(prestigio.xp), e rankFromXp aplica a regra de gasto do
+    // GOAT. Sem gasto informado, os 500 mil da linha do GOAT caíam para a
+    // patente de baixo, e a tela mostrava o selo do PRO ao lado do nome GOAT.
+    for (const prestigio of PRESTIGE_RANKS) {
+      const r = rankDoPrestigio(prestigio);
+      expect(r.prestige?.key).toBe(prestigio.key);
+      expect(r.label).toBe(prestigio.label);
+      expect(r.numeral).toBe(prestigio.label);
+      expect(r.color).toBe(prestigio.color);
+    }
+  });
+
+  it("o GOAT é o caso que quebrava, e agora sai GOAT", () => {
+    const goat = PRESTIGE_RANKS.find((p) => p.key === "GOAT")!;
+    expect(rankDoPrestigio(goat).prestige?.key).toBe("GOAT");
+    // E a regra de gasto continua de pé onde ela importa, que é avaliar
+    // alguém de verdade: só XP não faz ninguém GOAT.
+    expect(rankFromXp(goat.xp).prestige?.key).not.toBe("GOAT");
   });
 });

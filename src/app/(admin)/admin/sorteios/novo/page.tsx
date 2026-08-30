@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
 import { ArrowLeft, Sparkles } from "lucide-react";
 
@@ -37,22 +38,17 @@ export default async function NewRafflePage() {
           Voltar para sorteios
         </Link>
 
-        <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight">
-                Novo sorteio
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Preencha o título e siga para a aba que quiser. O sorteio é
-                criado sozinho quando você abre Imagens, Prêmios ou Pagamento.
-              </p>
-            </div>
-          </div>
-        </div>
+        <CabecalhoDeAdmin
+          etiqueta="Campanhas"
+          icone={<Sparkles aria-hidden className="h-3 w-3" />}
+          titulo="Novo sorteio"
+          descricao="Preencha o título e siga para a aba que quiser. O sorteio é criado sozinho quando você abre Imagens, Prêmios ou Pagamento."
+          migalha={[
+            { rotulo: "Admin", href: "/admin" },
+            { rotulo: "Sorteios", href: "/admin/sorteios" },
+            { rotulo: "Novo" },
+          ]}
+        />
       </div>
       <RaffleForm
         mode={{ kind: "create" }}

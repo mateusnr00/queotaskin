@@ -1566,3 +1566,272 @@
     display: none;
   }
 }
+
+/* ============================================================
+   O CANHOTO DO GANHADOR
+   ============================================================
+
+   Um ticket de verdade: dois furos nas laterais, picotagem no meio com os
+   pontos acesos nas pontas, o ícone de um lado e o selo do outro.
+
+   A versão anterior era um retângulo com borda tracejada à esquerda, e a
+   borda tracejada sozinha não faz ticket: sem os furos ela lê como um card
+   com um detalhe, e não como um pedaço de papel que saiu de um bloco.
+
+   DUAS ADAPTAÇÕES AO PROJETO
+
+   A fonte não é fixada em Inter. O site inteiro roda em Public Sans, e um
+   único elemento em outra família apareceria como corpo estranho. Herda.
+
+   E a cor dos furos é a da superfície de trás, `#0e1013`, o mesmo bg do
+   painel em que o canhoto mora. Furo é ausência: se a cor não for exatamente
+   a de trás, ele deixa de ser buraco e vira mancha escura. Está numa variável
+   porque no dia em que o painel mudar de cor, os furos têm que mudar junto,
+   e quem esquecer disso vai ver duas bolotas erradas na tela. */
+.winner-ticket {
+  --ticket-red: #ff3c47;
+  /* A cor da superfície ATRÁS do canhoto. Ver a nota acima. */
+  --ticket-furo: #0e1013;
+
+  width: 100%;
+  /* Teto de largura: o painel vai a 768px no desktop, e um canhoto esticado
+     nessa largura viraria uma faixa, com o número perdido no meio de tanto
+     vazio. */
+  max-width: 420px;
+  margin-inline: auto;
+  min-height: 132px;
+
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  isolation: isolate;
+
+  border: 1px solid rgba(255, 60, 71, 0.72);
+  border-radius: 22px;
+
+  background:
+    radial-gradient(circle at 18% 50%, rgba(255, 60, 71, 0.11), transparent 36%),
+    linear-gradient(110deg, #211116 0%, #181014 48%, #211115 100%);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    inset 0 0 35px rgba(255, 43, 55, 0.025),
+    0 8px 30px rgba(0, 0, 0, 0.32);
+}
+
+/* O fio de luz no topo, o mesmo recurso das outras molduras desta tela. */
+.winner-ticket::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #ff5862, transparent);
+  box-shadow:
+    0 0 8px rgba(255, 60, 71, 0.75),
+    0 0 18px rgba(255, 60, 71, 0.2);
+}
+
+/* Os furos. Ficam metade para fora e o overflow do canhoto corta a outra
+   metade, que é o que desenha a mordida na borda. */
+.winner-ticket::after,
+.ticket-left::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ticket-furo);
+  transform: translateY(-50%);
+}
+
+.winner-ticket::after {
+  right: -15px;
+  border-left: 1px solid rgba(255, 60, 71, 0.75);
+  box-shadow: -4px 0 12px rgba(255, 60, 71, 0.08);
+}
+
+.ticket-left::before {
+  left: -15px;
+  border-right: 1px solid rgba(255, 60, 71, 0.75);
+}
+
+.ticket-left {
+  width: 104px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.ticket-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--ticket-red);
+  border: 1px solid rgba(255, 60, 71, 0.42);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 60, 71, 0.1),
+    rgba(255, 255, 255, 0.012)
+  );
+  box-shadow:
+    inset 0 0 18px rgba(255, 60, 71, 0.04),
+    0 0 16px rgba(255, 60, 71, 0.05);
+}
+
+/* A picotagem, com os dois pontos acesos nas pontas. */
+.ticket-divider {
+  width: 1px;
+  margin: 17px 0;
+  position: relative;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 60, 71, 0.55) 0px,
+    rgba(255, 60, 71, 0.55) 7px,
+    transparent 7px,
+    transparent 14px
+  );
+}
+
+.ticket-divider::before,
+.ticket-divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #ff3c47;
+  box-shadow: 0 0 8px rgba(255, 60, 71, 0.8);
+}
+
+.ticket-divider::before {
+  top: -2px;
+}
+
+.ticket-divider::after {
+  bottom: -2px;
+}
+
+.ticket-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px 20px 18px 28px;
+  position: relative;
+  z-index: 2;
+  /* O painel é centralizado; o canhoto não. Número e rótulo alinham à
+     esquerda, encostados na picotagem, como num bilhete impresso. */
+  text-align: left;
+}
+
+.ticket-label {
+  margin-bottom: 5px;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.ticket-number {
+  font-size: clamp(46px, 8vw, 64px);
+  line-height: 0.98;
+  font-weight: 900;
+  letter-spacing: -3px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(255, 255, 255, 0.035);
+}
+
+.ticket-seal {
+  width: 78px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  position: relative;
+  z-index: 2;
+  color: var(--ticket-red);
+}
+
+.ticket-seal svg {
+  filter: drop-shadow(0 0 8px rgba(255, 60, 71, 0.18));
+}
+
+/* Marca d'água. Quase invisível de propósito: é textura, não informação. */
+.ticket-watermark {
+  position: absolute;
+  right: 82px;
+  bottom: -7px;
+  z-index: 0;
+  font-size: 58px;
+  font-weight: 900;
+  letter-spacing: -4px;
+  color: rgba(255, 255, 255, 0.018);
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 600px) {
+  .winner-ticket {
+    min-height: 112px;
+    border-radius: 18px;
+  }
+
+  .ticket-left {
+    width: 75px;
+  }
+
+  .ticket-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+  }
+
+  .ticket-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .ticket-content {
+    padding: 17px 10px 16px 18px;
+  }
+
+  .ticket-label {
+    font-size: 10px;
+    letter-spacing: 2.1px;
+    margin-bottom: 6px;
+  }
+
+  .ticket-number {
+    font-size: 45px;
+    letter-spacing: -2px;
+  }
+
+  .ticket-seal {
+    width: 58px;
+  }
+
+  .ticket-seal svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Some no celular: com o canhoto estreito ela passaria por baixo do
+     número, e textura que atrapalha leitura deixa de ser textura. */
+  .ticket-watermark {
+    display: none;
+  }
+}

@@ -70,30 +70,34 @@ export function mensagemDeParabens({
 }
 
 /**
- * A mensagem que o GANHADOR manda para o suporte para reivindicar.
+ * A mensagem que o ganhador manda ao suporte.
  *
- * Sentido oposto da de parabéns: aquela sai do painel para a pessoa, esta
- * sai da pessoa para o suporte. Por isso ela se identifica e diz o que
- * ganhou, em vez de cumprimentar.
+ * Três informações, e nada além: quem é, o que ganhou, e para onde mandar.
  *
- * Leva a referência do pedido. Sem ela o suporte recebe "ganhei uma AK-47" e
- * precisa perguntar quem é e em qual campanha antes de poder ajudar, o que
- * transforma a entrega numa conversa de ida e volta.
+ * A versão anterior tinha cinco e duas sobravam. Ela dizia o prêmio E a
+ * campanha, e como as campanhas aqui se chamam como skins, saía "ganhei
+ * 'Two Times' McCoy | TACP Cavalry na campanha 'Two Times' McCoy | TACP
+ * Cavalry", o mesmo nome duas vezes na mesma frase. E terminava com o id do
+ * pedido, um cuid de 25 caracteres que não diz nada a quem lê e que o suporte
+ * acha pelo nome de qualquer jeito.
+ *
+ * No lugar deles entrou o que realmente faltava: o LINK DE TROCA. É por ele
+ * que a skin sai, e sem ele o atendimento começava pedindo justamente isso.
  */
 export function mensagemDeReivindicacao({
   nome,
   premio,
-  campanha,
-  referencia,
+  tradeUrl,
 }: {
   nome: string;
   premio: string;
-  campanha: string;
-  /** Id do pedido, para o suporte achar sem perguntar. */
-  referencia: string;
+  /** O link de troca da Steam. Nulo quando a pessoa ainda não cadastrou. */
+  tradeUrl: string | null;
 }): string {
-  return (
-    `Olá! Sou ${nome.trim()} e ganhei ${premio} na campanha ${campanha}. ` +
-    `Quero reivindicar o prêmio. Pedido ${referencia}.`
-  );
+  const abertura = `Olá, sou ${nome.trim()}. Ganhei ${premio}.`;
+  // Sem link, dizer isso é mais útil do que omitir: o suporte já abre a
+  // conversa sabendo qual é o primeiro passo, em vez de perguntar e esperar.
+  return tradeUrl
+    ? `${abertura} Meu trade link: ${tradeUrl}`
+    : `${abertura} Ainda não cadastrei meu trade link.`;
 }

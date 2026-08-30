@@ -82,6 +82,21 @@ enum RaffleModality {
 }
 
 /// Fases do sorteio ao vivo. A ordem aqui é a ordem em que acontecem.
+/// Em que pé está a entrega da skin ao ganhador.
+///
+/// Era um booleano disfarçado: `deliveredAt` nulo ou preenchido. Isso conta
+/// duas histórias e a fila tem mais do que duas: skin que precisa sair na
+/// frente, compra que deu errado, envio que precisa ser refeito, e prêmio pago
+/// em dinheiro em vez de item.
+enum DeliveryStatus {
+  PRIORIDADE // sai na frente das outras
+  AGUARDANDO // estado inicial de toda campanha sorteada
+  ENVIADO // a oferta saiu e o ganhador recebeu
+  ERRO // a compra ou a troca falhou; exige olho humano
+  REENVIO // saiu, voltou, precisa sair de novo
+  PIX // pago em dinheiro, e não em skin
+}
+
 enum DrawStatus {
   WAITING_DRAW // campanha encerrada, esperando a hora marcada
   COUNTDOWN // os segundos finais, contando na tela
@@ -316,6 +331,20 @@ model Tenant {
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
   logoShape                         LogoShape @default(RECTANGLE)
   siteDescription                   String?
+  /// Câmbio usado para converter o custo da entrega, digitado pelo painel.
+  ///
+  /// A skin é comprada do fornecedor em YUAN, e é isso que fica gravado em
+  /// Raffle.deliveryCost. Real e dólar são leituras dele.
+  ///
+  /// As taxas são digitadas, e não buscadas de uma API, de propósito: número
+  /// de câmbio inventado por padrão vira relatório financeiro errado com cara
+  /// de certo. Sem taxa cadastrada, a tela mostra só yuan e diz por quê.
+  ///
+  /// Quantos REAIS vale 1 yuan.
+  cnyToBrl                          Decimal?  @db.Decimal(12, 6)
+  /// Quantos REAIS vale 1 dólar.
+  usdToBrl                          Decimal?  @db.Decimal(12, 6)
+
   supportPhone                      String?
   supportEmail                      String?
   homeCampaignsTitle                String?
@@ -593,6 +622,64 @@ model Raffle {
   winnerTicketNumber Int?
   winnerDrawnAt      DateTime?
   winnerNote         String?   @db.Text
+
+  /// Controle de entrega da skin principal, para a fila de /admin/entregas.
+  ///
+  /// A tela já listava ganhador, prêmio e link de troca, mas nada dizia o que
+  /// já tinha saído: campanha sorteada há um mês ficava do lado da de ontem,
+  /// e quem operava precisava lembrar de cor. Marcar aqui é o que separa a
+  /// fila do histórico.
+  ///
+  /// Em que pé está a entrega. Ver o enum para o significado de cada estado.
+  deliveryStatus DeliveryStatus @default(AGUARDANDO)
+
+  /// Quando a skin de fato saiu. Preenchido ao entrar em ENVIADO e limpo ao
+  /// sair dele: é a data da entrega, e não a data da última mexida no status.
+  deliveredAt   DateTime?
+  /// Quem marcou. Sem relação declarada de propósito: é registro de auditoria,
+  /// e apagar a conta de um operador não pode apagar o histórico de entrega.
+  deliveredById String?
+  /// Observação da entrega: número da oferta na Steam, combinação feita, o que
+  /// for. Livre porque cada entrega tem a sua história.
+  deliveryNote  String?   @db.Text
+
+  /// Quanto custou comprar a skin do fornecedor para entregar ao ganhador.
+  ///
+  /// É o custo REAL da premiação, e não tem como sair de nenhum outro lugar:
+  /// o preço da cota é receita, o valor de mercado da skin é estimativa, e o
+  /// que saiu do caixa é isto aqui, digitado por quem comprou.
+  ///
+  /// Decimal, e não Float: dinheiro em ponto flutuante acumula erro de
+  /// centavo, e a soma da coluna é o número que interessa.
+  deliveryCost  Decimal?  @db.Decimal(10, 2)
+
+  /// O PTAX de venda do dia em que ESTA entrega saiu: reais por yuan.
+  ///
+  /// Sem isto, o relatório converte todo o histórico pela taxa global do
+  /// painel, e o gasto de julho é reconvertido pelo câmbio de hoje toda vez
+  /// que alguém atualiza a taxa. Com a taxa gravada na linha, cada compra
+  /// carrega o câmbio do dia dela e o fechamento para de oscilar.
+  ///
+  /// Seis casas porque taxa não é dinheiro: 0,760500 arredondado para 0,76
+  /// erra R$ 0,42 numa compra de ¥ 850.
+  deliveryFxRate Decimal? @db.Decimal(12, 6)
+
+  /// O dia do boletim que gerou deliveryFxRate.
+  ///
+  /// Pode ser anterior ao envio: fim de semana e feriado não têm boletim, e o
+  /// que vale é o último dia útil. Guardar qual foi é o que torna a conversão
+  /// conferível depois, em vez de um número sem procedência.
+  deliveryFxDate DateTime?
+
+  /// De onde a taxa veio: "PTAX" ou "AWESOMEAPI".
+  ///
+  /// Duas fontes podem responder pela mesma moeda, e sem isto a taxa vira um
+  /// número sem procedência: não daria para reconciliar o relatório com o
+  /// boletim depois, nem para saber quais linhas usaram a oficial.
+  ///
+  /// Texto e não enum: é rótulo de origem, e acrescentar uma fonte não deveria
+  /// exigir migration de tipo.
+  deliveryFxSource String?
 
   /// Campanha exclusiva: nível mínimo (1–21) para conseguir reservar.
   /// NULL = aberta a todos. Quem já está em patente de prestígio passa em
@@ -1766,6 +1853,39 @@ model Draw {
 /// O compromisso (`serverSeedHash`) é público desde o primeiro dia e aparece
 /// na página da campanha. A semente em si só é publicada depois que o número
 /// vencedor já é público, e `revealedAt` é o carimbo desse momento.
+/// Os times de CS2 para quem o participante torce.
+///
+/// Nasceu como constante em src/lib/times-cs2.ts, e a lista fixa em código
+/// estava certa enquanto ninguém precisava mexer nela. Passou a estar errada
+/// quando o pedido virou "quero enviar o escudo e adicionar times novos":
+/// isso é cadastro, e cadastro não mora em deploy.
+///
+/// O `id` continua sendo o slug, o mesmo que já está gravado em
+/// User.favoriteTeamId. Manter a mesma chave é o que faz a migração ser só
+/// mudar de onde a lista é lida, sem tocar em conta nenhuma.
+model Team {
+  /// Slug. É o que User.favoriteTeamId guarda.
+  id     String  @id
+  nome   String
+  /// Duas a quatro letras. É o que o emblema mostra quando não há escudo.
+  tag    String
+  /// Acento do emblema de reserva, em hex de seis dígitos.
+  cor    String
+  regiao String
+  /// URL do escudo no Storage. Vazio cai no emblema de iniciais.
+  escudo String?
+  /// Ordem na lista. Empate desfeito pelo nome.
+  ordem  Int     @default(0)
+  /// Time desativado some do seletor mas NÃO é apagado: quem já torcia por ele
+  /// continua com o id na conta, e o emblema continua desenhando.
+  ativo  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ativo, regiao, ordem])
+}
+
 model DrawSeed {
   raffleId String @id
   raffle   Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)

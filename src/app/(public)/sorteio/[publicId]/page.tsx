@@ -14,8 +14,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { auth } from "@/auth";
 import { idPublicoValido } from "@/lib/sorteio-ao-vivo";
-import { carregarEstadoPublico } from "@/server/services/sorteio-ao-vivo";
+import {
+  carregarEstadoPublico,
+  dadosDeReivindicacao,
+} from "@/server/services/sorteio-ao-vivo";
 import { TransmissaoDoSorteio } from "@/components/sorteio/transmissao";
 
 // Nunca estático: a página é diferente a cada segundo, e uma versão guardada
@@ -61,5 +65,19 @@ export default async function PaginaDoSorteio({
   const estado = await carregarEstadoPublico(publicId);
   if (!estado) notFound();
 
-  return <TransmissaoDoSorteio estadoInicial={estado} />;
+  // Resolvido AQUI, no servidor, e nunca no endpoint público de estado: aquela
+  // resposta é a mesma para todo mundo e pode ser guardada em cache, então um
+  // dado por espectador ali entregaria o link de um ganhador para outra pessoa.
+  const session = await auth();
+  const reivindicacao = await dadosDeReivindicacao(
+    publicId,
+    session?.user?.id,
+  ).catch(() => null);
+
+  return (
+    <TransmissaoDoSorteio
+      estadoInicial={estado}
+      reivindicacao={reivindicacao}
+    />
+  );
 }

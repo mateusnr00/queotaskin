@@ -190,6 +190,21 @@ export default async function ReservationReceiptPage({
 
   // ── Estado pago: tela comemorativa + caixas surpresas (se houver).
   if (reservation.status === "PAID") {
+    // O link de troca vai na mensagem de reivindicação: é o endereço para
+    // onde a skin sai, e sem ele o atendimento começa pedindo justamente
+    // isso. Só é lido aqui dentro porque só compra paga tem o que reivindicar.
+    //
+    // Compra feita sem login não tem conta ligada, e aí o link não existe: a
+    // mensagem diz isso em vez de fingir que existe.
+    const tradeUrl = reservation.userId
+      ? ((
+          await prisma.user.findUnique({
+            where: { id: reservation.userId },
+            select: { steamTradeUrl: true },
+          })
+        )?.steamTradeUrl ?? null)
+      : null;
+
     // Os títulos premiados que caíram nos números desta pessoa.
     //
     // O painel promete que isto aparece no comprovante, e o texto de ganhador
@@ -298,8 +313,7 @@ export default async function ReservationReceiptPage({
               premiados={premiadosDaPessoa}
               telefoneDoSuporte={suporte?.supportPhone ?? null}
               nomeDoGanhador={reservation.participantName}
-              nomeDaCampanha={reservation.raffle.title}
-              referencia={reservation.id}
+              tradeUrl={tradeUrl}
               texto={reservation.raffle.awardedTicketsWinnerText}
             />
           )}
@@ -319,7 +333,7 @@ export default async function ReservationReceiptPage({
               allowOpenAll={reservation.raffle.surpriseBoxAbrirTodas}
               telefoneDoSuporte={suporte?.supportPhone ?? null}
               nomeDoGanhador={reservation.participantName}
-              nomeDaCampanha={reservation.raffle.title}
+              tradeUrl={tradeUrl}
             />
           )}
 

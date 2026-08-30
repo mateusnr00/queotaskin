@@ -11,7 +11,16 @@
 // Por que assim: escudo de organização é marca registrada, e este site vende
 // cotas. Depender do arquivo para a tela existir seria amarrar a funcionalidade
 // a uma decisão jurídica que não é deste componente.
+//
+// E é por isso que a TAG também é a rede de proteção quando a imagem falha.
+// O escudo pode ser um link colado no painel, apontando para o servidor de
+// outra pessoa: esse link pode sumir, mudar de caminho ou passar a recusar
+// hotlink, e nada disso avisa antes. Quando acontece, o emblema volta para a
+// tag em vez de virar aquele ícone de imagem quebrada.
 
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 
 import { cn } from "@/lib/utils";
@@ -33,14 +42,24 @@ export function EmblemaDoTime({
   className?: string;
 }) {
   const { caixa, px } = TAMANHOS[tamanho];
+  const [falhou, setFalhou] = useState(false);
 
-  if (time.escudo) {
+  if (time.escudo && !falhou) {
     return (
       <Image
         src={time.escudo}
         alt={time.nome}
         width={px}
         height={px}
+        // Servido direto do src, sem passar pelo otimizador do Next.
+        //
+        // Duas razões, e as duas bastam sozinhas. O escudo pode ser um link
+        // colado no painel, de um host qualquer, e o otimizador só busca de
+        // host autorizado no next.config: sem isto, escudo de fora responderia
+        // 400 e apareceria quebrado. E o emblema tem 36px no maior tamanho,
+        // então o que a otimização economizaria aqui é ruído.
+        unoptimized
+        onError={() => setFalhou(true)}
         className={cn("shrink-0 rounded-[5px] object-contain", caixa, className)}
       />
     );

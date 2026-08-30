@@ -1,37 +1,78 @@
 "use client";
 
-// A escolha do time, em grade.
+// A escolha do time, numa linha.
 //
-// Grade de botões, e não um `select`: são trinta times com emblema, e o valor
-// da escolha está em reconhecer o escudo, coisa que a lista nativa do celular
-// não mostra. Salva no clique, sem botão de confirmar, porque é uma escolha
-// só e voltar atrás é outro clique.
+// Era uma grade com os trinta times, cada um num botão com emblema, e ela
+// ocupava três telas de celular dentro de Minha Conta. Um dado cosmético,
+// escolhido uma vez e quase nunca revisto, empurrava para baixo o extrato de
+// XP e os dados de acesso, que é o que a pessoa vem ver aqui.
+//
+// Agora é uma linha fechada. O emblema continua ao lado de cada nome dentro da
+// lista, porque reconhecer o escudo é metade da escolha, mas a lista só existe
+// enquanto está aberta.
+//
+// Salva na troca, sem botão de confirmar: é uma escolha só, e voltar atrás é
+// outra troca.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-import { timesPorRegiao, type TimeDeCS2 } from "@/lib/times-cs2";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { semAcento } from "@/lib/busca";
+import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { salvarTimeDoCoracaoAction } from "@/server/actions/time-do-coracao";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 
-export function SeletorDeTime({ atual }: { atual: string | null }) {
+/**
+ * "Não torço por ninguém" precisa de um valor, e não de string vazia: o Select
+ * do Radix usa o valor vazio para dizer "nada selecionado", então uma opção com
+ * valor "" seria impossível de escolher.
+ */
+const NENHUM = "__nenhum__";
+
+export function SeletorDeTime({
+  atual,
+  times,
+}: {
+  atual: string | null;
+  /** A lista vem do servidor: os times moram no banco desde a migration. */
+  times: readonly TimeDeCS2[];
+}) {
   const router = useRouter();
   const [salvando, comTransicao] = useTransition();
-  // O escolhido vive no cliente para a marca de seleção aparecer no clique, e
-  // não só quando o servidor responder. O `router.refresh` depois reconcilia.
+  // O escolhido vive no cliente para a linha mudar no ato, e não só quando o
+  // servidor responder. O router.refresh depois reconcilia.
   const [escolhido, setEscolhido] = useState(atual);
-  const { br, inter } = timesPorRegiao();
+  // A busca. Passou a fazer falta quando a lista cresceu: com quarenta times,
+  // rolar até achar o seu no celular é trabalho, e o teclado de digitação
+  // rápida do select não ajuda em tela sem teclado físico.
+  const [busca, setBusca] = useState("");
 
-  function escolher(id: string | null) {
+  const filtrados = filtrar(times, busca);
+  const br = filtrados.filter((t) => t.regiao === "BR");
+  const inter = filtrados.filter((t) => t.regiao === "INTER");
+
+  // `string | null`: este Select entrega null quando a seleção é limpa, e
+  // NENHUM quando a opção "não exibir" é escolhida. Os dois querem dizer a
+  // mesma coisa aqui, e viram null antes de sair daqui.
+  function escolher(valor: string | null) {
+    const id = valor == null || valor === NENHUM ? null : valor;
     const anterior = escolhido;
     setEscolhido(id);
     comTransicao(async () => {
       const r = await salvarTimeDoCoracaoAction(id);
       if (!r.ok) {
-        // Devolve o estado anterior: deixar a marca no time novo depois de o
+        // Devolve o estado anterior: deixar o time novo na linha depois de o
         // servidor recusar mostraria uma escolha que não existe no banco.
         setEscolhido(anterior);
         toast.error(r.error);
@@ -42,69 +83,89 @@ export function SeletorDeTime({ atual }: { atual: string | null }) {
     });
   }
 
-  return (
-    <div className={cn("space-y-4", salvando && "pointer-events-none opacity-70")}>
-      <Grupo titulo="Brasil" times={br} escolhido={escolhido} aoEscolher={escolher} />
-      <Grupo titulo="Internacionais" times={inter} escolhido={escolhido} aoEscolher={escolher} />
+  const time = times.find((t) => t.id === escolhido) ?? null;
 
-      {escolhido && (
-        <button
-          type="button"
-          onClick={() => escolher(null)}
-          className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Não quero exibir time
-        </button>
-      )}
-    </div>
+  return (
+    <Select
+      value={escolhido ?? NENHUM}
+      onValueChange={escolher}
+      disabled={salvando}
+      // Fechou, esquece a busca: reabrir mostrando o filtro da vez passada
+      // pareceria que metade dos times sumiu.
+      onOpenChange={(aberto) => {
+        if (!aberto) setBusca("");
+      }}
+    >
+      <SelectTrigger className="h-11 w-full" aria-label="Time do coração">
+        {/* SelectValue com filho próprio, e não o texto da opção: assim a
+            linha fechada mostra o emblema junto do nome, do mesmo jeito que
+            ele vai aparecer ao lado do seu nome nas listas públicas. */}
+        <SelectValue>
+          {time ? (
+            <span className="flex items-center gap-2">
+              <EmblemaDoTime time={time} tamanho="md" />
+              <span className="truncate">{time.nome}</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Escolher time</span>
+          )}
+        </SelectValue>
+      </SelectTrigger>
+
+      <SelectContent>
+        {/* O campo de busca dentro da lista.
+            stopPropagation nas teclas porque o select tem digitação rápida
+            própria: sem isso, cada letra digitada aqui saltaria a seleção para
+            um time começado por aquela letra, e o texto nunca entraria. */}
+        <div className="sticky top-0 z-10 bg-popover p-1">
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            placeholder="Buscar time"
+            aria-label="Buscar time"
+            className="h-9"
+          />
+        </div>
+
+        {busca === "" && (
+          <SelectItem value={NENHUM}>Não exibir time</SelectItem>
+        )}
+        <Grupo titulo="Brasil" times={br} />
+        <Grupo titulo="Internacionais" times={inter} />
+
+        {filtrados.length === 0 && (
+          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+            Nenhum time com esse nome.
+          </p>
+        )}
+      </SelectContent>
+    </Select>
   );
 }
 
-function Grupo({
-  titulo,
-  times,
-  escolhido,
-  aoEscolher,
-}: {
-  titulo: string;
-  times: readonly TimeDeCS2[];
-  escolhido: string | null;
-  aoEscolher: (id: string) => void;
-}) {
+/** Casa por nome ou tag, ignorando acento e caixa. */
+function filtrar(times: readonly TimeDeCS2[], busca: string): TimeDeCS2[] {
+  const alvo = semAcento(busca);
+  if (alvo === "") return [...times];
+  return times.filter(
+    (t) => semAcento(t.nome).includes(alvo) || semAcento(t.tag).includes(alvo),
+  );
+}
+
+function Grupo({ titulo, times }: { titulo: string; times: readonly TimeDeCS2[] }) {
+  if (times.length === 0) return null;
   return (
-    <div>
-      <p className="mb-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
-        {titulo}
-      </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {times.map((time) => {
-          const ativo = time.id === escolhido;
-          return (
-            <button
-              key={time.id}
-              type="button"
-              aria-pressed={ativo}
-              onClick={() => aoEscolher(time.id)}
-              className={cn(
-                // 44px de altura mínima: é um alvo de toque, e a grade tem
-                // trinta deles um do lado do outro.
-                "flex min-h-11 items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors",
-                ativo
-                  ? "border-primary bg-primary/10"
-                  : "border-border bg-card hover:border-primary/40 hover:bg-muted/50",
-              )}
-            >
-              <EmblemaDoTime time={time} tamanho="lg" />
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold">
-                {time.nome}
-              </span>
-              {ativo && (
-                <Check aria-hidden className="h-4 w-4 shrink-0 text-primary" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <SelectGroup>
+      <SelectLabel>{titulo}</SelectLabel>
+      {times.map((time) => (
+        <SelectItem key={time.id} value={time.id}>
+          <span className="flex items-center gap-2">
+            <EmblemaDoTime time={time} tamanho="md" />
+            <span>{time.nome}</span>
+          </span>
+        </SelectItem>
+      ))}
+    </SelectGroup>
   );
 }

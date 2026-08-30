@@ -31,7 +31,7 @@ import { Trophy } from "lucide-react";
 
 import { RARITY_TEXT_VAR } from "@/lib/cs2";
 import { nomeCurto } from "@/lib/nome-curto";
-import { timePorId } from "@/lib/times-cs2";
+import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { separarDesgaste } from "@/lib/premio-nome";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ export function LinhaDePremio({
   premio,
   raridade,
   ganhador,
-  timeDoGanhador,
+  time,
   rotuloVago,
 }: {
   /** Ja formatado com os zeros a esquerda. Ausente nas caixas surpresas. */
@@ -51,15 +51,15 @@ export function LinhaDePremio({
   raridade?: SkinRarity | null;
   ganhador: string | null;
   /**
-   * O id do time para quem o ganhador torce. Opcional: caixa surpresa nem
-   * sempre tem conta ligada, e a linha existe sem isto desde antes.
+   * O time para quem o ganhador torce, já resolvido no servidor. Chega pronto
+   * porque esta linha roda no cliente e não tem como consultar o banco.
+   * Opcional: compra sem conta não tem time, e a linha existe sem isto.
    */
-  timeDoGanhador?: string | null;
+  time?: TimeDeCS2 | null;
   /** O que dizer quando ainda nao tem dono. */
   rotuloVago: string;
 }) {
   const temDono = Boolean(ganhador);
-  const time = timePorId(timeDoGanhador);
   const { nome, desgaste } = separarDesgaste(premio);
 
   return (

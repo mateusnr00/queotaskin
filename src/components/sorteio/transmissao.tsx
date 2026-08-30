@@ -15,6 +15,7 @@
 // mesma ordem em que o servidor libera os dois.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import {
   RefreshCw,
@@ -34,13 +35,18 @@ import {
 } from "@/lib/sorteio-ao-vivo";
 import { numeroDoTitulo } from "@/lib/titulo";
 import { cn } from "@/lib/utils";
-import type { EstadoPublicoDoSorteio } from "@/server/services/sorteio-ao-vivo";
+import type {
+  DadosDeReivindicacao,
+  EstadoPublicoDoSorteio,
+} from "@/server/services/sorteio-ao-vivo";
 import { BORDA_DE_AUTH, HALO_DE_AUTH } from "@/components/auth/cartao-de-auth";
 import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
 import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
 import { useSom } from "@/components/sorteio/usar-som";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
+import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 
 /** Os últimos segundos, quando a contagem troca de cara. */
 const SEGUNDOS_DE_TENSAO = 10;
@@ -62,12 +68,20 @@ function horaDeBrasilia(iso: string): string {
 
 export function TransmissaoDoSorteio({
   estadoInicial,
+  reivindicacao,
 }: {
   estadoInicial: EstadoPublicoDoSorteio;
+  /**
+   * Preenchido só quando quem está olhando é o ganhador e há telefone de
+   * suporte. Vem do servidor, resolvido por sessão, e por isso não pode ser
+   * derivado do estado público, que é igual para todo mundo.
+   */
+  reivindicacao: DadosDeReivindicacao | null;
 }) {
   const { estado, agora, conexao, recarregar } =
     useEstadoDoSorteio(estadoInicial);
   const som = useSom();
+  const router = useRouter();
 
   // A FASE VEM DO RELÓGIO, não da última resposta do servidor.
   //
@@ -102,6 +116,22 @@ export function TransmissaoDoSorteio({
           agora,
         );
 
+  // Quem assistiu AO VIVO recebeu esta página renderizada antes de existir
+  // ganhador, então `reivindicacao` chegou nula e continuaria nula para sempre:
+  // a fase muda no cliente, pelo relógio, sem passar pelo servidor de novo.
+  //
+  // Uma releitura, uma vez só, quando a transmissão termina. Os cinco segundos
+  // de espera deixam o confete e a revelação acontecerem antes: recarregar em
+  // cima do momento mais importante da tela seria trocar um botão por um
+  // solavanco.
+  const jaRelou = useRef(false);
+  useEffect(() => {
+    if (fase !== "FINISHED" || reivindicacao || jaRelou.current) return;
+    jaRelou.current = true;
+    const id = setTimeout(() => router.refresh(), 5000);
+    return () => clearTimeout(id);
+  }, [fase, reivindicacao, router]);
+
   const aoVivo =
     fase === "COUNTDOWN" || fase === "DRAWING" || fase === "REVEALING";
 
@@ -118,7 +148,14 @@ export function TransmissaoDoSorteio({
           {(fase === "DRAWING" ||
             fase === "REVEALING" ||
             fase === "FINISHED") && (
-            <Revelacao estado={estado} agora={agora} som={som} />
+            <Revelacao
+              estado={estado}
+              agora={agora}
+              som={som}
+              // Muda o peso de "Ver a campanha": com a reivindicação na tela,
+              // ela deixa de ser a ação principal.
+              temReivindicacao={fase === "FINISHED" && reivindicacao != null}
+            />
           )}
           {fase === "ERROR" && <Falha estado={estado} />}
         </div>
@@ -131,6 +168,66 @@ export function TransmissaoDoSorteio({
             sorteio" logo abaixo do nome do ganhador, e a página de conferência
             mostra os mesmos quatro hashes com a checagem rodando ao vivo. O
             card era a terceira cópia da mesma informação na mesma tela. */}
+
+        {/* Reivindicação do prêmio, no fim e só para quem ganhou.
+            Ganhar e não saber o que fazer em seguida é o pior momento para
+            deixar a pessoa sozinha: a tela dizia o nome dela e parava ali.
+
+            A primeira versão deste bloco veio emprestada do comprovante, com
+            card e botão verdes, e ficou horrível: esta tela é vermelha do
+            cabeçalho ao rodapé, e um retângulo esmeralda no fim dela parecia
+            colado de outro site. Verde ali era herança do WhatsApp, não uma
+            escolha.
+
+            Agora usa a mesma casca dupla dos outros painéis, com os mesmos
+            raios concêntricos e o mesmo fio de luz no topo, e o `mt-5` que
+            faltava: sem ele o bloco encostava no card do ganhador, sem
+            respiro nenhum entre uma borda e outra.
+
+            E deixou de repetir "Título 054", que já está dois centímetros
+            acima, dentro do canhoto. A repetição era metade do aperto. */}
+        {fase === "FINISHED" && reivindicacao && (
+          <div
+            className={cn(
+              "mt-5 rounded-[1.75rem] border border-transparent p-1.5",
+              HALO_DE_AUTH,
+            )}
+            style={BORDA_DE_AUTH}
+          >
+            <div className="relative overflow-hidden rounded-[1.375rem] bg-[#0e1013] p-6 text-center shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] sm:p-8">
+              {/* A mesma luz da marca que sai de trás da skin no card acima. */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_50%_0%,rgba(239,68,68,0.16),transparent_70%)]"
+              />
+              <div className="relative space-y-4">
+                <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
+                  A skin é sua
+                </p>
+                <p className="mx-auto max-w-[36ch] text-sm leading-relaxed text-white/65">
+                  Chame o suporte para combinar a entrega. A conversa já abre
+                  com os seus dados.
+                </p>
+                <BotaoReivindicar
+                  className="w-full sm:w-auto"
+                  variante="marca"
+                  telefoneDoSuporte={reivindicacao.telefoneDoSuporte}
+                  nome={reivindicacao.nome}
+                  premio={reivindicacao.premio}
+                  tradeUrl={reivindicacao.tradeUrl}
+                />
+                {/* Só quando falta. Quem já cadastrou não precisa ler sobre
+                    um problema que não tem. */}
+                {!reivindicacao.tradeUrl && (
+                  <p className="mx-auto max-w-[36ch] text-xs leading-relaxed text-white/45">
+                    Você ainda não cadastrou seu link de troca. Dá para
+                    cadastrar em Minha Conta e adiantar a entrega.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <EstadoDaConexao situacao={conexao} recarregar={recarregar} />
       </div>
@@ -455,10 +552,13 @@ function Revelacao({
   estado,
   agora,
   som,
+  temReivindicacao,
 }: {
   estado: EstadoPublicoDoSorteio;
   agora: Date;
   som: ReturnType<typeof useSom>;
+  /** Quando verdadeiro, "Ver a campanha" cede o peso à reivindicação. */
+  temReivindicacao: boolean;
 }) {
   const numero = estado.resultado?.numero ?? null;
   const atrasado =
@@ -514,17 +614,6 @@ function Revelacao({
               aoPassar={() => som.tocar("rolagem")}
             />
           </div>
-
-          {/* Quantos títulos estão no bolo, durante o sorteio.
-            Sem isto a tela mostra números correndo e um resultado, e nada diz
-            que a faixa inteira estava em jogo. Quem vê três resultados
-            seguidos na metade de cima conclui sozinho que o sorteio puxa para
-            o fim, e não tem como saber que não. */}
-          <p className="mt-3 text-xs text-white/55">
-            {estado.eligibleTicketCount > 0
-              ? `${estado.eligibleTicketCount.toLocaleString("pt-BR")} títulos no sorteio, todos com a mesma chance`
-              : "Todos os títulos com a mesma chance"}
-          </p>
 
           {numero != null && (
             <p className="sr-only" role="status">
@@ -583,46 +672,96 @@ function Revelacao({
                   <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
                     Temos um ganhador
                   </p>
-                  <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                  {/* O nome e, ao lado, o emblema do time para quem essa
+                      pessoa torce. Era o lugar que faltava: o emblema estava
+                      ligado nas listas de prêmios e não aqui, que é onde todo
+                      mundo olha quando o sorteio acaba. */}
+                  <p className="flex flex-wrap items-center justify-center gap-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
                     {ganhador}
+                    {estado.resultado?.time && (
+                      <EmblemaDoTime
+                        time={estado.resultado.time}
+                        tamanho="lg"
+                      />
+                    )}
                   </p>
 
-                  {/* O canhoto: o pedaço de papel que sai do pote, com a
-                    picotagem à esquerda. É o que dá objeto ao resultado,
-                    em vez de deixar o número solto no meio do texto. */}
-                  <div
-                    className="mx-auto flex w-full max-w-[320px] items-stretch overflow-hidden rounded-xl border border-red-500/50"
-                    style={{ background: "rgba(239,68,68,0.08)" }}
-                  >
-                    <span
-                      aria-hidden
-                      className="w-4 shrink-0 self-stretch border-r-2 border-dashed border-red-500/50"
-                    />
-                    <div className="min-w-0 flex-1 px-4 py-2.5 text-left">
-                      <p className="text-[9px] font-bold tracking-[0.16em] text-white/55 uppercase">
-                        Título vencedor
-                      </p>
-                      <p className="font-mono text-lg font-black tabular-nums text-white">
-                        {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
-                      </p>
+                  {/* O canhoto: o pedaço de papel que sai do pote. É o que
+                      dá objeto ao resultado, em vez de deixar o número solto
+                      no meio do texto.
+
+                      Era um retângulo com borda tracejada à esquerda, e isso
+                      não faz ticket: sem os furos ele lê como um card com um
+                      detalhe. Agora tem os dois furos, a picotagem com os
+                      pontos acesos nas pontas, e o selo do outro lado. O
+                      desenho inteiro vive em `.winner-ticket`, no globals. */}
+                  <div className="winner-ticket">
+                    <div className="ticket-left">
+                      <div className="ticket-icon">
+                        <svg
+                          aria-hidden
+                          width="25"
+                          height="25"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M4.5 5.5H19.5V8.2C18.05 8.2 16.9 9.35 16.9 10.8C16.9 12.25 18.05 13.4 19.5 13.4V18.5H4.5V15.8C5.95 15.8 7.1 14.65 7.1 13.2C7.1 11.75 5.95 10.6 4.5 10.6V5.5Z"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
                     </div>
-                    <ShieldCheck
-                      aria-hidden
-                      className="mr-4 h-4 w-4 shrink-0 self-center text-red-500"
-                    />
+
+                    <div aria-hidden className="ticket-divider" />
+
+                    <div className="ticket-content">
+                      <span className="ticket-label">TÍTULO VENCEDOR</span>
+                      <strong className="ticket-number">
+                        {numeroDoTitulo(numero, estado.campanha.totalNumbers)}
+                      </strong>
+                    </div>
+
+                    <div className="ticket-seal">
+                      <ShieldCheck
+                        aria-hidden
+                        className="h-[27px] w-[27px]"
+                        strokeWidth={1.7}
+                      />
+                    </div>
+
+                    {/* Textura, não informação: fica em 1,8% de opacidade e
+                        sai do fluxo para leitor de tela. */}
+                    <div aria-hidden className="ticket-watermark">
+                      WINNER
+                    </div>
                   </div>
 
+                  {/* Só "Ver a campanha". O "Conferir o sorteio" que ficava
+                      ao lado saiu a pedido.
+
+                      Consequência que vale estar escrita: com ele, saiu o
+                      último link do site para /sorteio/<id>/verificar. A
+                      página continua de pé e o endereço continua funcionando,
+                      mas agora só chega lá quem digitar. */}
                   <div className="flex flex-col items-center gap-2 pt-1 sm:flex-row sm:justify-center">
-                    <Link
-                      href={`/sorteio/${estado.publicId}/verificar`}
-                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-6 text-sm font-bold text-emerald-200 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] sm:w-auto"
-                    >
-                      <ShieldCheck aria-hidden className="h-4 w-4" />
-                      Conferir o sorteio
-                    </Link>
+                    {/* Dois botões sólidos iguais, empilhados, brigavam pela
+                        mesma atenção, e o mais importante era o de baixo. Para
+                        quem ganhou, reivindicar é A ação; ver a campanha é
+                        passeio. Então aqui ela vira contorno, e a pílula cheia
+                        fica só com a reivindicação. Para quem não ganhou nada
+                        muda: ela continua sendo o único botão, e sólido. */}
                     <Link
                       href={`/${estado.campanha.slug}`}
-                      className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary px-7 text-sm font-bold text-primary-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-95 active:scale-[0.98] sm:w-auto"
+                      className={cn(
+                        "inline-flex h-11 w-full items-center justify-center rounded-full px-7 text-sm font-bold transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] sm:w-auto",
+                        temReivindicacao
+                          ? "border border-white/20 text-white/80 hover:border-white/35 hover:text-white"
+                          : "bg-primary text-primary-foreground hover:opacity-95",
+                      )}
                     >
                       Ver a campanha
                     </Link>

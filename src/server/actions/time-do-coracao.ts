@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import { timeExiste } from "@/lib/times-cs2";
+import { timeExiste } from "@/server/services/times";
 import type { ActionResult } from "@/server/actions/auth";
 
 export async function salvarTimeDoCoracaoAction(
@@ -28,7 +28,7 @@ export async function salvarTimeDoCoracaoAction(
   // leitura, então normaliza para nulo aqui, na entrada.
   const id = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
 
-  if (id !== null && !timeExiste(id)) {
+  if (id !== null && !(await timeExiste(id))) {
     return { ok: false, error: "Time desconhecido." };
   }
 

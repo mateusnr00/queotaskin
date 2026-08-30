@@ -79,20 +79,42 @@ describe("mensagemDeReivindicacao", () => {
   const base = {
     nome: "Carlos Eduardo",
     premio: "AK-47 | Redline (Field-Tested)",
-    campanha: "AWP | Dragon Lore",
-    referencia: "cmtd18k6h0019",
+    tradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=1&token=ab",
   };
 
-  it("se identifica, diz o prêmio e a campanha", () => {
-    const m = mensagemDeReivindicacao(base);
-    expect(m).toContain("Sou Carlos Eduardo");
-    expect(m).toContain("AK-47 | Redline (Field-Tested)");
-    expect(m).toContain("na campanha AWP | Dragon Lore");
+  it("diz quem é, o que ganhou e para onde mandar, e mais nada", () => {
+    expect(mensagemDeReivindicacao(base)).toBe(
+      "Olá, sou Carlos Eduardo. Ganhei AK-47 | Redline (Field-Tested). " +
+        "Meu trade link: https://steamcommunity.com/tradeoffer/new/?partner=1&token=ab",
+    );
   });
 
-  // Sem a referência o suporte recebe "ganhei uma AK-47" e tem de perguntar
-  // quem é antes de poder ajudar.
-  it("leva a referência do pedido", () => {
-    expect(mensagemDeReivindicacao(base)).toContain("Pedido cmtd18k6h0019");
+  it("não repete o nome da campanha nem carrega id de pedido", () => {
+    // O defeito relatado: campanhas aqui se chamam como skins, então dizer o
+    // prêmio E a campanha saía com o mesmo nome duas vezes na mesma frase. E o
+    // id do pedido era um cuid de 25 caracteres que não diz nada a quem lê.
+    const m = mensagemDeReivindicacao(base);
+    expect(m).not.toContain("na campanha");
+    expect(m).not.toContain("Pedido");
+    expect(m).not.toMatch(/c[a-z0-9]{24}/);
+  });
+
+  it("sem link cadastrado, avisa em vez de omitir", () => {
+    // Omitir deixaria "Ganhei X." e ponto, e o suporte responderia pedindo o
+    // link. Dizer que falta já adianta o primeiro passo da conversa.
+    const m = mensagemDeReivindicacao({ ...base, tradeUrl: null });
+    expect(m).toContain("Ganhei AK-47 | Redline (Field-Tested).");
+    expect(m).toContain("Ainda não cadastrei meu trade link.");
+  });
+
+  it("é curta: cabe numa olhada", () => {
+    // O texto anterior passava de 180 caracteres com um cuid no fim.
+    expect(mensagemDeReivindicacao({ ...base, tradeUrl: null }).length).toBeLessThan(120);
+  });
+
+  it("apara espaço sobrando do nome", () => {
+    expect(mensagemDeReivindicacao({ ...base, nome: "  Ana  " })).toContain(
+      "sou Ana.",
+    );
   });
 });

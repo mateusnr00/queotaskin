@@ -1,13 +1,14 @@
 import Link from "next/link";
+import { Moldura } from "@/components/ui/moldura";
+import { ScrollText } from "lucide-react";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { listarLogs } from "@/server/services/activity-log-query";
 import { ACOES, type TipoDeAlvo } from "@/lib/activity-log-actions";
 import { ListaDeLogs } from "@/components/admin/logs/lista-de-logs";
-import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Registro de atividade" };
@@ -51,6 +52,7 @@ const NOME_DO_TIPO: Record<TipoDeAlvo, string> = {
   Reservation: "reserva",
   Payment: "pagamento",
   SkinTemplate: "skin do catálogo",
+  Team: "time",
   Tenant: "painel",
 };
 
@@ -128,18 +130,12 @@ export default async function LogsPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Registro de atividade
-        </h1>
-        <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Link href="/admin" className="hover:text-foreground">
-            Admin
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span>Registro</span>
-        </nav>
-      </header>
+      <CabecalhoDeAdmin
+        etiqueta="Auditoria"
+        icone={<ScrollText aria-hidden className="h-3 w-3" />}
+        titulo="Registro de atividade"
+        migalha={[{ rotulo: "Admin", href: "/admin" }, { rotulo: "Registro" }]}
+      />
 
       {/* Formulário GET puro, como a busca de Usuários: o resultado vira URL,
           sobrevive ao recarregar e dá para mandar pra outra pessoa. */}
@@ -239,7 +235,7 @@ export default async function LogsPage({
         )}
       </form>
 
-      <Card className="overflow-hidden p-0">
+      <Moldura>
         <ListaDeLogs
           registros={registros.map((r) => ({
             id: r.id,
@@ -255,12 +251,12 @@ export default async function LogsPage({
             detalhes: r.detalhes,
           }))}
         />
-      </Card>
+      </Moldura>
 
       {proximo && (
         <Link
           href={`/admin/logs?${paramsBase.toString()}${paramsBase.toString() ? "&" : ""}cursor=${encodeURIComponent(
-            `${proximo.criadoEm.toISOString()}|${proximo.id}`
+            `${proximo.criadoEm.toISOString()}|${proximo.id}`,
           )}`}
           className={buttonVariants({ variant: "outline" })}
         >

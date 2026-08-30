@@ -30,10 +30,29 @@
 //
 // O número em que a fita para é o número que ganhou. Não há troca, não há
 // corte, e a única coisa que a chegada do resultado faz é dizer onde frear.
+//
+// O SEGUNDO DEFEITO, DE CONFIANÇA
+//
+// O quadro final mostrava vizinhos DIFERENTES em cada aparelho: no celular
+// parava entre 079 e 041, no computador entre 011 e 075, com o mesmo vencedor
+// no meio. A causa: os títulos da fita saem da posição dela, e a posição
+// dependia de quantos passos o giro tinha dado até o resultado chegar. Isso
+// varia com a rede, então cada visitante parava num ponto diferente.
+//
+// Vizinho diferente não muda quem ganhou, mas quem compara duas telas não sabe
+// disso: vê dois resultados que não batem e desconfia do sorteio inteiro. Numa
+// página cujo argumento é "confira você mesmo", isso custa mais do que parece.
+//
+// A CAUDA
+//
+// Os últimos passos deixaram de usar a posição corrida e passaram a usar uma
+// faixa própria de índices, longe de qualquer posição que o giro alcance. Os
+// passos da frenagem e o quadro final saem sempre dos mesmos índices, então o
+// fim da fita é idêntico em qualquer aparelho, com rede rápida ou lenta.
 
 import { useEffect, useRef, useState } from "react";
 
-import { casasDoTitulo, tituloDaFita } from "@/lib/titulo";
+import { casasDoTitulo, tituloDaCauda, tituloDaFita } from "@/lib/titulo";
 
 /** Altura de cada linha. Três visíveis: a de cima, a do meio e a de baixo. */
 const ALTURA = 62;
@@ -134,9 +153,21 @@ export function CarretelDeTitulos({
       // No último passo da freada, quem entra é o vencedor. Em qualquer outro,
       // é um título qualquer da amostra.
       const ultimo = naFreada && freando! >= PASSOS_DA_FREADA;
+      // Na frenagem os títulos vêm da CAUDA, e não da posição corrida: é isso
+      // que faz o fim da fita ser o mesmo em toda tela.
       const entrando = ultimo
         ? vencedorRef.current!
-        : tituloDaFita(semente, posicao++, amostra, totalNumbers);
+        : naFreada
+          ? tituloDaCauda(
+              semente,
+              freando!,
+              amostra,
+              totalNumbers,
+              // Só o penúltimo passo continua visível no fim, na linha de
+              // cima. Os outros passam e somem, e repetir ali não incomoda.
+              freando === PASSOS_DA_FREADA - 1 ? vencedorRef.current : null,
+            )
+          : tituloDaFita(semente, posicao++, amostra, totalNumbers);
 
       setLinhas((antes) => [antes[1], antes[2], entrando]);
       setDuracao(naFreada ? intervaloDaFreada(freando!) : PASSO_GIRANDO);
@@ -150,7 +181,13 @@ export function CarretelDeTitulos({
           setLinhas((antes) => [
             antes[1],
             antes[2],
-            tituloDaFita(semente, posicao++, amostra, totalNumbers),
+            tituloDaCauda(
+              semente,
+              PASSOS_DA_FREADA + 1,
+              amostra,
+              totalNumbers,
+              vencedorRef.current,
+            ),
           ]);
           id = setTimeout(() => {
             if (cancelado) return;
@@ -160,7 +197,10 @@ export function CarretelDeTitulos({
         return;
       }
 
-      id = setTimeout(andar, naFreada ? intervaloDaFreada(freando!) : PASSO_GIRANDO);
+      id = setTimeout(
+        andar,
+        naFreada ? intervaloDaFreada(freando!) : PASSO_GIRANDO,
+      );
     };
 
     id = setTimeout(andar, PASSO_GIRANDO);
@@ -171,6 +211,40 @@ export function CarretelDeTitulos({
     // Roda uma vez e vive até o fim: reiniciar cortaria o movimento.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // QUEM PEDIU MENOS MOVIMENTO TAMBÉM VÊ O RESULTADO.
+  //
+  // O laço de cima sai antes de começar quando prefers-reduced-motion está
+  // ligado, e sem isto a fita ficava parada nos três primeiros títulos para
+  // sempre: o vencedor nunca aparecia no meio. Agora ela salta direto para o
+  // quadro final, que é o mesmo que todo mundo enxerga no fim.
+  useEffect(() => {
+    if (numeroFinal == null) return;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Adiado por um quadro: setState direto no corpo do efeito dispara
+    // renderização em cascata, e o compilador do React trata isso como erro.
+    const id = setTimeout(() => {
+      setLinhas([
+        tituloDaCauda(
+          semente,
+          PASSOS_DA_FREADA - 1,
+          amostra,
+          totalNumbers,
+          numeroFinal,
+        ),
+        numeroFinal,
+        tituloDaCauda(
+          semente,
+          PASSOS_DA_FREADA + 1,
+          amostra,
+          totalNumbers,
+          numeroFinal,
+        ),
+      ]);
+      setParado(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [numeroFinal, semente, amostra, totalNumbers]);
 
   const mascara =
     "linear-gradient(180deg, transparent, #000 24%, #000 76%, transparent)";
@@ -209,8 +283,7 @@ export function CarretelDeTitulos({
                 opacity: i === 1 ? 1 : 0.24,
                 fontSize: i === 1 ? 40 : 30,
                 color: i === 1 ? "#fff" : "rgba(255,255,255,0.75)",
-                textShadow:
-                  i === 1 ? "0 0 26px rgba(239,68,68,0.55)" : "none",
+                textShadow: i === 1 ? "0 0 26px rgba(239,68,68,0.55)" : "none",
               }}
             >
               {preencher(numero, casas)}

@@ -1,6 +1,6 @@
-import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -36,24 +36,17 @@ export default async function MensagensPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          Mensagens
-        </h1>
-        <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Link href="/admin" className="hover:text-foreground">
-            Admin
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link href="/admin/configuracoes" className="hover:text-foreground">
-            Configurações
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span>Mensagens</span>
-        </nav>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Personalize o que aparece pros compradores nas telas finais.
-          Campos vazios voltam pro texto padrão.
-        </p>
+        <CabecalhoDeAdmin
+          etiqueta="Ajustes"
+          icone={<MessageSquare aria-hidden className="h-3 w-3" />}
+          titulo="Mensagens"
+          descricao="Personalize o que aparece pros compradores nas telas finais. Campos vazios voltam pro texto padrão."
+          migalha={[
+            { rotulo: "Admin", href: "/admin" },
+            { rotulo: "Configurações", href: "/admin/configuracoes" },
+            { rotulo: "Mensagens" },
+          ]}
+        />
       </div>
 
       <MessagesSettingsForm

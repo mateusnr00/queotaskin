@@ -98,3 +98,36 @@ export function tituloDaFita(
   if (bolo.length > 0) return bolo[h % bolo.length];
   return 1 + (h % Math.max(1, Math.floor(totalNumbers)));
 }
+
+/**
+ * Onde a cauda da fita mora.
+ *
+ * Índice alto de propósito: o giro anda de um em um a partir do 3, e mesmo uma
+ * espera de horas não chega perto daqui. Assim os índices da cauda nunca
+ * colidem com os do giro, e o fim da fita não depende de quanto ela girou.
+ */
+export const INICIO_DA_CAUDA = 1_000_000;
+
+/**
+ * O título de um passo da cauda.
+ *
+ * `evitar` é o vencedor: nos dois passos que sobram VISÍVEIS no quadro final,
+ * repetir o número do meio faria a tela mostrar o mesmo título duas vezes, que
+ * parece defeito. Procura em índices vizinhos até achar outro, e desiste
+ * depois de algumas tentativas, porque numa campanha de um número só não
+ * existe outro para achar.
+ */
+export function tituloDaCauda(
+  semente: string,
+  passo: number,
+  amostra: readonly number[],
+  totalNumbers: number,
+  evitar?: number | null,
+): number {
+  const base = INICIO_DA_CAUDA + passo * 16;
+  let escolhido = tituloDaFita(semente, base, amostra, totalNumbers);
+  for (let i = 1; i < 12 && evitar != null && escolhido === evitar; i++) {
+    escolhido = tituloDaFita(semente, base + i, amostra, totalNumbers);
+  }
+  return escolhido;
+}

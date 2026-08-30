@@ -43,7 +43,8 @@ interface Props {
   /** Vem de Configurações. Sem ele o botão de reivindicar não aparece. */
   telefoneDoSuporte: string | null;
   nomeDoGanhador: string;
-  nomeDaCampanha: string;
+  /** Link de troca da Steam, que vai na mensagem para o suporte. */
+  tradeUrl: string | null;
 }
 
 const INITIAL_VISIBLE = 5;
@@ -83,7 +84,7 @@ function querMenosMovimento() {
 export function SurpriseBoxesClaim({
   telefoneDoSuporte,
   nomeDoGanhador,
-  nomeDaCampanha,
+  tradeUrl,
   reservationId,
   boxes: initialBoxes,
   allowOpenAll,
@@ -245,8 +246,7 @@ export function SurpriseBoxesClaim({
             <BoxRow
               telefoneDoSuporte={telefoneDoSuporte}
               nomeDoGanhador={nomeDoGanhador}
-              nomeDaCampanha={nomeDaCampanha}
-              referencia={reservationId}
+              tradeUrl={tradeUrl}
               box={b}
               abrindo={openingId === b.id}
               travado={travado}
@@ -285,8 +285,7 @@ function BoxRow({
   onOpen,
   telefoneDoSuporte,
   nomeDoGanhador,
-  nomeDaCampanha,
-  referencia,
+  tradeUrl,
 }: {
   box: SurpriseBoxClaimItem;
   abrindo: boolean;
@@ -294,8 +293,7 @@ function BoxRow({
   onOpen: () => void;
   telefoneDoSuporte: string | null;
   nomeDoGanhador: string;
-  nomeDaCampanha: string;
-  referencia: string;
+  tradeUrl: string | null;
 }) {
   if (box.status === "UNOPENED") {
     return (
@@ -387,8 +385,7 @@ function BoxRow({
         telefoneDoSuporte={telefoneDoSuporte}
         nome={nomeDoGanhador}
         premio={box.prize.prize}
-        campanha={nomeDaCampanha}
-        referencia={referencia}
+        tradeUrl={tradeUrl}
         variante="claro"
         className="mt-3 w-full"
       />

@@ -10,9 +10,10 @@
 // servidor inteiro.
 
 import type { Metadata } from "next";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, ExternalLink, Radio, ShieldCheck } from "lucide-react";
+import { ExternalLink, Radio, ShieldCheck } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -33,11 +34,14 @@ function quando(data: Date | null): string {
 }
 
 const COR_DO_STATUS: Record<string, string> = {
-  WAITING_DRAW: "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300",
-  COUNTDOWN: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300",
+  WAITING_DRAW:
+    "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300",
+  COUNTDOWN:
+    "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300",
   DRAWING: "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300",
   REVEALING: "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300",
-  FINISHED: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+  FINISHED:
+    "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
   ERROR: "border-red-500/40 bg-red-500/15 text-red-600 dark:text-red-300",
 };
 
@@ -70,29 +74,16 @@ export default async function SorteioDaCampanhaPage({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <Radio className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 space-y-1">
-            <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Link href="/admin/sorteios" className="hover:text-foreground">
-                Sorteios
-              </Link>
-              <ChevronRight className="h-3 w-3" />
-              <span className="truncate">{raffle.title}</span>
-            </nav>
-            <h1 className="text-lg font-bold tracking-tight md:text-xl">
-              Sorteio ao vivo
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              O resultado é definido pelo sistema, sozinho, assim que a
-              campanha encerra. Esta tela acompanha; ela não decide.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Campanhas"
+        icone={<Radio aria-hidden className="h-3 w-3" />}
+        titulo="Sorteio ao vivo"
+        descricao="O resultado é definido pelo sistema, sozinho, assim que a campanha encerra. Esta tela acompanha; ela não decide."
+        migalha={[
+          { rotulo: "Sorteios", href: "/admin/sorteios" },
+          { rotulo: raffle.title },
+        ]}
+      />
 
       {!draw ? (
         <section className="rounded-2xl border bg-card p-5">
@@ -102,9 +93,9 @@ export default async function SorteioDaCampanhaPage({
             </span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            O sorteio é criado sozinho quando a campanha encerra, e a partir
-            daí ninguém consegue mudar o resultado. Encerra quando todos os
-            títulos forem vendidos
+            O sorteio é criado sozinho quando a campanha encerra, e a partir daí
+            ninguém consegue mudar o resultado. Encerra quando todos os títulos
+            forem vendidos
             {raffle.autoCloseOnDraw && raffle.drawDate
               ? `, ou na data marcada (${quando(raffle.drawDate)})`
               : ""}
@@ -162,11 +153,23 @@ export default async function SorteioDaCampanhaPage({
             )}
 
             <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Campo rotulo="Campanha encerrada em" valor={quando(draw.raffleEndedAt)} />
-              <Campo rotulo="Contagem começa" valor={quando(draw.drawScheduledAt)} />
+              <Campo
+                rotulo="Campanha encerrada em"
+                valor={quando(draw.raffleEndedAt)}
+              />
+              <Campo
+                rotulo="Contagem começa"
+                valor={quando(draw.drawScheduledAt)}
+              />
               <Campo rotulo="Sorteio às" valor={quando(draw.drawStartsAt)} />
-              <Campo rotulo="Contagem observada" valor={quando(draw.countdownStartedAt)} />
-              <Campo rotulo="Número escolhido em" valor={quando(draw.drawExecutedAt)} />
+              <Campo
+                rotulo="Contagem observada"
+                valor={quando(draw.countdownStartedAt)}
+              />
+              <Campo
+                rotulo="Número escolhido em"
+                valor={quando(draw.drawExecutedAt)}
+              />
               <Campo rotulo="Finalizado em" valor={quando(draw.finishedAt)} />
             </dl>
           </section>
@@ -198,14 +201,23 @@ export default async function SorteioDaCampanhaPage({
                     valor={draw.eligibleTicketCount.toLocaleString("pt-BR")}
                   />
                   <Campo rotulo="Método" valor={draw.rngMethod} />
-                  <Campo rotulo="Versão do motor" valor={String(draw.drawVersion)} />
+                  <Campo
+                    rotulo="Versão do motor"
+                    valor={String(draw.drawVersion)}
+                  />
                 </dl>
                 {/* A prova, na íntegra. O painel vê tudo, inclusive o que
                     só vira público na revelação: é aqui que a equipe confere
                     um sorteio que alguém questionou. */}
                 <div className="mt-3 space-y-2">
-                  <Prova rotulo="Chave travada (SHA-256)" valor={draw.serverSeedHash} />
-                  <Prova rotulo="Lista de títulos (SHA-256)" valor={draw.clientSeed} />
+                  <Prova
+                    rotulo="Chave travada (SHA-256)"
+                    valor={draw.serverSeedHash}
+                  />
+                  <Prova
+                    rotulo="Lista de títulos (SHA-256)"
+                    valor={draw.clientSeed}
+                  />
                   <Prova rotulo="Cálculo (HMAC-SHA256)" valor={draw.hmacHex} />
                   <Prova
                     rotulo="Posição sorteada"

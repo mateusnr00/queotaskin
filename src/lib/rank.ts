@@ -77,7 +77,6 @@ export interface PrestigeRank {
   /** XP acumulado para alcançar a patente. */
   xp: number;
   color: string;
-  description: string;
 }
 
 /**
@@ -86,6 +85,11 @@ export interface PrestigeRank {
  * A lista precisa ficar em ordem crescente de XP: prestigeFromXp percorre de
  * ponta a ponta e guarda a última alcançada. Reordenar é só mexer aqui, a UI
  * e os cálculos derivam tudo desta lista.
+ *
+ * Sem descrição. Cada uma tinha uma frase embaixo ("melhor jogador da
+ * partida", "assinou com uma organização", "o maior de todos os tempos"), e
+ * elas explicavam a metáfora, não o degrau: não diziam nada sobre o que a
+ * pessoa ganha nem sobre como chegar lá. O nome e o XP dizem.
  */
 export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
   {
@@ -93,21 +97,20 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     label: "MVP",
     xp: 350_000, // R$ 35.000
     color: "#7c6cf0",
-    description: "Melhor jogador da partida.",
   },
   {
     key: "PRO_PLAYER",
-    label: "Pro Player",
+    // "PRO", e não "Pro Player": é como a cena chama, e o selo tem espaço para
+    // três letras, não para duas palavras.
+    label: "PRO",
     xp: 425_000, // R$ 42.500
     color: "#3fc9d6",
-    description: "Assinou com uma organização.",
   },
   {
     key: "GOAT",
     label: "GOAT",
     xp: 500_000, // R$ 50.000
     color: "#f2d059",
-    description: "O maior de todos os tempos.",
   },
 ] as const;
 
@@ -262,6 +265,30 @@ export function prestigeFromXp(
   return found;
 }
 
+/**
+ * O rank de UMA patente de prestígio, sem passar pela escada de XP.
+ *
+ * Existe por causa de um selo errado: a lista de patentes desenhava cada linha
+ * com rankFromXp(prestigio.xp), e rankFromXp aplica a regra de gasto do GOAT.
+ * Com o gasto padrão em zero, os 500 mil XP da linha do GOAT caíam para a
+ * patente de baixo, e a lista mostrava o selo do PRO ao lado do nome GOAT.
+ *
+ * A lista é uma LEGENDA do que existe, não uma avaliação de quem olha: cada
+ * linha tem que desenhar o seu próprio selo, e a regra de quem chegou lá é
+ * outra pergunta, respondida por prestigeFromXp.
+ */
+export function rankDoPrestigio(prestige: PrestigeRank): Rank {
+  return {
+    level: MAX_LEVEL,
+    prestige,
+    label: prestige.label,
+    tierName: prestige.label,
+    numeral: prestige.label,
+    color: prestige.color,
+    xp: prestige.xp,
+  };
+}
+
 export function rankFromXp(xp: number, totalSpent = 0): Rank {
   const total = Math.max(0, Math.floor(xp));
   const prestige = prestigeFromXp(total, totalSpent);
@@ -366,15 +393,27 @@ function nextStep(
     const index = PRESTIGE_RANKS.findIndex((r) => r.key === rank.prestige!.key);
     const next = PRESTIGE_RANKS[index + 1];
     if (!next) {
-      return { floorXp: rank.prestige.xp, ceilXp: rank.prestige.xp, nextLabel: null };
+      return {
+        floorXp: rank.prestige.xp,
+        ceilXp: rank.prestige.xp,
+        nextLabel: null,
+      };
     }
-    return { floorXp: rank.prestige.xp, ceilXp: next.xp, nextLabel: next.label };
+    return {
+      floorXp: rank.prestige.xp,
+      ceilXp: next.xp,
+      nextLabel: next.label,
+    };
   }
 
   // No nível 21 o próximo degrau é a primeira patente de prestígio.
   if (rank.level >= MAX_LEVEL) {
     const first = PRESTIGE_RANKS[0];
-    return { floorXp: xpForLevel(MAX_LEVEL), ceilXp: first.xp, nextLabel: first.label };
+    return {
+      floorXp: xpForLevel(MAX_LEVEL),
+      ceilXp: first.xp,
+      nextLabel: first.label,
+    };
   }
 
   return {

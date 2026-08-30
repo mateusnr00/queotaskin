@@ -1,3 +1,5 @@
+import type { DeliveryStatus } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 import { toSkinPrize } from "@/lib/prize-mapper";
 import type { SkinPrize } from "@/components/cs2/skin-card";
@@ -7,8 +9,24 @@ export interface Delivery {
   raffleSlug: string;
   raffleTitle: string;
   ticketNumber: number;
+  /** Quantos títulos a campanha tem. Decide as casas do número exibido. */
+  totalNumbers: number;
   drawnAt: Date | null;
   note: string | null;
+  status: DeliveryStatus;
+  /** Quando a skin de fato saiu. Só existe em ENVIADO. */
+  deliveredAt: Date | null;
+  deliveryNote: string | null;
+  /** Quanto saiu do caixa para comprar a skin. Nulo é "ainda não anotado". */
+  deliveryCost: number | null;
+  /** O PTAX do dia desta entrega. Nulo = converte pela taxa do painel. */
+  deliveryFxRate: number | null;
+  /** O dia do boletim que gerou deliveryFxRate. */
+  deliveryFxDate: Date | null;
+  /** De onde a taxa veio: "PTAX" ou "AWESOMEAPI". */
+  deliveryFxSource: string | null;
+  /** Nome de quem marcou, quando a conta ainda existe. */
+  deliveredBy: string | null;
   /** Comprador do número sorteado. Nulo se o título não foi vendido. */
   winner: {
     reservationId: string;
@@ -33,6 +51,15 @@ export interface Delivery {
 export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
   const raffles = await prisma.raffle.findMany({
     where: { tenantId, winnerTicketNumber: { not: null } },
+    // Pendente primeiro, e dentro de cada grupo o mais recente no topo.
+    // A fila existe para dizer o que falta fazer; o que já saiu é histórico e
+    // não pode empurrar o trabalho de hoje para o fim da página.
+    // CRONOLÓGICA, do sorteio mais recente para o mais antigo.
+    //
+    // Antes vinha pendente primeiro, e isso embaralhava a leitura: uma entrega
+    // saía do lugar assim que era marcada, e a pessoa perdia de vista onde
+    // estava. Quem quer só o que falta usa o seletor de status; a ordem da
+    // lista é a do tempo, que não muda quando se mexe numa linha.
     orderBy: [{ winnerDrawnAt: "desc" }],
     include: { prizes: { orderBy: { position: "asc" } } },
   });
@@ -65,6 +92,25 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
 
   const ticketByRaffle = new Map(winningTickets.map((t) => [t.raffleId, t]));
 
+  // Os nomes de quem marcou entrega, numa query só. `deliveredById` não tem
+  // relação declarada de propósito (ver o schema), então a busca é manual e
+  // um id órfão simplesmente não vira nome, em vez de quebrar a tela.
+  const idsDeQuemEntregou = [
+    ...new Set(
+      raffles.map((r) => r.deliveredById).filter((v): v is string => !!v),
+    ),
+  ];
+  const nomePorId = new Map(
+    idsDeQuemEntregou.length > 0
+      ? (
+          await prisma.user.findMany({
+            where: { id: { in: idsDeQuemEntregou } },
+            select: { id: true, name: true },
+          })
+        ).map((u) => [u.id, u.name])
+      : [],
+  );
+
   return raffles.map((raffle) => {
     const ticket = ticketByRaffle.get(raffle.id);
     const reservation = ticket?.reservation ?? null;
@@ -74,14 +120,31 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       raffleSlug: raffle.slug,
       raffleTitle: raffle.title,
       ticketNumber: raffle.winnerTicketNumber!,
+      totalNumbers: raffle.totalNumbers,
       drawnAt: raffle.winnerDrawnAt,
       note: raffle.winnerNote,
+      status: raffle.deliveryStatus,
+      deliveredAt: raffle.deliveredAt,
+      deliveryNote: raffle.deliveryNote,
+      // Decimal do Prisma não atravessa a fronteira servidor/cliente, então
+      // vira número aqui, no mesmo lugar em que todo o resto é normalizado.
+      deliveryCost:
+        raffle.deliveryCost != null ? Number(raffle.deliveryCost) : null,
+      deliveryFxRate:
+        raffle.deliveryFxRate != null ? Number(raffle.deliveryFxRate) : null,
+      deliveryFxDate: raffle.deliveryFxDate,
+      deliveryFxSource: raffle.deliveryFxSource,
+      deliveredBy: raffle.deliveredById
+        ? (nomePorId.get(raffle.deliveredById) ?? null)
+        : null,
       winner: reservation
         ? {
             reservationId: reservation.id,
             name: reservation.participantName,
-            phone: reservation.participantPhone ?? reservation.user?.phone ?? null,
-            email: reservation.participantEmail ?? reservation.user?.email ?? null,
+            phone:
+              reservation.participantPhone ?? reservation.user?.phone ?? null,
+            email:
+              reservation.participantEmail ?? reservation.user?.email ?? null,
             userId: reservation.user?.id ?? null,
             steamTradeUrl: reservation.user?.steamTradeUrl ?? null,
             steamId: reservation.user?.steamId ?? null,

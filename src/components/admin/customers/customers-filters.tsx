@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Moldura } from "@/components/ui/moldura";
 import { useState, useTransition } from "react";
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 
@@ -69,7 +70,13 @@ export function CustomersFilters({ filtros }: { filtros: FiltrosCliente }) {
 
   function enviar(dados: FormData) {
     const params = new URLSearchParams();
-    for (const campo of ["busca", "nome", "cpf", "email", "telefone"] as const) {
+    for (const campo of [
+      "busca",
+      "nome",
+      "cpf",
+      "email",
+      "telefone",
+    ] as const) {
       const valor = String(dados.get(campo) ?? "").trim();
       if (valor) params.set(campo, valor);
     }
@@ -83,108 +90,120 @@ export function CustomersFilters({ filtros }: { filtros: FiltrosCliente }) {
   }
 
   return (
-    <form action={enviar} className="rounded-xl border bg-card p-3 md:p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Uma linha, e a busca ocupa o que sobra. É a ação de 90% das
+    <Moldura>
+      <form action={enviar} className="p-3 md:p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Uma linha, e a busca ocupa o que sobra. É a ação de 90% das
             visitas: achar uma pessoa. */}
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            name="busca"
-            defaultValue={filtros.busca}
-            placeholder="Nome, CPF, telefone ou e-mail"
-            aria-label="Buscar cliente por nome, CPF, telefone ou e-mail"
-            className="h-10 pl-9"
-          />
-        </div>
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              name="busca"
+              defaultValue={filtros.busca}
+              placeholder="Nome, CPF, telefone ou e-mail"
+              aria-label="Buscar cliente por nome, CPF, telefone ou e-mail"
+              className="h-10 pl-9"
+            />
+          </div>
 
-        <Select value={ordem} onValueChange={(v) => v && setOrdem(v)}>
-          {/* Select do projeto, e não <select> nativo: o menu do nativo é
+          <Select value={ordem} onValueChange={(v) => v && setOrdem(v)}>
+            {/* Select do projeto, e não <select> nativo: o menu do nativo é
               desenhado pelo sistema e não aceita estilo, então no tema escuro
               ele abre branco. Já aconteceu no seletor de país do cadastro. */}
-          <SelectTrigger
-            aria-label="Ordenar por"
-            className="h-10 w-[190px] shrink-0"
+            <SelectTrigger
+              aria-label="Ordenar por"
+              className="h-10 w-[190px] shrink-0"
+            >
+              <SelectValue labels={ROTULO_DA_ORDEM} />
+            </SelectTrigger>
+            <SelectContent>
+              {ORDENACOES.map((o) => (
+                <SelectItem key={o.valor} value={o.valor}>
+                  {o.rotulo}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <button
+            type="submit"
+            disabled={pendente}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
-            <SelectValue labels={ROTULO_DA_ORDEM} />
-          </SelectTrigger>
-          <SelectContent>
-            {ORDENACOES.map((o) => (
-              <SelectItem key={o.valor} value={o.valor}>
-                {o.rotulo}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Search className="h-4 w-4" />
+            {pendente ? "Buscando..." : "Buscar"}
+          </button>
 
-        <button
-          type="submit"
-          disabled={pendente}
-          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          <Search className="h-4 w-4" />
-          {pendente ? "Buscando..." : "Buscar"}
-        </button>
+          {temFiltro && (
+            <button
+              type="button"
+              onClick={() =>
+                iniciarTransicao(() => router.push("/admin/clientes"))
+              }
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm hover:bg-muted"
+            >
+              <X className="h-3.5 w-3.5" />
+              Limpar
+            </button>
+          )}
 
-        {temFiltro && (
           <button
             type="button"
-            onClick={() => iniciarTransicao(() => router.push("/admin/clientes"))}
-            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm hover:bg-muted"
+            onClick={() => setAvancada((v) => !v)}
+            aria-expanded={avancada}
+            aria-controls="busca-avancada"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <X className="h-3.5 w-3.5" />
-            Limpar
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Avançada
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                avancada && "rotate-180",
+              )}
+            />
           </button>
-        )}
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setAvancada((v) => !v)}
-          aria-expanded={avancada}
-          aria-controls="busca-avancada"
-          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          Avançada
-          <ChevronDown
-            aria-hidden
-            className={cn("h-3.5 w-3.5 transition-transform", avancada && "rotate-180")}
-          />
-        </button>
-      </div>
-
-      {/* Os campos continuam no DOM quando fechados para o formulário não
+        {/* Os campos continuam no DOM quando fechados para o formulário não
           perder o que já estava preenchido ao recolher a seção. */}
-      <div
-        id="busca-avancada"
-        className={cn(
-          "grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
-          avancada ? "mt-3 border-t pt-3" : "hidden",
-        )}
-      >
-        <Campo label="Nome" name="nome" defaultValue={filtros.nome} placeholder="João da Silva" />
-        <Campo
-          label="CPF"
-          name="cpf"
-          defaultValue={filtros.cpf}
-          placeholder="000.000.000-00"
-          inputMode="numeric"
-        />
-        <Campo
-          label="E-mail"
-          name="email"
-          defaultValue={filtros.email}
-          placeholder="cliente@email.com"
-        />
-        <Campo
-          label="Telefone"
-          name="telefone"
-          defaultValue={filtros.telefone}
-          placeholder="(62) 99999-9999"
-          inputMode="numeric"
-        />
-      </div>
-    </form>
+        <div
+          id="busca-avancada"
+          className={cn(
+            "grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
+            avancada ? "mt-3 border-t pt-3" : "hidden",
+          )}
+        >
+          <Campo
+            label="Nome"
+            name="nome"
+            defaultValue={filtros.nome}
+            placeholder="João da Silva"
+          />
+          <Campo
+            label="CPF"
+            name="cpf"
+            defaultValue={filtros.cpf}
+            placeholder="000.000.000-00"
+            inputMode="numeric"
+          />
+          <Campo
+            label="E-mail"
+            name="email"
+            defaultValue={filtros.email}
+            placeholder="cliente@email.com"
+          />
+          <Campo
+            label="Telefone"
+            name="telefone"
+            defaultValue={filtros.telefone}
+            placeholder="(62) 99999-9999"
+            inputMode="numeric"
+          />
+        </div>
+      </form>
+    </Moldura>
   );
 }
 

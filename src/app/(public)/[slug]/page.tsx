@@ -17,7 +17,8 @@ import { SkinHero } from "@/components/cs2/skin-hero";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { numeroDoTitulo, ordemEmbaralhada } from "@/lib/titulo";
-import { SeloDeCompromisso } from "@/components/sorteio/selo-de-compromisso";
+import { mapaDeTimes } from "@/server/services/times";
+import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { SeloDeTransmissao } from "@/components/sorteio/selo-de-transmissao";
 import { PROPORCAO_DA_SKIN, headlineSkin } from "@/lib/cs2";
 import { MinLevelGate } from "@/components/rank/min-level-gate";
@@ -201,24 +202,19 @@ export default async function PublicRaffleDetailPage({
   // estático de ganhador por um convite para assistir: entre o encerramento e
   // a revelação existem dez minutos em que a página precisa dizer para onde
   // ir, e antes disso ela não dizia nada.
-  const [sorteio, semente] = await Promise.all([
-    prisma.draw.findUnique({
-      where: { raffleId: raffle.id },
-      select: {
-        publicId: true,
-        status: true,
-        drawStartsAt: true,
-        eligibleTicketCount: true,
-      },
-    }),
-    // Só o HASH. A semente em si nunca é lida aqui: esta página entrega
-    // objetos inteiros para componentes de cliente, e uma leitura descuidada
-    // do segredo mandaria a chave do sorteio para o navegador de todo mundo.
-    prisma.drawSeed.findUnique({
-      where: { raffleId: raffle.id },
-      select: { serverSeedHash: true, committedAt: true },
-    }),
-  ]);
+  // A semente deixou de ser lida aqui junto com isto. Ela existia para o card
+  // "Sorteio verificável", que saiu da página: a prova inteira vive em
+  // /sorteio/<id>/verificar, e manter a consulta seria uma ida ao banco por
+  // visita para alimentar nada.
+  const sorteio = await prisma.draw.findUnique({
+    where: { raffleId: raffle.id },
+    select: {
+      publicId: true,
+      status: true,
+      drawStartsAt: true,
+      eligibleTicketCount: true,
+    },
+  });
 
   const isActive = raffle.status === "ACTIVE";
   const statusConfig = await getConfiguracaoDeStatus();
@@ -233,6 +229,8 @@ export default async function PublicRaffleDetailPage({
   // do título pra exibir no card. Não bloqueia, se ninguém comprou esse
   // número (edge case), mostra só o número.
   let winnerParticipant: string | null = null;
+  /** O time de quem ganhou, para o emblema ao lado do nome no card. */
+  let winnerTeamId: string | null = null;
   if (raffle.winnerTicketNumber != null) {
     const winnerTicket = await prisma.ticket.findFirst({
       where: {
@@ -241,11 +239,17 @@ export default async function PublicRaffleDetailPage({
         status: { in: ["PAID", "AWARDED"] },
       },
       select: {
-        reservation: { select: { participantName: true } },
+        reservation: {
+          select: {
+            participantName: true,
+            user: { select: { favoriteTeamId: true } },
+          },
+        },
       },
     });
     winnerParticipant =
       winnerTicket?.reservation?.participantName?.trim() || null;
+    winnerTeamId = winnerTicket?.reservation?.user?.favoriteTeamId ?? null;
   }
 
   // Backward-compat: lê requiredFields do JSON com defaults seguros.
@@ -300,6 +304,11 @@ export default async function PublicRaffleDetailPage({
   // sorteio, que guarda tudo.
   const sorteioConcluido = raffle.winnerTicketNumber != null;
 
+  // Um mapa id -> time para a página inteira. As listas de ganhadores têm N
+  // ids e não podem fazer N consultas; o mapa inclui os desativados, para quem
+  // já torcia por um time arquivado não perder o emblema.
+  const times = await mapaDeTimes();
+
   const showAwarded =
     raffle.awardedTicketsEnabled && raffle.awardedTicketsShowList;
   const awardedNumbers = raffle.awardedTickets.map((a) => a.number);
@@ -337,7 +346,9 @@ export default async function PublicRaffleDetailPage({
       prizeDescription: a.prizeDescription,
       skinRarity: a.skinRarity,
       participantName: participantByNumber.get(a.number) ?? null,
-      participantTeamId: teamByNumber.get(a.number) ?? null,
+      // Resolvido aqui, no servidor: as linhas rodam no cliente e não têm como
+      // consultar o banco de times.
+      time: times.get(teamByNumber.get(a.number) ?? "") ?? null,
     }),
   );
   // ── Caixas surpresas na página pública ──
@@ -368,8 +379,9 @@ export default async function PublicRaffleDetailPage({
         ? (p.claimedByBox?.reservation.participantName ?? null)
         : null,
       // Segue a mesma chave do nome: sem "exibir ganhadores", nem o time sai.
-      timeDoGanhador: raffle.surpriseBoxExibirGanhadores
-        ? (p.claimedByBox?.reservation.user?.favoriteTeamId ?? null)
+      time: raffle.surpriseBoxExibirGanhadores
+        ? (times.get(p.claimedByBox?.reservation.user?.favoriteTeamId ?? "") ??
+          null)
         : null,
       aberto: Boolean(p.claimedAt),
     }));
@@ -470,11 +482,19 @@ export default async function PublicRaffleDetailPage({
               {numeroDoTitulo(raffle.winnerTicketNumber, raffle.totalNumbers)}
             </p>
             {winnerParticipant ? (
-              <p className="text-base font-semibold">
-                Ganhador:{" "}
-                <span className="text-amber-800 dark:text-amber-200">
-                  {winnerParticipant}
+              <p className="flex flex-wrap items-center justify-center gap-2 text-base font-semibold">
+                <span>
+                  Ganhador:{" "}
+                  <span className="text-amber-800 dark:text-amber-200">
+                    {winnerParticipant}
+                  </span>
                 </span>
+                {times.get(winnerTeamId ?? "") && (
+                  <EmblemaDoTime
+                    time={times.get(winnerTeamId!)!}
+                    tamanho="md"
+                  />
+                )}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -667,19 +687,6 @@ export default async function PublicRaffleDetailPage({
 
         <SurpriseBoxesSection caixas={caixasPublicas} />
 
-        {/* A prova do sorteio, fechada, no fim.
-            Ela ficava aberta logo abaixo do título e comia quase uma tela de
-            celular entre o nome da campanha e o preço. Aqui embaixo ela
-            continua pública antes da venda, que é o que dá valor a ela, sem
-            atravessar o caminho de quem veio comprar. */}
-        {semente && !sorteioConcluido && (
-          <SeloDeCompromisso
-            hash={semente.serverSeedHash}
-            desde={semente.committedAt.toISOString()}
-            publicId={sorteio?.publicId ?? null}
-          />
-        )}
-
         {raffle.showShareButtons && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -688,6 +695,7 @@ export default async function PublicRaffleDetailPage({
             <SocialShare url={shareUrl} title={`Participe: ${raffle.title}`} />
           </div>
         )}
+
       </div>
     </div>
   );
