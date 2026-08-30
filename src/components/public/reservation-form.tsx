@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { CLASSE_DE_COLUNAS, colunasDosCards } from "@/lib/grade";
 import { useState, useTransition } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,23 +50,17 @@ export interface RequiredFields {
 function buildSchema(
   req: RequiredFields,
   needsCpfInput: boolean,
-  needsPhoneInput: boolean
+  needsPhoneInput: boolean,
 ) {
   return z.object({
     participantCpf: needsCpfInput
-      ? z
-          .string()
-          .transform(onlyDigits)
-          .refine(isValidCpf, "CPF inválido")
+      ? z.string().transform(onlyDigits).refine(isValidCpf, "CPF inválido")
       : z.string().optional(),
     participantPhone: needsPhoneInput
       ? z
           .string()
           .transform(onlyDigits)
-          .refine(
-            (v) => v.length >= 10 && v.length <= 11,
-            "Telefone inválido"
-          )
+          .refine((v) => v.length >= 10 && v.length <= 11, "Telefone inválido")
       : z.string().optional(),
     participantEmail: req.email
       ? z.string().email("E-mail inválido")
@@ -136,14 +131,15 @@ export function ReservationForm({
   const isManualMode = reservationModel === "MANUAL" && totalNumbers <= 500;
 
   const [quantity, setQuantity] = useState<number>(
-    initialQuantity ?? minPurchase
+    initialQuantity ?? minPurchase,
   );
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
 
   // Visitante informa CPF e celular ao criar a conta, então esses campos não
   // se repetem aqui; para quem já tem conta, só aparecem se faltarem nela.
   const needsCpfInput = isLoggedIn && requiredFields.cpf && !currentUser.cpf;
-  const needsPhoneInput = isLoggedIn && requiredFields.phone && !currentUser.phone;
+  const needsPhoneInput =
+    isLoggedIn && requiredFields.phone && !currentUser.phone;
   const schema = buildSchema(requiredFields, needsCpfInput, needsPhoneInput);
   type Values = z.infer<typeof schema>;
 
@@ -205,9 +201,7 @@ export function ReservationForm({
 
   function criarReserva(values: Values) {
     startTransition(async () => {
-      const base = isManualMode
-        ? { numbers: selectedNumbers }
-        : { quantity };
+      const base = isManualMode ? { numbers: selectedNumbers } : { quantity };
 
       // De onde esta pessoa veio. Lê a URL desta visita, ou o que ficou
       // guardado da chegada: quem clica no anúncio cai no sorteio com as
@@ -304,7 +298,9 @@ export function ReservationForm({
             aqui basta uma linha, no celular cada bloco alto empurra o botão
             para fora da tela. */}
         <p className="text-center text-xs text-muted-foreground">
-          <strong className="tabular-nums text-foreground">{effectiveQty}</strong>{" "}
+          <strong className="tabular-nums text-foreground">
+            {effectiveQty}
+          </strong>{" "}
           {effectiveQty === 1 ? "número selecionado" : "números selecionados"}
         </p>
 
@@ -318,7 +314,7 @@ export function ReservationForm({
           // para um botão desabilitado convida ao clique que não funciona.
           className={cn(
             "h-13 w-full flex-col gap-0 text-base font-semibold leading-tight",
-            !isPending && effectiveQty > 0 && "cta-pulsa"
+            !isPending && effectiveQty > 0 && "cta-pulsa",
           )}
           disabled={isPending || effectiveQty === 0}
         >
@@ -372,7 +368,7 @@ function QuantityPicker({
   // somando, um card de +2 continua útil numa campanha de mínimo 10, são
   // cinco cliques, não um card inválido.
   const cards = selectionCards.filter(
-    (q) => q > 0 && (!maxPurchase || q <= maxPurchase)
+    (q) => q > 0 && (!maxPurchase || q <= maxPurchase),
   );
   return (
     <div className="space-y-2.5">
@@ -381,7 +377,12 @@ function QuantityPicker({
       </p>
 
       {cards.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div
+          className={cn(
+            "grid gap-2",
+            CLASSE_DE_COLUNAS[colunasDosCards(cards.length)],
+          )}
+        >
           {cards.map((q, idx) => {
             const popular = idx === selectionCardsBestseller;
             // Preço do acréscimo, não do total: o card soma q cotas ao que
@@ -400,7 +401,7 @@ function QuantityPicker({
                   "relative flex flex-col items-center gap-0 rounded-xl border-2 px-2 py-2.5 text-center transition-all",
                   popular
                     ? "card-popular-pulsa border-amber-500 bg-amber-500/10"
-                    : "border-border hover:border-primary/40 active:border-primary"
+                    : "border-border hover:border-primary/40 active:border-primary",
                 )}
               >
                 {popular && (
@@ -589,7 +590,7 @@ function ParticipantExtras({
                       .replace(/\D/g, "")
                       .slice(0, 11);
                     field.onChange(
-                      digits.length === 11 ? formatCpf(digits) : digits
+                      digits.length === 11 ? formatCpf(digits) : digits,
                     );
                   }}
                   onBlur={field.onBlur}
