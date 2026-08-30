@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
+import { ShoppingCart } from "lucide-react";
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+
 import type { Prisma, ReservationStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
@@ -207,20 +208,16 @@ export default async function ComprasPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            Lista de Compras
-          </h1>
-          <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Link href="/admin/sorteios" className="hover:text-foreground">
-              Sorteios
-            </Link>
-            <ChevronRight className="h-3 w-3" />
-            <span className="truncate">Sorteio: {raffle.id}</span>
-          </nav>
-        </div>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Campanhas"
+        icone={<ShoppingCart aria-hidden className="h-3 w-3" />}
+        titulo="Lista de compras"
+        migalha={[
+          { rotulo: "Sorteios", href: "/admin/sorteios" },
+          { rotulo: raffle.title, href: `/admin/sorteios/${raffle.id}/editar` },
+          { rotulo: "Compras" },
+        ]}
+      />
 
       <RaffleComprasView
         raffle={{

@@ -10,9 +10,10 @@
 // servidor inteiro.
 
 import type { Metadata } from "next";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, ExternalLink, Radio, ShieldCheck } from "lucide-react";
+import { ExternalLink, Radio, ShieldCheck } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -73,29 +74,16 @@ export default async function SorteioDaCampanhaPage({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
-            <Radio className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 space-y-1">
-            <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Link href="/admin/sorteios" className="hover:text-foreground">
-                Sorteios
-              </Link>
-              <ChevronRight className="h-3 w-3" />
-              <span className="truncate">{raffle.title}</span>
-            </nav>
-            <h1 className="text-lg font-bold tracking-tight md:text-xl">
-              Sorteio ao vivo
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              O resultado é definido pelo sistema, sozinho, assim que a campanha
-              encerra. Esta tela acompanha; ela não decide.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Campanhas"
+        icone={<Radio aria-hidden className="h-3 w-3" />}
+        titulo="Sorteio ao vivo"
+        descricao="O resultado é definido pelo sistema, sozinho, assim que a campanha encerra. Esta tela acompanha; ela não decide."
+        migalha={[
+          { rotulo: "Sorteios", href: "/admin/sorteios" },
+          { rotulo: raffle.title },
+        ]}
+      />
 
       {!draw ? (
         <section className="rounded-2xl border bg-card p-5">

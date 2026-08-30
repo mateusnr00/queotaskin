@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, UserRound } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -73,12 +74,19 @@ export default async function EditUserPage({
             Ver histórico desta conta
           </Link>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">{user.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {user._count.reservations} reserva(s) · cadastrado em{" "}
-          {formatDateTime(user.createdAt)}
-          {user.email ? ` · ${user.email}` : ""}
-        </p>
+        <CabecalhoDeAdmin
+          etiqueta="Acessos"
+          icone={<UserRound aria-hidden className="h-3 w-3" />}
+          titulo={user.name}
+          descricao={
+            <>
+              {user._count.reservations}{" "}
+              {user._count.reservations === 1 ? "reserva" : "reservas"} ·
+              cadastrado em {formatDateTime(user.createdAt)}
+              {user.email ? ` · ${user.email}` : ""}
+            </>
+          }
+        />
       </div>
 
       <UserEditForm
