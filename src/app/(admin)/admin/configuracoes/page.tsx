@@ -1,6 +1,6 @@
-import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+import { Settings } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -61,16 +61,15 @@ export default async function ConfiguracoesPage() {
   return (
     <div className="max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          Configurações
-        </h1>
-        <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Link href="/admin" className="hover:text-foreground">
-            Admin
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span>Configurações</span>
-        </nav>
+        <CabecalhoDeAdmin
+          etiqueta="Ajustes"
+          icone={<Settings aria-hidden className="h-3 w-3" />}
+          titulo="Configurações"
+          migalha={[
+            { rotulo: "Admin", href: "/admin" },
+            { rotulo: "Configurações" },
+          ]}
+        />
       </div>
 
       <SettingsForm
@@ -87,8 +86,7 @@ export default async function ConfiguracoesPage() {
           homeCampaignsCaption: tenant.homeCampaignsCaption ?? "",
           showWinnersOnHome: tenant.showWinnersOnHome,
           thankYouImageUrl: tenant.paidImageUrl,
-          loginMode:
-            tenant.loginMode === "cpf" ? "cpf" : "phone",
+          loginMode: tenant.loginMode === "cpf" ? "cpf" : "phone",
           numbersNomenclature:
             tenant.numbersNomenclature === "numeros" ||
             tenant.numbersNomenclature === "bilhetes" ||
@@ -97,8 +95,7 @@ export default async function ConfiguracoesPage() {
               : "titulos",
           quantityCardsHeading: tenant.quantityCardsHeading ?? "",
           minPurchaseAge:
-            tenant.minPurchaseAge === 16 ||
-            tenant.minPurchaseAge === 21
+            tenant.minPurchaseAge === 16 || tenant.minPurchaseAge === 21
               ? tenant.minPurchaseAge
               : 18,
           affiliateCookieHours: tenant.affiliateCookieHours,
@@ -115,13 +112,11 @@ export default async function ConfiguracoesPage() {
           showAppButton: tenant.showAppButton,
           instantPrizesOrder: tenant.instantPrizesOrder,
           awardedSectionTitle: tenant.awardedSectionTitle,
-          showAwardedOnlyWhenDistributed:
-            tenant.showAwardedOnlyWhenDistributed,
+          showAwardedOnlyWhenDistributed: tenant.showAwardedOnlyWhenDistributed,
           showAwardedNumbers: tenant.showAwardedNumbers,
           showAwardedNumbersBoxes: tenant.showAwardedNumbersBoxes,
           showAwardedNumbersRoulette: tenant.showAwardedNumbersRoulette,
-          showAwardedNumbersScratchCard:
-            tenant.showAwardedNumbersScratchCard,
+          showAwardedNumbersScratchCard: tenant.showAwardedNumbersScratchCard,
           aggregateInstantAwards: tenant.aggregateInstantAwards,
           disableInstantAwardsRepeatWinners:
             tenant.disableInstantAwardsRepeatWinners,

@@ -5,6 +5,7 @@
 // Todos os toggles são client-side (server action via useTransition + toast).
 
 import Link from "next/link";
+import { Moldura } from "@/components/ui/moldura";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -50,7 +51,7 @@ const STATUSES = [
 ] as const;
 
 const STATUS_LABELS = Object.fromEntries(
-  STATUSES.map((s) => [s.value, s.label])
+  STATUSES.map((s) => [s.value, s.label]),
 );
 
 export interface RaffleCardData {
@@ -102,7 +103,7 @@ export function RaffleCard({
     100,
     raffle.totalNumbers > 0
       ? Math.round((raffle.soldTickets / raffle.totalNumbers) * 100)
-      : 0
+      : 0,
   );
 
   function alternarPrincipal() {
@@ -184,174 +185,175 @@ export function RaffleCard({
   function copyLink() {
     navigator.clipboard.writeText(publicUrl).then(
       () => toast.success("Link copiado"),
-      () => toast.error("Falha ao copiar link")
+      () => toast.error("Falha ao copiar link"),
     );
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex flex-col lg:flex-row gap-4">
-        {/* Thumb + info */}
-        <div className="flex gap-3 min-w-0 flex-1">
-          <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border">
-            {raffle.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={raffle.coverUrl}
-                alt={raffle.title}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                <TicketCheck className="h-7 w-7 opacity-40" />
+    <Moldura>
+      <div className="p-4 transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.02]">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Thumb + info */}
+          <div className="flex gap-3 min-w-0 flex-1">
+            <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border">
+              {raffle.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={raffle.coverUrl}
+                  alt={raffle.title}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                  <TicketCheck className="h-7 w-7 opacity-40" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-sm leading-snug line-clamp-2">
+                {raffle.title}
+              </p>
+              <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+                <div>
+                  Sorteio:{" "}
+                  {raffle.drawDate ? formatDateTime(raffle.drawDate) : "-"}
+                </div>
+                <div>Cadastro: {formatDate(raffle.createdAt)}</div>
               </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm leading-snug line-clamp-2">
-              {raffle.title}
-            </p>
-            <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground tabular-nums">
-              <div>
-                Sorteio:{" "}
-                {raffle.drawDate ? formatDateTime(raffle.drawDate) : "-"}
-              </div>
-              <div>Cadastro: {formatDate(raffle.createdAt)}</div>
             </div>
           </div>
-        </div>
 
-        {/* Status */}
-        <div className="flex items-center">
-          <Select
-            value={status}
-            onValueChange={changeStatus}
-            disabled={isPending}
-          >
-            <SelectTrigger className="w-full lg:w-36 h-9">
-              <SelectValue labels={STATUS_LABELS} />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUSES.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          {/* Status */}
+          <div className="flex items-center">
+            <Select
+              value={status}
+              onValueChange={changeStatus}
+              disabled={isPending}
+            >
+              <SelectTrigger className="w-full lg:w-36 h-9">
+                <SelectValue labels={STATUS_LABELS} />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Ações */}
-        <div className="flex items-center gap-1 flex-wrap">
-          {/* Subir e descer no lugar de arrastar: a lista é paginada e o
+          {/* Ações */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {/* Subir e descer no lugar de arrastar: a lista é paginada e o
               painel é usado no telefone, onde arrastar item de lista disputa
               com a rolagem da página. Dois botões resolvem o mesmo e
               funcionam pelo teclado. */}
-          <IconAction
-            label="Subir na vitrine"
-            onClick={() => mover("cima")}
-            disabled={isPending}
-          >
-            <ChevronUp className="h-4 w-4" />
-          </IconAction>
-          <IconAction
-            label="Descer na vitrine"
-            onClick={() => mover("baixo")}
-            disabled={isPending}
-          >
-            <ChevronDown className="h-4 w-4" />
-          </IconAction>
+            <IconAction
+              label="Subir na vitrine"
+              onClick={() => mover("cima")}
+              disabled={isPending}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </IconAction>
+            <IconAction
+              label="Descer na vitrine"
+              onClick={() => mover("baixo")}
+              disabled={isPending}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </IconAction>
 
-          {/* A principal é uma só no site inteiro, então o ícone é diferente
+            {/* A principal é uma só no site inteiro, então o ícone é diferente
               do destaque na home: coroa é "a maior", estrela é "aparece lá". */}
-          <IconAction
-            label={
-              principal
-                ? "Deixar de ser a principal"
-                : "Tornar a campanha principal do site"
-            }
-            onClick={alternarPrincipal}
-            active={principal}
-            disabled={isPending}
-          >
-            <Crown
-              className={cn("h-4 w-4", principal && "fill-primary text-primary")}
-            />
-          </IconAction>
+            <IconAction
+              label={
+                principal
+                  ? "Deixar de ser a principal"
+                  : "Tornar a campanha principal do site"
+              }
+              onClick={alternarPrincipal}
+              active={principal}
+              disabled={isPending}
+            >
+              <Crown
+                className={cn(
+                  "h-4 w-4",
+                  principal && "fill-primary text-primary",
+                )}
+              />
+            </IconAction>
 
-          <IconAction
-            label={highlight ? "Remover destaque" : "Destacar na home"}
-            onClick={toggleHighlight}
-            active={highlight}
-          >
-            <Star
-              className={cn(
-                "h-4 w-4",
-                highlight && "fill-primary text-primary"
+            <IconAction
+              label={highlight ? "Remover destaque" : "Destacar na home"}
+              onClick={toggleHighlight}
+              active={highlight}
+            >
+              <Star
+                className={cn(
+                  "h-4 w-4",
+                  highlight && "fill-primary text-primary",
+                )}
+              />
+            </IconAction>
+
+            <IconAction label="Copiar link" onClick={copyLink}>
+              <Copy className="h-4 w-4" />
+            </IconAction>
+
+            <IconLink
+              href={`/admin/sorteios/${raffle.id}/editar`}
+              label="Editar"
+            >
+              <Pencil className="h-4 w-4" />
+            </IconLink>
+
+            <IconAction
+              label="Duplicar sorteio"
+              onClick={duplicar}
+              disabled={duplicando}
+            >
+              {duplicando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CopyPlus className="h-4 w-4" />
               )}
-            />
-          </IconAction>
+            </IconAction>
 
-          <IconAction label="Copiar link" onClick={copyLink}>
-            <Copy className="h-4 w-4" />
-          </IconAction>
+            <IconLink href={publicUrl} label="Visualizar página" external>
+              <ExternalLink className="h-4 w-4" />
+            </IconLink>
 
-          <IconLink
-            href={`/admin/sorteios/${raffle.id}/editar`}
-            label="Editar"
-          >
-            <Pencil className="h-4 w-4" />
-          </IconLink>
+            <IconLink
+              href={`/admin/sorteios/${raffle.id}/campanha`}
+              label="Links de campanha"
+            >
+              <Link2 className="h-4 w-4" />
+            </IconLink>
 
-          <IconAction
-            label="Duplicar sorteio"
-            onClick={duplicar}
-            disabled={duplicando}
-          >
-            {duplicando ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CopyPlus className="h-4 w-4" />
-            )}
-          </IconAction>
+            <IconLink
+              href={`/admin/sorteios/${raffle.id}/sorteio`}
+              label="Sorteio ao vivo"
+            >
+              <Radio className="h-4 w-4" />
+            </IconLink>
 
-          <IconLink
-            href={publicUrl}
-            label="Visualizar página"
-            external
-          >
-            <ExternalLink className="h-4 w-4" />
-          </IconLink>
+            <IconLink
+              href={`/admin/sorteios/${raffle.id}/compras`}
+              label="Ver compras"
+              accent
+            >
+              <ShoppingCart className="h-4 w-4" />
+            </IconLink>
+          </div>
 
-          <IconLink
-            href={`/admin/sorteios/${raffle.id}/campanha`}
-            label="Links de campanha"
-          >
-            <Link2 className="h-4 w-4" />
-          </IconLink>
-
-          <IconLink
-            href={`/admin/sorteios/${raffle.id}/sorteio`}
-            label="Sorteio ao vivo"
-          >
-            <Radio className="h-4 w-4" />
-          </IconLink>
-
-          <IconLink
-            href={`/admin/sorteios/${raffle.id}/compras`}
-            label="Ver compras"
-            accent
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </IconLink>
-        </div>
-
-        {/* Ring de % vendido */}
-        <div className="flex items-center justify-end lg:justify-center lg:w-20 shrink-0">
-          <CircularProgress percent={soldPct} />
+          {/* Ring de % vendido */}
+          <div className="flex items-center justify-end lg:justify-center lg:w-20 shrink-0">
+            <CircularProgress percent={soldPct} />
+          </div>
         </div>
       </div>
-    </div>
+    </Moldura>
   );
 }
 
@@ -379,7 +381,7 @@ function IconAction({
       aria-label={label}
       className={cn(
         "h-9 w-9 text-muted-foreground hover:text-foreground",
-        active && "text-primary hover:text-primary"
+        active && "text-primary hover:text-primary",
       )}
     >
       {children}
@@ -402,7 +404,7 @@ function IconLink({
 }) {
   const className = cn(
     "h-9 w-9 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
-    accent && "text-primary hover:text-primary hover:bg-primary/10"
+    accent && "text-primary hover:text-primary hover:bg-primary/10",
   );
   if (external) {
     return (
@@ -431,11 +433,7 @@ function CircularProgress({ percent }: { percent: number }) {
   const offset = c - (percent / 100) * c;
   return (
     <div className="relative h-12 w-12" aria-label={`Compras ${percent}%`}>
-      <svg
-        viewBox="0 0 40 40"
-        className="h-full w-full -rotate-90"
-        aria-hidden
-      >
+      <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90" aria-hidden>
         <circle
           cx="20"
           cy="20"

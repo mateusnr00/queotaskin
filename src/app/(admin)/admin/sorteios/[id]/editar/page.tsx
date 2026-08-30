@@ -113,7 +113,7 @@ export default async function EditRafflePage({
     syncpay: Boolean(tenant.syncpayClientId && tenant.syncpayClientSecretEnc),
     codepay: Boolean(tenant.codepayClientId && tenant.codepayPasswordEnc),
     sigilopay: Boolean(
-      tenant.sigilopayClientId && tenant.sigilopayClientSecretEnc
+      tenant.sigilopayClientId && tenant.sigilopayClientSecretEnc,
     ),
     nexuspag: Boolean(tenant.nexuspagApiKeyEnc),
   };

@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, UserPlus } from "lucide-react";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { UserCreateForm } from "@/components/admin/user-create-form";
@@ -21,13 +22,17 @@ export default async function NovoUsuarioPage() {
       </Link>
 
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Nova conta
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Cadastre um cliente à mão ou dê acesso ao painel para alguém da
-          equipe.
-        </p>
+        <CabecalhoDeAdmin
+          etiqueta="Acessos"
+          icone={<UserPlus aria-hidden className="h-3 w-3" />}
+          titulo="Nova conta"
+          descricao="Cadastre um cliente à mão ou dê acesso ao painel para alguém da equipe."
+          migalha={[
+            { rotulo: "Admin", href: "/admin" },
+            { rotulo: "Usuários", href: "/admin/usuarios" },
+            { rotulo: "Nova conta" },
+          ]}
+        />
       </div>
 
       <UserCreateForm souDono={session.user.role === "SUPER_ADMIN"} />

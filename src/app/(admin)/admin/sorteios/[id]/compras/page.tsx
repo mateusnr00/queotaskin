@@ -9,16 +9,19 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { RaffleComprasView } from "@/components/admin/raffle-compras-view";
 import { raffleUrl } from "@/lib/raffle-url";
-import {
-  contarOcupados,
-  contarVendidos,
-} from "@/server/services/vendidos";
+import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
 
 export const metadata: Metadata = { title: "Lista de Compras" };
 
 const PAGE_SIZE = 5;
 
-type TabKey = "all" | "paid" | "pending" | "expired" | "cancelled" | "affiliates";
+type TabKey =
+  | "all"
+  | "paid"
+  | "pending"
+  | "expired"
+  | "cancelled"
+  | "affiliates";
 
 export default async function ComprasPage({
   params,
@@ -66,7 +69,9 @@ export default async function ComprasPage({
       status: true,
       openedAt: true,
       createdAt: true,
-      prize: { select: { id: true, title: true, prize: true, skinRarity: true } },
+      prize: {
+        select: { id: true, title: true, prize: true, skinRarity: true },
+      },
       reservation: {
         select: {
           participantName: true,

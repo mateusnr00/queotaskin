@@ -16,7 +16,10 @@ import {
 import { prisma } from "@/lib/db";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SalesChart, type SalesChartPoint } from "@/components/admin/sales-chart";
+import {
+  SalesChart,
+  type SalesChartPoint,
+} from "@/components/admin/sales-chart";
 import { formatBRL } from "@/lib/format";
 import { formatCpf, formatPhone } from "@/lib/cpf";
 import { cn } from "@/lib/utils";
@@ -49,7 +52,7 @@ function startOfTodayBrasilia(): Date {
 // Retorna array no formato esperado pelo SalesChart.
 function bucketize(
   reservations: { createdAt: Date; status: string }[],
-  now: Date
+  now: Date,
 ): SalesChartPoint[] {
   const points: SalesChartPoint[] = [];
   const labelFmt = new Intl.DateTimeFormat("pt-BR", {
@@ -61,7 +64,7 @@ function bucketize(
     const end = new Date(now.getTime() - i * 5 * 60_000);
     const start = new Date(end.getTime() - 5 * 60_000);
     const bucket = reservations.filter(
-      (r) => r.createdAt >= start && r.createdAt < end
+      (r) => r.createdAt >= start && r.createdAt < end,
     );
     points.push({
       label: labelFmt.format(end),
@@ -83,7 +86,9 @@ function comparacaoComOntem(hoje: number, ontem: number): string | undefined {
   if (ontem === 0) return hoje > 0 ? "primeiro dia com movimento" : undefined;
   const variacao = Math.round(((hoje - ontem) / ontem) * 100);
   if (variacao === 0) return "igual a hoje";
-  return variacao > 0 ? `hoje está ${variacao}% acima` : `hoje está ${Math.abs(variacao)}% abaixo`;
+  return variacao > 0
+    ? `hoje está ${variacao}% acima`
+    : `hoje está ${Math.abs(variacao)}% abaixo`;
 }
 
 export default async function AdminDashboardPage() {
@@ -226,8 +231,8 @@ export default async function AdminDashboardPage() {
             Olá, {firstName} <span aria-hidden>👋</span>
           </h1>
           <p className="mt-2 text-sm text-zinc-300 max-w-md leading-relaxed">
-            Visão geral da sua plataforma: vendas, reservas e clientes em
-            tempo real.
+            Visão geral da sua plataforma: vendas, reservas e clientes em tempo
+            real.
           </p>
           <div className="mt-5 flex gap-2 flex-wrap">
             <Link
@@ -323,7 +328,9 @@ export default async function AdminDashboardPage() {
         <Card className="p-5">
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="font-semibold">Top 5 Compradores</h2>
-            <span className="text-xs text-muted-foreground">por valor pago</span>
+            <span className="text-xs text-muted-foreground">
+              por valor pago
+            </span>
           </div>
           {topBuyers.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
@@ -333,13 +340,11 @@ export default async function AdminDashboardPage() {
             <ul className="space-y-3">
               {topBuyers.map((b) => {
                 const phone = b.phone?.replace(/\D/g, "") ?? "";
-                const wa = phone.length >= 10 ? `https://wa.me/55${phone}` : null;
+                const wa =
+                  phone.length >= 10 ? `https://wa.me/55${phone}` : null;
                 const initial = b.name.charAt(0).toUpperCase();
                 return (
-                  <li
-                    key={b.cpf}
-                    className="flex items-center gap-3"
-                  >
+                  <li key={b.cpf} className="flex items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-foreground">
                       {initial}
                     </span>
@@ -395,10 +400,7 @@ function KpiCard({
 }) {
   return (
     <Card
-      className={cn(
-        "relative overflow-hidden p-5 bg-gradient-to-br",
-        accent
-      )}
+      className={cn("relative overflow-hidden p-5 bg-gradient-to-br", accent)}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -415,7 +417,7 @@ function KpiCard({
         <div
           className={cn(
             "flex h-11 w-11 items-center justify-center rounded-xl shrink-0",
-            iconBg
+            iconBg,
           )}
         >
           <Icon className="h-5 w-5" />

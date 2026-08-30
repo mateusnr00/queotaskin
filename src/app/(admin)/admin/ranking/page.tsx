@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Moldura, Placa } from "@/components/ui/moldura";
+import { MessageCircle, Sparkles, Trophy, Users, Wallet } from "lucide-react";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import { ChevronRight, MessageCircle } from "lucide-react";
 
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
@@ -9,7 +11,6 @@ import { leaderboard } from "@/server/services/xp";
 import { whatsappLink } from "@/server/services/customers";
 import { RankBadge } from "@/components/rank/rank-badge";
 import { rankFromXp } from "@/lib/rank";
-import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -44,36 +45,44 @@ export default async function AdminRankingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Ranking</h1>
-          <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Link href="/admin" className="hover:text-foreground">
-              Admin
-            </Link>
-            <ChevronRight className="h-3 w-3" />
-            <span>Ranking</span>
-          </nav>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          R$ 1 pago = {settings?.xpPerBrl ?? 10} XP
-          {settings?.rankEnabled === false && (
-            <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-500">
-              rank desligado
-            </span>
-          )}
-        </p>
-      </div>
+      <CabecalhoDeAdmin
+        etiqueta="Progressão"
+        icone={<Trophy aria-hidden className="h-3 w-3" />}
+        titulo="Ranking"
+        migalha={[{ rotulo: "Admin", href: "/admin" }, { rotulo: "Ranking" }]}
+        acoes={
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            R$ 1 pago = {settings?.xpPerBrl ?? 10} XP
+            {settings?.rankEnabled === false && (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-500">
+                rank desligado
+              </span>
+            )}
+          </p>
+        }
+      />
 
       {rows.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <Stat label="Participantes ranqueados" value={rows.length.toLocaleString("pt-BR")} />
-          <Stat label="XP distribuído" value={totalXp.toLocaleString("pt-BR")} />
-          <Stat label="Receita dos ranqueados" value={formatBRL(totalSpent)} />
+          <Stat
+            icone={<Users className="h-3.5 w-3.5" />}
+            label="Participantes ranqueados"
+            value={rows.length.toLocaleString("pt-BR")}
+          />
+          <Stat
+            icone={<Sparkles className="h-3.5 w-3.5" />}
+            label="XP distribuído"
+            value={totalXp.toLocaleString("pt-BR")}
+          />
+          <Stat
+            icone={<Wallet className="h-3.5 w-3.5" />}
+            label="Receita dos ranqueados"
+            value={formatBRL(totalSpent)}
+          />
         </div>
       )}
 
-      <Card className="overflow-hidden p-0">
+      <Moldura>
         <Table>
           <TableHeader>
             <TableRow>
@@ -119,7 +128,9 @@ export default async function AdminRankingPage() {
                     <TableCell>
                       <span className="flex items-center gap-2">
                         <RankBadge rank={rank} size="sm" />
-                        <span className="text-xs font-semibold">{rank.tierName}</span>
+                        <span className="text-xs font-semibold">
+                          {rank.tierName}
+                        </span>
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
@@ -132,7 +143,9 @@ export default async function AdminRankingPage() {
                       {row.paidReservations}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {row.lastPurchaseAt ? formatDate(row.lastPurchaseAt) : "-"}
+                      {row.lastPurchaseAt
+                        ? formatDate(row.lastPurchaseAt)
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       {/* O contato fica aqui e só aqui: é a lista de quem
@@ -157,7 +170,7 @@ export default async function AdminRankingPage() {
             )}
           </TableBody>
         </Table>
-      </Card>
+      </Moldura>
 
       {rows.length === 100 && (
         <p className="text-center text-xs text-muted-foreground">
@@ -168,13 +181,14 @@ export default async function AdminRankingPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="p-4">
-      <p className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p className="font-mono text-xl font-bold tabular-nums">{value}</p>
-    </Card>
-  );
+function Stat({
+  label,
+  value,
+  icone,
+}: {
+  label: string;
+  value: string;
+  icone: React.ReactNode;
+}) {
+  return <Placa rotulo={label} valor={value} icone={icone} />;
 }

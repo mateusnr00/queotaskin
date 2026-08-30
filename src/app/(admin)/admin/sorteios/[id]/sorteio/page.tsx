@@ -33,11 +33,14 @@ function quando(data: Date | null): string {
 }
 
 const COR_DO_STATUS: Record<string, string> = {
-  WAITING_DRAW: "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300",
-  COUNTDOWN: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300",
+  WAITING_DRAW:
+    "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300",
+  COUNTDOWN:
+    "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300",
   DRAWING: "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300",
   REVEALING: "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300",
-  FINISHED: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+  FINISHED:
+    "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
   ERROR: "border-red-500/40 bg-red-500/15 text-red-600 dark:text-red-300",
 };
 
@@ -87,8 +90,8 @@ export default async function SorteioDaCampanhaPage({
               Sorteio ao vivo
             </h1>
             <p className="text-sm text-muted-foreground">
-              O resultado é definido pelo sistema, sozinho, assim que a
-              campanha encerra. Esta tela acompanha; ela não decide.
+              O resultado é definido pelo sistema, sozinho, assim que a campanha
+              encerra. Esta tela acompanha; ela não decide.
             </p>
           </div>
         </div>
@@ -102,9 +105,9 @@ export default async function SorteioDaCampanhaPage({
             </span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            O sorteio é criado sozinho quando a campanha encerra, e a partir
-            daí ninguém consegue mudar o resultado. Encerra quando todos os
-            títulos forem vendidos
+            O sorteio é criado sozinho quando a campanha encerra, e a partir daí
+            ninguém consegue mudar o resultado. Encerra quando todos os títulos
+            forem vendidos
             {raffle.autoCloseOnDraw && raffle.drawDate
               ? `, ou na data marcada (${quando(raffle.drawDate)})`
               : ""}
@@ -162,11 +165,23 @@ export default async function SorteioDaCampanhaPage({
             )}
 
             <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Campo rotulo="Campanha encerrada em" valor={quando(draw.raffleEndedAt)} />
-              <Campo rotulo="Contagem começa" valor={quando(draw.drawScheduledAt)} />
+              <Campo
+                rotulo="Campanha encerrada em"
+                valor={quando(draw.raffleEndedAt)}
+              />
+              <Campo
+                rotulo="Contagem começa"
+                valor={quando(draw.drawScheduledAt)}
+              />
               <Campo rotulo="Sorteio às" valor={quando(draw.drawStartsAt)} />
-              <Campo rotulo="Contagem observada" valor={quando(draw.countdownStartedAt)} />
-              <Campo rotulo="Número escolhido em" valor={quando(draw.drawExecutedAt)} />
+              <Campo
+                rotulo="Contagem observada"
+                valor={quando(draw.countdownStartedAt)}
+              />
+              <Campo
+                rotulo="Número escolhido em"
+                valor={quando(draw.drawExecutedAt)}
+              />
               <Campo rotulo="Finalizado em" valor={quando(draw.finishedAt)} />
             </dl>
           </section>
@@ -198,14 +213,23 @@ export default async function SorteioDaCampanhaPage({
                     valor={draw.eligibleTicketCount.toLocaleString("pt-BR")}
                   />
                   <Campo rotulo="Método" valor={draw.rngMethod} />
-                  <Campo rotulo="Versão do motor" valor={String(draw.drawVersion)} />
+                  <Campo
+                    rotulo="Versão do motor"
+                    valor={String(draw.drawVersion)}
+                  />
                 </dl>
                 {/* A prova, na íntegra. O painel vê tudo, inclusive o que
                     só vira público na revelação: é aqui que a equipe confere
                     um sorteio que alguém questionou. */}
                 <div className="mt-3 space-y-2">
-                  <Prova rotulo="Chave travada (SHA-256)" valor={draw.serverSeedHash} />
-                  <Prova rotulo="Lista de títulos (SHA-256)" valor={draw.clientSeed} />
+                  <Prova
+                    rotulo="Chave travada (SHA-256)"
+                    valor={draw.serverSeedHash}
+                  />
+                  <Prova
+                    rotulo="Lista de títulos (SHA-256)"
+                    valor={draw.clientSeed}
+                  />
                   <Prova rotulo="Cálculo (HMAC-SHA256)" valor={draw.hmacHex} />
                   <Prova
                     rotulo="Posição sorteada"

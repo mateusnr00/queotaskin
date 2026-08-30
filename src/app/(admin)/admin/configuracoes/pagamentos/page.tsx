@@ -1,6 +1,6 @@
-import Link from "next/link";
+import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+import { CreditCard } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -54,20 +54,16 @@ export default async function PagamentosPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          Pagamentos
-        </h1>
-        <nav className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Link href="/admin" className="hover:text-foreground">
-            Admin
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link href="/admin/configuracoes" className="hover:text-foreground">
-            Configurações
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span>Pagamentos</span>
-        </nav>
+        <CabecalhoDeAdmin
+          etiqueta="Ajustes"
+          icone={<CreditCard aria-hidden className="h-3 w-3" />}
+          titulo="Pagamentos"
+          migalha={[
+            { rotulo: "Admin", href: "/admin" },
+            { rotulo: "Configurações", href: "/admin/configuracoes" },
+            { rotulo: "Pagamentos" },
+          ]}
+        />
       </div>
 
       <PaymentSettingsForm
@@ -87,11 +83,11 @@ export default async function PagamentosPage() {
           codepayPasswordConfigured: Boolean(tenant.codepayPasswordEnc),
           sigilopayClientId: tenant.sigilopayClientId ?? "",
           sigilopayClientSecretConfigured: Boolean(
-            tenant.sigilopayClientSecretEnc
+            tenant.sigilopayClientSecretEnc,
           ),
           nexuspagApiKeyConfigured: Boolean(tenant.nexuspagApiKeyEnc),
           nexuspagWebhookSecretConfigured: Boolean(
-            tenant.nexuspagWebhookSecretEnc
+            tenant.nexuspagWebhookSecretEnc,
           ),
         }}
         webhookUrls={{
