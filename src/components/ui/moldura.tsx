@@ -62,7 +62,13 @@ export function Etiqueta({
 }
 
 /** O tom de cada placa. O número manda na cor, e a cor avisa antes da leitura. */
-export type TomDaPlaca = "neutro" | "alerta" | "bom" | "ruim" | "custo";
+export type TomDaPlaca =
+  | "neutro"
+  | "alerta"
+  | "bom"
+  | "ruim"
+  | "custo"
+  | "marca";
 
 const TOM: Record<TomDaPlaca, { caixa: string; valor: string }> = {
   neutro: { caixa: "border-white/10 bg-white/[0.03]", valor: "" },
@@ -81,6 +87,11 @@ const TOM: Record<TomDaPlaca, { caixa: string; valor: string }> = {
   custo: {
     caixa: "border-amber-500/25 bg-amber-500/[0.05]",
     valor: "text-amber-400",
+  },
+  /** Métrica que é boa notícia sem ser dinheiro: recorrência, crescimento. */
+  marca: {
+    caixa: "border-primary/30 bg-primary/[0.06]",
+    valor: "text-primary",
   },
 };
 
