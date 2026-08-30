@@ -7,6 +7,8 @@ export interface Delivery {
   raffleSlug: string;
   raffleTitle: string;
   ticketNumber: number;
+  /** Quantos títulos a campanha tem. Decide as casas do número exibido. */
+  totalNumbers: number;
   drawnAt: Date | null;
   note: string | null;
   /** Quando a skin saiu. Nulo é pendente: ver a nota no schema. */
@@ -99,6 +101,7 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       raffleSlug: raffle.slug,
       raffleTitle: raffle.title,
       ticketNumber: raffle.winnerTicketNumber!,
+      totalNumbers: raffle.totalNumbers,
       drawnAt: raffle.winnerDrawnAt,
       note: raffle.winnerNote,
       deliveredAt: raffle.deliveredAt,
