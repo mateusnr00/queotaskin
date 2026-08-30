@@ -29,6 +29,8 @@ import {
   ExternalLink,
   Info,
   PackageCheck,
+  Search,
+  Truck,
 } from "lucide-react";
 
 import {
@@ -56,6 +58,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { BORDA_DE_AUTH } from "@/components/auth/cartao-de-auth";
 import { semAcento } from "@/lib/busca";
 import { formatDateTime } from "@/lib/format";
 import { lerReais } from "@/lib/dinheiro";
@@ -75,11 +78,7 @@ import {
   type EstadoDoPrazo,
 } from "@/lib/prazo";
 import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
-import {
-  ESTADOS_DA_ENTREGA,
-  estadoDaEntrega,
-  pendente,
-} from "@/lib/entrega";
+import { ESTADOS_DA_ENTREGA, estadoDaEntrega, pendente } from "@/lib/entrega";
 import {
   marcarEntregaAction,
   salvarCustoDaEntregaAction,
@@ -166,31 +165,67 @@ export function TabelaDeEntregas({
     });
   }, [entregas, filtro, busca]);
 
+  // Quantas estouraram o prazo. É o número que decide o que fazer primeiro, e
+  // ele não existia em lugar nenhum da tela: dava para ter cinco atrasadas e a
+  // página só dizer "cinco pendentes".
+  const atrasadas = agora
+    ? entregas.filter(
+        (e) =>
+          situacaoDoPrazo(e.drawnAt, e.deliveredAt, agora)?.estado ===
+          "atrasada",
+      ).length
+    : 0;
+
   return (
-    <div className="space-y-4">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Entregas
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">
-            {qtdPendentes} pendente{qtdPendentes === 1 ? "" : "s"}
-          </span>{" "}
-          de {entregas.length}.
-          {gastoEmYuan > 0 && (
-            <>
-              {" "}
-              <span className="font-semibold text-foreground">
-                {gasto == null ? formatarMoeda(gastoEmYuan, "CNY") : formatarMoeda(gasto, moeda)}
-              </span>{" "}
-              gastos com fornecedor.
-            </>
-          )}
-        </p>
+    <div className="space-y-5">
+      <header className="space-y-4">
+        <div>
+          {/* Etiqueta antes do título: diz de que parte do painel isto é, sem
+              gastar uma linha de texto explicando. */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-bold tracking-[0.18em] text-red-400 uppercase">
+            <Truck aria-hidden className="h-3 w-3" />
+            Operação
+          </span>
+          <h1 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
+            Entregas
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ganhador, skin e link de troca de cada campanha sorteada.
+          </p>
+        </div>
+
+        {/* Três números, em placas. Eram uma frase corrida, e frase não se lê
+            de relance: quem abre esta tela quer saber quanto falta, quanto
+            atrasou e quanto saiu do caixa, nessa ordem. */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Placa
+            rotulo="Pendentes"
+            valor={String(qtdPendentes)}
+            nota={`de ${entregas.length}`}
+            icone={<PackageCheck className="h-3.5 w-3.5" />}
+          />
+          <Placa
+            rotulo="Atrasadas"
+            valor={String(atrasadas)}
+            nota={`prazo de ${PRAZO_DE_ENTREGA_HORAS}h`}
+            icone={<AlertTriangle className="h-3.5 w-3.5" />}
+            alerta={atrasadas > 0}
+          />
+          <Placa
+            rotulo="Custo total"
+            valor={
+              gasto == null
+                ? formatarMoeda(gastoEmYuan, "CNY")
+                : formatarMoeda(gasto, moeda)
+            }
+            nota="com fornecedor"
+            icone={<Coins className="h-3.5 w-3.5" />}
+          />
+        </div>
       </header>
 
       {semLink > 0 && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           <p className="text-amber-700 dark:text-amber-300">
             {semLink} entrega{semLink === 1 ? "" : "s"} pendente
@@ -201,54 +236,71 @@ export function TabelaDeEntregas({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={filtro} onValueChange={(v) => setFiltro(v ?? TODOS)}>
-          <SelectTrigger className="h-9 w-full sm:w-48" aria-label="Filtrar por status">
-            {/* O rótulo é escrito aqui, e não deixado para o componente: sem
-                isto ele mostra o VALOR cru ("TODOS", "PRIORIDADE"), que é como
-                o código chama o estado, não como a pessoa chama. */}
-            <SelectValue>{rotuloDoFiltro(filtro)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={PENDENTES}>Pendentes</SelectItem>
-            <SelectItem value={TODOS}>Todos os status</SelectItem>
-            {ESTADOS_DA_ENTREGA.map((e) => (
-              <SelectItem key={e.chave} value={e.chave}>
-                <Ponto cor={e.cor} />
-                {e.rotulo}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por skin, ganhador, campanha ou título"
-          aria-label="Buscar entrega"
-          className="h-9 w-full sm:max-w-sm"
-        />
+      {/* A barra de controles vive dentro da mesma moldura dupla do resto,
+          em vez de flutuar solta sobre o fundo. */}
+      <Moldura>
+        <div className="flex flex-wrap items-center gap-2 p-2.5">
+          <Select value={filtro} onValueChange={(v) => setFiltro(v ?? TODOS)}>
+            <SelectTrigger
+              className="h-9 w-full sm:w-48"
+              aria-label="Filtrar por status"
+            >
+              {/* O rótulo é escrito aqui, e não deixado para o componente: sem
+                  isto ele mostra o VALOR cru ("TODOS", "PRIORIDADE"), que é
+                  como o código chama o estado, não como a pessoa chama. */}
+              <SelectValue>{rotuloDoFiltro(filtro)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PENDENTES}>Pendentes</SelectItem>
+              <SelectItem value={TODOS}>Todos os status</SelectItem>
+              {ESTADOS_DA_ENTREGA.map((e) => (
+                <SelectItem key={e.chave} value={e.chave}>
+                  <Ponto cor={e.cor} />
+                  {e.rotulo}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        {/* A moeda, num clique. Yuan, real, dólar, e volta. */}
-        <button
-          type="button"
-          onClick={() => setMoeda(proximaMoeda(moeda))}
-          title="Trocar a moeda dos custos"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition-colors hover:bg-muted"
-        >
-          <Coins className="h-3.5 w-3.5 text-muted-foreground" />
-          {SIMBOLO[moeda]} {moeda}
-        </button>
+          {/* No celular a busca ocupa a linha inteira: dividida com os dois
+              botões, ela sobrava com uns quatro centímetros e o texto de
+              exemplo era cortado no meio da palavra. */}
+          <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por skin, ganhador, campanha ou título"
+              aria-label="Buscar entrega"
+              className="h-9 w-full pl-8"
+            />
+          </div>
 
-        <DialogDeTaxas taxas={taxas} />
-      </div>
+          {/* A moeda, num clique. Yuan, real, dólar, e volta. */}
+          <button
+            type="button"
+            onClick={() => setMoeda(proximaMoeda(moeda))}
+            title="Trocar a moeda dos custos"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3.5 text-xs font-bold transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.07] active:scale-[0.97]"
+          >
+            <Coins className="h-3.5 w-3.5 text-muted-foreground" />
+            {SIMBOLO[moeda]} {moeda}
+          </button>
+
+          <DialogDeTaxas taxas={taxas} />
+        </div>
+      </Moldura>
 
       {/* Sem taxa cadastrada não há como converter, e a tela diz isso em vez
           de mostrar um número inventado. */}
       {moeda !== "CNY" && gasto == null && (
-        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+        <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           Cadastre a taxa de câmbio em Taxas para ver os custos em{" "}
-          {moeda === "BRL" ? "real" : "dólar"}. Sem ela, os valores continuam
-          em yuan.
+          {moeda === "BRL" ? "real" : "dólar"}. Sem ela, os valores continuam em
+          yuan.
         </p>
       )}
 
@@ -265,38 +317,122 @@ export function TabelaDeEntregas({
         {visiveis.length === 0 && <Vazio total={entregas.length} />}
       </div>
 
-      <div className="hidden overflow-hidden rounded-xl border bg-card sm:block">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[260px]">Skin</TableHead>
-                <TableHead className="min-w-[120px]">Link de troca</TableHead>
-                <TableHead className="min-w-[130px] text-right">
-                  Custo ({moeda})
-                </TableHead>
-                <TableHead className="min-w-[150px]">Sorteado</TableHead>
-                <TableHead className="min-w-[170px]">Enviado</TableHead>
-                <TableHead className="sticky right-0 min-w-[190px] bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
-                  Status
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visiveis.map((e) => (
-                <Linha
-                  key={e.raffleId}
-                  entrega={e}
-                  moeda={moeda}
-                  taxas={taxas}
-                  agora={agora}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        {visiveis.length === 0 && <Vazio total={entregas.length} />}
+      <div className="hidden sm:block">
+        <Moldura>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="min-w-[260px]">Skin</TableHead>
+                  <TableHead className="min-w-[120px]">Link de troca</TableHead>
+                  <TableHead className="min-w-[130px] text-right">
+                    Custo ({moeda})
+                  </TableHead>
+                  <TableHead className="min-w-[150px]">Sorteado</TableHead>
+                  <TableHead className="min-w-[170px]">Enviado</TableHead>
+                  <TableHead className="sticky right-0 min-w-[190px] bg-[#0e1013] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.8)]">
+                    Status
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visiveis.map((e) => (
+                  <Linha
+                    key={e.raffleId}
+                    entrega={e}
+                    moeda={moeda}
+                    taxas={taxas}
+                    agora={agora}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {visiveis.length === 0 && <Vazio total={entregas.length} dentro />}
+        </Moldura>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A moldura dupla, a mesma do cartão de criar conta e dos painéis do sorteio.
+ *
+ * Casca de fora com a borda em gradiente por background-clip, miolo com raio
+ * calculado a partir do de fora, para os dois arcos serem concêntricos, e um
+ * fio de luz na aresta superior do miolo.
+ *
+ * SEM o halo vermelho do cartão de auth, e isso é decisão, não esquecimento.
+ * Lá existe UM cartão focal no meio da tela, e o brilho o destaca. Aqui são
+ * três molduras empilhadas, mais uma por linha no celular: o mesmo halo
+ * repetido vira um borrão vermelho atrás de tudo, e o que destacaria tudo não
+ * destaca nada. A borda em gradiente já carrega a identidade sozinha.
+ *
+ * Existe como componente porque a tela tem três dessas: a barra de controles,
+ * a tabela e cada cartão do celular. Três cópias do mesmo desenho é como duas
+ * delas divergem no primeiro ajuste.
+ */
+function Moldura({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-[1.75rem] border border-transparent p-1.5",
+        className,
+      )}
+      style={BORDA_DE_AUTH}
+    >
+      <div className="overflow-hidden rounded-[1.375rem] bg-[#0e1013] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Um número em placa, com rótulo pequeno em cima. */
+function Placa({
+  rotulo,
+  valor,
+  nota,
+  icone,
+  alerta,
+}: {
+  rotulo: string;
+  valor: string;
+  nota: string;
+  icone: React.ReactNode;
+  alerta?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3",
+        alerta && "border-red-500/40 bg-red-500/[0.07]",
+      )}
+    >
+      <p
+        className={cn(
+          "flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase",
+          alerta && "text-red-400",
+        )}
+      >
+        {icone}
+        {rotulo}
+      </p>
+      <p
+        className={cn(
+          "mt-1 text-2xl font-black tabular-nums",
+          alerta && "text-red-400",
+        )}
+      >
+        {valor}
+      </p>
+      <p className="text-[11px] text-muted-foreground">{nota}</p>
     </div>
   );
 }
@@ -309,11 +445,13 @@ export function TabelaDeEntregas({
  */
 const COR_DO_PRAZO: Record<EstadoDoPrazo, string> = {
   no_prazo: "border-white/15 text-muted-foreground",
-  perto: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  perto:
+    "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
   atrasada: "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400",
   cumprida:
     "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  estourada: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  estourada:
+    "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
 };
 
 function SeloDoPrazo({
@@ -343,14 +481,29 @@ function SeloDoPrazo({
   );
 }
 
-function Vazio({ total }: { total: number }) {
-  return (
-    <p className="rounded-xl border bg-card px-4 py-12 text-center text-sm text-muted-foreground sm:border-0">
-      {total === 0
-        ? "Nenhuma campanha sorteada ainda."
-        : "Nada aqui com esse filtro."}
-    </p>
+function Vazio({ total, dentro }: { total: number; dentro?: boolean }) {
+  const corpo = (
+    <div className="px-4 py-14 text-center">
+      <PackageCheck
+        aria-hidden
+        className="mx-auto h-8 w-8 text-muted-foreground/30"
+        strokeWidth={1.5}
+      />
+      <p className="mt-3 text-sm font-semibold">
+        {total === 0
+          ? "Nenhuma campanha sorteada ainda."
+          : "Nada com esse filtro."}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {total === 0
+          ? "Quando um sorteio terminar, a entrega aparece aqui."
+          : "Troque o status ou limpe a busca."}
+      </p>
+    </div>
   );
+  // Dentro da tabela ele já está numa moldura; solto no celular precisa da
+  // dele, senão fica um texto boiando no fundo da página.
+  return dentro ? corpo : <Moldura>{corpo}</Moldura>;
 }
 
 function Ponto({ cor }: { cor: string }) {
@@ -380,7 +533,12 @@ function Linha({
   // de composição própria, e dentro dela `position: sticky` para de funcionar,
   // o que quebraria a coluna de status. Ela recua pela cor do texto.
   return (
-    <TableRow className={cn(!pendente(entrega.status) && "text-muted-foreground")}>
+    <TableRow
+      className={cn(
+        "border-white/[0.06] transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.03]",
+        !pendente(entrega.status) && "text-muted-foreground",
+      )}
+    >
       <TableCell>
         <div className="flex items-center gap-2.5">
           <Miniatura premio={premio} />
@@ -428,7 +586,7 @@ function Linha({
         <SeloDoPrazo entrega={entrega} agora={agora} />
       </TableCell>
 
-      <TableCell className="sticky right-0 bg-card shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.6)]">
+      <TableCell className="sticky right-0 bg-[#0e1013] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.8)]">
         <SeletorDeStatus entrega={entrega} />
       </TableCell>
     </TableRow>
@@ -450,65 +608,67 @@ function Cartao({
   const estado = estadoDaEntrega(entrega.status);
 
   return (
-    <article className="space-y-3 rounded-xl border bg-card p-3">
-      <div className="flex items-start gap-2.5">
-        <Miniatura premio={premio} grande />
-        <div className="min-w-0 flex-1">
-          <p className="flex items-start gap-1">
-            <span
-              className="min-w-0 text-sm font-bold leading-snug"
-              style={
-                premio?.skinRarity
-                  ? { color: RARITY_TEXT_VAR[premio.skinRarity] }
-                  : undefined
-              }
-            >
-              {nomeDaSkin(entrega)}
-            </span>
-            <BotaoDeCopia
-              valor={nomeDaSkin(entrega)}
-              rotulo="Copiar nome da skin"
-            />
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {premio?.skinWear && (
-              <span className="mr-1.5 rounded border px-1 py-px text-[10px] font-semibold">
-                {WEAR_SHORT[premio.skinWear]}
+    <Moldura>
+      <article className="space-y-3 p-3.5">
+        <div className="flex items-start gap-2.5">
+          <Miniatura premio={premio} grande />
+          <div className="min-w-0 flex-1">
+            <p className="flex items-start gap-1">
+              <span
+                className="min-w-0 text-sm font-bold leading-snug"
+                style={
+                  premio?.skinRarity
+                    ? { color: RARITY_TEXT_VAR[premio.skinRarity] }
+                    : undefined
+                }
+              >
+                {nomeDaSkin(entrega)}
               </span>
-            )}
-            Sorteada {formatDateTime(entrega.drawnAt)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {entrega.deliveredAt
-              ? `Enviada ${formatDateTime(entrega.deliveredAt)}`
-              : "Ainda não enviada"}
-          </p>
-          <SeloDoPrazo entrega={entrega} agora={agora} />
+              <BotaoDeCopia
+                valor={nomeDaSkin(entrega)}
+                rotulo="Copiar nome da skin"
+              />
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {premio?.skinWear && (
+                <span className="mr-1.5 rounded border px-1 py-px text-[10px] font-semibold">
+                  {WEAR_SHORT[premio.skinWear]}
+                </span>
+              )}
+              Sorteada {formatDateTime(entrega.drawnAt)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {entrega.deliveredAt
+                ? `Enviada ${formatDateTime(entrega.deliveredAt)}`
+                : "Ainda não enviada"}
+            </p>
+            <SeloDoPrazo entrega={entrega} agora={agora} />
+          </div>
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+            style={{ backgroundColor: `${estado.cor}22`, color: estado.cor }}
+          >
+            {estado.rotulo}
+          </span>
         </div>
-        <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
-          style={{ backgroundColor: `${estado.cor}22`, color: estado.cor }}
-        >
-          {estado.rotulo}
-        </span>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <LinkDeTroca entrega={entrega} comRotulo />
-        <FichaDoGanhador entrega={entrega} comRotulo />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Custo</span>
-        <div className="w-32">
-          <CampoDeCusto entrega={entrega} moeda={moeda} taxas={taxas} />
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.02] p-1">
+          <LinkDeTroca entrega={entrega} comRotulo />
+          <FichaDoGanhador entrega={entrega} comRotulo />
         </div>
-      </div>
 
-      <div className="border-t pt-2.5">
-        <SeletorDeStatus entrega={entrega} />
-      </div>
-    </article>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Custo</span>
+          <div className="w-32">
+            <CampoDeCusto entrega={entrega} moeda={moeda} taxas={taxas} />
+          </div>
+        </div>
+
+        <div className="border-t border-white/[0.08] pt-2.5">
+          <SeletorDeStatus entrega={entrega} />
+        </div>
+      </article>
+    </Moldura>
   );
 }
 
@@ -522,7 +682,7 @@ function Miniatura({
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40",
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]",
         grande ? "h-12 w-12" : "h-10 w-10",
       )}
     >
@@ -568,7 +728,11 @@ function LinkDeTroca({
         )}
       >
         <ExternalLink className="h-3.5 w-3.5" />
-        {comRotulo ? "Abrir na Steam" : <span className="sr-only">Abrir na Steam</span>}
+        {comRotulo ? (
+          "Abrir na Steam"
+        ) : (
+          <span className="sr-only">Abrir na Steam</span>
+        )}
       </a>
     </div>
   );
@@ -599,7 +763,11 @@ function FichaDoGanhador({
         )}
       >
         <Info className="h-3.5 w-3.5" />
-        {comRotulo ? "Ganhador" : <span className="sr-only">Dados do ganhador</span>}
+        {comRotulo ? (
+          "Ganhador"
+        ) : (
+          <span className="sr-only">Dados do ganhador</span>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
@@ -778,10 +946,8 @@ function CampoDeCusto({
   // yuan em vez de exibir vazio, que pareceria "custo não anotado".
   const podeConverter = emYuan == null || deYuan(emYuan, moeda, taxas) != null;
   const moedaDoCampo: Moeda = podeConverter ? moeda : "CNY";
-  const naMoeda =
-    emYuan == null ? null : deYuan(emYuan, moedaDoCampo, taxas);
-  const comoTexto =
-    naMoeda == null ? "" : naMoeda.toFixed(2).replace(".", ",");
+  const naMoeda = emYuan == null ? null : deYuan(emYuan, moedaDoCampo, taxas);
+  const comoTexto = naMoeda == null ? "" : naMoeda.toFixed(2).replace(".", ",");
 
   const [texto, setTexto] = useState(comoTexto);
   const [salvando, setSalvando] = useState(false);
