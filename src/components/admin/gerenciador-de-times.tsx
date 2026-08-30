@@ -43,6 +43,8 @@ interface Rascunho {
   regiao: RegiaoDoTime;
   ordem: number;
   ativo: boolean;
+  /** URL do escudo. Colar o link evita baixar e subir de novo. */
+  escudo: string;
 }
 
 const NOVO: Rascunho = {
@@ -53,6 +55,7 @@ const NOVO: Rascunho = {
   regiao: "BR",
   ordem: 0,
   ativo: true,
+  escudo: "",
 };
 
 export function GerenciadorDeTimes({
@@ -258,7 +261,7 @@ function Linha({
           size="sm"
           variant="ghost"
           disabled={ocupado}
-          onClick={() => aoEditar({ ...time, id: time.id })}
+          onClick={() => aoEditar({ ...time, id: time.id, escudo: time.escudo ?? "" })}
         >
           <Pencil className="h-4 w-4" />
           <span className="sr-only">Editar</span>
@@ -313,7 +316,9 @@ function Formulario({
     tag: d.tag || "??",
     cor: /^#[0-9a-fA-F]{6}$/.test(d.cor) ? d.cor.toLowerCase() : "#ef4444",
     regiao: d.regiao,
-    escudo: null,
+    // A prévia mostra o link colado: é assim que dá para ver na hora se a
+    // imagem existe e se ela fica legível no tamanho do emblema.
+    escudo: d.escudo.startsWith("https://") ? d.escudo : null,
   };
 
   return (
@@ -408,6 +413,23 @@ function Formulario({
             Aparece no seletor
           </Label>
         </div>
+      </div>
+
+      <div className="mt-3 space-y-1.5">
+        <Label htmlFor="time-escudo">Link do escudo (opcional)</Label>
+        <Input
+          id="time-escudo"
+          value={d.escudo}
+          maxLength={2048}
+          onChange={(e) => setD({ ...d, escudo: e.target.value.trim() })}
+          placeholder="https://img-cdn.hltv.org/teamlogo/..."
+          className="font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Cole um link https e o escudo aparece na prévia aqui em cima. Sem
+          link, o emblema desenha a tag sobre a cor. Também dá para enviar um
+          arquivo pelo botão de imagem na linha do time.
+        </p>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">

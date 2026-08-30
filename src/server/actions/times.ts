@@ -41,6 +41,19 @@ const esquema = z.object({
   regiao: z.enum(["BR", "INTER"]),
   ordem: z.coerce.number().int().min(0).max(999).default(0),
   ativo: z.boolean().default(true),
+  // O escudo por LINK, para não precisar baixar e subir de novo.
+  //
+  // Só https, e a recusa não é frescura: "javascript:" e "data:" num src
+  // colado por quem tem o painel viraria execução de script na página pública,
+  // e "http:" quebraria o cadeado do navegador para todo visitante.
+  escudo: z
+    .string()
+    .trim()
+    .max(2048)
+    .refine((v) => v === "" || v.startsWith("https://"), "O link precisa começar com https://")
+    .optional()
+    .nullable()
+    .transform((v) => (v ? v : null)),
 });
 
 export async function salvarTimeAction(
@@ -75,6 +88,7 @@ export async function salvarTimeAction(
       regiao: d.regiao,
       ordem: d.ordem,
       ativo: d.ativo,
+      escudo: d.escudo,
     };
     await prisma.team.upsert({
       where: { id },
