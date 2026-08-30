@@ -77,7 +77,6 @@ export interface PrestigeRank {
   /** XP acumulado para alcançar a patente. */
   xp: number;
   color: string;
-  description: string;
 }
 
 /**
@@ -86,6 +85,11 @@ export interface PrestigeRank {
  * A lista precisa ficar em ordem crescente de XP: prestigeFromXp percorre de
  * ponta a ponta e guarda a última alcançada. Reordenar é só mexer aqui, a UI
  * e os cálculos derivam tudo desta lista.
+ *
+ * Sem descrição. Cada uma tinha uma frase embaixo ("melhor jogador da
+ * partida", "assinou com uma organização", "o maior de todos os tempos"), e
+ * elas explicavam a metáfora, não o degrau: não diziam nada sobre o que a
+ * pessoa ganha nem sobre como chegar lá. O nome e o XP dizem.
  */
 export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
   {
@@ -93,21 +97,20 @@ export const PRESTIGE_RANKS: readonly PrestigeRank[] = [
     label: "MVP",
     xp: 350_000, // R$ 35.000
     color: "#7c6cf0",
-    description: "Melhor jogador da partida.",
   },
   {
     key: "PRO_PLAYER",
-    label: "Pro Player",
+    // "PRO", e não "Pro Player": é como a cena chama, e o selo tem espaço para
+    // três letras, não para duas palavras.
+    label: "PRO",
     xp: 425_000, // R$ 42.500
     color: "#3fc9d6",
-    description: "Assinou com uma organização.",
   },
   {
     key: "GOAT",
     label: "GOAT",
     xp: 500_000, // R$ 50.000
     color: "#f2d059",
-    description: "O maior de todos os tempos.",
   },
 ] as const;
 

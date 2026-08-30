@@ -116,17 +116,17 @@ export default async function MyAccountPage() {
         </div>
       )}
 
-      {/* Duas colunas no desktop, e não uma pilha de seis cartões iguais.
-          A página respondia duas perguntas diferentes com o mesmo peso
-          visual, uma embaixo da outra, dentro de um terço da tela: à
-          esquerda fica "como estou indo", à direita "meus dados". Cada
-          coluna tem um assunto, e o olho escolhe antes de ler. */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-start">
-        {/* min-w-0 nos dois: item de grid nasce com `min-width: auto`, então o
-            conteúdo mais largo de dentro empurra a coluna inteira. O card de
-            Boost tem cinco faixas num rolador horizontal, e sem isto ele
-            esticava a página para 510px num telefone de 360, com rolagem
-            lateral de verdade. Medida no navegador, não deduzida. */}
+      {/* Uma coluna só, em qualquer largura.
+          Eram duas no desktop, com a da direita fixa acompanhando a rolagem.
+          A ideia era separar "como estou indo" de "meus dados", mas na prática
+          a da esquerda terminava cedo e sobrava meia tela vazia ao lado de uma
+          coluna estreita, com os cartões da direita espremidos em pouco mais
+          de um terço da largura. Empilhado, cada cartão usa a largura inteira
+          e a leitura é uma só, de cima para baixo. */}
+      <div className="space-y-5">
+        {/* min-w-0 continua: o card de Boost tem cinco faixas num rolador
+            horizontal, e sem isto ele esticava a página para 510px num telefone
+            de 360, com rolagem lateral de verdade. Medida no navegador. */}
         <div className="min-w-0 space-y-5">
           {rankOn && (
             <>
@@ -146,10 +146,7 @@ export default async function MyAccountPage() {
           )}
         </div>
 
-        {/* A coluna acompanha a rolagem no desktop: a da esquerda é longa, e
-            sem isto a entrega da Steam saía da tela enquanto a pessoa lia o
-            extrato. */}
-        <div className="min-w-0 space-y-5 lg:sticky lg:top-6">
+        <div className="min-w-0 space-y-5">
           <section className="rounded-xl border bg-card p-4">
             <div className="mb-1 flex items-center justify-between gap-2">
               <h2 className="text-base font-bold">Entrega na Steam</h2>
@@ -197,7 +194,7 @@ export default async function MyAccountPage() {
 
           <section className="rounded-xl border bg-card p-4">
             <h2 className="mb-3 text-base font-bold">Dados de acesso</h2>
-            <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+            <dl className="grid gap-2 sm:grid-cols-2">
               {/* O emblema ao lado do próprio nome, que é como ele vai
                   aparecer para os outros nas listas de ganhadores. Serve de
                   confirmação: dá para ver aqui que o time está mesmo salvo,
@@ -240,14 +237,36 @@ export default async function MyAccountPage() {
           uma lista inteira para chegar no campo que resolve o aviso. Aqui ele
           fica depois da ação, e no desktop ganha a largura toda, que é o que
           uma lista quer. */}
+      {/* Sanfona, e fechada por padrão.
+          São dez lançamentos, e eles são consulta: a pessoa abre quando quer
+          conferir de onde veio o XP, não toda vez que entra na conta. Aberto
+          por padrão, ele empurrava as patentes para fora da tela em qualquer
+          largura.
+
+          `details` puro: abre e fecha sem JavaScript nenhum, e a contagem no
+          resumo já responde "tem coisa aí dentro?" sem precisar abrir. */}
       {rankOn && (
-        <section className="rounded-xl border bg-card p-4">
-          <h2 className="mb-1 text-base font-bold">Extrato de XP</h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Últimos lançamentos da sua conta.
-          </p>
-          <XpHistory entries={history} />
-        </section>
+        <details className="group overflow-hidden rounded-xl border bg-card">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 hover:bg-muted/50">
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-bold">Extrato de XP</span>
+              <span className="block text-sm text-muted-foreground">
+                {history.length === 0
+                  ? "Nenhum lançamento ainda."
+                  : `${history.length} lançamento${history.length === 1 ? "" : "s"} na sua conta.`}
+              </span>
+            </span>
+            <span
+              aria-hidden
+              className="text-muted-foreground transition-transform group-open:rotate-180"
+            >
+              ▾
+            </span>
+          </summary>
+          <div className="border-t p-4">
+            <XpHistory entries={history} />
+          </div>
+        </details>
       )}
 
       {/* Sem sanfona, e essa foi uma correção.

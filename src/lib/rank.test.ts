@@ -192,7 +192,7 @@ describe("rankProgress", () => {
   it("dentro do prestígio aponta a patente seguinte", () => {
     const p = rankProgress(350_000); // MVP
     expect(p.rank.label).toBe("MVP");
-    expect(p.nextLabel).toBe("Pro Player");
+    expect(p.nextLabel).toBe("PRO");
     expect(p.xpToNext).toBe(75_000); // 425.000 − 350.000
   });
 

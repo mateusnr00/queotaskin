@@ -86,15 +86,14 @@ export function RankCard({
               className="text-[11px] font-bold tracking-[0.12em] uppercase"
               style={{ color: rank.color }}
             >
-              {/* No prestígio o nome já é o título, repetir a faixa embaixo
-                  seria eco. Ali cabe melhor o que a patente significa.
-                  Fora do prestígio vai o número do nível: agora que o título
-                  é o nome da patente ("Xerife"), repetir o grupo embaixo
-                  seria eco também nos grupos de um nível só, e o número é o
-                  que as campanhas exclusivas usam como requisito. */}
-              {rank.prestige
-                ? rank.prestige.description
-                : `Nível ${rank.level}`}
+              {/* Fora do prestígio vai o número do nível: agora que o
+                  título é o nome da patente ("Xerife"), repetir o grupo
+                  embaixo seria eco nos grupos de um nível só, e o número é o
+                  que as campanhas exclusivas usam como requisito.
+
+                  No prestígio não vai nada. Ia a descrição da patente, e ela
+                  saiu: explicava a metáfora, não o degrau. */}
+              {rank.prestige ? null : `Nível ${rank.level}`}
             </p>
           </div>
 
@@ -260,7 +259,6 @@ export function RankLadder({ xp }: { xp: number }) {
                     {prestige.label}
                   </span>
                 </p>
-                <p className="text-[11px] text-muted-foreground">{prestige.description}</p>
               </div>
               <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
                 {prestige.xp.toLocaleString("pt-BR")}
