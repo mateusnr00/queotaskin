@@ -59,7 +59,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { BORDA_DE_AUTH } from "@/components/auth/cartao-de-auth";
+import { Etiqueta, Moldura, Placa } from "@/components/admin/moldura";
 import { semAcento } from "@/lib/busca";
 import { formatDateTime } from "@/lib/format";
 import { lerReais } from "@/lib/dinheiro";
@@ -183,10 +183,9 @@ export function TabelaDeEntregas({
         <div>
           {/* Etiqueta antes do título: diz de que parte do painel isto é, sem
               gastar uma linha de texto explicando. */}
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-bold tracking-[0.18em] text-red-400 uppercase">
-            <Truck aria-hidden className="h-3 w-3" />
+          <Etiqueta icone={<Truck aria-hidden className="h-3 w-3" />}>
             Operação
-          </span>
+          </Etiqueta>
           <h1 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
             Entregas
           </h1>
@@ -210,7 +209,7 @@ export function TabelaDeEntregas({
             valor={String(atrasadas)}
             nota={`prazo de ${PRAZO_DE_ENTREGA_HORAS}h`}
             icone={<AlertTriangle className="h-3.5 w-3.5" />}
-            alerta={atrasadas > 0}
+            tom={atrasadas > 0 ? "alerta" : "neutro"}
           />
           <Placa
             rotulo="Custo total"
@@ -356,94 +355,6 @@ export function TabelaDeEntregas({
   );
 }
 
-/**
- * A moldura dupla, a mesma do cartão de criar conta e dos painéis do sorteio.
- *
- * Casca de fora com a borda em gradiente por background-clip, miolo com raio
- * calculado a partir do de fora, para os dois arcos serem concêntricos, e um
- * fio de luz na aresta superior do miolo.
- *
- * SEM o halo vermelho do cartão de auth, e isso é decisão, não esquecimento.
- * Lá existe UM cartão focal no meio da tela, e o brilho o destaca. Aqui são
- * três molduras empilhadas, mais uma por linha no celular: o mesmo halo
- * repetido vira um borrão vermelho atrás de tudo, e o que destacaria tudo não
- * destaca nada. A borda em gradiente já carrega a identidade sozinha.
- *
- * Existe como componente porque a tela tem três dessas: a barra de controles,
- * a tabela e cada cartão do celular. Três cópias do mesmo desenho é como duas
- * delas divergem no primeiro ajuste.
- */
-function Moldura({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[1.75rem] border border-transparent p-1.5",
-        className,
-      )}
-      style={BORDA_DE_AUTH}
-    >
-      <div className="overflow-hidden rounded-[1.375rem] bg-[#0e1013] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/** Um número em placa, com rótulo pequeno em cima. */
-function Placa({
-  rotulo,
-  valor,
-  nota,
-  icone,
-  alerta,
-}: {
-  rotulo: string;
-  valor: string;
-  nota: string;
-  icone: React.ReactNode;
-  alerta?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3",
-        alerta && "border-red-500/40 bg-red-500/[0.07]",
-      )}
-    >
-      <p
-        className={cn(
-          "flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase",
-          alerta && "text-red-400",
-        )}
-      >
-        {icone}
-        {rotulo}
-      </p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-black tabular-nums",
-          alerta && "text-red-400",
-        )}
-      >
-        {valor}
-      </p>
-      <p className="text-[11px] text-muted-foreground">{nota}</p>
-    </div>
-  );
-}
-
-/**
- * O selo do prazo: quanto falta, quanto atrasou, ou em quanto tempo saiu.
- *
- * Pequeno de propósito. Ele não é a informação principal da linha, é o aviso
- * que faz a pessoa olhar duas vezes para a linha certa.
- */
 const COR_DO_PRAZO: Record<EstadoDoPrazo, string> = {
   no_prazo: "border-white/15 text-muted-foreground",
   perto:

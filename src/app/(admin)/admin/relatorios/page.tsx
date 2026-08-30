@@ -1,12 +1,23 @@
 import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
+import Link from "next/link";
+import {
+  BarChart3,
+  CalendarRange,
+  Coins,
+  FileSearch,
+  Receipt,
+  Ticket,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Etiqueta, Moldura, Placa } from "@/components/admin/moldura";
 import {
   Select,
   SelectContent,
@@ -36,7 +47,9 @@ function isoDay(d: Date): string {
 // Calcula a chave de agrupamento (segunda-feira da semana ISO) para uma data.
 // Padrão ISO 8601: semana começa na segunda.
 function isoWeek(d: Date): string {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const date = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
   const dayNum = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() - dayNum + 1); // segunda da mesma semana
   return date.toISOString().slice(0, 10);
@@ -63,10 +76,7 @@ function formatBucketLabel(bucket: string, group: GroupKey): string {
   }
   const date = new Date(bucket + "T00:00:00Z");
   if (group === "week") {
-    return (
-      "Sem. iniciada em " +
-      new Intl.DateTimeFormat("pt-BR").format(date)
-    );
+    return "Sem. iniciada em " + new Intl.DateTimeFormat("pt-BR").format(date);
   }
   return new Intl.DateTimeFormat("pt-BR", {
     weekday: "short",
@@ -74,6 +84,74 @@ function formatBucketLabel(bucket: string, group: GroupKey): string {
     month: "2-digit",
     year: "numeric",
   }).format(date);
+}
+
+const num = (n: number) => n.toLocaleString("pt-BR");
+
+/** "1 reserva", "2 reservas". Plural fixo é o tipo de descuido que se lê. */
+const plural = (n: number, um: string, muitos: string) =>
+  `${num(n)} ${n === 1 ? um : muitos}`;
+
+/**
+ * A composição do período, em barra.
+ *
+ * A tabela diz os números; a barra diz a proporção, que é o que se procura num
+ * relatório antes de qualquer conta: qual período pesou mais e quanto dele foi
+ * embora em custo. A largura é relativa ao maior faturamento da lista, então
+ * a comparação entre linhas é visual e não exige ler doze valores.
+ */
+function Barra({
+  total,
+  custo,
+  maximo,
+}: {
+  total: number;
+  custo: number;
+  maximo: number;
+}) {
+  if (maximo <= 0 || total <= 0) return null;
+  const largura = Math.max(2, (total / maximo) * 100);
+  // A fatia de custo é medida dentro do próprio faturamento do período. Custo
+  // maior que o faturamento (dia de entrega sem venda) satura em 100%: passar
+  // disso desenharia uma barra maior do que a do período campeão.
+  const fatiaDeCusto = Math.min(100, (custo / total) * 100);
+  return (
+    <div
+      className="mt-1.5 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-white/[0.05]"
+      aria-hidden
+    >
+      <div className="h-full rounded-full" style={{ width: `${largura}%` }}>
+        <div className="flex h-full w-full">
+          <div
+            className="h-full bg-amber-500/70"
+            style={{ width: `${fatiaDeCusto}%` }}
+          />
+          <div className="h-full flex-1 bg-emerald-500/70" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Um número de contexto na faixa de volume. */
+function Volume({
+  rotulo,
+  valor,
+  icone,
+}: {
+  rotulo: string;
+  valor: string;
+  icone: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+      <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+        {icone}
+        {rotulo}
+      </span>
+      <span className="text-lg font-black tabular-nums">{valor}</span>
+    </div>
+  );
 }
 
 export default async function AdminReportsPage({
@@ -89,9 +167,9 @@ export default async function AdminReportsPage({
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const sp = await searchParams;
-  const group = (["day", "week", "month"].includes(sp.group ?? "")
-    ? sp.group
-    : "day") as GroupKey;
+  const group = (
+    ["day", "week", "month"].includes(sp.group ?? "") ? sp.group : "day"
+  ) as GroupKey;
   const raffleId = sp.raffleId === "all" ? undefined : sp.raffleId;
 
   // Padrão: últimos 30 dias.
@@ -198,18 +276,19 @@ export default async function AdminReportsPage({
     buckets.set(key, entry);
   }
 
-  const rows = Array.from(buckets.entries()).sort(([a], [b]) =>
-    a < b ? 1 : -1 // mais recente primeiro
+  const rows = Array.from(buckets.entries()).sort(
+    ([a], [b]) => (a < b ? 1 : -1), // mais recente primeiro
   );
+  const maiorFaturamento = rows.reduce((m, [, d]) => Math.max(m, d.total), 0);
 
   const totalReservations = reservations.length;
   const totalTickets = reservations.reduce(
     (acc, r) => acc + r._count.tickets,
-    0
+    0,
   );
   const totalRevenue = reservations.reduce(
     (acc, r) => acc + Number(r.totalAmount),
-    0
+    0,
   );
   const totalCusto = temTaxa ? custoEmYuan * cnyToBrl! : null;
   const resultado = totalCusto == null ? null : totalRevenue - totalCusto;
@@ -220,94 +299,166 @@ export default async function AdminReportsPage({
       ? null
       : (resultado / totalRevenue) * 100;
 
+  // Atalhos de período. Escolher "últimos 7 dias" com dois seletores de data é
+  // trabalho de calendário para uma pergunta que se faz o tempo todo.
+  const desde = (dias: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - dias);
+    return d;
+  };
+  const inicioDoMes = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const atalhos: { rotulo: string; de: Date; ate: Date }[] = [
+    { rotulo: "7 dias", de: desde(7), ate: now },
+    { rotulo: "30 dias", de: desde(30), ate: now },
+    { rotulo: "90 dias", de: desde(90), ate: now },
+    { rotulo: "Este mês", de: inicioDoMes, ate: now },
+  ];
+  const href = (de: Date, ate: Date) => {
+    const q = new URLSearchParams({ group, from: isoDay(de), to: isoDay(ate) });
+    if (raffleId) q.set("raffleId", raffleId);
+    return `/admin/relatorios?${q.toString()}`;
+  };
+  const deAtual = isoDay(from);
+  const ateAtual = isoDay(to);
+
+  const rotuloDoSorteio = raffleId
+    ? (raffleOptions.find((r) => r.id === raffleId)?.title ??
+      "Todos os sorteios")
+    : "Todos os sorteios";
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Relatórios</h1>
-        <p className="text-sm text-muted-foreground">
-          Vendas confirmadas (status PAGO) e o custo das skins entregues, no
-          período escolhido.
-        </p>
-      </div>
+      <header className="space-y-4">
+        <div>
+          <Etiqueta icone={<BarChart3 aria-hidden className="h-3 w-3" />}>
+            Financeiro
+          </Etiqueta>
+          <h1 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
+            Relatórios
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Vendas confirmadas e o custo das skins entregues, no período
+            escolhido.
+          </p>
+        </div>
+      </header>
 
-      <form className="grid gap-3 md:grid-cols-4">
-        <div>
-          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Tipo
-          </label>
-          <Select name="group" defaultValue={group}>
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue
-                labels={{
-                  day: "Vendas por Dia",
-                  week: "Vendas por Semana",
-                  month: "Vendas por Mês",
-                }}
+      {/* Filtros, na mesma moldura das outras telas do painel. Soltos no fundo
+          eles pareciam três controles largados antes do conteúdo. */}
+      <Moldura>
+        <form className="divide-y divide-white/[0.06]">
+          <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 md:px-4">
+            <span className="mr-1 flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+              <CalendarRange aria-hidden className="h-3.5 w-3.5" />
+              Período
+            </span>
+            {atalhos.map((a) => {
+              const ativo =
+                isoDay(a.de) === deAtual && isoDay(a.ate) === ateAtual;
+              return (
+                <Link
+                  key={a.rotulo}
+                  href={href(a.de, a.ate)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                    ativo
+                      ? "border-red-500/40 bg-red-500/15 text-red-300"
+                      : "border-white/10 text-muted-foreground hover:border-white/20 hover:text-foreground",
+                  )}
+                >
+                  {a.rotulo}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="grid gap-3 px-3 py-3 sm:grid-cols-2 md:px-4 lg:grid-cols-4">
+            <div>
+              <label className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                Agrupar por
+              </label>
+              <Select name="group" defaultValue={group}>
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue
+                    labels={{
+                      day: "Dia",
+                      week: "Semana",
+                      month: "Mês",
+                    }}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Dia</SelectItem>
+                  <SelectItem value="week">Semana</SelectItem>
+                  <SelectItem value="month">Mês</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                Sorteio
+              </label>
+              <Select name="raffleId" defaultValue={raffleId ?? "all"}>
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue
+                    labels={{
+                      all: "Todos os sorteios",
+                      ...Object.fromEntries(
+                        raffleOptions.map((r) => [r.id, r.title]),
+                      ),
+                    }}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os sorteios</SelectItem>
+                  {raffleOptions.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                De
+              </label>
+              <Input
+                type="date"
+                name="from"
+                defaultValue={deAtual}
+                className="mt-1"
               />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="day">Vendas por Dia</SelectItem>
-              <SelectItem value="week">Vendas por Semana</SelectItem>
-              <SelectItem value="month">Vendas por Mês</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Sorteio
-          </label>
-          <Select name="raffleId" defaultValue={raffleId ?? "all"}>
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue
-                labels={{
-                  all: "Todos os sorteios",
-                  ...Object.fromEntries(
-                    raffleOptions.map((r) => [r.id, r.title])
-                  ),
-                }}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                Até
+              </label>
+              <Input
+                type="date"
+                name="to"
+                defaultValue={ateAtual}
+                className="mt-1"
               />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os sorteios</SelectItem>
-              {raffleOptions.map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {r.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            De
-          </label>
-          <Input
-            type="date"
-            name="from"
-            defaultValue={from.toISOString().slice(0, 10)}
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Até
-          </label>
-          <Input
-            type="date"
-            name="to"
-            defaultValue={to.toISOString().slice(0, 10)}
-            className="mt-1"
-          />
-        </div>
-        <div className="md:col-span-4">
-          <Button type="submit" className="w-full md:w-auto">
-            Gerar Relatório
-          </Button>
-        </div>
-      </form>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between md:px-4">
+            <p className="text-xs text-muted-foreground">
+              {rotuloDoSorteio}, agrupado por {GROUP_LABEL[group].toLowerCase()}
+              .
+            </p>
+            <Button type="submit" className="w-full sm:w-auto">
+              Gerar relatório
+            </Button>
+          </div>
+        </form>
+      </Moldura>
 
       {!temTaxa && custoEmYuan > 0 && (
-        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+        <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           Há {custoEmYuan.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}{" "}
           yuan de custo no período, mas a taxa de câmbio não está cadastrada,
           então ele não entra no resultado. Cadastre em Entregas, no botão
@@ -315,137 +466,219 @@ export default async function AdminReportsPage({
         </p>
       )}
 
-      {/* Totais agregados */}
-      <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-5">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Reservas pagas
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {totalReservations.toLocaleString("pt-BR")}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Títulos vendidos
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {totalTickets.toLocaleString("pt-BR")}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Faturamento
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {formatBRL(totalRevenue)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Custo das skins
-            </div>
-            <div className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
-              {totalCusto == null ? "-" : formatBRL(totalCusto)}
-            </div>
-            <div className="text-[11px] text-muted-foreground tabular-nums">
-              ¥{" "}
-              {custoEmYuan.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Resultado
-            </div>
-            <div
-              className={cn(
-                "mt-1 text-2xl font-bold tabular-nums",
-                resultado != null &&
-                  (resultado >= 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-red-600 dark:text-red-400"),
-              )}
-            >
-              {resultado == null ? "-" : formatBRL(resultado)}
-            </div>
-            {margem != null && (
-              <div className="text-[11px] text-muted-foreground tabular-nums">
-                margem de {margem.toFixed(1).replace(".", ",")}%
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Os três números que respondem a pergunta da tela, em destaque. */}
+      <div className="grid gap-3 md:grid-cols-3">
+        <Placa
+          rotulo="Faturamento"
+          valor={formatBRL(totalRevenue)}
+          nota="vendas confirmadas"
+          icone={<Wallet className="h-3.5 w-3.5" />}
+          destaque
+        />
+        <Placa
+          rotulo="Custo das skins"
+          valor={totalCusto == null ? "-" : formatBRL(totalCusto)}
+          nota={`¥ ${custoEmYuan.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} com fornecedor`}
+          icone={<Coins className="h-3.5 w-3.5" />}
+          tom="custo"
+          destaque
+        />
+        {/* Zero não é lucro: verde num período sem lançamento nenhum diz que
+            deu certo, quando o que houve foi nada acontecer. */}
+        <Placa
+          rotulo="Resultado"
+          valor={resultado == null ? "-" : formatBRL(resultado)}
+          nota={
+            margem == null
+              ? "faturamento menos custo"
+              : `margem de ${margem.toFixed(1).replace(".", ",")}%`
+          }
+          icone={<TrendingUp className="h-3.5 w-3.5" />}
+          tom={
+            resultado == null || resultado === 0
+              ? "neutro"
+              : resultado > 0
+                ? "bom"
+                : "ruim"
+          }
+          destaque
+        />
       </div>
 
-      {/* Tabela agrupada */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{GROUP_LABEL[group]}</TableHead>
-              <TableHead className="text-right">Reservas</TableHead>
-              <TableHead className="text-right">Títulos</TableHead>
-              <TableHead className="text-right">Faturamento</TableHead>
-              <TableHead className="text-right">Custo das skins</TableHead>
-              <TableHead className="text-right">Resultado</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="text-center text-muted-foreground py-10"
-                >
-                  Nenhum lançamento no período selecionado.
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map(([bucket, data]) => (
-                <TableRow key={bucket}>
-                  <TableCell className="font-medium">
-                    {formatBucketLabel(bucket, group)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {data.count.toLocaleString("pt-BR")}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {data.tickets.toLocaleString("pt-BR")}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold">
-                    {formatBRL(data.total)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-amber-600 dark:text-amber-400">
-                    {data.custo > 0 ? formatBRL(data.custo) : "-"}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right font-semibold tabular-nums",
-                      data.total - data.custo >= 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-red-600 dark:text-red-400",
-                    )}
-                  >
-                    {formatBRL(data.total - data.custo)}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      {/* O volume por trás deles vai numa faixa, não em placas do tamanho das
+          de cima: é contexto, e em cartão grande dois números pequenos ficam
+          boiando no vazio, com o mesmo peso da resposta que a tela dá. */}
+      <div className="grid grid-cols-2 divide-x divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+        <Volume
+          rotulo="Reservas pagas"
+          valor={num(totalReservations)}
+          icone={<Receipt aria-hidden className="h-3.5 w-3.5" />}
+        />
+        <Volume
+          rotulo="Títulos vendidos"
+          valor={num(totalTickets)}
+          icone={<Ticket aria-hidden className="h-3.5 w-3.5" />}
+        />
       </div>
+
+      {rows.length === 0 ? (
+        <Moldura>
+          <div className="px-4 py-14 text-center">
+            <FileSearch
+              aria-hidden
+              className="mx-auto h-8 w-8 text-muted-foreground/30"
+              strokeWidth={1.5}
+            />
+            <p className="mt-3 text-sm font-semibold">
+              Nenhum lançamento no período.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Escolha outro intervalo ou tire o filtro de sorteio.
+            </p>
+          </div>
+        </Moldura>
+      ) : (
+        <>
+          {/* Tabela no desktop. Seis colunas de números numa tela de 390px
+              viram rolagem lateral, e quem arrasta perde de vista a linha. */}
+          <Moldura className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[26%]">
+                    {GROUP_LABEL[group]}
+                  </TableHead>
+                  <TableHead className="text-right">Reservas</TableHead>
+                  <TableHead className="text-right">Títulos</TableHead>
+                  <TableHead className="text-right">Faturamento</TableHead>
+                  <TableHead className="text-right">Custo</TableHead>
+                  <TableHead className="text-right">Resultado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(([bucket, data]) => {
+                  const linha = data.total - data.custo;
+                  return (
+                    <TableRow
+                      key={bucket}
+                      className="transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                    >
+                      <TableCell className="align-middle">
+                        <span className="text-sm font-semibold">
+                          {formatBucketLabel(bucket, group)}
+                        </span>
+                        <Barra
+                          total={data.total}
+                          custo={data.custo}
+                          maximo={maiorFaturamento}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {num(data.count)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {num(data.tickets)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {formatBRL(data.total)}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right tabular-nums",
+                          data.custo > 0
+                            ? "text-amber-400"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {data.custo > 0 ? formatBRL(data.custo) : "-"}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right font-bold tabular-nums",
+                          linha >= 0 ? "text-emerald-400" : "text-red-400",
+                        )}
+                      >
+                        {formatBRL(linha)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Moldura>
+
+          {/* Cartões no celular: cada período é um bloco fechado. */}
+          <div className="space-y-3 md:hidden">
+            {rows.map(([bucket, data]) => {
+              const linha = data.total - data.custo;
+              return (
+                <Moldura key={bucket}>
+                  <div className="space-y-2.5 p-3">
+                    <div>
+                      <p className="text-sm font-bold">
+                        {formatBucketLabel(bucket, group)}
+                      </p>
+                      <Barra
+                        total={data.total}
+                        custo={data.custo}
+                        maximo={maiorFaturamento}
+                      />
+                    </div>
+
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                          Faturamento
+                        </p>
+                        <p className="text-lg font-black tabular-nums">
+                          {formatBRL(data.total)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                          Custo
+                        </p>
+                        <p
+                          className={cn(
+                            "text-lg font-black tabular-nums",
+                            data.custo > 0
+                              ? "text-amber-400"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {data.custo > 0 ? formatBRL(data.custo) : "-"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                      <span className="text-[10px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+                        Resultado
+                      </span>
+                      <span
+                        className={cn(
+                          "text-base font-black tabular-nums",
+                          linha >= 0 ? "text-emerald-400" : "text-red-400",
+                        )}
+                      >
+                        {formatBRL(linha)}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground tabular-nums">
+                      {plural(data.count, "reserva", "reservas")},{" "}
+                      {plural(data.tickets, "título", "títulos")}
+                    </p>
+                  </div>
+                </Moldura>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
