@@ -794,6 +794,23 @@ function SeletorDeStatus({ entrega }: { entrega: Delivery }) {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
   const [status, setStatus] = useState(entrega.status);
+
+  // O SELETOR TEM QUE SEGUIR O SERVIDOR, E NÃO SÓ O PRÓPRIO CLIQUE.
+  //
+  // O status também muda por fora daqui: anotar o custo marca a entrega como
+  // enviada, e apagar o custo a devolve para a fila. Com o estado preso ao
+  // valor inicial, o seletor continuava exibindo o de antes depois do
+  // router.refresh, e a linha ficava dizendo "Enviado" com o campo de custo
+  // vazio. Um estado que não existe no banco, na cara de quem opera.
+  //
+  // Guardar o último valor vindo do servidor é o que separa "o servidor mudou"
+  // de "eu acabei de escolher": só o primeiro reescreve a escolha na tela.
+  const [ultimoDoServidor, setUltimoDoServidor] = useState(entrega.status);
+  if (ultimoDoServidor !== entrega.status) {
+    setUltimoDoServidor(entrega.status);
+    setStatus(entrega.status);
+  }
+
   const estado = estadoDaEntrega(status);
 
   async function trocar(valor: string | null) {
