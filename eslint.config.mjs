@@ -18,6 +18,12 @@ const eslintConfig = defineConfig([
     // limpo escondem o próximo erro que for nosso.
     ".agents/**",
     ".claude/**",
+    // Componentes do Tremor vendorizados (data-viz), copiados do repo oficial
+    // (MIT) em src/components/ui/tremor. Os padrões de hook do upstream
+    // reprovam nas regras do react-hooks do Next, e não editamos código de
+    // terceiro. Só o chartColors.ts (a ponte de tema) foi adaptado por nós, e
+    // ele passa no lint normalmente.
+    "src/components/ui/tremor/**",
   ]),
 ]);
 

@@ -1,38 +1,39 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Prisma } from "@prisma/client";
-import {
-  MessageCircle,
-  ShoppingBag,
-  Sparkles,
-  TicketCheck,
-  TrendingUp,
-  Users,
-  Activity,
-  CalendarClock,
-  Eye,
-} from "lucide-react";
+import { MessageCircle, Sparkles, TrendingUp, Percent } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  SalesChart,
-  type SalesChartPoint,
-} from "@/components/admin/sales-chart";
+import { SalesChart, type SalesChartPoint } from "@/components/admin/sales-chart";
+import { StatDeHoje } from "@/components/admin/estatisticas/stat-de-hoje";
+import { SeletorDePeriodo } from "@/components/admin/estatisticas/seletor-de-periodo";
+import { GraficoDeVendas } from "@/components/admin/estatisticas/grafico-de-vendas";
+import { Funil } from "@/components/admin/estatisticas/funil";
+import { ListaPorCanal } from "@/components/admin/estatisticas/lista-por-canal";
+import { Risco } from "@/components/admin/estatisticas/risco";
+import { ProgressoCampanhas } from "@/components/admin/estatisticas/progresso-campanhas";
 import { formatBRL } from "@/lib/format";
 import { formatCpf, formatPhone } from "@/lib/cpf";
-import { cn } from "@/lib/utils";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { resumoDeVisitas } from "@/server/services/visitas";
+import {
+  serieDeVendas,
+  funilDeConversao,
+  faturamentoPorCanal,
+  reservasEmRisco,
+  progressoDasCampanhas,
+  totaisComparativo,
+} from "@/server/services/estatisticas";
+import { limitarIntervalo } from "@/lib/periodo";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 
 export const metadata: Metadata = { title: "Início" };
 
 const TZ = "America/Sao_Paulo";
+const PRESETS = [7, 30, 90, 180];
 
-// Limite inferior do "hoje" em Brasília, devolvido como Date em UTC pra usar
-// na query. Como o Postgres armazena TIMESTAMP, comparamos no instante UTC.
+// Limite inferior do "hoje" em Brasília, como Date em UTC para a query.
 function startOfTodayBrasilia(): Date {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -44,12 +45,10 @@ function startOfTodayBrasilia(): Date {
   const y = Number(parts.find((p) => p.type === "year")?.value);
   const m = Number(parts.find((p) => p.type === "month")?.value);
   const d = Number(parts.find((p) => p.type === "day")?.value);
-  // 00:00 BRT = 03:00 UTC (sem DST no BR desde 2019)
-  return new Date(Date.UTC(y, m - 1, d, 3, 0, 0));
+  return new Date(Date.UTC(y, m - 1, d, 3, 0, 0)); // 00:00 BRT = 03:00 UTC
 }
 
 // Bucketiza as reservas dos últimos 60 minutos em 12 fatias de 5 minutos.
-// Retorna array no formato esperado pelo SalesChart.
 function bucketize(
   reservations: { createdAt: Date; status: string }[],
   now: Date,
@@ -76,77 +75,87 @@ function bucketize(
   return points;
 }
 
-/**
- * "12% a mais que ontem", ou nada quando ontem foi zero.
- *
- * Sem o caso do zero, o primeiro dia de vida do site mostraria um aumento
- * infinito, e dividir por zero na tela é pior que não dizer nada.
- */
-function comparacaoComOntem(hoje: number, ontem: number): string | undefined {
-  if (ontem === 0) return hoje > 0 ? "primeiro dia com movimento" : undefined;
-  const variacao = Math.round(((hoje - ontem) / ontem) * 100);
-  if (variacao === 0) return "igual a hoje";
-  return variacao > 0
-    ? `hoje está ${variacao}% acima`
-    : `hoje está ${Math.abs(variacao)}% abaixo`;
+function umValor(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
 }
 
-export default async function AdminDashboardPage() {
+// O período da seção de análise: intervalo custom (de/até, com teto de 180
+// dias) tem prioridade; senão um preset em dias; senão 30 dias.
+function resolverPeriodo(sp: Record<string, string | string[] | undefined>): {
+  from: Date;
+  to: Date;
+  diasAtivo: number | null;
+  de?: string;
+  ate?: string;
+  rotulo: string;
+} {
+  const now = new Date();
+  const de = umValor(sp.de);
+  const ate = umValor(sp.ate);
+  if (de && ate) {
+    const from0 = new Date(`${de}T00:00:00`);
+    const to0 = new Date(`${ate}T23:59:59.999`);
+    if (
+      !Number.isNaN(from0.getTime()) &&
+      !Number.isNaN(to0.getTime()) &&
+      from0 <= to0
+    ) {
+      const { from, to } = limitarIntervalo(from0, to0);
+      const fmt = new Intl.DateTimeFormat("pt-BR");
+      return {
+        from,
+        to,
+        diasAtivo: null,
+        de,
+        ate,
+        rotulo: `${fmt.format(from)} a ${fmt.format(to)}`,
+      };
+    }
+  }
+  const diasRaw = Number(umValor(sp.dias));
+  const dias = PRESETS.includes(diasRaw) ? diasRaw : 30;
+  const from = new Date(now.getTime() - dias * 24 * 60 * 60 * 1000);
+  return { from, to: now, diasAtivo: dias, rotulo: `últimos ${dias} dias` };
+}
+
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
   const firstName =
     session?.user?.name?.split(" ")[0] ?? session?.user?.name ?? "Admin";
+  const sp = await searchParams;
+  const periodo = resolverPeriodo(sp);
+
   const now = new Date();
   const lastHour = new Date(now.getTime() - 60 * 60_000);
-  const todayStart = startOfTodayBrasilia();
+  const hojeInicio = startOfTodayBrasilia();
 
   const [
-    paidAgg,
-    activeRaffles,
-    participantsTodayRows,
-    participantesTotalRows,
+    kpiHoje,
     visitas,
+    serie,
+    funil,
+    canais,
+    risco,
+    campanhas,
     lastHourReservations,
     topBuyersRaw,
   ] = await Promise.all([
-    prisma.reservation.aggregate({
-      where: { status: "PAID", raffle: { tenantId } },
-      _sum: { totalAmount: true },
-      _count: { _all: true },
-    }),
-    prisma.raffle.count({ where: { status: "ACTIVE", tenantId } }),
-    // Distinct buyers (PAID) hoje, usa raw para distinct count.
-    // Filtra pelo tenant via JOIN com Raffle.
-    prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-      SELECT COUNT(DISTINCT r."participantCpf")::bigint AS count
-      FROM "Reservation" r
-      JOIN "Raffle" rf ON rf.id = r."raffleId"
-      WHERE r."status" = 'PAID'
-        AND r."createdAt" >= ${todayStart}
-        AND r."participantCpf" IS NOT NULL
-        AND rf."tenantId" = ${tenantId}
-    `),
-    // Participantes de todos os tempos, e não só de hoje: é o tamanho da
-    // base, o número que se compara com as visitas para saber quantos dos
-    // que entraram viraram comprador.
-    prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-      SELECT COUNT(DISTINCT r."participantCpf")::bigint AS count
-      FROM "Reservation" r
-      JOIN "Raffle" rf ON rf.id = r."raffleId"
-      WHERE r."status" = 'PAID'
-        AND r."participantCpf" IS NOT NULL
-        AND rf."tenantId" = ${tenantId}
-    `),
+    totaisComparativo({ tenantId, from: hojeInicio, to: now }),
     resumoDeVisitas(tenantId, now),
+    serieDeVendas({ tenantId, from: periodo.from, to: periodo.to }),
+    funilDeConversao({ tenantId, from: periodo.from, to: periodo.to }),
+    faturamentoPorCanal({ tenantId, from: periodo.from, to: periodo.to }),
+    reservasEmRisco({ tenantId, now }),
+    progressoDasCampanhas(tenantId),
     prisma.reservation.findMany({
-      where: {
-        createdAt: { gte: lastHour },
-        raffle: { tenantId },
-      },
+      where: { createdAt: { gte: lastHour }, raffle: { tenantId } },
       select: { createdAt: true, status: true },
     }),
-    // Top 5 por valor pago, agrupado por CPF (que é o identificador real
-    // do comprador, mesmo quando a reserva ainda não tinha userId).
     prisma.reservation.groupBy({
       by: ["participantCpf"],
       where: {
@@ -161,13 +170,12 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  const faturamento = Number(paidAgg._sum.totalAmount ?? 0);
-  const compras = paidAgg._count._all;
-  const ticketMedio = compras > 0 ? faturamento / compras : 0;
-  const participantsToday = Number(participantsTodayRows[0]?.count ?? 0);
-  const participantesTotal = Number(participantesTotalRows[0]?.count ?? 0);
+  const conversaoHoje =
+    visitas.visitantesHoje > 0
+      ? Math.round((kpiHoje.atual.reservas / visitas.visitantesHoje) * 100)
+      : null;
 
-  // Para cada CPF top, busca o último nome/telefone usado.
+  // Perfil (nome/telefone) dos top compradores, a partir do CPF.
   const cpfs = topBuyersRaw
     .map((b) => b.participantCpf)
     .filter((c): c is string => Boolean(c));
@@ -175,10 +183,7 @@ export default async function AdminDashboardPage() {
     cpfs.length === 0
       ? []
       : await prisma.reservation.findMany({
-          where: {
-            participantCpf: { in: cpfs },
-            raffle: { tenantId },
-          },
+          where: { participantCpf: { in: cpfs }, raffle: { tenantId } },
           orderBy: { createdAt: "desc" },
           select: {
             participantCpf: true,
@@ -186,10 +191,7 @@ export default async function AdminDashboardPage() {
             participantPhone: true,
           },
         });
-  const profileByCpf = new Map<
-    string,
-    { name: string; phone: string | null }
-  >();
+  const profileByCpf = new Map<string, { name: string; phone: string | null }>();
   for (const p of buyerProfiles) {
     if (!p.participantCpf || profileByCpf.has(p.participantCpf)) continue;
     profileByCpf.set(p.participantCpf, {
@@ -208,12 +210,9 @@ export default async function AdminDashboardPage() {
   const chartData = bucketize(lastHourReservations, now);
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      {/* Banner de boas-vindas. Fundo escuro com gradiente sutil + brilho
-          radial atrás do texto pra garantir contraste do título mesmo em
-          telas com brilho alto. Texto sempre claro, sem dependência da
-          cor de tema do site. */}
-      <div className="relative overflow-hidden rounded-2xl bg-zinc-950 p-6 md:p-8 text-zinc-50">
+    <div className="max-w-7xl space-y-6">
+      {/* Banner de boas-vindas. */}
+      <div className="relative overflow-hidden rounded-2xl bg-zinc-950 p-6 text-zinc-50 md:p-8">
         <div
           aria-hidden
           className="absolute inset-0 bg-[radial-gradient(circle_at_15%_30%,var(--primary)_0%,transparent_55%)] opacity-40"
@@ -227,14 +226,13 @@ export default async function AdminDashboardPage() {
             <Sparkles className="h-3.5 w-3.5" />
             Bem-vindo de volta
           </p>
-          <h1 className="mt-2 text-2xl md:text-3xl font-bold tracking-tight text-white">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-white md:text-3xl">
             Olá, {firstName} <span aria-hidden>👋</span>
           </h1>
-          <p className="mt-2 text-sm text-zinc-300 max-w-md leading-relaxed">
-            Visão geral da sua plataforma: vendas, reservas e clientes em tempo
-            real.
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-300">
+            Visão geral da sua plataforma: vendas, reservas e clientes.
           </p>
-          <div className="mt-5 flex gap-2 flex-wrap">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Link
               href="/admin/sorteios/novo"
               className={buttonVariants({ size: "sm" })}
@@ -252,72 +250,86 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Duas fileiras, e não uma só de sete. Em cima o dinheiro, embaixo o
-          público: são perguntas diferentes, e sete cartões em fila viram uma
-          régua onde o olho não sabe onde parar. */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <KpiCard
-          label="Faturamento Total"
-          value={formatBRL(faturamento)}
-          icon={TrendingUp}
-          accent="from-orange-500/15 to-orange-500/0"
-          iconBg="bg-orange-500/15 text-orange-600 dark:text-orange-300"
-        />
-        <KpiCard
-          label="Compras"
-          value={compras.toLocaleString("pt-BR")}
-          icon={ShoppingBag}
-          accent="from-emerald-500/15 to-emerald-500/0"
-          iconBg="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
-        />
-        <KpiCard
-          label="Ticket Médio"
-          value={formatBRL(ticketMedio)}
-          icon={TicketCheck}
-          accent="from-blue-500/15 to-blue-500/0"
-          iconBg="bg-blue-500/15 text-blue-600 dark:text-blue-300"
-        />
-      </div>
-
+      {/* KPIs de hoje, em tempo real, com delta vs a mesma janela de ontem. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          label="Visitas Hoje"
-          value={visitas.hoje.toLocaleString("pt-BR")}
-          subline={`${visitas.visitantesHoje.toLocaleString("pt-BR")} pessoa(s) diferente(s)`}
-          icon={Eye}
-          accent="from-sky-500/15 to-sky-500/0"
-          iconBg="bg-sky-500/15 text-sky-600 dark:text-sky-300"
+        <StatDeHoje
+          label="Faturamento hoje"
+          value={formatBRL(kpiHoje.atual.faturamento)}
+          delta={kpiHoje.variacao.faturamento}
         />
-        <KpiCard
-          label="Visitas Ontem"
-          value={visitas.ontem.toLocaleString("pt-BR")}
-          subline={comparacaoComOntem(visitas.hoje, visitas.ontem)}
-          icon={CalendarClock}
-          accent="from-violet-500/15 to-violet-500/0"
-          iconBg="bg-violet-500/15 text-violet-600 dark:text-violet-300"
+        <StatDeHoje
+          label="Reservas pagas hoje"
+          value={kpiHoje.atual.reservas.toLocaleString("pt-BR")}
+          delta={kpiHoje.variacao.reservas}
         />
-        <KpiCard
-          label="Visitas Total"
-          value={visitas.total.toLocaleString("pt-BR")}
-          icon={Activity}
-          accent="from-cyan-500/15 to-cyan-500/0"
-          iconBg="bg-cyan-500/15 text-cyan-600 dark:text-cyan-300"
+        <StatDeHoje
+          label="Ticket médio hoje"
+          value={formatBRL(kpiHoje.atual.ticketMedio)}
+          delta={kpiHoje.variacao.ticketMedio}
         />
-        <KpiCard
-          label="Participantes"
-          value={participantesTotal.toLocaleString("pt-BR")}
-          subline={`${participantsToday.toLocaleString("pt-BR")} hoje · ${activeRaffles} sorteio(s) ativo(s)`}
-          icon={Users}
-          accent="from-fuchsia-500/15 to-fuchsia-500/0"
-          iconBg="bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300"
+        <StatDeHoje
+          label="Conversão hoje"
+          value={conversaoHoje != null ? `${conversaoHoje}%` : "-"}
+          hint={`${kpiHoje.atual.reservas.toLocaleString("pt-BR")} de ${visitas.visitantesHoje.toLocaleString("pt-BR")} visitantes`}
         />
       </div>
 
-      {/* Chart + Top buyers */}
+      {/* Seção de análise: o período controla os três cards abaixo. */}
+      <div className="flex flex-wrap items-end justify-between gap-3 border-t pt-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            Análise
+          </h2>
+          <p className="text-xs text-muted-foreground">{periodo.rotulo}</p>
+        </div>
+        <SeletorDePeriodo
+          diasAtivo={periodo.diasAtivo}
+          de={periodo.de}
+          ate={periodo.ate}
+        />
+      </div>
+
+      <Card className="p-5">
+        <h3 className="mb-3 font-semibold">Vendas no tempo</h3>
+        <GraficoDeVendas pontos={serie.pontos} />
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <h3 className="mb-3 font-semibold">Funil de conversão</h3>
+          <Funil funil={funil} />
+        </Card>
+        <Card className="p-5">
+          <h3 className="mb-3 font-semibold">Faturamento por canal</h3>
+          <ListaPorCanal canais={canais} />
+        </Card>
+      </div>
+
+      {/* Operação / agora: independe do período. */}
+      <div className="border-t pt-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Percent className="h-4 w-4 text-primary" />
+          Operação · agora
+        </h2>
+        <p className="text-xs text-muted-foreground">Tempo real</p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <h3 className="mb-3 font-semibold">Reservas em risco</h3>
+          <Risco risco={risco} />
+        </Card>
+        <Card className="p-5">
+          <h3 className="mb-3 font-semibold">Campanhas ativas</h3>
+          <ProgressoCampanhas campanhas={campanhas} />
+        </Card>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 p-5">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-semibold">Vendas na última hora</h2>
+        <Card className="p-5 lg:col-span-2">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="font-semibold">Vendas na última hora</h3>
             <span className="text-xs text-muted-foreground">
               Atualiza ao recarregar
             </span>
@@ -326,11 +338,9 @@ export default async function AdminDashboardPage() {
         </Card>
 
         <Card className="p-5">
-          <div className="flex items-baseline justify-between mb-3">
-            <h2 className="font-semibold">Top 5 Compradores</h2>
-            <span className="text-xs text-muted-foreground">
-              por valor pago
-            </span>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h3 className="font-semibold">Top 5 compradores</h3>
+            <span className="text-xs text-muted-foreground">por valor pago</span>
           </div>
           {topBuyers.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
@@ -340,8 +350,7 @@ export default async function AdminDashboardPage() {
             <ul className="space-y-3">
               {topBuyers.map((b) => {
                 const phone = b.phone?.replace(/\D/g, "") ?? "";
-                const wa =
-                  phone.length >= 10 ? `https://wa.me/55${phone}` : null;
+                const wa = phone.length >= 10 ? `https://wa.me/55${phone}` : null;
                 const initial = b.name.charAt(0).toUpperCase();
                 return (
                   <li key={b.cpf} className="flex items-center gap-3">
@@ -349,14 +358,14 @@ export default async function AdminDashboardPage() {
                       {initial}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm leading-tight truncate">
+                      <div className="truncate text-sm font-medium leading-tight">
                         {b.name}
                       </div>
-                      <div className="text-xs text-muted-foreground leading-tight mt-0.5 truncate">
+                      <div className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">
                         {formatCpf(b.cpf)}
                         {b.phone ? ` · ${formatPhone(b.phone)}` : ""}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1 tabular-nums">
+                      <div className="mt-1 text-xs tabular-nums text-muted-foreground">
                         {b.count}x · {formatBRL(b.total)}
                       </div>
                     </div>
@@ -379,50 +388,5 @@ export default async function AdminDashboardPage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  subline,
-  icon: Icon,
-  accent,
-  iconBg,
-}: {
-  label: string;
-  value: string;
-  subline?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
-  accent: string;
-  iconBg: string;
-}) {
-  return (
-    <Card
-      className={cn("relative overflow-hidden p-5 bg-gradient-to-br", accent)}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {label}
-          </div>
-          <div className="text-2xl md:text-3xl font-bold tracking-tight mt-1 tabular-nums truncate">
-            {value}
-          </div>
-          {subline && (
-            <div className="text-xs text-muted-foreground mt-1">{subline}</div>
-          )}
-        </div>
-        <div
-          className={cn(
-            "flex h-11 w-11 items-center justify-center rounded-xl shrink-0",
-            iconBg,
-          )}
-        >
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </Card>
   );
 }
