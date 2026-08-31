@@ -42,6 +42,7 @@ export function LinhaDePremio({
   raridade,
   ganhador,
   time,
+  reservado,
   rotuloVago,
 }: {
   /** Ja formatado com os zeros a esquerda. Ausente nas caixas surpresas. */
@@ -56,6 +57,15 @@ export function LinhaDePremio({
    * Opcional: compra sem conta não tem time, e a linha existe sem isto.
    */
   time?: TimeDeCS2 | null;
+  /**
+   * O prêmio já tem dono, mas a unidade ainda não foi aberta.
+   *
+   * É um terceiro estado, e não um detalhe: entre "disponível" e "revelado"
+   * existe o reservado. Contá-lo como disponível prometeria ao próximo
+   * comprador um prêmio que já é de outra pessoa. Quem levou continua em
+   * segredo até a abertura.
+   */
+  reservado?: boolean;
   /** O que dizer quando ainda nao tem dono. */
   rotuloVago: string;
 }) {
@@ -87,7 +97,9 @@ export function LinhaDePremio({
               jogo: Oculta vermelha, Secreta rosa, faca dourada. Sai por
               variavel CSS porque a cor oficial da Valve reprova em contraste
               como texto, e cada tema precisa do seu tom. */}
-          <span style={raridade ? { color: RARITY_TEXT_VAR[raridade] } : undefined}>
+          <span
+            style={raridade ? { color: RARITY_TEXT_VAR[raridade] } : undefined}
+          >
             {nome}
           </span>
           {desgaste && (
@@ -112,8 +124,12 @@ export function LinhaDePremio({
                 de cada linha. */}
             {time && <EmblemaDoTime time={time} tamanho="sm" />}
           </p>
+        ) : reservado ? (
+          <p className="mt-1 text-xs font-semibold text-amber-500">Reservado</p>
         ) : (
-          <p className="mt-1 text-xs font-semibold text-primary">{rotuloVago}</p>
+          <p className="mt-1 text-xs font-semibold text-primary">
+            {rotuloVago}
+          </p>
         )}
       </div>
     </li>

@@ -153,6 +153,10 @@ export default async function PublicRaffleDetailPage({
             claimedAt: true,
             raspadinhaQueLevou: {
               select: {
+                // O status entra junto: o prêmio tem dono desde a compra, e sem
+                // ele a lista pública anunciaria o ganhador antes de a pessoa
+                // raspar o próprio bilhete.
+                status: true,
                 reservation: {
                   select: {
                     participantName: true,
@@ -428,6 +432,9 @@ export default async function PublicRaffleDetailPage({
           null)
         : null,
       aberto: p.claimedByBox?.status !== "UNOPENED" && Boolean(p.claimedAt),
+      // Reservado é diferente de disponível: a caixa fechada já tem este
+      // prêmio, e contá-lo como disponível prometeria o que não existe mais.
+      reservado: p.claimedAt != null,
     }));
 
     if (raffle.surpriseBoxDisplayOrder === "DESC") return itens.reverse();
@@ -438,17 +445,27 @@ export default async function PublicRaffleDetailPage({
   // Mesma bagunça estável da caixa, e pelo mesmo motivo: em ordem de cadastro,
   // a lista fechada mostraria sempre os cinco primeiros, e os últimos nunca
   // apareceriam para quem não clica em "mostrar mais".
+  /** O bilhete já foi raspado? Só então o nome de quem levou pode aparecer. */
+  const reveladaAoPublico = (bilhete: { status: string } | null | undefined) =>
+    bilhete != null && bilhete.status !== "DISPONIVEL";
+
   const raspadinhasPublicas = raffle.raspadinhaEnabled
     ? ordemEmbaralhada(
         raffle.raspadinhaPremios.map((p) => ({
           id: p.id,
           premio: p.rotulo,
           raridade: p.skinRarity,
-          ganhador: p.raspadinhaQueLevou?.reservation.participantName ?? null,
-          time:
-            times.get(
-              p.raspadinhaQueLevou?.reservation.user?.favoriteTeamId ?? "",
-            ) ?? null,
+          ganhador: reveladaAoPublico(p.raspadinhaQueLevou)
+            ? (p.raspadinhaQueLevou?.reservation.participantName ?? null)
+            : null,
+          time: reveladaAoPublico(p.raspadinhaQueLevou)
+            ? (times.get(
+                p.raspadinhaQueLevou?.reservation.user?.favoriteTeamId ?? "",
+              ) ?? null)
+            : null,
+          // Prêmio já reservado a um bilhete fechado não é mais "disponível",
+          // mesmo que o nome de quem levou ainda não apareça.
+          reservado: p.claimedAt != null,
         })),
         (i) => i.id,
       )

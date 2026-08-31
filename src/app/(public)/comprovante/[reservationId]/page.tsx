@@ -66,9 +66,9 @@ const reservationInclude = {
       id: true,
       numero: true,
       status: true,
-      // O premio so vem quando o bilhete JA foi raspado. Enquanto esta
-      // DISPONIVEL nao existe premio nenhum: ele e sorteado no servidor no
-      // instante da revelacao, entao nao ha o que espiar no inspetor.
+      // A consulta traz o prêmio, e o mapeamento abaixo é quem decide se ele
+      // viaja: bilhete DISPONIVEL já TEM prêmio decidido desde a compra, e o
+      // corte precisa acontecer antes de virar prop.
       premio: { select: { id: true, tipo: true, rotulo: true, valor: true } },
     },
     orderBy: { numero: "asc" as const },
@@ -256,18 +256,24 @@ export default async function ReservationReceiptPage({
           }))
         : null;
 
+    // O PRÊMIO SÓ VIAJA DEPOIS DE RASPADA, pelo mesmo motivo da caixa: ele
+    // passou a ser decidido na confirmação do pagamento, então o bilhete
+    // fechado já sabe o que tem dentro. Mandar isso para o navegador
+    // entregaria o resultado antes do gesto, e nenhum esconderijo no React
+    // resolveria: o dado não pode chegar ao aparelho.
     const raspadinhas = reservation.raspadinhas.map((r) => ({
       id: r.id,
       numero: numeroDoBilhete(r.numero),
       status: r.status as "DISPONIVEL" | "PREMIADA" | "SEM_PREMIO",
-      premio: r.premio
-        ? {
-            id: r.premio.id,
-            tipo: r.premio.tipo as "PIX" | "SKIN",
-            rotulo: r.premio.rotulo,
-            valor: r.premio.valor == null ? null : Number(r.premio.valor),
-          }
-        : null,
+      premio:
+        r.status !== "DISPONIVEL" && r.premio
+          ? {
+              id: r.premio.id,
+              tipo: r.premio.tipo as "PIX" | "SKIN",
+              rotulo: r.premio.rotulo,
+              valor: r.premio.valor == null ? null : Number(r.premio.valor),
+            }
+          : null,
     }));
 
     // O PRÊMIO SÓ VIAJA DEPOIS DE ABERTA.

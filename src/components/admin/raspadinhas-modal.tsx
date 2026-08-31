@@ -97,6 +97,8 @@ export interface GanhadorDaRaspadinha {
   telefone: string | null;
   paisDoTelefone: string | null;
   raspadaEm: string | null;
+  /** A pessoa já raspou? O prêmio existe desde a compra, o gesto é depois. */
+  raspada: boolean;
   pagoEm: string | null;
 }
 
@@ -1103,7 +1105,8 @@ function Ganhadores({ ganhadores }: { ganhadores: GanhadorDaRaspadinha[] }) {
             </div>
             <NomeDoPremio ganhador={g} />
             <p className="text-[11px] text-muted-foreground tabular-nums">
-              Bilhete {numeroDoBilhete(g.numero)}
+              {g.raspada ? "Raspada" : "Não raspada"} · Bilhete{" "}
+              {numeroDoBilhete(g.numero)}
               {g.raspadaEm ? ` · ${formatDateTime(new Date(g.raspadaEm))}` : ""}
             </p>
           </li>
@@ -1122,6 +1125,9 @@ function Ganhadores({ ganhadores }: { ganhadores: GanhadorDaRaspadinha[] }) {
                 Prêmio
               </th>
               <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+                Status
+              </th>
+              <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
                 Bilhete
               </th>
               <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
@@ -1136,6 +1142,11 @@ function Ganhadores({ ganhadores }: { ganhadores: GanhadorDaRaspadinha[] }) {
                 <td className="px-4 py-2.5 font-medium">{g.ganhador}</td>
                 <td className="px-4 py-2.5">
                   <NomeDoPremio ganhador={g} />
+                </td>
+                <td className="px-4 py-2.5">
+                  <Badge variant="outline" className="text-[10px]">
+                    {g.raspada ? "Raspada" : "Não raspada"}
+                  </Badge>
                 </td>
                 <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground tabular-nums">
                   {numeroDoBilhete(g.numero)}

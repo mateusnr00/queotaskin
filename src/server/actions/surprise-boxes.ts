@@ -26,6 +26,8 @@ import {
   soltaNestaAbertura,
   type CompraQueAbre,
 } from "@/lib/saida";
+import { alocarPremiosDaReserva } from "@/server/services/alocacao";
+import { revelarCaixa } from "@/server/services/revelacao";
 import { dddDoTelefone } from "@/lib/cpf";
 import { z } from "zod";
 
@@ -74,6 +76,7 @@ export async function openSurpriseBoxAction(
         raffleId: true,
         prizeId: true,
         premioSorteadoEm: true,
+        alocacao: true,
         prize: { select: { id: true, title: true, prize: true } },
         reservation: {
           select: {
@@ -115,36 +118,47 @@ export async function openSurpriseBoxAction(
       return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
     }
 
-    // ABRIR É SÓ REVELAR. O prêmio foi decidido quando a caixa nasceu, na
-    // confirmação do pagamento (ver autoGenerateSurpriseBoxesForReservation).
-    // Antes ele era sorteado aqui, e por isso uma caixa fechada não dizia nada
-    // ao painel: quem administra só ficava sabendo do ganhador depois que a
-    // pessoa clicasse, o que podia levar dias ou não acontecer nunca.
-    if (box.premioSorteadoEm) {
-      const now = new Date();
-      if (box.prizeId && box.prize) {
-        const atualizou = await prisma.surpriseBox.updateMany({
-          where: { id: boxId, status: "UNOPENED" },
-          data: { status: "OPENED_PRIZE", openedAt: now },
-        });
-        if (atualizou.count === 0) return await refetchOpened(boxId);
-        return {
-          ok: true,
-          data: { status: "OPENED_PRIZE", prize: box.prize },
-        };
-      }
-      const atualizou = await prisma.surpriseBox.updateMany({
-        where: { id: boxId, status: "UNOPENED" },
-        data: { status: "OPENED_EMPTY", openedAt: now },
-      });
-      if (atualizou.count === 0) return await refetchOpened(boxId);
-      return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
+    // ABRIR É SÓ REVELAR.
+    //
+    // O prêmio foi decidido na confirmação do pagamento, pelo motor de
+    // alocação (services/alocacao.ts). Aqui não existe sorteio nenhum: o
+    // servidor lê o que já está gravado, confere a dona da caixa, vira o
+    // status e devolve. Requisições repetidas devolvem exatamente o mesmo.
+    if (box.alocacao === "ALOCADA") {
+      const revelada = await revelarCaixa(boxId);
+      if (revelada) return { ok: true, data: revelada };
+      return await refetchOpened(boxId);
     }
 
-    // CAIXA ANTIGA, de antes desta mudança: nasceu sem sorteio nenhum, e o
-    // caminho dela continua sendo o de sempre, sortear na abertura. Sem isto,
-    // toda caixa fechada comprada antes do deploy viraria vazia de uma vez.
-    // Some sozinho conforme essas caixas vão sendo abertas.
+    // AINDA NÃO ALOCADA. Não sorteia aqui: uma caixa nova que chegou neste
+    // estado é sinal de alocação interrompida, e sortear agora seria voltar
+    // ao defeito que este corretivo elimina. Termina a alocação (idempotente,
+    // com o mesmo cadeado) e revela o que ela decidir.
+    if (box.alocacao === "PENDENTE") {
+      await alocarPremiosDaReserva(box.reservationId, "CAIXA");
+      const depois = await prisma.surpriseBox.findUnique({
+        where: { id: boxId },
+        select: {
+          alocacao: true,
+          prize: { select: { id: true, title: true, prize: true } },
+        },
+      });
+      if (depois?.alocacao === "ALOCADA") {
+        const revelada = await revelarCaixa(boxId);
+        if (revelada) return { ok: true, data: revelada };
+        return await refetchOpened(boxId);
+      }
+      return {
+        ok: false,
+        error: "Não foi possível abrir agora. Tente de novo.",
+      };
+    }
+
+    // CAIXA LEGADO: nasceu antes de a decisão passar para a compra, e resolve
+    // na abertura como sempre fez. Nenhuma caixa nova entra aqui, e o caminho
+    // some sozinho conforme as antigas vão sendo abertas. Está separado de
+    // propósito: misturado com o de cima, uma falha na alocação cairia nele em
+    // silêncio.
     for (let attempt = 0; attempt < MAX_DRAW_RETRIES; attempt++) {
       // Recontado a cada tentativa: a caixa de agora ainda está UNOPENED, e
       // é ela que faz a última abertura soltar garantido.
@@ -169,6 +183,7 @@ export async function openSurpriseBoxAction(
             status: "OPENED_EMPTY",
             openedAt: new Date(),
             premioSorteadoEm: new Date(),
+            alocacao: "ALOCADA",
           },
         });
         if (updated.count === 0) {
@@ -194,6 +209,7 @@ export async function openSurpriseBoxAction(
             openedAt: new Date(),
             premioSorteadoEm: new Date(),
             vendidosNaSaida: drawn.vendidos,
+            alocacao: "ALOCADA",
           },
         });
         if (boxUpdated.count === 0) {
@@ -233,6 +249,7 @@ export async function openSurpriseBoxAction(
         status: "OPENED_EMPTY",
         openedAt: new Date(),
         premioSorteadoEm: new Date(),
+        alocacao: "ALOCADA",
       },
     });
     return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };

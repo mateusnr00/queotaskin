@@ -500,6 +500,14 @@ export async function conferirRaspadinhasAction(
             tickets: { where: { status: { in: ["PAID", "AWARDED"] } } },
           },
         },
+        // Bilhete que existe mas ficou sem decisão: sinal de alocação
+        // interrompida. Sem olhar isto, a conferência via a contagem certa e
+        // seguia adiante, deixando o bilhete pendente para sempre.
+        raspadinhas: {
+          where: { alocacao: "PENDENTE" },
+          select: { id: true },
+          take: 1,
+        },
       },
     });
     const faltouOlhar = Math.max(0, pagas.length - TETO_DA_CONFERENCIA);
@@ -515,7 +523,11 @@ export async function conferirRaspadinhasAction(
       }
       const alcancados = combos.filter((c) => titulos >= c.minimo);
       const esperado = Math.max(...alcancados.map((c) => c.quantidade));
-      if (reserva._count.raspadinhas >= esperado) continue;
+      const faltamBilhetes = reserva._count.raspadinhas < esperado;
+      const faltaDecidir = reserva.raspadinhas.length > 0;
+      if (!faltamBilhetes && !faltaDecidir) continue;
+      // Idempotente das duas pontas: cria o que falta e termina a alocação de
+      // quem ficou pendente. Quem já está resolvido não é tocado.
       criadas += await gerarRaspadinhasParaReserva(reserva.id);
     }
 

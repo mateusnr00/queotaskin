@@ -110,13 +110,17 @@ export default async function ComprasPage({
   // Quem já levou prêmio na raspadinha. A caixa surpresa mostrava os dela
   // desde sempre; a raspadinha não tinha onde, e o prêmio sorteado sumia da
   // vista de quem precisa entregar.
+  // Premiada é quem TEM prêmio, e não quem já raspou: o prêmio é decidido na
+  // compra, então o painel enxerga o ganhador sem esperar o gesto, igual à
+  // caixa surpresa. O status da linha diz se a pessoa já viu ou não.
   const raspadinhasPremiadas = await prisma.raspadinha.findMany({
-    where: { raffleId: id, status: "PREMIADA" },
-    orderBy: { raspadaEm: "desc" },
+    where: { raffleId: id, premioId: { not: null } },
+    orderBy: [{ raspadaEm: "desc" }, { alocadoEm: "desc" }, { numero: "asc" }],
     take: 200,
     select: {
       id: true,
       numero: true,
+      status: true,
       raspadaEm: true,
       premio: { select: { rotulo: true, skinRarity: true } },
       reservation: {
@@ -410,6 +414,7 @@ export default async function ComprasPage({
             telefone: r.reservation.participantPhone,
             paisDoTelefone: r.reservation.user?.phoneCountry ?? null,
             raspadaEm: r.raspadaEm?.toISOString() ?? null,
+            raspada: r.status !== "DISPONIVEL",
             pagoEm: r.reservation.paidAt?.toISOString() ?? null,
           })),
         }}

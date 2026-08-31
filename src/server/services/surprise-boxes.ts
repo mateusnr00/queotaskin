@@ -11,8 +11,8 @@
 // 3. Calcula quantas caixas o comprador ganha:
 //    - Acumulativo: soma todos os combos com threshold ≤ tickets.
 //    - Não acumulativo: pega só o combo com maior threshold ≤ tickets.
-// 4. Cria N SurpriseBox em status UNOPENED e SORTEIA O PRÊMIO DE CADA UMA
-//    aqui mesmo, na confirmação do pagamento.
+// 4. Cria N SurpriseBox e chama o motor de alocação, no MESMO cadeado, para
+//    decidir o destino de cada uma. Ver services/alocacao.ts.
 //
 // O SORTEIO MUDOU DE MOMENTO, e isso é o que faz o painel enxergar.
 //
@@ -26,16 +26,8 @@
 // do comprovante manda o prêmio só das caixas já abertas, senão bastaria abrir
 // o inspetor para saber qual caixa vale a pena.
 
-import { randomInt } from "node:crypto";
-
 import { prisma } from "@/lib/db";
-import { dddDoTelefone } from "@/lib/cpf";
-import {
-  podeSairAgora,
-  premioDaVez,
-  soltaNestaAbertura,
-  type CompraQueAbre,
-} from "@/lib/saida";
+import { alocarNaTransacao } from "@/server/services/alocacao";
 
 export async function autoGenerateSurpriseBoxesForReservation(
   reservationId: string,
@@ -83,253 +75,39 @@ export async function autoGenerateSurpriseBoxesForReservation(
   // padrão do crédito de XP (xp.ts). A transação garante o lock por toda a
   // janela; ele é liberado ao fim dela.
   const raffleId = reservation.raffleId;
-  const criadas = await prisma.$transaction(async (tx) => {
-    // Forma de dois argumentos (int,int), igual ao lock de XP em xp.ts: casa
-    // com a sobrecarga sem cast. O primeiro argumento é um namespace fixo
-    // ('surprise_box') pra não colidir com locks de outras features.
-    await tx.$executeRaw`
-      SELECT pg_advisory_xact_lock(hashtext('surprise_box'), hashtext(${reservationId}))
-    `;
+  // CRIAR E ALOCAR SÃO A MESMA OPERAÇÃO, dentro do mesmo cadeado.
+  //
+  // Antes o cadeado cobria só a criação, e o sorteio vinha depois, solto. O
+  // webhook e a reconsulta de status chegam juntos o tempo todo: um criava as
+  // unidades e o outro, encontrando-as criadas, seguia direto para o sorteio,
+  // e os dois podiam sortear a mesma compra. Agora quem chega depois espera,
+  // encontra tudo ALOCADA e sai sem fazer nada.
+  return prisma.$transaction(
+    async (tx) => {
+      // Forma de dois argumentos (int,int), igual ao lock de XP em xp.ts: casa
+      // com a sobrecarga sem cast. O primeiro argumento é um namespace fixo
+      // pra não colidir com locks de outras features.
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtext('alocacao'), hashtext(${reservationId}))
+      `;
 
-    const existing = await tx.surpriseBox.count({ where: { reservationId } });
-    const toCreate = expected - existing;
-    if (toCreate <= 0) return 0;
+      const existing = await tx.surpriseBox.count({ where: { reservationId } });
+      const toCreate = expected - existing;
+      if (toCreate > 0) {
+        await tx.surpriseBox.createMany({
+          data: Array.from({ length: toCreate }, () => ({
+            raffleId,
+            reservationId,
+          })),
+        });
+      }
 
-    await tx.surpriseBox.createMany({
-      data: Array.from({ length: toCreate }, () => ({
-        raffleId,
-        reservationId,
-      })),
-    });
-
-    return toCreate;
-  });
-
-  if (criadas > 0) await sortearPremiosDaReserva(reservationId);
-  return criadas;
-}
-
-/**
- * Decide o prêmio de cada caixa desta compra que ainda não foi sorteada.
- *
- * FORA DA TRANSAÇÃO DA CRIAÇÃO, de propósito. Reservar prêmio é disputa com
- * os outros compradores, e prender isso na mesma transação que segura o
- * cadeado da reserva faria uma compra grande travar o pagamento de todo mundo
- * enquanto sorteia.
- *
- * Caixa por caixa, e não tudo de uma vez, porque cada sorteio depende do que
- * sobrou depois do anterior: o ponto de saída agendado é sequencial e o bolo
- * encolhe a cada prêmio reservado.
- */
-async function sortearPremiosDaReserva(reservationId: string): Promise<void> {
-  const reserva = await prisma.reservation.findUnique({
-    where: { id: reservationId },
-    select: {
-      raffleId: true,
-      paidAt: true,
-      createdAt: true,
-      participantPhone: true,
-      _count: {
-        select: { tickets: { where: { status: { in: ["PAID", "AWARDED"] } } } },
-      },
+      // Sempre, e não só quando criou: uma execução interrompida antes deixa
+      // unidades PENDENTE, e é esta chamada que as termina na tentativa
+      // seguinte, sem tocar no que já foi decidido.
+      await alocarNaTransacao(tx, reservationId, "CAIXA");
+      return Math.max(0, toCreate);
     },
-  });
-  if (!reserva) return;
-
-  const aSortear = await prisma.surpriseBox.findMany({
-    where: { reservationId, premioSorteadoEm: null, status: "UNOPENED" },
-    select: { id: true },
-    // Mesma ordem que a tela mostra, e com o id desempatando: as caixas nascem
-    // no mesmo instante, e sem isso o sorteio percorreria uma ordem e a tela
-    // mostraria outra.
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  });
-  if (aSortear.length === 0) return;
-
-  const compra: CompraQueAbre = {
-    titulos: reserva._count.tickets,
-    quando: reserva.paidAt ?? reserva.createdAt,
-    ddd: dddDoTelefone(reserva.participantPhone),
-  };
-
-  for (let i = 0; i < aSortear.length; i++) {
-    // Uma caixa que falha não derruba as outras. Sem isto, um prêmio em
-    // estado inconsistente fazia a compra inteira ficar sem sorteio nenhum, e
-    // em silêncio: quem chama esta função engole o erro para não travar a
-    // confirmação do pagamento.
-    try {
-      await sortearUmaCaixa(
-        aSortear[i]!.id,
-        reserva.raffleId,
-        compra,
-        aSortear.length - i,
-      );
-    } catch (err) {
-      console.error("[sortearPremiosDaReserva] caixa", aSortear[i]!.id, err);
-    }
-  }
-}
-
-/** Quantas vezes tentar quando outro comprador leva o prêmio no meio. */
-const TENTATIVAS_DE_SORTEIO = 3;
-
-/**
- * Sorteia e reserva o prêmio de UMA caixa, ou a marca como sem prêmio.
- *
- * A reserva do prêmio é a mesma trava de sempre: só leva quem encontrar
- * `claimedAt` nulo. Dois compradores sorteando o mesmo prêmio no mesmo
- * instante disputam esta linha, e um só ganha; o outro tenta de novo.
- */
-async function sortearUmaCaixa(
-  boxId: string,
-  raffleId: string,
-  compra: CompraQueAbre,
-  caixasRestantes: number,
-): Promise<void> {
-  for (let tentativa = 0; tentativa < TENTATIVAS_DE_SORTEIO; tentativa++) {
-    const { premioId, vendidos } = await sortearPremio(
-      raffleId,
-      compra,
-      caixasRestantes,
-    );
-    if (!premioId) {
-      await prisma.surpriseBox.updateMany({
-        where: { id: boxId, premioSorteadoEm: null },
-        data: { premioSorteadoEm: new Date(), vendidosNaSaida: vendidos },
-      });
-      return;
-    }
-
-    const levou = await prisma.$transaction(async (tx) => {
-      const claimed = await tx.surpriseBoxPrize.updateMany({
-        where: { id: premioId, claimedAt: null, locked: false },
-        data: { claimedAt: new Date() },
-      });
-      if (claimed.count === 0) return false;
-      await tx.surpriseBox.updateMany({
-        where: { id: boxId, premioSorteadoEm: null },
-        data: {
-          prizeId: premioId,
-          premioSorteadoEm: new Date(),
-          // A venda do instante, para o painel poder dizer em quantos por
-          // cento este prêmio saiu de verdade.
-          vendidosNaSaida: vendidos,
-        },
-      });
-      return true;
-    });
-    if (levou) return;
-  }
-
-  // Perdeu as três disputas: fecha sem prêmio, senão a caixa ficaria para
-  // sempre sem sorteio e a abertura não saberia o que mostrar.
-  await prisma.surpriseBox.updateMany({
-    where: { id: boxId, premioSorteadoEm: null },
-    data: { premioSorteadoEm: new Date() },
-  });
-}
-
-/**
- * Qual prêmio sai agora, ou nulo para caixa vazia.
- *
- * Mesmas regras de sempre, na mesma ordem: o agendado que já venceu manda, a
- * chance é a reserva, e prêmio marcado para mais adiante nem entra no bolo.
- * Só mudou o momento em que isto roda.
- */
-async function sortearPremio(
-  raffleId: string,
-  compra: CompraQueAbre,
-  caixasRestantes: number,
-): Promise<{ premioId: string | null; vendidos: number }> {
-  const disponiveis = await prisma.surpriseBoxPrize.findMany({
-    // `claimedByBox: null` além do `claimedAt`: são duas marcas da mesma
-    // coisa, e elas podem discordar (uma correção no banco que zera uma e
-    // esquece a outra, por exemplo). Quando discordam, o prêmio entra no bolo
-    // já preso a outra caixa, e a gravação bate no unique de prizeId e derruba
-    // o sorteio da compra inteira. Perguntar pelas duas fecha essa porta.
-    where: { raffleId, locked: false, claimedAt: null, claimedByBox: null },
-    select: {
-      id: true,
-      mode: true,
-      odds: true,
-      tipoDeSaida: true,
-      saidaEmTitulos: true,
-      saidaTitulosDe: true,
-      saidaTitulosAte: true,
-      saidaDataDe: true,
-      saidaDataAte: true,
-      saidaDdds: true,
-    },
-  });
-  const vendidos = await prisma.ticket.count({
-    where: { raffleId, status: "PAID" },
-  });
-  if (disponiveis.length === 0) return { premioId: null, vendidos };
-
-  const agendado = premioDaVez(
-    disponiveis.map((p) => ({
-      id: p.id,
-      saida: {
-        tipo: p.tipoDeSaida,
-        emTitulos: p.saidaEmTitulos,
-        titulosDe: p.saidaTitulosDe,
-        titulosAte: p.saidaTitulosAte,
-        dataDe: p.saidaDataDe,
-        dataAte: p.saidaDataAte,
-        ddds: p.saidaDdds,
-      },
-    })),
-    { vendidos, compra },
+    { timeout: 30_000, maxWait: 15_000 },
   );
-
-  const liberados = disponiveis.filter((p) =>
-    podeSairAgora(
-      {
-        tipo: p.tipoDeSaida,
-        emTitulos: p.saidaEmTitulos,
-        titulosDe: p.saidaTitulosDe,
-        titulosAte: p.saidaTitulosAte,
-        dataDe: p.saidaDataDe,
-        dataAte: p.saidaDataAte,
-        ddds: p.saidaDdds,
-      },
-      { vendidos, compra },
-    ),
-  );
-
-  const percent = liberados.filter(
-    (p) => p.mode === "PERCENT" && p.odds != null,
-  );
-  const random = liberados.filter((p) => p.mode === "RANDOM");
-
-  const emPe = new Set(random.map((p) => p.id));
-  if (agendado) emPe.add(agendado);
-  const solta = soltaNestaAbertura(
-    { premios: emPe.size, aberturasRestantes: caixasRestantes },
-    randomInt(0, 10_000) / 10_000,
-  );
-
-  if (agendado && solta) return { premioId: agendado, vendidos };
-
-  const rolagem = randomInt(0, 10000) / 100;
-  let acumulado = 0;
-  for (const p of embaralhar(percent)) {
-    acumulado += Number(p.odds);
-    if (rolagem < acumulado) return { premioId: p.id, vendidos };
-  }
-
-  if (random.length > 0 && solta) {
-    return { premioId: random[randomInt(random.length)]!.id, vendidos };
-  }
-  return { premioId: null, vendidos };
-}
-
-/** Sem viés de ordem de cadastro entre prêmios de mesma chance. */
-function embaralhar<T>(lista: T[]): T[] {
-  const a = [...lista];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1);
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
 }

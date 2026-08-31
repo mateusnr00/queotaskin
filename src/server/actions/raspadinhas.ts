@@ -31,6 +31,8 @@ import { dddDoTelefone } from "@/lib/cpf";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { alocarPremiosDaReserva } from "@/server/services/alocacao";
+import { revelarBilhete } from "@/server/services/revelacao";
 import { getCurrentTenant } from "@/lib/tenant";
 import { sessionMayAccessOwnedResource } from "@/lib/auth-helpers";
 import type { ActionResult } from "@/server/actions/auth";
@@ -85,6 +87,7 @@ export async function revelarRaspadinhaAction(
       select: {
         id: true,
         status: true,
+        alocacao: true,
         reservationId: true,
         raffleId: true,
         premio: { select: { id: true, tipo: true, rotulo: true, valor: true } },
@@ -131,11 +134,60 @@ export async function revelarRaspadinhaAction(
       return { ok: true, data: { status: "SEM_PREMIO", premio: null } };
     }
 
+    // RASPAR É SÓ REVELAR.
+    //
+    // O prêmio foi decidido na confirmação do pagamento, pelo motor de
+    // alocação (services/alocacao.ts). Aqui não existe sorteio nenhum: o
+    // servidor lê o que está gravado, confere a dona do bilhete, marca como
+    // revelado e devolve. Raspar virou gesto de interface, e o resultado não
+    // depende mais da ordem, do aparelho nem de recarregar a página.
+    if (bilhete.alocacao === "ALOCADA") {
+      const revelado = await revelarBilhete(bilhete.id);
+      if (revelado) return { ok: true, data: revelado };
+      return { ok: false, error: "Erro ao revelar a raspadinha" };
+    }
+
+    // AINDA NÃO ALOCADO: sinal de alocação interrompida. Termina a alocação,
+    // que é idempotente e usa o mesmo cadeado da geração, e revela o que ela
+    // decidir. Não sorteia aqui.
+    if (bilhete.alocacao === "PENDENTE") {
+      await alocarPremiosDaReserva(bilhete.reservationId, "RASPADINHA");
+      const depois = await prisma.raspadinha.findUnique({
+        where: { id: bilhete.id },
+        select: {
+          alocacao: true,
+          premio: {
+            select: { id: true, tipo: true, rotulo: true, valor: true },
+          },
+        },
+      });
+      if (depois?.alocacao === "ALOCADA") {
+        const revelado = await revelarBilhete(bilhete.id);
+        if (revelado) return { ok: true, data: revelado };
+      }
+      return {
+        ok: false,
+        error: "Não foi possível revelar agora. Tente de novo.",
+      };
+    }
+
+    // BILHETE LEGADO: nasceu antes de a decisão passar para a compra, e
+    // resolve na raspagem como sempre fez.
+    //
+    // Alocar estes bilhetes de uma vez na migração reservaria prêmios para
+    // quem talvez nunca raspe, tirando do bolo de quem compra amanhã. Deixar
+    // como estão não muda resultado nenhum: eles seguem exatamente o caminho
+    // que já seguiriam. Nenhum bilhete novo entra aqui, e o caminho some
+    // sozinho conforme os antigos vão sendo raspados.
     for (let tentativa = 0; tentativa < TENTATIVAS; tentativa++) {
       // Recontado a cada tentativa: o bilhete de agora ainda está DISPONIVEL,
       // e é ele que faz a última raspagem soltar garantido.
       const bilhetesRestantes = await prisma.raspadinha.count({
-        where: { reservationId: bilhete.reservationId, status: "DISPONIVEL" },
+        where: {
+          reservationId: bilhete.reservationId,
+          status: "DISPONIVEL",
+          alocacao: "LEGADO",
+        },
       });
       const sorteado = await sortearPremio(
         bilhete.raffleId,
@@ -152,7 +204,12 @@ export async function revelarRaspadinhaAction(
         // fica pendente: pendente faria a pessoa raspar de novo para sempre.
         await prisma.raspadinha.updateMany({
           where: { id: bilhete.id, status: "DISPONIVEL" },
-          data: { status: "SEM_PREMIO", raspadaEm: new Date() },
+          data: {
+            status: "SEM_PREMIO",
+            raspadaEm: new Date(),
+            alocacao: "ALOCADA",
+            alocadoEm: new Date(),
+          },
         });
         return { ok: true, data: { status: "SEM_PREMIO", premio: null } };
       }
@@ -171,6 +228,8 @@ export async function revelarRaspadinhaAction(
           status: "PREMIADA",
           premioId: sorteado.id,
           raspadaEm: new Date(),
+          alocacao: "ALOCADA",
+          alocadoEm: new Date(),
         },
       });
 
@@ -207,7 +266,12 @@ export async function revelarRaspadinhaAction(
     // Três disputas perdidas seguidas: a essa altura o bolo esvaziou.
     await prisma.raspadinha.updateMany({
       where: { id: bilhete.id, status: "DISPONIVEL" },
-      data: { status: "SEM_PREMIO", raspadaEm: new Date() },
+      data: {
+        status: "SEM_PREMIO",
+        raspadaEm: new Date(),
+        alocacao: "ALOCADA",
+        alocadoEm: new Date(),
+      },
     });
     return { ok: true, data: { status: "SEM_PREMIO", premio: null } };
   } catch (err) {

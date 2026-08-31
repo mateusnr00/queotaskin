@@ -32,6 +32,8 @@ export interface CaixaPublica {
   raridade: SkinRarity | null;
   /** Nome de quem levou, quando já foi aberta. */
   ganhador: string | null;
+  /** O prêmio já tem dono, mas a unidade ainda não foi aberta. */
+  reservado?: boolean;
   /** Time do ganhador, resolvido no servidor. Nulo quando não há conta. */
   time: TimeDeCS2 | null;
 }
@@ -40,7 +42,9 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
   const [aberto, setAberto] = useState(false);
   if (caixas.length === 0) return null;
 
-  const sorteados = caixas.filter((c) => c.ganhador).length;
+  // Reservado conta como saído: o prêmio já tem dono, mesmo que o nome só
+  // apareça depois da abertura.
+  const sorteados = caixas.filter((c) => c.ganhador || c.reservado).length;
   const visiveis =
     aberto || caixas.length <= VISIVEIS_FECHADO
       ? caixas
@@ -73,6 +77,7 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
             raridade={c.raridade}
             ganhador={c.ganhador}
             time={c.time}
+            reservado={c.reservado}
             rotuloVago="Disponível"
           />
         ))}
@@ -85,9 +90,14 @@ export function SurpriseBoxesSection({ caixas }: { caixas: CaixaPublica[] }) {
           className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
         >
           <ChevronDown
-            className={cn("h-4 w-4 transition-transform", aberto && "rotate-180")}
+            className={cn(
+              "h-4 w-4 transition-transform",
+              aberto && "rotate-180",
+            )}
           />
-          {aberto ? "Mostrar menos" : `Mostrar mais (${caixas.length - VISIVEIS_FECHADO})`}
+          {aberto
+            ? "Mostrar menos"
+            : `Mostrar mais (${caixas.length - VISIVEIS_FECHADO})`}
         </button>
       )}
     </section>

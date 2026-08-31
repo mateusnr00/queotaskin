@@ -92,6 +92,8 @@ export interface PremioDeRaspadinha {
   raridade: SkinRarity | null;
   /** Nome de quem levou, quando já saiu. */
   ganhador: string | null;
+  /** O prêmio já tem dono, mas a unidade ainda não foi aberta. */
+  reservado?: boolean;
   /** Time do ganhador, resolvido no servidor. Nulo quando não há conta. */
   time: TimeDeCS2 | null;
 }
@@ -104,7 +106,10 @@ export function RaspadinhasSection({
   const [aberto, setAberto] = useState(false);
   if (premios.length === 0) return null;
 
-  const sorteados = premios.filter((p) => p.ganhador).length;
+  // Reservado conta como saído: o prêmio já tem dono, mesmo que o nome só
+  // apareça depois da raspagem. Contá-lo como disponível prometeria ao próximo
+  // comprador um prêmio que não existe mais no bolo.
+  const sorteados = premios.filter((p) => p.ganhador || p.reservado).length;
   const visiveis =
     aberto || premios.length <= VISIVEIS_FECHADO
       ? premios
@@ -134,6 +139,7 @@ export function RaspadinhasSection({
             raridade={p.raridade}
             ganhador={p.ganhador}
             time={p.time}
+            reservado={p.reservado}
             rotuloVago="Disponível"
           />
         ))}

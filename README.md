@@ -180,6 +180,85 @@ Counter-Strike, calibrado para o modo escuro.
 | `src/server/services/deliveries.ts` | Fila de entregas pós-sorteio |
 | `src/lib/cs2.test.ts` | Testes da lógica de domínio |
 
+## Caixas surpresa e raspadinhas: o prêmio é decidido na compra
+
+As duas mecânicas dividem o mesmo motor, `src/server/services/alocacao.ts`.
+Não existe sorteio no clique: quando o pagamento é confirmado, as unidades
+são criadas e os prêmios já são distribuídos entre elas. Abrir a caixa ou
+raspar o bilhete apenas **revela** o que está gravado.
+
+```
+PAGAMENTO CONFIRMADO → combos definem a quantidade → unidades criadas →
+prêmios elegíveis identificados → distribuídos entre as unidades →
+gravado → o usuário abre/raspa → a tela só revela
+```
+
+O resultado não muda com a ordem de abertura, com refresh, com outro
+aparelho, com requisição duplicada, nem com "abrir todas".
+
+### Distribuição, e não chance por unidade
+
+`src/lib/distribuicao.ts` faz amostragem sem reposição: cada unidade leva
+com probabilidade `prêmios restantes ÷ unidades restantes`. Isso garante que
+N prêmios elegíveis premiem exatamente N unidades, espalhadas, em vez de
+saírem todos nas primeiras. Prêmios com `odds` (chance) continuam sendo
+rolagem independente, aplicada depois, só nas unidades que sobraram vazias.
+
+### Quais prêmios entram
+
+O motor calcula quantos títulos estavam vendidos antes da compra
+(`vendidosAntes`) e quantos ficaram depois (`vendidosNaSaida`), e considera
+elegível todo prêmio cujo ponto de saída caiu **dentro desse intervalo**.
+Quem tinha 12 vendidos e compra 25 leva tanto o prêmio de 14 quanto o de 32.
+Prêmios travados (`locked`) nunca entram. `PERSONALIZADO` é resolvido aqui,
+não na abertura.
+
+### Cadeado e idempotência
+
+Criação e alocação acontecem na mesma transação, sob
+`pg_advisory_xact_lock(hashtext('alocacao'), hashtext(reservationId))`, e o
+bolo de prêmios é lido com `FOR UPDATE SKIP LOCKED`. Duas confirmações do
+mesmo pagamento, ou dois webhooks simultâneos, produzem o mesmo resultado:
+`alocarPremiosDaReserva()` pode ser chamada N vezes: a segunda não acha
+unidade `PENDENTE` e não escreve nada. A alocação é imutável.
+
+Revelar (`src/server/services/revelacao.ts`) é igualmente idempotente: o
+update é guardado por `where: { status: "UNOPENED" }` (ou `"DISPONIVEL"`),
+então a segunda requisição não escreve e devolve o mesmo resultado.
+
+### Três estados, sem ambiguidade
+
+`EstadoDaAlocacao` distingue o que antes era um `null` ambíguo:
+
+| Estado | O que significa |
+|---|---|
+| `LEGADO` | Unidade anterior à migração. Continua sorteando na abertura, pelo caminho antigo. |
+| `PENDENTE` | Criada, mas a alocação não terminou (processo interrompido). É retomada na primeira abertura ou pelo botão "Conferir e entregar". |
+| `ALOCADA` | Destino gravado. Abrir só revela. |
+
+A migração `20260901020000_estado_da_alocacao` não sorteia nada: marca como
+`ALOCADA` o que já tinha prêmio ou já fora aberto, e como `LEGADO` o resto.
+Nenhum histórico é reescrito e nenhuma caixa antiga fica vazia.
+
+### O prêmio não viaja antes da revelação
+
+Como o destino passa a existir antes do gesto, mandá-lo ao navegador
+entregaria o jogo. O comprovante só serializa `prize`/`premio` depois que a
+unidade saiu de `UNOPENED`/`DISPONIVEL`; a página pública mostra o prêmio
+como **Reservado** (nem "Disponível", nem com o nome do ganhador) enquanto a
+unidade não foi aberta.
+
+### Onde mexer
+
+| Arquivo | O quê |
+|---|---|
+| `src/lib/distribuicao.ts` | Espalhamento puro, sem banco |
+| `src/server/services/alocacao.ts` | Motor compartilhado: elegibilidade, cadeado, gravação |
+| `src/server/services/revelacao.ts` | Virar o status e devolver o que está gravado |
+| `src/server/services/surprise-boxes.ts` | Combos e criação das caixas |
+| `src/server/services/raspadinhas.ts` | Combos e criação dos bilhetes |
+| `src/server/services/alocacao.integration.test.ts` | Cenários contra banco de verdade |
+
 ## Sistema de rank
 
 Progressão por gasto, pensada para recorrência: o jogador volta porque o

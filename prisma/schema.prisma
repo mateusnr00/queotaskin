@@ -1235,6 +1235,23 @@ enum SurpriseBoxPrizeMode {
   PERCENT // odds-based, admin define a chance (%) daquele item sair
 }
 
+/// Em que pe esta a decisao do premio de uma unidade (caixa ou raspadinha).
+///
+/// Existe porque `prizeId = null` sozinho nao distingue tres coisas diferentes:
+/// "ainda nao decidi", "decidi e nao deu premio" e "nasci antes de existir
+/// decisao na compra". Sem separar, uma falha na alocacao fazia a unidade cair
+/// em silencio no caminho antigo, sorteando na abertura.
+enum EstadoDaAlocacao {
+  /// Criada antes do sorteio passar para a compra. Resolve na abertura, como
+  /// sempre fez. Nenhuma unidade nova entra neste estado.
+  LEGADO
+  /// Criada e esperando a alocacao. Se ficar parada aqui, houve falha: a
+  /// alocacao pode ser repetida sem risco, e nunca resolve na abertura.
+  PENDENTE
+  /// Destino definido e gravado. A partir daqui e imutavel.
+  ALOCADA
+}
+
 enum SurpriseBoxStatus {
   UNOPENED // caixa criada pós-pagamento, aguardando o comprador abrir
   OPENED_PRIZE // aberta e ganhou um prêmio (prizeId preenchido)
@@ -1328,6 +1345,14 @@ model SurpriseBox {
   prizeId       String?           @unique
   openedAt      DateTime?
 
+  /// O estado da decisao desta caixa. Ver EstadoDaAlocacao.
+  alocacao EstadoDaAlocacao @default(PENDENTE)
+
+  /// Quantos titulos a campanha tinha vendido ANTES da compra que gerou esta
+  /// caixa. Com `vendidosNaSaida` forma o intervalo que a compra atravessou, e
+  /// e o que permite conferir depois se um premio saiu no ponto certo.
+  vendidosAntes Int?
+
   /// Quantos titulos a campanha tinha vendido quando esta caixa foi sorteada.
   ///
   /// Guardado no momento do sorteio, e nao recalculado depois: a venda anda,
@@ -1352,6 +1377,7 @@ model SurpriseBox {
   updatedAt DateTime @updatedAt
 
   @@index([reservationId])
+  @@index([reservationId, alocacao])
   @@index([raffleId, status])
 }
 
@@ -1460,9 +1486,22 @@ model Raspadinha {
   /// visual, nao chave: quem manda e o id.
   numero Int
 
-  /// 1:1 com o premio levado. Nulo enquanto nao raspou ou se nao premiou.
+  /// 1:1 com o premio levado. Nulo quando a alocacao nao deu premio.
+  ///
+  /// Decidido na CONFIRMACAO DO PAGAMENTO, igual a caixa surpresa, e nao mais
+  /// no primeiro traco da raspagem. Raspar passou a ser so revelacao.
   premioId  String?   @unique
   raspadaEm DateTime?
+
+  /// O estado da decisao deste bilhete. Ver EstadoDaAlocacao.
+  alocacao EstadoDaAlocacao @default(PENDENTE)
+
+  /// Quando a alocacao decidiu o destino deste bilhete.
+  alocadoEm DateTime?
+
+  /// O intervalo de venda que a compra deste bilhete atravessou.
+  vendidosAntes   Int?
+  vendidosNaSaida Int?
 
   raffle      Raffle            @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   reservation Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
@@ -1473,6 +1512,7 @@ model Raspadinha {
 
   @@unique([raffleId, numero])
   @@index([reservationId])
+  @@index([reservationId, alocacao])
   @@index([raffleId, status])
 }
 
