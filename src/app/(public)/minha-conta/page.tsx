@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Send,
+  Link2,
   Shield,
   TicketCheck,
   UserRound,
@@ -62,9 +63,12 @@ export default async function MyAccountPage() {
       steamId: true,
       favoriteTeamId: true,
       createdAt: true,
+      affiliate: { select: { status: true } },
     },
   });
   if (!user) notFound();
+
+  const ehAfiliado = user.affiliate?.status === "ACTIVE";
 
   const times = await listarTimesAtivos();
   const timeDoCoracao = times.find((t) => t.id === user.favoriteTeamId) ?? null;
@@ -325,6 +329,35 @@ export default async function MyAccountPage() {
           que servem. Ela volta aberta, com o cabeçalho do próprio componente
           em vez de um resumo repetido por fora. */}
       {rankOn && <RankLadder xp={xp} />}
+
+      {/* A porta do programa de afiliados. Fica no fim, e aparece para todo
+          mundo: quem já é afiliado vem aqui buscar o link, e quem não é
+          descobre que o programa existe. Quem não participa continua sem ver
+          métrica nenhuma, isso é decidido lá dentro. */}
+      <Moldura>
+        <Link
+          href="/minha-conta/afiliados"
+          className="flex items-center gap-3 p-4 transition-colors hover:bg-white/[0.03] md:p-5"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">
+            <Link2 aria-hidden className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-bold">
+              Programa de Afiliados
+            </span>
+            <span className="block text-sm leading-relaxed text-muted-foreground">
+              {ehAfiliado
+                ? "Seu link, suas Entradas Grátis e quem você já indicou."
+                : "A cada R$ 10 em compras dos seus indicados, uma Entrada Grátis."}
+            </span>
+          </span>
+          <ChevronRight
+            aria-hidden
+            className="h-4 w-4 shrink-0 text-muted-foreground"
+          />
+        </Link>
+      </Moldura>
     </div>
   );
 }

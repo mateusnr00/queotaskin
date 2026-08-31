@@ -24,6 +24,7 @@ import { autoAwardTicketsForReservation } from "@/server/services/awarded-ticket
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation } from "@/server/services/xp";
+import { processarPagamentoConfirmado } from "@/server/services/afiliados";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -184,6 +185,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
     // Credita o XP do rank. Idempotente: reentrega do webhook não dobra.
     await awardXpForReservation(payment.reservationId);
+    // O programa de afiliados: confirma a Entrada Grátis usada nesta compra e
+    // credita o progresso de quem indicou. Idempotente por índice único, o
+    // que importa aqui: este webhook chega mais de uma vez.
+    await processarPagamentoConfirmado(payment.reservationId).catch((err) =>
+      console.error(`[syncpay webhook] afiliado falhou:`, err),
+    );
   } else if (resolved === "REJECTED" && payment.status === "PENDING") {
     await prisma.payment.update({
       where: { id: payment.id },

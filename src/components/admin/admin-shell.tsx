@@ -27,6 +27,7 @@ import {
   Users2,
   Wallet,
   X,
+  Link2,
 } from "lucide-react";
 
 import { logoutAction } from "@/server/actions/auth";
@@ -46,6 +47,7 @@ const NAV_GERAL = [
   { href: "/admin/entregas", label: "Entregas", icon: PackageCheck },
   { href: "/admin/times", label: "Times", icon: Shield },
   { href: "/admin/clientes", label: "Clientes", icon: Users2 },
+  { href: "/admin/afiliados", label: "Afiliados", icon: Link2 },
   // Separado de Clientes porque aquela lista ordena por gasto, e quem é
   // da equipe quase nunca compra: procurar um admin lá é procurar no fim.
   { href: "/admin/usuarios", label: "Usuários", icon: UserCog },

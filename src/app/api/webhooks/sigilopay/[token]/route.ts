@@ -37,6 +37,10 @@ import { autoAwardTicketsForReservation } from "@/server/services/awarded-ticket
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation } from "@/server/services/xp";
+import {
+  processarPagamentoConfirmado,
+  reverterCompraDeIndicado,
+} from "@/server/services/afiliados";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -165,6 +169,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
     // Credita o XP do rank. Idempotente: reentrega do webhook não dobra.
     await awardXpForReservation(payment.reservationId);
+    // O programa de afiliados: confirma a Entrada Grátis usada nesta compra e
+    // credita o progresso de quem indicou. Idempotente por índice único, o
+    // que importa aqui: este webhook chega mais de uma vez.
+    await processarPagamentoConfirmado(payment.reservationId).catch((err) =>
+      console.error(`[sigilopay webhook] afiliado falhou:`, err),
+    );
   } else if (aviso.desfazPagamento) {
     // Estorno e chargeback chegam DEPOIS do dinheiro ter entrado. A cobrança
     // vira REFUNDED e o evento fica registrado, mas os números emitidos, os
@@ -176,6 +186,14 @@ export async function POST(req: Request, { params }: RouteParams) {
       where: { id: payment.id },
       data: { status: "REFUNDED" },
     });
+    // O programa de afiliados é a exceção ao parágrafo acima, e dá para
+    // desfazer sem estragar nada: o progresso daquela compra volta atrás e as
+    // entradas que ela liberou, se ainda estiverem paradas no saldo, são
+    // recolhidas. Entrada já gasta num sorteio fica de pé, e o movimento
+    // registra a diferença para o admin ver.
+    await reverterCompraDeIndicado(payment.reservationId).catch((err) =>
+      console.error("[sigilopay webhook] estorno de afiliado falhou:", err),
+    );
     console.warn(
       `[sigilopay webhook] ${aviso.evento} na reserva ${payment.reservationId}: números e prêmios mantidos, revisar manualmente`
     );

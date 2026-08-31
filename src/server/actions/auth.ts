@@ -15,7 +15,9 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { getCurrentTenant } from "@/lib/tenant";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { COOKIE_DE_INDICACAO } from "@/lib/afiliados";
+import { vincularIndicacao } from "@/server/services/afiliados";
 
 import { auth, signIn, signOut } from "@/auth";
 import { registrarLog } from "@/server/services/activity-log";
@@ -51,7 +53,7 @@ export async function registerAction(
     };
   }
 
-  const { name, cpf, phone, phoneCountry } = parsed.data;
+  const { name, cpf, phone, phoneCountry, codigoDeIndicacao } = parsed.data;
 
   // Freio por IP: o cadastro é sem senha e sem captcha, então é criação livre
   // de contas (munição para abuso de reserva) e um oráculo de enumeração. Usa
@@ -91,6 +93,29 @@ export async function registerAction(
       },
       select: { id: true },
     });
+
+    // O VÍNCULO COM QUEM INDICOU.
+    //
+    // Vem do campo do formulário quando a pessoa digitou, e do cookie quando
+    // ela chegou por /?ref=CODIGO dias atrás. Roda depois da conta existir e
+    // nunca derruba o cadastro: código inexistente, autoindicação ou afiliado
+    // suspenso simplesmente não vinculam, e a conta é criada igual.
+    const codigoDoCookie = (await cookies()).get(COOKIE_DE_INDICACAO)?.value;
+    const codigo = (codigoDeIndicacao || codigoDoCookie || "").trim();
+    if (codigo) {
+      const vinculado = await vincularIndicacao(user.id, codigo);
+      if (vinculado) {
+        void registrarLog({
+          acao: "afiliado.indicacao_vinculada",
+          tenantId: tenant?.id ?? null,
+          origem: "PUBLICO",
+          ator: { id: user.id, nome: name, papel: "PARTICIPANT" },
+          alvo: { tipo: "User", id: user.id },
+          detalhes: { codigo: vinculado },
+        });
+      }
+    }
+
     return { ok: true, data: { userId: user.id } };
   } catch (err) {
     // P2002 = unique constraint violation. Phone e cpf são unique.

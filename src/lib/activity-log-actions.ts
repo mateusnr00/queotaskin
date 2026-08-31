@@ -56,6 +56,14 @@ export const ACOES = {
   "pagamento.aprovado": "confirmou o pagamento",
   "pagamento.recusado": "recusou o pagamento",
   "reservas.expiradas": "expirou reservas pendentes",
+  // O programa de afiliados. Entrada Grátis é benefício que vale dinheiro em
+  // cota, então quem ativou, suspendeu ou ajustou à mão precisa ter nome e
+  // hora no histórico: é a única defesa contra ajuste que ninguém assume.
+  "afiliado.ativado": "ativou o afiliado",
+  "afiliado.suspenso": "suspendeu o afiliado",
+  "afiliado.codigo_alterado": "alterou o código do afiliado",
+  "afiliado.entradas_ajustadas": "ajustou as entradas grátis de",
+  "afiliado.indicacao_vinculada": "foi indicado por um afiliado",
 } as const;
 
 export type AcaoDeLog = keyof typeof ACOES;

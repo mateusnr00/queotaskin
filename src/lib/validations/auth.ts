@@ -99,6 +99,14 @@ export const registerSchema = z
     cpf: cpfField,
     phone: z.string().transform(onlyDigits),
     phoneCountry: phoneCountryField,
+    /**
+     * Código de quem indicou, digitado ou vindo do link.
+     *
+     * Opcional e sem validação de existência aqui de propósito: código errado
+     * não pode impedir alguém de criar conta. Quem confere é o serviço, depois
+     * da conta criada, e o cadastro segue de qualquer jeito.
+     */
+    codigoDeIndicacao: z.string().trim().max(32).optional().or(z.literal("")),
   })
   .superRefine((dados, ctx) => {
     if (!telefoneValido(dados.phone, dados.phoneCountry)) {

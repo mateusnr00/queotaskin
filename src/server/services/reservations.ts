@@ -29,6 +29,10 @@ import {
 import type { CreateReservationInput } from "@/lib/validations/raffle";
 import { pickAvailableNumbers } from "@/server/services/raffles";
 import { bilhetesDe, dobroAtivo } from "@/lib/promocao-em-dobro";
+import {
+  liberarEntradaGratis,
+  reservarEntradaGratis,
+} from "@/server/services/afiliados";
 
 // Expira reservas PENDING da rifa específica que já passaram do expiresAt.
 // Chamada antes de cada createReservation pra liberar números rapidamente
@@ -56,6 +60,10 @@ export async function expireForRaffle(
       data: { status: "EXPIRED" },
     }),
   ]);
+  // A Entrada Grátis presa a um Pix que nunca foi pago volta para o saldo.
+  // Sem isto, quem gera cobrança e não paga perde o benefício, e nada além do
+  // suporte traria ele de volta.
+  for (const id of ids) await liberarEntradaGratis(id);
   return expired.length;
 }
 
@@ -82,6 +90,7 @@ export async function expireReservationIfDue(
       data: { status: "EXPIRED" },
     }),
   ]);
+  await liberarEntradaGratis(reservationId);
   return true;
 }
 
@@ -100,6 +109,10 @@ export async function computeTicketsToRecreate(
     select: {
       totalAmount: true,
       dobroAplicado: true,
+      // A cota coberta pela Entrada Grátis não está no valor: sem somá-la de
+      // volta, a reserva ressuscitada voltaria com um número a menos do que
+      // a pessoa comprou.
+      entradasGratis: { select: { id: true }, take: 1 },
       raffle: {
         select: {
           id: true,
@@ -123,9 +136,9 @@ export async function computeTicketsToRecreate(
     : Number(reservation.raffle.pricePerNumber);
   if (pricePerNumber <= 0) return [];
 
-  const pagas = Math.round(
-    (Number(reservation.totalAmount) - fee) / pricePerNumber
-  );
+  const pagas =
+    Math.round((Number(reservation.totalAmount) - fee) / pricePerNumber) +
+    reservation.entradasGratis.length;
   if (pagas <= 0) return [];
 
   // O valor pago só conta as cotas compradas. Quem comprou durante a promoção
@@ -139,7 +152,17 @@ export async function computeTicketsToRecreate(
   );
 }
 
-export async function createReservation(input: CreateReservationInput) {
+/**
+ * A compra, com a Entrada Grátis opcional.
+ *
+ * `usarEntradaDe` é o id do afiliado que vai gastar a entrada, e não um
+ * booleano do formulário: quem chama já conferiu quem é a pessoa, se ela tem
+ * entrada e se ainda não usou naquele sorteio. O que chega do navegador nunca
+ * decide desconto.
+ */
+export async function createReservation(
+  input: CreateReservationInput & { usarEntradaDe?: string | null },
+) {
   // 0. ANTES de tudo: libera números de reservas que já expiraram nessa rifa.
   // Custo: 1 query indexada. Se nada expirou, retorna imediatamente.
   // Garante que números pendentes vencidos virem disponíveis pro próximo
@@ -183,7 +206,21 @@ export async function createReservation(input: CreateReservationInput) {
   const pricePerNumber = raffle.isFree ? 0 : Number(raffle.pricePerNumber);
   // O valor é o das cotas escolhidas. A promoção em dobro NÃO entra aqui: ela
   // muda quantos números saem, nunca quanto se paga.
-  const totalAmount = pricePerNumber * input.numbers.length;
+  const bruto = pricePerNumber * input.numbers.length;
+
+  // A ENTRADA GRÁTIS COBRE UMA COTA, NÃO R$ 10.
+  //
+  // O desconto é o preço de UM número desta campanha: numa de R$ 1 ela vale
+  // R$ 1, numa de R$ 25 vale R$ 25, e nas duas a pessoa recebe a mesma coisa,
+  // uma cota. A quantidade de números não muda; o que muda é o quanto se paga.
+  //
+  // Descontar aqui, no valor gravado, é o que faz o resto do sistema
+  // continuar certo sozinho: o Pix cobra o que ficou, e o programa de
+  // afiliados, que lê totalAmount, credita só o dinheiro que entrou de
+  // verdade. Entrada Grátis não gera Entrada Grátis para ninguém.
+  const usaEntrada = Boolean(input.usarEntradaDe) && pricePerNumber > 0;
+  const desconto = usaEntrada ? pricePerNumber : 0;
+  const totalAmount = Math.max(0, bruto - desconto);
   const isFreeReservation = totalAmount <= 0;
   const now = new Date();
 
@@ -283,6 +320,22 @@ export async function createReservation(input: CreateReservationInput) {
         });
       }
 
+      // A entrada é reivindicada DENTRO da transação da compra. Fora dela,
+      // uma falha na criação dos tickets deixaria a entrada gasta numa compra
+      // que não existe. Aqui, ou as duas coisas acontecem, ou nenhuma.
+      //
+      // Compra que já nasce paga (total zerado) gasta a entrada na hora; a que
+      // espera Pix apenas reserva, e a reserva volta ao saldo se expirar.
+      if (usaEntrada && input.usarEntradaDe) {
+        await reservarEntradaGratis(
+          tx,
+          input.usarEntradaDe,
+          raffle.id,
+          reservation.id,
+          isFreeReservation,
+        );
+      }
+
       return reservation;
     });
   } catch (err) {
@@ -328,6 +381,8 @@ export async function expireReservations(now: Date = new Date()) {
       data: { status: "EXPIRED" },
     }),
   ]);
+
+  for (const id of ids) await liberarEntradaGratis(id);
 
   return { expired: expired.length };
 }

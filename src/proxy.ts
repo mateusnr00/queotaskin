@@ -40,6 +40,11 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
 import {
+  COOKIE_DE_INDICACAO,
+  DIAS_DO_COOKIE_DE_INDICACAO,
+  normalizarCodigo,
+} from "@/lib/afiliados";
+import {
   isAdminHost,
   isHostDeDesenvolvimento,
   urlDaRequisicao,
@@ -68,12 +73,44 @@ function ehCaminhoDoPainel(path: string): boolean {
   );
 }
 
+/**
+ * Guarda o código de quem indicou, quando ele chega pela URL.
+ *
+ * A pessoa clica em /?ref=MATEUS7K, olha a campanha, some, e volta três dias
+ * depois para criar conta. Sem guardar, o cadastro sairia sem vínculo e quem
+ * indicou não receberia nada por um trabalho que fez.
+ *
+ * Cookie próprio, e não sessionStorage como as marcas de anúncio (lib/utm):
+ * aquilo vale uma visita, isto precisa atravessar dias e o fechar do
+ * navegador. Trinta dias, lax, e sem httpOnly=false: quem lê é o servidor, no
+ * cadastro. Nunca sobrescreve por conta própria um vínculo já existente, e
+ * isso é decidido no cadastro, onde o banco sabe quem já tem afiliado.
+ */
+function guardarIndicacao(req: { nextUrl: URL }, resposta: NextResponse) {
+  const bruto = req.nextUrl.searchParams.get("ref");
+  if (!bruto) return resposta;
+  const codigo = normalizarCodigo(bruto);
+  if (!codigo) return resposta;
+
+  resposta.cookies.set(COOKIE_DE_INDICACAO, codigo, {
+    maxAge: DIAS_DO_COOKIE_DE_INDICACAO * 24 * 60 * 60,
+    sameSite: "lax",
+    httpOnly: true,
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return resposta;
+}
+
 export default auth((req) => {
   const url = req.nextUrl;
 
   const host = (req.headers.get("host") ?? "").toLowerCase();
   if (isHostDeDesenvolvimento(host)) {
-    return NextResponse.next();
+    // O cookie de indicação vem ANTES do desvio de desenvolvimento: em dev
+    // tudo roda num host só, e sair daqui cedo demais deixaria o link de
+    // afiliado sem efeito justamente onde ele é testado.
+    return guardarIndicacao(req, NextResponse.next());
   }
 
   const adminHost = isAdminHost(host);
@@ -125,7 +162,7 @@ export default auth((req) => {
     return new NextResponse(null, { status: 404 });
   }
 
-  return NextResponse.next();
+  return guardarIndicacao(req, NextResponse.next());
 });
 
 export const config = {

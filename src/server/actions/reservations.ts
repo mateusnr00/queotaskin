@@ -39,6 +39,10 @@ import { autoAwardTicketsForReservation } from "@/server/services/awarded-ticket
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation, getUserXp } from "@/server/services/xp";
+import {
+  processarPagamentoConfirmado,
+  situacaoDaEntrada,
+} from "@/server/services/afiliados";
 import { degrauDoRank, meetsMinLevel, rankFromXp } from "@/lib/rank";
 import type { ActionResult } from "@/server/actions/auth";
 
@@ -69,6 +73,14 @@ const optionalExtras = {
   utmMedium: z.string().max(120).optional(),
   utmCampaign: z.string().max(120).optional(),
   utmContent: z.string().max(120).optional(),
+  /**
+   * Pedido de uso da Entrada Grátis.
+   *
+   * É um pedido, e nada além disso: o valor do desconto, o saldo e a regra de
+   * uma por sorteio são todos recalculados no servidor logo abaixo. O que o
+   * navegador manda aqui é "quero usar", não "tenho direito".
+   */
+  usarEntradaGratis: z.coerce.boolean().optional(),
 };
 
 // União discriminada: ou {quantity} (sistema sorteia/pega sequencial),
@@ -185,6 +197,34 @@ export async function createReservationAction(
     }
   }
 
+  // A ENTRADA GRÁTIS, DECIDIDA AQUI.
+  //
+  // O formulário só pede; quem responde é o banco. Recalculamos saldo e a
+  // regra de uma por sorteio agora, e o desconto sai do preço atual da
+  // campanha, nunca de um valor enviado pelo navegador. Pedido sem direito
+  // não vira erro: a compra segue pelo preço cheio, porque derrubar a venda
+  // por causa do benefício seria o pior dos dois desfechos.
+  const pediuEntrada =
+    "usarEntradaGratis" in input && input.usarEntradaGratis === true;
+  let usarEntradaDe: string | null = null;
+  if (pediuEntrada) {
+    const situacao = await situacaoDaEntrada(user.id, raffle.id);
+    if (situacao.jaUsouNesteSorteio) {
+      return { ok: false, error: "Entrada grátis já utilizada neste sorteio." };
+    }
+    if (!situacao.podeUsar) {
+      return {
+        ok: false,
+        error: "Entrada grátis não está mais disponível.",
+      };
+    }
+    const afiliado = await prisma.affiliate.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    usarEntradaDe = afiliado?.id ?? null;
+  }
+
   // CPF efetivo: form > conta. Quando vier do form e a conta ainda não tem,
   // salva pra não pedir de novo na próxima reserva.
   const cpfFromForm =
@@ -230,6 +270,7 @@ export async function createReservationAction(
         raffleId: raffle.id,
         numbers: input.numbers,
         ...participantData,
+        usarEntradaDe,
       });
       await prisma.reservation.update({
         where: { id: reservation.id },
@@ -299,6 +340,7 @@ export async function createReservationAction(
         raffleId: raffle.id,
         numbers,
         ...participantData,
+        usarEntradaDe,
       });
 
       await prisma.reservation.update({
@@ -628,6 +670,12 @@ export async function markReservationPaidAction(
 
     // Credita o XP do rank também na confirmação manual pelo painel.
     await awardXpForReservation(reservation.id);
+    // E o programa de afiliados. Dinheiro combinado por fora ainda é dinheiro
+    // que o indicado pagou; o que a marca aprovadaNoPainel tira é a receita do
+    // relatório, não o benefício de quem trouxe o cliente.
+    await processarPagamentoConfirmado(reservation.id).catch((err) =>
+      console.error("[markReservationPaidAction] afiliado falhou:", err),
+    );
 
     revalidatePath(`/comprovante/${reservationId}`);
     return {

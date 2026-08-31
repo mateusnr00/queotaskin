@@ -11,6 +11,7 @@
 import { prisma } from "@/lib/db";
 import { registrarLog } from "@/server/services/activity-log";
 import { awardXpForReservation } from "@/server/services/xp";
+import { processarPagamentoConfirmado } from "@/server/services/afiliados";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
@@ -351,6 +352,9 @@ export async function pollPaymentStatusIfPending(
       // Cada entrega vai com catch próprio, como no webhook: o pagamento já
       // está confirmado neste ponto, e derrubar a função por causa de um
       // prêmio deixaria os outros sem entregar também.
+      await processarPagamentoConfirmado(reservationId).catch((err) =>
+        console.error("[pix] afiliado falhou:", err),
+      );
       await awardXpForReservation(reservationId).catch((err) =>
         console.error("[pollPaymentStatusIfPending] awardXp falhou:", err),
       );

@@ -399,6 +399,75 @@ linha mostra. A barra fica no perfil, onde significa algo.
   `balance` (gastável, resgatável). Aqui só existe o XP. O extrato já
   comporta a segunda moeda quando fizer sentido.
 
+## Programa de afiliados
+
+Quem indica ganha **Entrada Grátis**, e não dinheiro. A cada R$ 10
+efetivamente pagos pelos indicados, o afiliado ganha uma entrada, e cada
+entrada vale UMA cota em qualquer campanha, seja ela de R$ 1 ou de R$ 50.
+Não existe saldo em reais, saque nem conversão: o benefício é promocional.
+
+```
+/?ref=CODIGO → cookie (30 dias) → cadastro vincula → indicado compra →
+Pix pago → webhook → progresso em centavos → fecha R$ 10 → Entrada Grátis →
+checkout desconta uma cota → sorteio
+```
+
+### As peças
+
+| Onde | O quê |
+| --- | --- |
+| `src/lib/afiliados.ts` | Regra pura: recompensa, progresso, código, limiar |
+| `src/server/services/afiliados.ts` | O motor: vínculo, crédito, entradas, painel, admin |
+| `src/server/actions/afiliados.ts` | As portas: aplicar código, ativar, suspender, ajustar |
+| `src/proxy.ts` | Guarda o `?ref=` num cookie próprio de 30 dias |
+| `src/app/(public)/minha-conta/afiliados` | O painel de quem divulga |
+| `src/app/(admin)/admin/afiliados` | A gestão do programa |
+
+### O que garante que a conta fecha
+
+Quatro coisas, e nenhuma delas é um `if` no meio do código:
+
+- **Crédito único.** `MovimentoDeAfiliado` tem `unique(reservationId, tipo)`.
+  Webhook reentregue tenta gravar a mesma linha e o banco recusa. A SigiloPay
+  já entregou o mesmo evento quatro vezes em dois segundos.
+- **Uma entrada por sorteio.** `EntradaGratis` tem
+  `unique(affiliateId, raffleId)`, e entrada disponível guarda `raffleId`
+  nulo. O Postgres aceita vários nulos numa coluna unique, então a restrição
+  só passa a valer quando a entrada é reservada. A regra do produto virou
+  índice.
+- **Uma entrada de cada vez.** A entrada é reivindicada com
+  `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1)`. Duas
+  abas simultâneas: uma leva, a outra recebe "Entrada grátis não está mais
+  disponível".
+- **Só dinheiro pago.** O progresso vem de `reservation.totalAmount`, que já
+  nasce descontado da entrada usada. Compra de R$ 20 com R$ 10 cobertos por
+  entrada credita R$ 10, e nunca R$ 20: entrada não gera entrada para
+  ninguém.
+
+### Estados da entrada
+
+`DISPONIVEL` → `RESERVADA` (Pix pendente) → `USADA` (pago). Pix expirado
+devolve a entrada para `DISPONIVEL` com `raffleId` nulo, e aí ela volta a
+valer inclusive naquele mesmo sorteio. Compra que zera o total (uma cota
+coberta inteira) nasce paga e a entrada já sai como `USADA`, sem gerar Pix
+de R$ 0.
+
+### Onde o benefício é processado
+
+Nos mesmos seis pontos em que o XP é creditado: os quatro webhooks de
+pagamento, a consulta que confirma um Pix pendente e a aprovação manual pelo
+painel. Todos chamam `processarPagamentoConfirmado()`, uma função só, porque
+seis chamadas montadas à mão divergem no primeiro ajuste.
+
+### Suspensão e estorno
+
+Afiliado `SUSPENDED` para de receber indicados novos e de acumular
+progresso; o que ele já ganhou continua valendo. Estorno desfaz o progresso
+daquela compra e recolhe entrada que ainda esteja parada no saldo; entrada
+já gasta num sorteio em andamento fica de pé, e o movimento registra a
+diferença. Só o webhook da SigiloPay entrega evento de estorno hoje; os
+outros três gateways não expõem isso, então lá o caso é manual.
+
 ## Sorteio ao vivo
 
 O resultado deixou de ser digitado no painel. Quando a campanha encerra

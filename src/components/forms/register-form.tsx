@@ -5,11 +5,12 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { IdCard, User } from "lucide-react";
+import { IdCard, Link2, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
+import { normalizarCodigo } from "@/lib/afiliados";
 import { PAIS_PADRAO } from "@/lib/telefone";
 import { CampoDeTelefone } from "@/components/forms/campo-de-telefone";
 import { BotaoDeGrade } from "@/components/forms/botao-de-grade";
@@ -51,6 +52,10 @@ export function RegisterForm({
   // próprias telas mandam ?redirect=. Aceita os dois.
   const redirectTo =
     searchParams.get("redirect") ?? searchParams.get("callbackUrl") ?? "/";
+  // Quem chegou por /registro?ref=CODIGO vê o campo já preenchido. Quem
+  // chegou por /?ref=CODIGO tem o código no cookie, e o servidor o usa mesmo
+  // com este campo vazio: o cookie é a fonte, o campo é a conveniência.
+  const codigoDaUrl = normalizarCodigo(searchParams.get("ref") ?? "");
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -61,6 +66,7 @@ export function RegisterForm({
       cpf: "",
       phone: "",
       phoneCountry: PAIS_PADRAO,
+      codigoDeIndicacao: codigoDaUrl,
     },
   });
 
@@ -164,6 +170,48 @@ export function RegisterForm({
         />
 
         <CampoDeTelefone form={form} classeDoRotulo={ROTULO} />
+
+        {/* Opcional, e o último campo de propósito: cadastro é conversão, e
+            um campo a mais no meio do caminho custa gente. Quem tem código
+            digita; quem não tem passa reto e nada acontece. */}
+        <FormField
+          control={form.control}
+          name="codigoDeIndicacao"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className={ROTULO}>
+                Código de indicação{" "}
+                <span className="font-normal text-muted-foreground normal-case">
+                  (opcional)
+                </span>
+              </FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <Link2 className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoComplete="off"
+                    placeholder="Ex.: MATEUS7K"
+                    className={cn(CAMPO, "font-mono tracking-widest uppercase")}
+                    maxLength={20}
+                    value={field.value ?? ""}
+                    onChange={(e) =>
+                      field.onChange(normalizarCodigo(e.target.value))
+                    }
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </div>
+              </FormControl>
+              {codigoDaUrl && (
+                <p className="text-[11px] font-medium text-emerald-500">
+                  Você foi indicado por {codigoDaUrl}
+                </p>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         {/* O erro do servidor como aviso emoldurado, e não como linha
             vermelha solta no meio do formulário: solta, ela se confundia com

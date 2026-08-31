@@ -235,6 +235,14 @@ model User {
   // tenant é criado.
   ownedTenant Tenant? @relation("TenantOwner")
 
+  /// Quem indicou esta conta. Vínculo permanente: entra uma vez, no
+  /// cadastro (ou quando a pessoa aplica um código pela primeira vez), e
+  /// nunca troca. Sem isso, um segundo link roubaria o indicado do primeiro
+  /// afiliado, e a conta de quem indicou passaria a depender de quem mandou
+  /// o último link.
+  referredByAffiliateId String?
+  referredByAffiliate   Affiliate? @relation("IndicadosDoAfiliado", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+
   accounts       Account[]
   sessions       Session[]
   reservations   Reservation[]
@@ -249,6 +257,7 @@ model User {
 
   @@index([role])
   @@index([tenantId])
+  @@index([referredByAffiliateId])
 }
 
 // Tenant é o "cliente" da plataforma, cada admin que comprou domínio próprio
@@ -732,6 +741,7 @@ model Raffle {
   raspadinhaCombos      RaspadinhaCombo[]
   raspadinhaPremios     RaspadinhaPremio[]
   raspadinhas           Raspadinha[]
+  entradasGratis        EntradaGratis[]
 
   /// O sorteio ao vivo desta campanha. No máximo um, garantido pelo @unique
   /// do lado do Draw: dois sorteios oficiais para a mesma campanha seriam
@@ -1590,6 +1600,7 @@ model Reservation {
   payment       Payment?
   commission    AffiliateCommission?
   surpriseBoxes SurpriseBox[]
+  entradasGratis EntradaGratis[]
 
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -1674,11 +1685,30 @@ model PaymentWebhookEvent {
 // AFILIADOS
 // =====================================================================
 
+/// O programa de indicação.
+///
+/// A recompensa NÃO é dinheiro: a cada R$ 10 efetivamente pagos por quem o
+/// afiliado indicou, ele ganha uma Entrada Grátis, que vale uma cota em
+/// qualquer campanha, seja ela de R$ 1 ou de R$ 25. Não existe saldo em
+/// reais, saque, nem conversão: o benefício é promocional, e é por isso que
+/// as colunas de comissão abaixo continuam zeradas e sem uso.
 model Affiliate {
-  id                String  @id @default(cuid())
-  userId            String  @unique
-  code              String  @unique
-  commissionPercent Decimal @default(0) @db.Decimal(5, 2) // 0.00 a 100.00
+  id     String          @id @default(cuid())
+  userId String          @unique
+  code   String          @unique
+  status AffiliateStatus @default(ACTIVE)
+
+  /// Quanto já entrou de compras dos indicados e ainda não completou uma
+  /// entrada, em CENTAVOS. Inteiro, nunca float: R$ 10,00 é 1000, e somar
+  /// 0.1 + 0.2 em ponto flutuante perde centavo no fim do mês.
+  ///
+  /// É cache derivável do histórico; a fonte auditável é MovimentoDeAfiliado.
+  /// Toda escrita acontece dentro da mesma transação do movimento.
+  progressoEmCentavos Int @default(0)
+
+  /// Herança do motor de rifas, sem uso: este programa não paga comissão.
+  /// Ficam para não reescrever histórico de instalações antigas.
+  commissionPercent Decimal @default(0) @db.Decimal(5, 2)
   totalSales        Decimal @default(0) @db.Decimal(12, 2)
   totalCommission   Decimal @default(0) @db.Decimal(12, 2)
 
@@ -1686,9 +1716,121 @@ model Affiliate {
 
   reservations Reservation[]
   commissions  AffiliateCommission[]
+  indicados    User[]                @relation("IndicadosDoAfiliado")
+  entradas     EntradaGratis[]
+  movimentos   MovimentoDeAfiliado[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum AffiliateStatus {
+  /// Cadastrado, mas fora do ar: o link não vincula e nada acumula.
+  INACTIVE
+  ACTIVE
+  /// Punido. O histórico e as entradas já ganhas continuam de pé; o que para
+  /// é a entrada de gente nova e o acúmulo de progresso.
+  SUSPENDED
+}
+
+/// Uma Entrada Grátis, uma linha.
+///
+/// Podia ser um contador na tabela do afiliado, e não é de propósito. Contador
+/// não sabe dizer em qual campanha a entrada foi parar, não trava a regra de
+/// uma por sorteio, e não tem como ficar reservado enquanto um Pix está
+/// pendente. Uma linha por entrada resolve os três: o saldo é quantas estão
+/// DISPONIVEL, e a corrida entre duas abas é decidida pelo banco, com
+/// FOR UPDATE SKIP LOCKED na hora de pegar uma.
+model EntradaGratis {
+  id          String               @id @default(cuid())
+  affiliateId String
+  estado      EstadoDaEntradaGratis @default(DISPONIVEL)
+
+  /// Em que campanha ela foi gasta. Nulo enquanto disponível.
+  raffleId      String?
+  /// Em que compra. Nulo enquanto disponível.
+  reservationId String?
+
+  ganhaEm  DateTime  @default(now())
+  usadaEm  DateTime?
+
+  affiliate   Affiliate    @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  raffle      Raffle?      @relation(fields: [raffleId], references: [id], onDelete: SetNull)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  /// UMA POR SORTEIO, GARANTIDO PELO BANCO.
+  ///
+  /// Entrada disponível tem raffleId nulo, e o Postgres aceita quantos nulos
+  /// quiser numa coluna unique: a restrição só morde depois que a entrada é
+  /// reservada ou usada. Daí sai exatamente a regra do produto, sem "if" que
+  /// duas requisições simultâneas atravessam, e sem tabela extra só para
+  /// guardar (usuário, sorteio).
+  @@unique([affiliateId, raffleId])
+  @@index([affiliateId, estado])
+  @@index([reservationId])
+}
+
+enum EstadoDaEntradaGratis {
+  DISPONIVEL
+  /// Presa a uma compra com Pix pendente. Volta a DISPONIVEL se expirar.
+  RESERVADA
+  USADA
+}
+
+/// O histórico do programa, e a fonte da verdade.
+///
+/// Saldo e progresso existem em coluna por desempenho, mas quem audita lê
+/// daqui: quem gerou, quando, por qual compra, quanto acumulou, quando
+/// liberou entrada e onde a entrada foi gasta.
+model MovimentoDeAfiliado {
+  id          String                    @id @default(cuid())
+  affiliateId String
+  tipo        TipoDeMovimentoDeAfiliado
+
+  /// Dinheiro que entrou (ou saiu, negativo) no progresso, em centavos.
+  centavos Int @default(0)
+  /// Entradas concedidas (+) ou consumidas (-).
+  entradas Int @default(0)
+
+  reservationId String?
+  /// Quem comprou. Guardado além da reserva porque reserva pode ser apagada
+  /// com a campanha, e o histórico do afiliado não pode sumir junto.
+  indicadoId    String?
+  raffleId      String?
+  descricao     String?
+  /// Quem fez, quando o movimento é ajuste manual do painel.
+  adminId       String?
+
+  criadoEm DateTime @default(now())
+
+  affiliate Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  /// A trava contra crédito duplo.
+  ///
+  /// Webhook de pagamento chega mais de uma vez (a SigiloPay entregou o mesmo
+  /// evento quatro vezes em dois segundos na primeira transação real). Com
+  /// esta restrição, a segunda entrega tenta gravar a mesma linha e o banco
+  /// recusa: não é o código que decide, é o índice.
+  @@unique([reservationId, tipo])
+  @@index([affiliateId, criadoEm])
+  @@index([indicadoId])
+}
+
+enum TipoDeMovimentoDeAfiliado {
+  /// Compra paga de um indicado. Soma centavos ao progresso.
+  COMPRA_DE_INDICADO
+  /// O progresso fechou R$ 10 e virou entrada.
+  ENTRADA_LIBERADA
+  /// Entrada gasta numa campanha.
+  ENTRADA_USADA
+  /// Pix expirou ou compra caiu: a entrada voltou para o saldo.
+  ENTRADA_DEVOLVIDA
+  /// Estorno/chargeback: desfaz o progresso daquela compra.
+  ESTORNO_DE_COMPRA
+  /// Ajuste manual do painel, sempre com motivo e responsável.
+  AJUSTE
 }
 
 model AffiliateCommission {

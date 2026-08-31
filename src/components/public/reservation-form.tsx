@@ -13,6 +13,10 @@ import { createReservationAction } from "@/server/actions/reservations";
 import { guardarOuRecuperarMarcas } from "@/lib/utm";
 import { eventoDaMeta } from "@/components/public/pixel-da-meta";
 import { AccountGateDialog } from "@/components/public/account-gate-dialog";
+import {
+  CartaoDeEntradaGratis,
+  type EntradaNoCheckout,
+} from "@/components/public/cartao-de-entrada-gratis";
 import { formatBRL } from "@/lib/format";
 import { onlyDigits, formatCpf, formatPhone, isValidCpf } from "@/lib/cpf";
 import { Button } from "@/components/ui/button";
@@ -102,6 +106,11 @@ interface ReservationFormProps {
    * onde está a pegadinha justamente quando não existe nenhuma.
    */
   gratuita?: boolean;
+  /**
+   * A situação da Entrada Grátis desta pessoa nesta campanha, resolvida no
+   * servidor. Nula para quem não é afiliado.
+   */
+  entradaGratis?: EntradaNoCheckout | null;
   // Quick-picks configurados pelo admin. Array vazio = sem cards (mostra
   // só o stepper -/+). bestsellerIndex >= 0 destaca o card no índice
   // correspondente com badge "MAIS POPULAR".
@@ -121,6 +130,7 @@ export function ReservationForm({
   currentUser,
   pricePerNumber,
   gratuita = false,
+  entradaGratis = null,
   selectionCards,
   selectionCardsBestseller,
 }: ReservationFormProps) {
@@ -162,7 +172,24 @@ export function ReservationForm({
     },
   });
 
+  // Ligada por padrão quando existe benefício para usar: quem tem entrada
+  // esperando quase sempre quer usá-la, e deixar desligado transforma o
+  // presente em pegadinha de quem não reparou no interruptor.
+  const [usarEntrada, setUsarEntrada] = useState(
+    entradaGratis?.podeUsar ?? false,
+  );
+
   const effectiveQty = isManualMode ? selectedNumbers.length : quantity;
+
+  // O desconto é o preço de UMA cota, e vale só enquanto houver o que
+  // descontar. O servidor recalcula tudo isto de novo na hora de gravar.
+  const entradaAplicada =
+    Boolean(entradaGratis?.podeUsar) &&
+    usarEntrada &&
+    !gratuita &&
+    effectiveQty > 0;
+  const desconto = entradaAplicada ? pricePerNumber : 0;
+  const totalACobrar = Math.max(0, effectiveQty * pricePerNumber - desconto);
 
   function clampQty(v: number) {
     const min = Math.max(1, minPurchase);
@@ -227,6 +254,7 @@ export function ReservationForm({
         participantEmail: values.participantEmail || "",
         participantSocialName: values.participantSocialName || "",
         participantBirthDate: values.participantBirthDate || undefined,
+        usarEntradaGratis: entradaAplicada,
       };
 
       const result = await createReservationAction(payload);
@@ -303,6 +331,38 @@ export function ReservationForm({
           needsPhoneInput={needsPhoneInput}
         />
 
+        {entradaGratis && !gratuita && (
+          <CartaoDeEntradaGratis
+            situacao={entradaGratis}
+            precoDaCota={pricePerNumber}
+            usar={usarEntrada}
+            aoMudar={setUsarEntrada}
+            desabilitado={isPending}
+          />
+        )}
+
+        {/* A conta, quando há desconto. Sem ela a pessoa liga a entrada e o
+            único número que muda é o do botão: mostrar de onde saiu o abatimento
+            é o que faz o benefício parecer real. */}
+        {entradaAplicada && (
+          <div className="space-y-1 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3 text-muted-foreground">
+              <span>Subtotal</span>
+              <span className="tabular-nums">
+                {formatBRL(effectiveQty * pricePerNumber)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 font-semibold text-emerald-500">
+              <span>Entrada Grátis</span>
+              <span className="tabular-nums">-{formatBRL(desconto)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-1 font-bold">
+              <span>Total no Pix</span>
+              <span className="tabular-nums">{formatBRL(totalACobrar)}</span>
+            </div>
+          </div>
+        )}
+
         {/* Confirmação enxuta: o stepper logo acima já mostra o número, então
             aqui basta uma linha, no celular cada bloco alto empurra o botão
             para fora da tela. */}
@@ -344,7 +404,7 @@ export function ReservationForm({
               <span>Quero participar</span>
               {effectiveQty > 0 && (
                 <span className="text-xs font-bold tabular-nums opacity-90">
-                  {formatBRL(effectiveQty * pricePerNumber)}
+                  {formatBRL(totalACobrar)}
                 </span>
               )}
             </>
@@ -357,8 +417,8 @@ export function ReservationForm({
           open={pedindoConta}
           onOpenChange={setPedindoConta}
           quantidade={effectiveQty}
-          total={formatBRL(effectiveQty * pricePerNumber)}
-          gratuita={gratuita}
+          total={formatBRL(totalACobrar)}
+          gratuita={gratuita || totalACobrar <= 0}
           onAuthenticated={aoEntrarNaConta}
         />
       </form>

@@ -9,6 +9,7 @@ import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
 import { dobroAtivo } from "@/lib/promocao-em-dobro";
 import { FaixaDeDobro } from "@/components/public/faixa-de-dobro";
 import { FaixaDeGratuito } from "@/components/public/faixa-de-gratuito";
+import { situacaoDaEntrada } from "@/server/services/afiliados";
 import { ReservationForm } from "@/components/public/reservation-form";
 import type { RequiredFields } from "@/components/public/reservation-form";
 import { SocialShare } from "@/components/public/social-share";
@@ -305,6 +306,13 @@ export default async function PublicRaffleDetailPage({
     socialName: rawRF.socialName ?? DEFAULT_REQUIRED.socialName,
     birthDate: rawRF.birthDate ?? DEFAULT_REQUIRED.birthDate,
   };
+
+  // A Entrada Grátis de quem está olhando, nesta campanha. Resolvida aqui, no
+  // servidor: saldo e a regra de uma por sorteio nunca podem sair de um
+  // cálculo do navegador.
+  const entradaGratis = currentUser
+    ? await situacaoDaEntrada(currentUser.id, raffle.id)
+    : null;
 
   // Campanha exclusiva por nível: precisa do XP do visitante para saber se
   // libera o formulário. A decisão real é do servidor, em
@@ -693,6 +701,7 @@ export default async function PublicRaffleDetailPage({
                     currentUser={currentUser}
                     pricePerNumber={Number(raffle.pricePerNumber)}
                     gratuita={raffle.isFree}
+                    entradaGratis={entradaGratis}
                     selectionCards={raffle.selectionCards ?? []}
                     selectionCardsBestseller={
                       raffle.selectionCardsBestseller ?? -1
