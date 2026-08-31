@@ -6,6 +6,7 @@ import {
   porcentagemDaSaida,
   premioDaVez,
   type Saida,
+  soltaNestaAbertura,
 } from "@/lib/saida";
 
 const SAIDA: Saida = {
@@ -232,5 +233,87 @@ describe("premioDaVez", () => {
         compra: COMPRA,
       }),
     ).toBeNull();
+  });
+});
+
+describe("soltaNestaAbertura", () => {
+  it("sem prêmio em pé, nunca solta", () => {
+    expect(soltaNestaAbertura({ premios: 0, aberturasRestantes: 10 })).toBe(
+      false,
+    );
+  });
+
+  it("quando só resta a mesma quantidade de caixas, solta garantido", () => {
+    // É o que mantém a promessa: no fim da compra, todo prêmio em pé saiu.
+    expect(
+      soltaNestaAbertura({ premios: 4, aberturasRestantes: 4 }, 0.99),
+    ).toBe(true);
+    expect(
+      soltaNestaAbertura({ premios: 4, aberturasRestantes: 1 }, 0.99),
+    ).toBe(true);
+  });
+
+  it("a chance é prêmios sobre caixas restantes", () => {
+    // 4 em 54: solta com sorteio abaixo de 0,074 e segura acima.
+    expect(
+      soltaNestaAbertura({ premios: 4, aberturasRestantes: 54 }, 0.07),
+    ).toBe(true);
+    expect(
+      soltaNestaAbertura({ premios: 4, aberturasRestantes: 54 }, 0.08),
+    ).toBe(false);
+  });
+
+  it("distribui os quatro prêmios pelas cinquenta e quatro caixas", () => {
+    // O caso relatado, simulado inteiro: quatro prêmios, cinquenta e quatro
+    // caixas, abertas uma a uma. Antes, saíam nas posições 1, 2, 3 e 4.
+    let premios = 4;
+    const posicoes: number[] = [];
+    // Sorteio determinístico e mal distribuído de propósito: mesmo com esta
+    // sequência pobre, os prêmios não saem grudados no começo.
+    let semente = 7;
+    const dado = () => {
+      semente = (semente * 1103515245 + 12345) % 2147483648;
+      return semente / 2147483648;
+    };
+    for (let caixa = 1; caixa <= 54; caixa++) {
+      const restantes = 54 - caixa + 1;
+      if (
+        soltaNestaAbertura({ premios, aberturasRestantes: restantes }, dado())
+      ) {
+        posicoes.push(caixa);
+        premios--;
+      }
+    }
+    expect(posicoes).toHaveLength(4);
+    expect(premios).toBe(0);
+    // Nenhum grude no começo: os quatro não saem nas quatro primeiras.
+    expect(posicoes).not.toEqual([1, 2, 3, 4]);
+    // E o último sai bem depois do começo da lista.
+    expect(posicoes[3]!).toBeGreaterThan(10);
+  });
+
+  it("todo prêmio sai até o fim, em qualquer sorteio", () => {
+    // Cem simulações com sorteios diferentes: o total sempre fecha.
+    for (let s = 1; s <= 100; s++) {
+      let premios = 3;
+      let semente = s * 977;
+      const dado = () => {
+        semente = (semente * 1103515245 + 12345) % 2147483648;
+        return semente / 2147483648;
+      };
+      let saiu = 0;
+      for (let caixa = 1; caixa <= 12; caixa++) {
+        if (
+          soltaNestaAbertura(
+            { premios, aberturasRestantes: 12 - caixa + 1 },
+            dado(),
+          )
+        ) {
+          saiu++;
+          premios--;
+        }
+      }
+      expect(saiu).toBe(3);
+    }
   });
 });

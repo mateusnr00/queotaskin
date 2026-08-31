@@ -114,38 +114,6 @@ describe("ordemEmbaralhada", () => {
     expect(saida[0]).not.toBe(IDS_REAIS[0]);
   });
 
-  it("os premiados não saem grudados no começo da lista", () => {
-    // O relato: numa compra de nove caixas, as três premiadas apareceram nas
-    // posições 1, 2 e 3, com seis vazias embaixo. A causa era "Abrir todas"
-    // abrindo de cima para baixo, porque o prêmio agendado vai para a
-    // PRIMEIRA caixa aberta, e a primeira aberta era sempre a primeira da
-    // lista. Abrindo em ordem embaralhada, os três prêmios caem espalhados.
-    //
-    // Ids de caixas de verdade, no formato que o Prisma gera: eles compartilham
-    // o prefixo do instante de criação, que é justamente o caso difícil para
-    // um embaralhamento por hash.
-    const CAIXAS = [
-      "cmtd4g9pa00007dqa202oeolo",
-      "cmtd4g9pm00027dqavkbfj648",
-      "cmtd5qzdp00007dxa63a7llws",
-      "cmth8swfn003u7d6bgaoneo8u",
-      "cmth8vuvq003u7df69mzxxg5d",
-      "cmtha5ob4003u7d8zu0jpehj0",
-      "cmt90l7xf00087d5yftqzkudd",
-      "cmt90l7xp000b7d5yti1kuarx",
-      "cmt90l7xv000e7d5yj0mn50z3",
-    ];
-    const ordemDeAbrir = ordemEmbaralhada(CAIXAS, (x) => x);
-    // As três primeiras abertas são as que recebem os prêmios agendados.
-    const posicoes = ordemDeAbrir
-      .slice(0, 3)
-      .map((id) => CAIXAS.indexOf(id))
-      .sort((a, b) => a - b);
-    expect(posicoes).not.toEqual([0, 1, 2]);
-    // E não ficam todas na primeira metade, que seria o mesmo defeito de novo.
-    expect(posicoes[posicoes.length - 1]).toBeGreaterThan(2);
-  });
-
   it("aguenta lista vazia e de um item", () => {
     expect(ordemEmbaralhada([], (x: string) => x)).toEqual([]);
     expect(ordemEmbaralhada(["um"], (x) => x)).toEqual(["um"]);

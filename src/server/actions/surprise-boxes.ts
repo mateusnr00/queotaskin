@@ -20,7 +20,11 @@
 //   OPENED_EMPTY ("não foi dessa vez!").
 
 import { randomInt } from "node:crypto";
-import { premioDaVez, type CompraQueAbre } from "@/lib/saida";
+import {
+  premioDaVez,
+  soltaNestaAbertura,
+  type CompraQueAbre,
+} from "@/lib/saida";
 import { dddDoTelefone } from "@/lib/cpf";
 import { z } from "zod";
 
@@ -111,11 +115,20 @@ export async function openSurpriseBoxAction(
 
     // Tenta até 3x, race em concorrência (prize foi pego por outra caixa).
     for (let attempt = 0; attempt < MAX_DRAW_RETRIES; attempt++) {
-      const drawn = await drawPrize(box.raffleId, {
-        titulos: box.reservation._count.tickets,
-        quando: box.reservation.paidAt ?? box.reservation.createdAt,
-        ddd: dddDoTelefone(box.reservation.participantPhone),
+      // Recontado a cada tentativa: a caixa de agora ainda está UNOPENED, e
+      // é ela que faz a última abertura soltar garantido.
+      const caixasRestantes = await prisma.surpriseBox.count({
+        where: { reservationId: box.reservationId, status: "UNOPENED" },
       });
+      const drawn = await drawPrize(
+        box.raffleId,
+        {
+          titulos: box.reservation._count.tickets,
+          quando: box.reservation.paidAt ?? box.reservation.createdAt,
+          ddd: dddDoTelefone(box.reservation.participantPhone),
+        },
+        caixasRestantes,
+      );
 
       if (!drawn) {
         // Pool vazio → caixa vazia.
@@ -217,6 +230,8 @@ async function refetchOpened(
 async function drawPrize(
   raffleId: string,
   compra: CompraQueAbre,
+  /** Caixas desta compra que ainda não foram abertas, contando a de agora. */
+  caixasRestantes: number,
 ): Promise<{ id: string } | null> {
   const available = await prisma.surpriseBoxPrize.findMany({
     where: { raffleId, locked: false, claimedAt: null },
@@ -259,12 +274,33 @@ async function drawPrize(
     })),
     { vendidos, compra },
   );
-  if (agendado) return { id: agendado };
-
   const percent = available.filter(
     (p) => p.mode === "PERCENT" && p.odds != null,
   );
   const random = available.filter((p) => p.mode === "RANDOM");
+
+  // OS PRÊMIOS SE ESPALHAM PELAS CAIXAS DA COMPRA.
+  //
+  // Enquanto sobrava prêmio no bolo, TODA caixa ganhava: quem comprava
+  // cinquenta e quatro caixas com quatro prêmios em pé via os quatro saírem
+  // nas quatro primeiras e cinquenta vazias em fila. O sorteio estava certo e
+  // o resultado também, mas quem abre lê que os prêmios acabaram na quarta
+  // caixa e que o resto é formalidade.
+  //
+  // Conta em soltaNestaAbertura: prêmios sobre caixas que ainda faltam. Todos
+  // saem até o fim da compra, só que espalhados.
+  //
+  // Os PERCENT ficam de fora desta conta e continuam rolando a chance deles em
+  // toda caixa: ali a raridade é a regra, e forçar a saída no fim da compra
+  // transformaria um prêmio de 1% em prêmio garantido.
+  const emPe = new Set(random.map((p) => p.id));
+  if (agendado) emPe.add(agendado);
+  const solta = soltaNestaAbertura(
+    { premios: emPe.size, aberturasRestantes: caixasRestantes },
+    randomInt(0, 10_000) / 10_000,
+  );
+
+  if (agendado && solta) return { id: agendado };
 
   // Roll 0-100. Prêmios PERCENT ocupam faixas cumulativas; se o roll cai
   // numa faixa, ganhou esse prêmio. Caso contrário, cai pro pool RANDOM.
@@ -282,7 +318,7 @@ async function drawPrize(
   }
 
   // Nenhum PERCENT casou, picks uniforme entre os RANDOM disponíveis.
-  if (random.length > 0) {
+  if (random.length > 0 && solta) {
     const pick = random[randomInt(random.length)]!;
     return { id: pick.id };
   }

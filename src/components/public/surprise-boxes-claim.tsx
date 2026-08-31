@@ -26,7 +26,6 @@ import {
   CaixaSurpresaArte,
 } from "@/components/public/caixa-surpresa-arte";
 import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
-import { ordemEmbaralhada } from "@/lib/titulo";
 import { EstouroDeConfete } from "@/components/public/estouro-de-confete";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -164,23 +163,11 @@ export function SurpriseBoxesClaim({
   }
 
   function openAll() {
-    // EM ORDEM EMBARALHADA, e não de cima para baixo.
-    //
-    // O prêmio agendado vai para a primeira caixa aberta a partir do ponto
-    // dele, que é a promessa da saída programada. Abrindo a fila de cima para
-    // baixo, "a primeira aberta" era sempre a primeira da lista, e as três
-    // premiadas de uma compra saíam grudadas no topo, uma atrás da outra, com
-    // seis vazias embaixo. O resultado é o mesmo, o sorteio é o mesmo, mas
-    // ler três prêmios em fila e depois só vazio entrega o mecanismo e mata a
-    // surpresa que a caixa existe para dar.
-    //
-    // Embaralhamento estável, e não sorteio a cada clique: a ordem de abrir
-    // não decide QUEM ganha (isso é do servidor), só onde o prêmio cai na
-    // lista, e uma ordem reproduzível é mais fácil de conferir depois.
-    const targets = ordemEmbaralhada(
-      boxes.filter((b) => b.status === "UNOPENED"),
-      (b) => b.id,
-    );
+    // Sem embaralhar a ordem aqui: quem espalha os prêmios pelas caixas é o
+    // servidor (soltaNestaAbertura), a cada abertura, então abrir de cima para
+    // baixo não concentra mais nada. Embaralhar também aqui só faria a mesma
+    // coisa duas vezes, em dois lugares que teriam de continuar concordando.
+    const targets = boxes.filter((b) => b.status === "UNOPENED");
     if (targets.length === 0) return;
     startAllTransition(async () => {
       // Sem a animação por caixa aqui: vinte aberturas de 1,3s dariam meio

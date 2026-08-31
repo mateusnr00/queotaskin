@@ -21,7 +21,11 @@
 // igual em vez de terem bugs diferentes.
 
 import { randomInt } from "node:crypto";
-import { premioDaVez, type CompraQueAbre } from "@/lib/saida";
+import {
+  premioDaVez,
+  soltaNestaAbertura,
+  type CompraQueAbre,
+} from "@/lib/saida";
 import { dddDoTelefone } from "@/lib/cpf";
 import { z } from "zod";
 
@@ -127,11 +131,20 @@ export async function revelarRaspadinhaAction(
     }
 
     for (let tentativa = 0; tentativa < TENTATIVAS; tentativa++) {
-      const sorteado = await sortearPremio(bilhete.raffleId, {
-        titulos: bilhete.reservation._count.tickets,
-        quando: bilhete.reservation.paidAt ?? bilhete.reservation.createdAt,
-        ddd: dddDoTelefone(bilhete.reservation.participantPhone),
+      // Recontado a cada tentativa: o bilhete de agora ainda está DISPONIVEL,
+      // e é ele que faz a última raspagem soltar garantido.
+      const bilhetesRestantes = await prisma.raspadinha.count({
+        where: { reservationId: bilhete.reservationId, status: "DISPONIVEL" },
       });
+      const sorteado = await sortearPremio(
+        bilhete.raffleId,
+        {
+          titulos: bilhete.reservation._count.tickets,
+          quando: bilhete.reservation.paidAt ?? bilhete.reservation.createdAt,
+          ddd: dddDoTelefone(bilhete.reservation.participantPhone),
+        },
+        bilhetesRestantes,
+      );
 
       if (!sorteado) {
         // Acabaram os prêmios disponíveis. O bilhete fecha sem prêmio, e não
@@ -212,7 +225,12 @@ export async function revelarRaspadinhaAction(
  * randomInt do node:crypto, e não Math.random: aqui se decide dinheiro, e o
  * gerador comum é previsível o bastante para não servir.
  */
-async function sortearPremio(raffleId: string, compra: CompraQueAbre) {
+async function sortearPremio(
+  raffleId: string,
+  compra: CompraQueAbre,
+  /** Bilhetes desta compra ainda por raspar, contando o de agora. */
+  bilhetesRestantes: number,
+) {
   const disponiveis = await prisma.raspadinhaPremio.findMany({
     where: { raffleId, travado: false, claimedAt: null },
     select: {
@@ -257,13 +275,30 @@ async function sortearPremio(raffleId: string, compra: CompraQueAbre) {
     })),
     { vendidos, compra },
   );
-  if (agendado) {
+  const comChance = disponiveis.filter((p) => p.chance != null);
+  const semChance = disponiveis.filter((p) => p.chance == null);
+
+  // OS PRÊMIOS SE ESPALHAM PELOS BILHETES DA COMPRA.
+  //
+  // Mesma correção da caixa surpresa, pelo mesmo motivo: enquanto sobrava
+  // prêmio sem chance no bolo, TODO bilhete ganhava, e os prêmios saíam
+  // grudados nos primeiros raspados. Aqui ela cai ainda melhor, porque a
+  // revelação em sequência continua descendo a lista na ordem da tela: o que
+  // muda é em qual bilhete o prêmio aparece, não a coreografia.
+  //
+  // Os que têm chance ficam de fora e continuam rolando: ali a raridade é a
+  // regra, e forçá-los no fim viraria prêmio garantido.
+  const emPe = new Set(semChance.map((p) => p.id));
+  if (agendado) emPe.add(agendado);
+  const solta = soltaNestaAbertura(
+    { premios: emPe.size, aberturasRestantes: bilhetesRestantes },
+    randomInt(0, 10_000) / 10_000,
+  );
+
+  if (agendado && solta) {
     const escolhido = disponiveis.find((p) => p.id === agendado);
     if (escolhido) return escolhido;
   }
-
-  const comChance = disponiveis.filter((p) => p.chance != null);
-  const semChance = disponiveis.filter((p) => p.chance == null);
 
   // Sorteio em milésimos de ponto: chance é DECIMAL(5,2), então 12,34% cabe
   // exato. Em inteiro não haveria como representar meio por cento.
@@ -274,6 +309,6 @@ async function sortearPremio(raffleId: string, compra: CompraQueAbre) {
     if (rolagem < acumulado) return premio;
   }
 
-  if (semChance.length === 0) return null;
+  if (semChance.length === 0 || !solta) return null;
   return semChance[randomInt(0, semChance.length)];
 }

@@ -119,6 +119,45 @@ export function compraCasaComSaida(
   return true;
 }
 
+/**
+ * Esta abertura leva um prêmio do bolo, ou passa a vez?
+ *
+ * O DEFEITO QUE ISTO CORRIGE: enquanto sobrava prêmio no bolo, TODA caixa
+ * ganhava. Quem comprava cinquenta e quatro caixas com quatro prêmios em pé
+ * via os quatro saírem nas quatro primeiras e mais cinquenta vazias em fila.
+ * O sorteio estava certo, o resultado também, mas a leitura de quem abre é
+ * que os prêmios "acabaram na quarta caixa" e o resto é formalidade.
+ *
+ * A conta é amostragem sem reposição, a mesma de tirar quatro cartas marcadas
+ * de um baralho de cinquenta e quatro: a chance desta abertura é prêmios
+ * dividido por aberturas que ainda restam. Quando as duas se igualam, sai
+ * garantido. Isso espalha os prêmios uniformemente pelas aberturas E mantém a
+ * promessa de que todos saem, porque a última abertura sempre solta.
+ *
+ * O preço, dito na cara: o prêmio agendado deixa de cair na PRIMEIRA caixa
+ * aberta a partir do ponto dele e passa a cair em UMA das caixas daquela
+ * compra. O ponto continua mandando em QUANDO ele entra na roda; o que muda é
+ * só em qual caixa daquela mesma compra ele aparece.
+ */
+export function soltaNestaAbertura(
+  {
+    premios,
+    aberturasRestantes,
+  }: {
+    /** Quantos prêmios estão em pé para sair agora. */
+    premios: number;
+    /** Aberturas que ainda faltam nesta compra, contando a de agora. */
+    aberturasRestantes: number;
+  },
+  sorteio: number = Math.random(),
+): boolean {
+  if (premios <= 0) return false;
+  // Mais prêmio do que caixa: não há o que espalhar, e segurar aqui só faria
+  // prêmio sobrar sem dono.
+  if (aberturasRestantes <= premios) return true;
+  return sorteio < premios / aberturasRestantes;
+}
+
 export interface PremioAgendado {
   id: string;
   saida: Saida;
