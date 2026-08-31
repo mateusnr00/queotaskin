@@ -1163,6 +1163,24 @@ model AwardedTicket {
   /// que é a leitura que o jogador já tem dentro do jogo.
   skinRarity SkinRarity?
 
+  /// CONDICOES PARA O NUMERO PAGAR.
+  ///
+  /// Aqui NAO existe ponto de saida em porcentagem, e a diferenca e do
+  /// modelo, nao um esquecimento: o titulo premiado e amarrado a um NUMERO.
+  /// Quem comprar o 120 leva, e nao ha bolo para sortear nem quando agendar.
+  /// O numero ja e o agendamento.
+  ///
+  /// O que faz sentido e o outro eixo: para QUAL COMPRA ele paga. Serve ao
+  /// disparo com hora marcada, que e o caso real: numero premiado que so paga
+  /// depois das 14h espera a compra que veio do disparo.
+  ///
+  /// Todos nulos ou vazio e o comportamento de sempre: comprou, ganhou.
+  saidaTitulosDe  Int?
+  saidaTitulosAte Int?
+  saidaDataDe     DateTime?
+  saidaDataAte    DateTime?
+  saidaDdds       String[]
+
   raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
 
   @@unique([raffleId, number])

@@ -660,6 +660,14 @@ const awardedTicketsSchema = z.object({
       z.object({
         number: z.coerce.number().int().min(1).max(10_000_000),
         prizeDescription: z.string().min(1).max(200),
+        // Condições para o número pagar. Viajam com o item porque esta ação
+        // APAGA e recria a lista inteira: sem elas aqui, todo salvamento da
+        // aba limparia as condições em silêncio.
+        saidaTitulosDe: z.coerce.number().int().min(1).optional().nullable(),
+        saidaTitulosAte: z.coerce.number().int().min(1).optional().nullable(),
+        saidaDataDe: z.string().optional().nullable(),
+        saidaDataAte: z.string().optional().nullable(),
+        saidaDdds: z.array(z.string().regex(/^\d{2}$/)).default([]),
       }),
     )
     .max(500, "Máximo de 500 títulos premiados por sorteio"),
@@ -713,8 +721,8 @@ export async function setRaffleAwardedTicketsAction(
 
     // Remove duplicatas mantendo a última descrição. Postgres reclama em
     // unique([raffleId, number]) na hora do createMany se tiver dup.
-    const dedupe = new Map<number, string>();
-    for (const i of items) dedupe.set(i.number, i.prizeDescription);
+    const dedupe = new Map<number, (typeof items)[number]>();
+    for (const i of items) dedupe.set(i.number, i);
 
     // A raridade sai do NOME, conferido contra o catálogo de skins do tenant,
     // e não de uma escolha guardada no formulário. É o que faz a colagem em
@@ -747,12 +755,17 @@ export async function setRaffleAwardedTicketsAction(
       }),
       prisma.awardedTicket.deleteMany({ where: { raffleId } }),
       prisma.awardedTicket.createMany({
-        data: [...dedupe.entries()].map(([number, prizeDescription]) => ({
+        data: [...dedupe.values()].map((i) => ({
           raffleId,
-          number,
-          prizeDescription,
-          skinRarity: raridadeDoPremio(prizeDescription, catalogo),
+          number: i.number,
+          prizeDescription: i.prizeDescription,
+          skinRarity: raridadeDoPremio(i.prizeDescription, catalogo),
           isInstantPrize: true,
+          saidaTitulosDe: i.saidaTitulosDe ?? null,
+          saidaTitulosAte: i.saidaTitulosAte ?? null,
+          saidaDataDe: i.saidaDataDe ? new Date(i.saidaDataDe) : null,
+          saidaDataAte: i.saidaDataAte ? new Date(i.saidaDataAte) : null,
+          saidaDdds: i.saidaDdds,
         })),
       }),
     ]);

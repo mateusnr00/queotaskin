@@ -157,6 +157,14 @@ export default async function EditRafflePage({
     number: a.number,
     prizeDescription: a.prizeDescription,
     participantName: participantByNumber.get(String(a.number)) ?? null,
+    // As condições precisam ir e voltar: a ação de salvar APAGA e recria a
+    // lista inteira, então uma condição que não chega ao formulário some no
+    // primeiro salvamento da aba, sem ninguém perceber.
+    saidaTitulosDe: a.saidaTitulosDe,
+    saidaTitulosAte: a.saidaTitulosAte,
+    saidaDataDe: a.saidaDataDe?.toISOString() ?? null,
+    saidaDataAte: a.saidaDataAte?.toISOString() ?? null,
+    saidaDdds: a.saidaDdds,
   }));
   const initialAwardedConfig = {
     enabled: raffle.awardedTicketsEnabled,

@@ -9,14 +9,19 @@
 // - Auto-cura de rifa grátis (comprovante page)
 
 import { prisma } from "@/lib/db";
+import { compraCasaComSaida } from "@/lib/saida";
+import { dddDoTelefone } from "@/lib/cpf";
 
 export async function autoAwardTicketsForReservation(
-  reservationId: string
+  reservationId: string,
 ): Promise<number[]> {
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
     select: {
       raffleId: true,
+      paidAt: true,
+      createdAt: true,
+      participantPhone: true,
       tickets: {
         where: { status: "PAID" },
         select: { id: true, number: true },
@@ -28,11 +33,45 @@ export async function autoAwardTicketsForReservation(
   const numbers = reservation.tickets.map((t) => t.number);
   const awarded = await prisma.awardedTicket.findMany({
     where: { raffleId: reservation.raffleId, number: { in: numbers } },
-    select: { number: true },
+    select: {
+      number: true,
+      saidaTitulosDe: true,
+      saidaTitulosAte: true,
+      saidaDataDe: true,
+      saidaDataAte: true,
+      saidaDdds: true,
+    },
   });
   if (awarded.length === 0) return [];
 
-  const awardedNumbers = new Set(awarded.map((a) => a.number));
+  // CONDIÇÕES DA COMPRA, QUANDO HOUVER.
+  //
+  // Aqui não existe ponto de saída em porcentagem: o número já é o
+  // agendamento. O que existe é para QUAL COMPRA o número paga, e serve ao
+  // disparo com hora marcada. Sem nenhuma condição gravada, que é como toda
+  // linha antiga está, o comportamento é o de sempre: comprou, ganhou.
+  const compra = {
+    titulos: reservation.tickets.length,
+    quando: reservation.paidAt ?? reservation.createdAt,
+    ddd: dddDoTelefone(reservation.participantPhone),
+  };
+  const validos = awarded.filter((a) =>
+    compraCasaComSaida(
+      {
+        tipo: "PERSONALIZADO",
+        emTitulos: null,
+        titulosDe: a.saidaTitulosDe,
+        titulosAte: a.saidaTitulosAte,
+        dataDe: a.saidaDataDe,
+        dataAte: a.saidaDataAte,
+        ddds: a.saidaDdds,
+      },
+      compra,
+    ),
+  );
+  if (validos.length === 0) return [];
+
+  const awardedNumbers = new Set(validos.map((a) => a.number));
   const ticketsToUpgrade = reservation.tickets
     .filter((t) => awardedNumbers.has(t.number))
     .map((t) => t.id);

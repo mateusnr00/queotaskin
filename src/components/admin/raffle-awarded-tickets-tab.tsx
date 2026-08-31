@@ -11,8 +11,15 @@
 // - Adicionar em lote via textarea ("número, prêmio" por linha).
 
 import { useState, useTransition } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Trophy, Award, Dices } from "lucide-react";
+import { Award, Dices, Plus, Settings, Trash2, Trophy } from "lucide-react";
 
 import { setRaffleAwardedTicketsAction } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
@@ -45,6 +52,32 @@ interface AwardedRow {
   number: string;
   prizeDescription: string;
   participantName?: string | null;
+  /** Condições para o número pagar. Ver src/lib/saida.ts. */
+  saidaTitulosDe: number | null;
+  saidaTitulosAte: number | null;
+  saidaDataDe: string | null;
+  saidaDataAte: string | null;
+  saidaDdds: string[];
+}
+
+/** Uma linha nasce sem condição nenhuma: comprou o número, ganhou. */
+const SEM_CONDICAO = {
+  saidaTitulosDe: null,
+  saidaTitulosAte: null,
+  saidaDataDe: null,
+  saidaDataAte: null,
+  saidaDdds: [] as string[],
+};
+
+/** A linha tem alguma condição gravada? */
+function temCondicao(r: AwardedRow): boolean {
+  return (
+    r.saidaTitulosDe != null ||
+    r.saidaTitulosAte != null ||
+    r.saidaDataDe != null ||
+    r.saidaDataAte != null ||
+    r.saidaDdds.length > 0
+  );
 }
 
 interface Props {
@@ -56,6 +89,11 @@ interface Props {
     number: number;
     prizeDescription: string;
     participantName?: string | null;
+    saidaTitulosDe?: number | null;
+    saidaTitulosAte?: number | null;
+    saidaDataDe?: string | null;
+    saidaDataAte?: string | null;
+    saidaDdds?: string[];
   }[];
   initialConfig: {
     enabled: boolean;
@@ -78,7 +116,7 @@ export function RaffleAwardedTicketsTab({
   const [enabled, setEnabled] = useState(initialConfig.enabled);
   const [showList, setShowList] = useState(initialConfig.showList);
   const [viewMode, setViewMode] = useState<"list" | "modal">(
-    initialConfig.viewMode
+    initialConfig.viewMode,
   );
   const [winnerText, setWinnerText] = useState(initialConfig.winnerText);
   const [loserShow, setLoserShow] = useState(initialConfig.loserShow);
@@ -106,15 +144,31 @@ export function RaffleAwardedTicketsTab({
           number: String(i.number),
           prizeDescription: i.prizeDescription,
           participantName: i.participantName ?? null,
+          saidaTitulosDe: i.saidaTitulosDe ?? null,
+          saidaTitulosAte: i.saidaTitulosAte ?? null,
+          saidaDataDe: i.saidaDataDe ?? null,
+          saidaDataAte: i.saidaDataAte ?? null,
+          saidaDdds: i.saidaDdds ?? [],
         }))
-      : [{ number: "", prizeDescription: "", participantName: null }]
+      : [
+          {
+            number: "",
+            prizeDescription: "",
+            participantName: null,
+            ...SEM_CONDICAO,
+          },
+        ],
   );
   const [bulkText, setBulkText] = useState("");
+  const [condicoes, setCondicoes] = useState<{
+    indice: number;
+    row: AwardedRow;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function update(idx: number, key: keyof AwardedRow, value: string) {
     setItems((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it))
+      prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)),
     );
   }
 
@@ -122,15 +176,27 @@ export function RaffleAwardedTicketsTab({
     if (items.length >= MAX_ITEMS) return;
     setItems((prev) => [
       ...prev,
-      { number: "", prizeDescription: "", participantName: null },
+      {
+        number: "",
+        prizeDescription: "",
+        participantName: null,
+        ...SEM_CONDICAO,
+      },
     ]);
   }
 
   function remove(idx: number) {
     setItems((prev) =>
       prev.length === 1
-        ? [{ number: "", prizeDescription: "", participantName: null }]
-        : prev.filter((_, i) => i !== idx)
+        ? [
+            {
+              number: "",
+              prizeDescription: "",
+              participantName: null,
+              ...SEM_CONDICAO,
+            },
+          ]
+        : prev.filter((_, i) => i !== idx),
     );
   }
 
@@ -142,7 +208,7 @@ export function RaffleAwardedTicketsTab({
     const used = new Set(
       items
         .map((i) => parseInt(i.number, 10))
-        .filter((n) => Number.isFinite(n) && n > 0)
+        .filter((n) => Number.isFinite(n) && n > 0),
     );
     const maxTries = totalNumbers * 2;
     for (let i = 0; i < maxTries; i++) {
@@ -153,7 +219,7 @@ export function RaffleAwardedTicketsTab({
       }
     }
     toast.error(
-      "Nenhum número livre encontrado. Remova alguns antes de gerar mais."
+      "Nenhum número livre encontrado. Remova alguns antes de gerar mais.",
     );
   }
 
@@ -171,6 +237,7 @@ export function RaffleAwardedTicketsTab({
         number: m[1]!,
         prizeDescription: m[2]!.trim(),
         participantName: null,
+        ...SEM_CONDICAO,
       });
     }
     if (parsed.length === 0) {
@@ -179,7 +246,7 @@ export function RaffleAwardedTicketsTab({
     }
     setItems((prev) => {
       const filtered = prev.filter(
-        (p) => p.number.trim() || p.prizeDescription.trim()
+        (p) => p.number.trim() || p.prizeDescription.trim(),
       );
       return [...filtered, ...parsed].slice(0, MAX_ITEMS);
     });
@@ -193,6 +260,14 @@ export function RaffleAwardedTicketsTab({
       .map((i) => ({
         number: parseInt(i.number, 10),
         prizeDescription: i.prizeDescription.trim(),
+        // As condições viajam de volta porque a ação APAGA e recria a lista:
+        // sem isto, todo salvamento da aba limparia em silêncio o que foi
+        // configurado nas engrenagens.
+        saidaTitulosDe: i.saidaTitulosDe,
+        saidaTitulosAte: i.saidaTitulosAte,
+        saidaDataDe: i.saidaDataDe,
+        saidaDataAte: i.saidaDataAte,
+        saidaDdds: i.saidaDdds,
       }));
 
     startTransition(async () => {
@@ -214,13 +289,13 @@ export function RaffleAwardedTicketsTab({
       toast.success(
         cleaned.length === 0
           ? "Configuração salva (lista vazia)"
-          : `${cleaned.length} título(s) premiado(s) salvo(s)`
+          : `${cleaned.length} título(s) premiado(s) salvo(s)`,
       );
     });
   }
 
   const filledCount = items.filter(
-    (i) => i.number.trim() && i.prizeDescription.trim()
+    (i) => i.number.trim() && i.prizeDescription.trim(),
   ).length;
 
   return (
@@ -267,9 +342,7 @@ export function RaffleAwardedTicketsTab({
               onValueChange={(v) => v && setViewMode(v as "list" | "modal")}
             >
               <SelectTrigger>
-                <SelectValue
-                  labels={{ list: "Lista", modal: "Modal/Popup" }}
-                />
+                <SelectValue labels={{ list: "Lista", modal: "Modal/Popup" }} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="list">Lista</SelectItem>
@@ -296,8 +369,8 @@ export function RaffleAwardedTicketsTab({
             onChange={(e) => setWinnerText(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Aparece no comprovante quando o cliente é dono de pelo menos 1 ticket
-            AWARDED. Vazio = usa o padrão.
+            Aparece no comprovante quando o cliente é dono de pelo menos 1
+            ticket AWARDED. Vazio = usa o padrão.
           </p>
         </div>
 
@@ -370,6 +443,28 @@ export function RaffleAwardedTicketsTab({
                 aoMudar={(v) => update(idx, "prizeDescription", v)}
                 catalogo={catalogo}
               />
+              {/* A engrenagem das condições. Fica acesa quando a linha tem
+                  alguma: sem esse sinal, uma condição gravada some da vista e
+                  vira surpresa no dia em que alguém compra e não ganha. */}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={
+                  temCondicao(it)
+                    ? "border-primary/50 text-primary"
+                    : "text-muted-foreground"
+                }
+                onClick={() => setCondicoes({ indice: idx, row: it })}
+                aria-label={`Condições do número ${it.number || "novo"}`}
+                title={
+                  temCondicao(it)
+                    ? "Este número tem condições para pagar"
+                    : "Definir condições para este número pagar"
+                }
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -436,6 +531,16 @@ export function RaffleAwardedTicketsTab({
           {isPending ? "Salvando..." : "Salvar alterações"}
         </Button>
       </StickySaveBar>
+
+      <CondicoesDoTitulo
+        linha={condicoes}
+        aoSalvar={(indice, cond) =>
+          setItems((prev) =>
+            prev.map((x, j) => (j === indice ? { ...x, ...cond } : x)),
+          )
+        }
+        aoFechar={() => setCondicoes(null)}
+      />
     </>
   );
 }
@@ -462,4 +567,164 @@ function ToggleRow({
       </div>
     </div>
   );
+}
+
+/**
+ * Condições para um número premiado pagar.
+ *
+ * AQUI NÃO HÁ PONTO DE SAÍDA EM PORCENTAGEM, e a diferença é do modelo. O
+ * título premiado é amarrado a um NÚMERO: quem comprar o 120 leva, e não há
+ * bolo para sortear nem quando agendar. O número já é o agendamento.
+ *
+ * O que faz sentido é o outro eixo: para QUAL COMPRA ele paga. Serve ao
+ * disparo com hora marcada, que é o caso real.
+ *
+ * Campo em branco não filtra, e uma linha sem nenhuma condição é o
+ * comportamento de sempre: comprou o número, ganhou.
+ */
+function CondicoesDoTitulo({
+  linha,
+  aoSalvar,
+  aoFechar,
+}: {
+  linha: { indice: number; row: AwardedRow } | null;
+  aoSalvar: (indice: number, cond: Partial<AwardedRow>) => void;
+  aoFechar: () => void;
+}) {
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
+  const [dDe, setDDe] = useState("");
+  const [dAte, setDAte] = useState("");
+  const [ddds, setDdds] = useState("");
+  const [ultimo, setUltimo] = useState<number | null>(null);
+
+  if (linha && linha.indice !== ultimo) {
+    setUltimo(linha.indice);
+    setDe(linha.row.saidaTitulosDe?.toString() ?? "");
+    setAte(linha.row.saidaTitulosAte?.toString() ?? "");
+    setDDe(paraCampoDeData(linha.row.saidaDataDe));
+    setDAte(paraCampoDeData(linha.row.saidaDataAte));
+    setDdds(linha.row.saidaDdds.join(", "));
+  }
+
+  function salvar() {
+    if (!linha) return;
+    const n = (v: string) => (v.trim() === "" ? null : Number(v));
+    aoSalvar(linha.indice, {
+      saidaTitulosDe: n(de),
+      saidaTitulosAte: n(ate),
+      saidaDataDe: dDe.trim() === "" ? null : new Date(dDe).toISOString(),
+      saidaDataAte: dAte.trim() === "" ? null : new Date(dAte).toISOString(),
+      saidaDdds: ddds
+        .split(/[\s,]+/)
+        .map((d) => d.replace(/\D/g, ""))
+        .filter((d) => d.length === 2),
+    });
+    aoFechar();
+  }
+
+  return (
+    <Dialog open={linha != null} onOpenChange={(o) => !o && aoFechar()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Condições de saída</DialogTitle>
+          <DialogDescription>
+            Para o número <strong>{linha?.row.number}</strong> pagar. Em branco,
+            ele paga para quem comprar, como sempre.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="tit-de">
+                Títulos, no mínimo
+              </Label>
+              <Input
+                id="tit-de"
+                inputMode="numeric"
+                value={de}
+                onChange={(e) => setDe(e.target.value)}
+                placeholder="sem mínimo"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="tit-ate">
+                Títulos, no máximo
+              </Label>
+              <Input
+                id="tit-ate"
+                inputMode="numeric"
+                value={ate}
+                onChange={(e) => setAte(e.target.value)}
+                placeholder="sem limite"
+                className="font-mono"
+              />
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="tit-dde">
+                A partir de
+              </Label>
+              <Input
+                id="tit-dde"
+                type="datetime-local"
+                value={dDe}
+                onChange={(e) => setDDe(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="tit-date">
+                Até
+              </Label>
+              <Input
+                id="tit-date"
+                type="datetime-local"
+                value={dAte}
+                onChange={(e) => setDAte(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs" htmlFor="tit-ddd">
+              DDDs (opcional)
+            </Label>
+            <Input
+              id="tit-ddd"
+              value={ddds}
+              onChange={(e) => setDdds(e.target.value)}
+              placeholder="62, 11, 21"
+              className="font-mono"
+            />
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Para um disparo de WhatsApp das 14h, ponha 14h em{" "}
+            <strong>A partir de</strong>: o número espera a compra que veio
+            dele. Atenção: com condição, alguém pode comprar o número premiado e
+            não levar, então avise isso no texto da campanha.
+          </p>
+          <button
+            type="button"
+            onClick={salvar}
+            className="h-9 w-full rounded-lg bg-primary text-sm font-bold text-primary-foreground transition-opacity hover:opacity-95"
+          >
+            Aplicar
+          </button>
+          <p className="text-[11px] text-muted-foreground">
+            As condições só vão para o banco quando você salvar a aba.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** ISO para o formato que datetime-local aceita, no fuso de quem olha. */
+function paraCampoDeData(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
