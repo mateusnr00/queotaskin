@@ -108,7 +108,11 @@ export default async function AdminRankingPage() {
               </TableRow>
             ) : (
               rows.map((row) => {
-                const rank = rankFromXp(row.xp);
+                // O gasto entra junto porque o GOAT depende dele: sem o
+                // segundo argumento, `prestigeFromXp` pula o degrau e o
+                // maior cliente da casa aparece aqui como PRO. O cliente vê
+                // GOAT na conta dele e o painel discordava em silêncio.
+                const rank = rankFromXp(row.xp, row.spent);
                 return (
                   <TableRow key={row.userId} className="hover:bg-muted/40">
                     <TableCell className="text-center font-mono text-xs text-muted-foreground tabular-nums">

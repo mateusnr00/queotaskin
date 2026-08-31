@@ -112,11 +112,18 @@ async function pedirAwesome(
     });
     if (!res.ok) {
       // 404 aqui quer dizer "esse par não existe", que é resposta e não erro.
+      //
+      // 401, 403 e 429 são outra história, e a causa costuma ser a mesma: sem
+      // AWESOMEAPI_TOKEN a chamada vai como anônima, que tem cota pequena.
+      // Sem esta linha o painel só mostrava "HTTP 429" e a pessoa ia procurar
+      // defeito no código, não uma variável que falta na Vercel.
+      const semChave = !token && [401, 403, 429].includes(res.status);
       return {
         cambio: null,
         notas: [
           `AwesomeAPI: HTTP ${res.status}` +
-            (res.status === 404 ? " (par inexistente)" : ""),
+            (res.status === 404 ? " (par inexistente)" : "") +
+            (semChave ? ". AWESOMEAPI_TOKEN não está configurada" : ""),
         ],
       };
     }

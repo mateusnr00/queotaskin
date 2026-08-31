@@ -15,9 +15,8 @@
 //    Convenção: hosts admin começam com "admin." ou "painel.". Tudo o que
 //    não começa assim é considerado host público.
 //
-//      - Host público: /admin* redireciona pro host admin equivalente
-//        (admin.<rest>) pra esconder a existência do painel no domínio
-//        do participante.
+//      - Host público: /admin* responde 404, igualzinho a um caminho que
+//        não existe. O painel não é anunciado no domínio do participante.
 //      - Host admin: só o painel e o que serve pra entrar nele existem.
 //        Qualquer outro caminho redireciona pra /admin.
 //
@@ -41,7 +40,6 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
 import {
-  hostAdminDoPublico,
   isAdminHost,
   isHostDeDesenvolvimento,
   urlDaRequisicao,
@@ -56,11 +54,17 @@ const { auth } = NextAuth(authConfig);
 // /login e /trocar-senha ficam porque são o caminho de entrada no painel.
 // /api segue porque o cron e os webhooks batem no mesmo deploy, e um
 // redirect no lugar de 200 quebraria os dois em silêncio.
-const CAMINHOS_DO_PAINEL = ["/admin", "/login", "/trocar-senha", "/api", "/_next"];
+const CAMINHOS_DO_PAINEL = [
+  "/admin",
+  "/login",
+  "/trocar-senha",
+  "/api",
+  "/_next",
+];
 
 function ehCaminhoDoPainel(path: string): boolean {
   return CAMINHOS_DO_PAINEL.some(
-    (base) => path === base || path.startsWith(`${base}/`)
+    (base) => path === base || path.startsWith(`${base}/`),
   );
 }
 
@@ -90,15 +94,35 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // No host público, /admin* redireciona pra admin.<host> pra a pessoa
-  // logada continuar a navegação sem fricção.
+  // No host público, /admin* NÃO EXISTE. Nem redireciona.
+  //
+  // Redirecionava para admin.<host>, para a pessoa logada continuar a
+  // navegação sem fricção, e o preço disso era entregar o endereço do painel a
+  // qualquer um que digitasse /admin no site: o navegador ia para
+  // admin.<domínio> e a barra de endereços passava a mostrar onde fica a porta
+  // de entrada. Quem cuida do painel já sabe o endereço e o tem salvo; para
+  // todo o resto, saber que ele existe só serve para tentar entrar.
+  //
+  // A resposta é a mesma de qualquer caminho inexistente: 404, sem cabeçalho,
+  // sem redirect, sem diferença entre "/admin" e "/qualquer-coisa". Isso vale
+  // inclusive para quem está logado como admin, porque o navegador de quem
+  // olha por cima do ombro não sabe quem está logado.
   if (isAdminPath) {
-    const target = urlDaRequisicao(req, path);
-    target.host = hostAdminDoPublico(host);
-    // O caminho do painel costuma carregar querystring útil (filtros,
-    // paginação); ao contrário dos outros redirects, aqui ela é preservada.
-    target.search = url.search;
-    return NextResponse.redirect(target);
+    // 404 direto, e não um rewrite para a página de erro do app.
+    //
+    // Rewrite exige URL ABSOLUTA (o Next recusa caminho relativo), e a origem
+    // que ela carrega decide se o pedido é resolvido aqui dentro ou buscado
+    // como se fosse outro servidor. Quando o AUTH_URL aponta para o host do
+    // painel, tanto `req.url` quanto `req.nextUrl` saem com aquela origem, e o
+    // Next tenta buscar /_not-found no OUTRO domínio: sai 500 em vez de 404,
+    // conferido aqui. Numa rota que existe para esconder o painel, um 500
+    // entrega justamente o que o 404 esconderia.
+    //
+    // O preço é o corpo vazio: um caminho que não existe devolve a página de
+    // erro desenhada, e este devolve nada. Quem estiver sondando percebe a
+    // diferença, mas o que ele queria (o endereço do painel) não está em lugar
+    // nenhum da resposta.
+    return new NextResponse(null, { status: 404 });
   }
 
   return NextResponse.next();

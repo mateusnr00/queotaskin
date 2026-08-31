@@ -42,11 +42,6 @@ export function hostPublicoDoAdmin(adminHost: string): string {
   return adminHost.replace(/^(admin|painel)\./i, "");
 }
 
-/** "queotaskin.com" → "admin.queotaskin.com" (descarta www.) */
-export function hostAdminDoPublico(publicHost: string): string {
-  return `admin.${publicHost.replace(/^www\./i, "")}`;
-}
-
 /**
  * Monta uma URL de redirecionamento a partir do que o navegador realmente
  * pediu.
@@ -58,7 +53,7 @@ export function hostAdminDoPublico(publicHost: string): string {
  */
 export function urlDaRequisicao(
   request: { nextUrl: URL; headers: Headers },
-  pathname: string
+  pathname: string,
 ): URL {
   const url = new URL(request.nextUrl.toString());
   url.pathname = pathname;

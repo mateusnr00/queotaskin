@@ -112,7 +112,10 @@ function Patente({ customer }: { customer: Customer }) {
   return customer.showModBadge ? (
     <ModBadge size={26} uid={`mod-${customer.id}`} />
   ) : (
-    <RankBadge xp={customer.xp} size="sm" />
+    // Com o gasto junto, senão o GOAT nunca aparece: ele é o único degrau
+    // com exigência financeira, e sem o segundo argumento a conta trata todo
+    // mundo como quem gastou zero.
+    <RankBadge xp={customer.xp} totalSpent={customer.spent} size="sm" />
   );
 }
 

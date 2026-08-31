@@ -41,6 +41,7 @@ function tamanhoDaFonte(numeral: string): number {
  */
 export function RankBadge({
   xp,
+  totalSpent = 0,
   rank,
   size = "md",
   muted = false,
@@ -48,13 +49,22 @@ export function RankBadge({
 }: {
   /** Passe `xp` OU um `rank` já calculado. */
   xp?: number;
+  /**
+   * Quanto a pessoa já pagou, em reais. Só serve para resolver o GOAT, que é
+   * o único degrau com exigência financeira, e nunca é exibido.
+   *
+   * Omitir vale para todo lugar onde o selo não pode chegar ao topo (a escada
+   * de patentes, o degrau de uma campanha exclusiva). Numa lista de gente de
+   * verdade, omitir rebaixa o GOAT para PRO sem avisar.
+   */
+  totalSpent?: number;
   rank?: Rank;
   size?: keyof typeof SIZES;
   /** Faixa ainda não alcançada: apaga o selo sem escondê-lo. */
   muted?: boolean;
   className?: string;
 }) {
-  const resolved = rank ?? rankFromXp(xp ?? 0);
+  const resolved = rank ?? rankFromXp(xp ?? 0, totalSpent);
   const px = SIZES[size];
 
   // IDs precisam ser únicos por selo. Numa lista de ranking há dezenas na
@@ -124,7 +134,11 @@ export function RankBadge({
         // Cada lado do octógono ganha o próprio degradê; juntos fecham a
         // volta do arco-íris.
         LADOS_DO_OCTOGONO.map((lado, i) => (
-          <polygon key={i} points={lado.pontos} fill={`url(#${uid}-arco${i})`} />
+          <polygon
+            key={i}
+            points={lado.pontos}
+            fill={`url(#${uid}-arco${i})`}
+          />
         ))
       ) : design.forma === "losango" ? (
         <rect
@@ -166,7 +180,7 @@ export function RankBadge({
       >
         {resolved.numeral}
       </text>
-    </>
+    </>,
   );
 }
 
@@ -193,7 +207,10 @@ export function RankMeter({
   const value = Math.min(100, Math.max(0, percent));
   return (
     <div
-      className={cn("relative overflow-hidden rounded-full bg-[#20242b]", className)}
+      className={cn(
+        "relative overflow-hidden rounded-full bg-[#20242b]",
+        className,
+      )}
       style={{ height }}
       role="progressbar"
       aria-valuenow={Math.round(value)}

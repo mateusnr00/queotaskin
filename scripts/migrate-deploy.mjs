@@ -35,6 +35,29 @@ function run(label, args) {
 const isProduction = process.env.VERCEL_ENV === "production";
 const faltando = ["DATABASE_URL", "DIRECT_URL"].filter((v) => !process.env[v]);
 
+// MIGRATION SÓ EM PRODUÇÃO, e a checagem é esta, não a de variáveis.
+//
+// Antes o roteiro era "tem DIRECT_URL, então migra", e o que mantinha o
+// preview longe do banco de produção era um detalhe de configuração: a
+// variável existir só no escopo Production. Mas na Vercel, quem adiciona uma
+// variável sem escolher escopo marca os três, e é o que acontece quando
+// alguém troca a senha do Supabase e recola as strings. No dia em que isso
+// acontecer, TODO PULL REQUEST passa a rodar `prisma migrate deploy` no banco
+// de produção antes de qualquer pessoa olhar o preview, e uma migration com
+// DROP roda ali sem revisão nenhuma.
+//
+// VERCEL_ENV vem da plataforma e não é editável por variável de projeto, então
+// é a única coisa aqui que diz de verdade em qual ambiente o build está.
+if (!isProduction && faltando.length === 0) {
+  console.log(
+    `[build] VERCEL_ENV=${process.env.VERCEL_ENV ?? "(vazio)"}, pulando \`prisma migrate deploy\`.\n` +
+      "[build] Migration é passo de produção. Este build só valida a compilação,\n" +
+      "[build] mesmo com DATABASE_URL e DIRECT_URL presentes: preview e banco de\n" +
+      "[build] produção não se encostam."
+  );
+  process.exit(0);
+}
+
 if (faltando.length > 0) {
   if (isProduction) {
     console.error(
