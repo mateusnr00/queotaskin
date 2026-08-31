@@ -40,6 +40,7 @@ import { randomInt } from "node:crypto";
 import type { Draw, DrawStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { fullSkinName } from "@/lib/cs2";
 import { nomeCurto } from "@/lib/nome-curto";
 import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { registrarLog } from "@/server/services/activity-log";
@@ -424,10 +425,13 @@ async function executarSorteio(draw: Draw): Promise<Draw> {
       status: { in: ["WAITING_DRAW", "COUNTDOWN"] },
       winningNumber: null,
     },
-    data: { status: "DRAWING", countdownStartedAt: draw.countdownStartedAt ?? new Date() },
+    data: {
+      status: "DRAWING",
+      countdownStartedAt: draw.countdownStartedAt ?? new Date(),
+    },
   });
   if (reivindicou.count !== 1) {
-    return (await prisma.draw.findUniqueOrThrow({ where: { id: draw.id } }));
+    return await prisma.draw.findUniqueOrThrow({ where: { id: draw.id } });
   }
 
   try {
@@ -813,7 +817,9 @@ export function estadoPublico(
     eligibleTicketCount: draw.eligibleTicketCount,
     rngMethod: draw.rngMethod,
     amostraDeTitulos,
-    drawExecutedAt: mostrarNumero ? (draw.drawExecutedAt?.toISOString() ?? null) : null,
+    drawExecutedAt: mostrarNumero
+      ? (draw.drawExecutedAt?.toISOString() ?? null)
+      : null,
     drawVersion: draw.drawVersion,
 
     prova: {
@@ -840,7 +846,8 @@ export function estadoPublico(
           }
         : null,
 
-    erro: draw.status === "ERROR" ? (draw.errorReason ?? "Falha no sorteio") : null,
+    erro:
+      draw.status === "ERROR" ? (draw.errorReason ?? "Falha no sorteio") : null,
   };
 }
 
@@ -1038,7 +1045,20 @@ export async function dadosDeReivindicacao(
           title: true,
           totalNumbers: true,
           tenantId: true,
-          prizes: { select: { description: true }, take: 1 },
+          // A ficha da skin junto, e não só a descrição: a mensagem que o
+          // ganhador manda para o suporte precisa dizer QUAL item é, e uma
+          // skin sem desgaste é cinco itens de preços diferentes. O
+          // atendimento começava perguntando isso.
+          prizes: {
+            select: {
+              description: true,
+              skinName: true,
+              skinWear: true,
+              skinStatTrak: true,
+              skinSouvenir: true,
+            },
+            take: 1,
+          },
         },
       },
     },
@@ -1080,7 +1100,17 @@ export async function dadosDeReivindicacao(
   return {
     telefoneDoSuporte: tenant.supportPhone,
     nome: bilhete.reservation.participantName,
-    premio: draw.raffle.prizes[0]?.description ?? draw.raffle.title,
+    // A DESCRIÇÃO MANDA, e o desgaste entra por cima quando falta.
+    //
+    // `skinName` é o nome de catálogo e às vezes diz menos: nesta base o
+    // prêmio tem skinName "★ Butterfly Knife | Doppler" e descrição
+    // "★ Butterfly Knife | Doppler Ruby (Nova de Fábrica)". Compor a partir
+    // do nome de catálogo perderia o "Ruby", e é justamente a fase que decide
+    // o preço do item. Passando skinName nulo, fullSkinName usa a descrição
+    // como base e só acrescenta o desgaste se ele ainda não estiver escrito.
+    premio: draw.raffle.prizes[0]
+      ? fullSkinName({ ...draw.raffle.prizes[0], skinName: null })
+      : draw.raffle.title,
     tradeUrl: bilhete.reservation.user?.steamTradeUrl ?? null,
     titulo: draw.winningNumber,
     totalNumbers: draw.raffle.totalNumbers,

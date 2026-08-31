@@ -119,9 +119,9 @@ export const WEAR_RANGE: Record<SkinWear, [number, number]> = {
 /** Desgaste correspondente a um float, usado para validar o cadastro. */
 export function wearFromFloat(value: number): SkinWear | null {
   if (!Number.isFinite(value) || value < 0 || value > 1) return null;
-  const found = (Object.entries(WEAR_RANGE) as [SkinWear, [number, number]][]).find(
-    ([, [min, max]]) => value >= min && value < max,
-  );
+  const found = (
+    Object.entries(WEAR_RANGE) as [SkinWear, [number, number]][]
+  ).find(([, [min, max]]) => value >= min && value < max);
   // 1.0 exato cai fora de todo intervalo semiaberto: é Battle-Scarred.
   return found?.[0] ?? "BATTLE_SCARRED";
 }
@@ -145,23 +145,37 @@ export type SkinLike = {
 export function hasSkinData(prize: SkinLike): boolean {
   return Boolean(
     prize.skinName ||
-      prize.skinRarity ||
-      prize.skinWear ||
-      prize.skinFloat != null ||
-      prize.skinStatTrak ||
-      prize.skinSouvenir,
+    prize.skinRarity ||
+    prize.skinWear ||
+    prize.skinFloat != null ||
+    prize.skinStatTrak ||
+    prize.skinSouvenir,
   );
 }
 
 /**
  * Nome completo como aparece no inventário:
- * "StatTrak™ AK-47 | Redline (Field-Tested)".
+ * "StatTrak™ AK-47 | Redline (Testada em Campo)".
+ *
+ * O DESGASTE SAI EM DOIS IDIOMAS, e a escolha é de quem lê. Em português para
+ * quem comprou, que é o idioma da página inteira. Em inglês, do jeito que a
+ * Steam escreve, para quem administra: esse texto é colado na busca do
+ * mercado na hora de comprar a skin para entregar, e lá "Testada em Campo"
+ * não acha nada.
  */
-export function fullSkinName(prize: SkinLike & { description?: string }): string {
+export function fullSkinName(
+  prize: SkinLike & { description?: string },
+  opcoes: { desgaste?: "pt" | "steam" } = {},
+): string {
   const base = prize.skinName?.trim() || prize.description?.trim() || "";
-  const prefix = prize.skinStatTrak ? "StatTrak™ " : prize.skinSouvenir ? "Souvenir " : "";
+  const prefix = prize.skinStatTrak
+    ? "StatTrak™ "
+    : prize.skinSouvenir
+      ? "Souvenir "
+      : "";
   const alreadyPrefixed = /^(StatTrak™|Souvenir)/i.test(base);
-  const wear = prize.skinWear ? ` (${WEAR_LABEL[prize.skinWear]})` : "";
+  const nomeDoDesgaste = opcoes.desgaste === "steam" ? WEAR_STEAM : WEAR_LABEL;
+  const wear = prize.skinWear ? ` (${nomeDoDesgaste[prize.skinWear]})` : "";
   const alreadyHasWear = /\(.+\)\s*$/.test(base);
 
   return `${alreadyPrefixed ? "" : prefix}${base}${alreadyHasWear ? "" : wear}`;
@@ -172,12 +186,17 @@ export function headlineSkin<T extends SkinLike>(prizes: T[]): T | null {
   const withRarity = prizes.filter((p) => p.skinRarity);
   if (withRarity.length === 0) return prizes[0] ?? null;
   return withRarity.reduce((best, current) =>
-    RARITY_ORDER[current.skinRarity!] > RARITY_ORDER[best.skinRarity!] ? current : best,
+    RARITY_ORDER[current.skinRarity!] > RARITY_ORDER[best.skinRarity!]
+      ? current
+      : best,
   );
 }
 
 /** Cor da raridade com alfa, para bordas e brilhos suaves. */
-export function rarityColor(rarity: SkinRarity | null | undefined, alpha = 1): string {
+export function rarityColor(
+  rarity: SkinRarity | null | undefined,
+  alpha = 1,
+): string {
   if (!rarity) return alpha === 1 ? "#64748b" : `rgba(100, 116, 139, ${alpha})`;
   const hex = RARITY_COLOR[rarity];
   if (alpha === 1) return hex;

@@ -81,7 +81,7 @@ import {
   situacaoDoPrazo,
   type EstadoDoPrazo,
 } from "@/lib/prazo";
-import { RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
+import { fullSkinName, RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
 import { ESTADOS_DA_ENTREGA, estadoDaEntrega, pendente } from "@/lib/entrega";
 import {
   buscarCotacaoAction,
@@ -509,8 +509,8 @@ function Linha({
                 </span>
               )}
               <BotaoDeCopia
-                valor={nomeDaSkin(entrega)}
-                rotulo="Copiar nome da skin"
+                valor={nomeParaCopiar(entrega)}
+                rotulo="Copiar nome e desgaste da skin"
               />
               <FichaDoGanhador entrega={entrega} />
             </p>
@@ -576,8 +576,8 @@ function Cartao({
                 {nomeDaSkin(entrega)}
               </span>
               <BotaoDeCopia
-                valor={nomeDaSkin(entrega)}
-                rotulo="Copiar nome da skin"
+                valor={nomeParaCopiar(entrega)}
+                rotulo="Copiar nome e desgaste da skin"
               />
             </p>
             <p className="text-xs text-muted-foreground">
@@ -814,6 +814,23 @@ function BotaoDeCopia({
 function nomeDaSkin(entrega: Delivery): string {
   const p = entrega.prizes[0];
   return p?.skinName ?? p?.description ?? entrega.raffleTitle;
+}
+
+/**
+ * O que vai para a área de transferência: nome E desgaste.
+ *
+ * Copiava só o nome, e o desgaste ficava ao lado em selo, para ler. Só que
+ * este botão existe para colar na busca do mercado na hora de comprar a skin,
+ * e "AK-47 | Redline" sem o desgaste devolve cinco itens de preços bem
+ * diferentes: quem colava tinha de voltar na tela, ler o selo e completar à
+ * mão, ou comprar o errado.
+ *
+ * Em inglês, como a Steam escreve, porque é lá que o texto vai ser colado.
+ */
+function nomeParaCopiar(entrega: Delivery): string {
+  const p = entrega.prizes[0];
+  if (!p) return entrega.raffleTitle;
+  return fullSkinName(p, { desgaste: "steam" });
 }
 
 function SeletorDeStatus({ entrega }: { entrega: Delivery }) {

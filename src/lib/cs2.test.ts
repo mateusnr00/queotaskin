@@ -43,15 +43,23 @@ describe("isValidTradeUrl", () => {
   });
 
   it("rejeita link truncado, sem token ou de outro domínio", () => {
-    expect(isValidTradeUrl("https://steamcommunity.com/tradeoffer/new/")).toBe(false);
+    expect(isValidTradeUrl("https://steamcommunity.com/tradeoffer/new/")).toBe(
+      false,
+    );
     expect(
-      isValidTradeUrl("https://steamcommunity.com/tradeoffer/new/?partner=123456789"),
+      isValidTradeUrl(
+        "https://steamcommunity.com/tradeoffer/new/?partner=123456789",
+      ),
     ).toBe(false);
     expect(
-      isValidTradeUrl("http://steamcommunity.com/tradeoffer/new/?partner=1&token=x"),
+      isValidTradeUrl(
+        "http://steamcommunity.com/tradeoffer/new/?partner=1&token=x",
+      ),
     ).toBe(false);
     expect(
-      isValidTradeUrl("https://steamcommunlty.com/tradeoffer/new/?partner=1&token=x"),
+      isValidTradeUrl(
+        "https://steamcommunlty.com/tradeoffer/new/?partner=1&token=x",
+      ),
     ).toBe(false);
     expect(isValidTradeUrl("")).toBe(false);
   });
@@ -93,7 +101,53 @@ describe("fullSkinName", () => {
   });
 
   it("cai na descrição quando não há nome de skin", () => {
-    expect(fullSkinName({ description: "R$ 500 em saldo" })).toBe("R$ 500 em saldo");
+    expect(fullSkinName({ description: "R$ 500 em saldo" })).toBe(
+      "R$ 500 em saldo",
+    );
+  });
+
+  it("escreve o desgaste como a Steam quando pedido", () => {
+    // Este é o texto que o admin cola na busca do mercado para comprar a skin
+    // e entregar. "Testada em Campo" ali não acha nada.
+    expect(
+      fullSkinName(
+        { skinName: "AK-47 | Redline", skinWear: "FIELD_TESTED" },
+        { desgaste: "steam" },
+      ),
+    ).toBe("AK-47 | Redline (Field-Tested)");
+  });
+
+  it("sem opção, continua em português", () => {
+    // A página do sorteio é em português inteira, e é o que quem comprou lê.
+    expect(
+      fullSkinName({ skinName: "AK-47 | Redline", skinWear: "FIELD_TESTED" }),
+    ).toBe("AK-47 | Redline (Testada em Campo)");
+  });
+
+  it("com skinName nulo, compõe a partir da descrição", () => {
+    // É como a mensagem de reivindicação monta o prêmio: a descrição costuma
+    // dizer MAIS que o nome de catálogo (a fase "Ruby", por exemplo, que é o
+    // que decide o preço do item), e o desgaste entra por cima quando falta.
+    expect(
+      fullSkinName({
+        description: "AWP | Dragon Lore",
+        skinName: null,
+        skinWear: "FIELD_TESTED",
+      }),
+    ).toBe("AWP | Dragon Lore (Testada em Campo)");
+    expect(
+      fullSkinName({
+        description: "★ Butterfly Knife | Doppler Ruby (Nova de Fábrica)",
+        skinName: null,
+        skinWear: "FACTORY_NEW",
+      }),
+    ).toBe("★ Butterfly Knife | Doppler Ruby (Nova de Fábrica)");
+  });
+
+  it("prêmio que não é skin não ganha desgaste nenhum", () => {
+    expect(
+      fullSkinName({ description: "Teclado mecânico" }, { desgaste: "steam" }),
+    ).toBe("Teclado mecânico");
   });
 });
 
