@@ -31,6 +31,10 @@ import {
 } from "@/components/public/awarded-tickets-section";
 import { SurpriseBoxesCombos } from "@/components/public/surprise-boxes-combos";
 import { SurpriseBoxesSection } from "@/components/public/surprise-boxes-section";
+import {
+  RaspadinhasCombos,
+  RaspadinhasSection,
+} from "@/components/public/raspadinhas-publicas";
 import { BarraDeProgresso } from "@/components/public/barra-de-progresso";
 import { PrecoDaCampanha } from "@/components/public/preco-da-campanha";
 import { formatBRL, formatDateTime } from "@/lib/format";
@@ -128,6 +132,36 @@ export default async function PublicRaffleDetailPage({
           where: { visible: true },
           orderBy: { threshold: "asc" },
           select: { threshold: true, boxCount: true, highlighted: true },
+        },
+        // A raspadinha, com os mesmos dois blocos da caixa: quantos títulos
+        // dão quantas, e o que dá para ganhar nelas.
+        raspadinhaCombos: {
+          where: { visivel: true },
+          orderBy: { minimo: "asc" },
+          select: { minimo: true, quantidade: true },
+        },
+        raspadinhaPremios: {
+          // Prêmio travado fica de fora: ele existe no cadastro para ser
+          // preparado antes de soltar, e anunciá-lo como "Disponível" seria
+          // prometer o que ainda não pode ser ganho.
+          where: { travado: false },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            rotulo: true,
+            skinRarity: true,
+            claimedAt: true,
+            raspadinhaQueLevou: {
+              select: {
+                reservation: {
+                  select: {
+                    participantName: true,
+                    user: { select: { favoriteTeamId: true } },
+                  },
+                },
+              },
+            },
+          },
         },
         surpriseBoxPrizes: {
           orderBy: { createdAt: "asc" },
@@ -390,6 +424,32 @@ export default async function PublicRaffleDetailPage({
     if (raffle.surpriseBoxDisplayOrder === "ASC") return itens;
     return ordemEmbaralhada(itens, (i) => i.id);
   })();
+
+  // Mesma bagunça estável da caixa, e pelo mesmo motivo: em ordem de cadastro,
+  // a lista fechada mostraria sempre os cinco primeiros, e os últimos nunca
+  // apareceriam para quem não clica em "mostrar mais".
+  const raspadinhasPublicas = raffle.raspadinhaEnabled
+    ? ordemEmbaralhada(
+        raffle.raspadinhaPremios.map((p) => ({
+          id: p.id,
+          premio: p.rotulo,
+          raridade: p.skinRarity,
+          ganhador: p.raspadinhaQueLevou?.reservation.participantName ?? null,
+          time:
+            times.get(
+              p.raspadinhaQueLevou?.reservation.user?.favoriteTeamId ?? "",
+            ) ?? null,
+        })),
+        (i) => i.id,
+      )
+    : [];
+
+  const combosDeRaspadinha = raffle.raspadinhaEnabled
+    ? raffle.raspadinhaCombos.map((c) => ({
+        titulos: c.minimo,
+        raspadinhas: c.quantidade,
+      }))
+    : [];
 
   const combosPublicos = raffle.surpriseBoxEnabled
     ? raffle.surpriseBoxCombos.map((c) => ({
@@ -687,6 +747,13 @@ export default async function PublicRaffleDetailPage({
 
         <SurpriseBoxesSection caixas={caixasPublicas} />
 
+        <RaspadinhasCombos
+          combos={combosDeRaspadinha}
+          precoPorNumero={Number(raffle.pricePerNumber)}
+        />
+
+        <RaspadinhasSection premios={raspadinhasPublicas} />
+
         {raffle.showShareButtons && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -695,7 +762,6 @@ export default async function PublicRaffleDetailPage({
             <SocialShare url={shareUrl} title={`Participe: ${raffle.title}`} />
           </div>
         )}
-
       </div>
     </div>
   );
