@@ -11,6 +11,7 @@
 //   participante (TODO), Detalhes.
 
 import { useEffect, useState, useTransition } from "react";
+import { porcentagemDaSaida, type TipoDeSaida } from "@/lib/saida";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -173,9 +174,19 @@ export interface SurpriseBoxPrizeRow {
   odds: number | null;
   locked: boolean;
   claimed: boolean;
+  /** Quando ele sai. Ver src/lib/saida.ts. */
+  tipoDeSaida: TipoDeSaida;
+  saidaEmTitulos: number | null;
+  saidaTitulosDe: number | null;
+  saidaTitulosAte: number | null;
+  saidaDataDe: string | null;
+  saidaDataAte: string | null;
+  saidaDdds: string[];
 }
 
 export interface SurpriseBoxConfig {
+  /** Para converter o ponto de saída, que é em títulos, em porcentagem. */
+  totalNumbers: number;
   enabled: boolean;
   accumulative: boolean;
   abrirTodas: boolean;
@@ -1030,6 +1041,7 @@ function CaixasModalBody({
           <PrizesTable
             prizes={prizes}
             catalogo={initial.catalogo}
+            totalNumbers={initial.totalNumbers}
             disabled={isPending}
           />
         )}
@@ -1662,16 +1674,70 @@ function EditarPremioBody({
   );
 }
 
+/**
+ * Quando o grupo sai, em porcentagem da venda.
+ *
+ * Uma unidade mostra o ponto; várias mostram a faixa que elas cobrem, porque
+ * cada uma tem o seu e elas saem uma atrás da outra. Prêmio antigo, cadastrado
+ * antes de a saída existir, não ganha ponto inventado: ele continua saindo
+ * pelo sorteio de chance, e a tela diz isso em vez de mentir uma porcentagem.
+ */
+function SeloDeSaida({
+  tipo,
+  pontos,
+  totalNumbers,
+}: {
+  tipo: TipoDeSaida;
+  pontos: (number | null)[];
+  totalNumbers: number;
+}) {
+  if (tipo === "PERSONALIZADO") {
+    return (
+      <Badge variant="outline" className="text-[10px] text-primary">
+        Saída personalizada
+      </Badge>
+    );
+  }
+  const pcts = pontos
+    .map((p) => porcentagemDaSaida(p, totalNumbers))
+    .filter((p): p is number => p != null)
+    .sort((a, b) => a - b);
+  if (pcts.length === 0) {
+    return (
+      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+        Sem agendamento
+      </Badge>
+    );
+  }
+  const fmt = (n: number) =>
+    `${n.toFixed(n < 10 ? 1 : 0).replace(".", ",")}%`;
+  const primeiro = pcts[0]!;
+  const ultimo = pcts[pcts.length - 1]!;
+  return (
+    <Badge
+      variant="outline"
+      className="border-emerald-500/40 text-[10px] text-emerald-500 tabular-nums"
+      title="Vai para a primeira caixa aberta a partir deste ponto da venda"
+    >
+      {pcts.length === 1 || primeiro === ultimo
+        ? `sai em ${fmt(primeiro)}`
+        : `sai de ${fmt(primeiro)} a ${fmt(ultimo)}`}
+    </Badge>
+  );
+}
+
 // Lista compacta dos prêmios cadastrados no pool, agrupada por title +
 // prize pra não duplicar visualmente quando o admin cria várias unidades.
 // Cada grupo mostra contador (claimed/total) + ações de lock/remove.
 function PrizesTable({
   prizes,
   catalogo,
+  totalNumbers,
   disabled,
 }: {
   prizes: SurpriseBoxPrizeRow[];
   catalogo: SkinDoCatalogoSimples[];
+  totalNumbers: number;
   disabled: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -1703,7 +1769,12 @@ function PrizesTable({
   // que já foi entregue.
   const noPool = prizes.filter((p) => !p.claimed);
 
-  // Agrupa por (title|prize|mode|odds) pra mostrar como "X unidades".
+  // Agrupa por (title|prize|mode|odds|tipoDeSaida) pra mostrar "X unidades".
+  //
+  // O PONTO DE SAÍDA NÃO ENTRA NA CHAVE de propósito: cada unidade tem o seu,
+  // porque elas saem uma atrás da outra. Agrupar por ele quebraria um cadastro
+  // de três unidades em três linhas de uma, que é o contrário do que esta
+  // lista existe para fazer. O grupo mostra a FAIXA que as unidades cobrem.
   const groups = new Map<
     string,
     {
@@ -1711,25 +1782,29 @@ function PrizesTable({
       prize: string;
       mode: SurpriseBoxPrizeMode;
       odds: number | null;
+      tipoDeSaida: TipoDeSaida;
+      pontos: (number | null)[];
       ids: { id: string; locked: boolean; claimed: boolean }[];
     }
   >();
   for (const p of noPool) {
-    const key = `${p.title} ${p.prize} ${p.mode} ${p.odds ?? "-"}`;
+    const key = [p.title, p.prize, p.mode, p.odds ?? "-", p.tipoDeSaida].join(
+      "\u0000",
+    );
     if (!groups.has(key)) {
       groups.set(key, {
         title: p.title,
         prize: p.prize,
         mode: p.mode,
         odds: p.odds,
+        tipoDeSaida: p.tipoDeSaida,
+        pontos: [],
         ids: [],
       });
     }
-    groups.get(key)!.ids.push({
-      id: p.id,
-      locked: p.locked,
-      claimed: p.claimed,
-    });
+    const g = groups.get(key)!;
+    g.pontos.push(p.saidaEmTitulos);
+    g.ids.push({ id: p.id, locked: p.locked, claimed: p.claimed });
   }
 
   return (
@@ -1746,7 +1821,7 @@ function PrizesTable({
           const allLocked = locked === total && total > 0;
           return (
             <li
-              key={`${g.title}-${g.prize}-${g.mode}-${g.odds ?? ""}`}
+              key={`${g.title}-${g.prize}-${g.mode}-${g.odds ?? ""}-${g.tipoDeSaida}`}
               className="flex items-center justify-between gap-3 px-3 py-2.5"
             >
               <div className="min-w-0 flex-1">
@@ -1761,9 +1836,17 @@ function PrizesTable({
                   </Badge>
                   {g.mode === "PERCENT" && g.odds != null && (
                     <Badge variant="outline" className="text-[10px]">
-                      {g.odds}%
+                      chance {g.odds}%
                     </Badge>
                   )}
+                  {/* QUANDO ELE SAI, que é a pergunta que a lista não
+                      respondia. Antes dava para cadastrar um prêmio grande e
+                      não ter ideia de quando ele apareceria. */}
+                  <SeloDeSaida
+                    tipo={g.tipoDeSaida}
+                    pontos={g.pontos}
+                    totalNumbers={totalNumbers}
+                  />
                   {allLocked && (
                     <Badge variant="outline" className="text-[10px] text-muted-foreground">
                       Bloqueado

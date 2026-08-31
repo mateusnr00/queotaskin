@@ -297,6 +297,7 @@ export default async function ComprasPage({
             visible: c.visible,
             highlighted: c.highlighted,
           })),
+          totalNumbers: raffle.totalNumbers,
           prizes: raffle.surpriseBoxPrizes.map((p) => ({
             id: p.id,
             title: p.title,
@@ -305,6 +306,16 @@ export default async function ComprasPage({
             odds: p.odds != null ? Number(p.odds) : null,
             locked: p.locked,
             claimed: p.claimedAt != null,
+            tipoDeSaida: p.tipoDeSaida,
+            saidaEmTitulos: p.saidaEmTitulos,
+            saidaTitulosDe: p.saidaTitulosDe,
+            saidaTitulosAte: p.saidaTitulosAte,
+            // ISO na travessia servidor/cliente: Date atravessa, mas o
+            // formato de volta depende do serializador, e a data aqui vira
+            // campo de formulário.
+            saidaDataDe: p.saidaDataDe?.toISOString() ?? null,
+            saidaDataAte: p.saidaDataAte?.toISOString() ?? null,
+            saidaDdds: p.saidaDdds,
           })),
         }}
       />

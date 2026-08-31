@@ -20,6 +20,8 @@
 //   OPENED_EMPTY ("não foi dessa vez!").
 
 import { randomInt } from "node:crypto";
+import { premioDaVez, type CompraQueAbre } from "@/lib/saida";
+import { dddDoTelefone } from "@/lib/cpf";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -44,7 +46,7 @@ export interface OpenedBoxResult {
 }
 
 export async function openSurpriseBoxAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult<OpenedBoxResult>> {
   try {
     const parsed = openSchema.safeParse(raw);
@@ -71,6 +73,10 @@ export async function openSurpriseBoxAction(
           select: {
             status: true,
             userId: true,
+            paidAt: true,
+            createdAt: true,
+            participantPhone: true,
+            _count: { select: { tickets: true } },
             raffle: { select: { tenantId: true } },
           },
         },
@@ -105,7 +111,11 @@ export async function openSurpriseBoxAction(
 
     // Tenta até 3x, race em concorrência (prize foi pego por outra caixa).
     for (let attempt = 0; attempt < MAX_DRAW_RETRIES; attempt++) {
-      const drawn = await drawPrize(box.raffleId);
+      const drawn = await drawPrize(box.raffleId, {
+        titulos: box.reservation._count.tickets,
+        quando: box.reservation.paidAt ?? box.reservation.createdAt,
+        ddd: dddDoTelefone(box.reservation.participantPhone),
+      });
 
       if (!drawn) {
         // Pool vazio → caixa vazia.
@@ -121,38 +131,37 @@ export async function openSurpriseBoxAction(
       }
 
       // Tenta reservar o prêmio atomicamente.
-      const result = await prisma
-        .$transaction(async (tx) => {
-          const claimed = await tx.surpriseBoxPrize.updateMany({
-            where: { id: drawn.id, claimedAt: null, locked: false },
-            data: { claimedAt: new Date() },
-          });
-          if (claimed.count === 0) return null; // race, outro vencedor
-
-          const boxUpdated = await tx.surpriseBox.updateMany({
-            where: { id: boxId, status: "UNOPENED" },
-            data: {
-              status: "OPENED_PRIZE",
-              prizeId: drawn.id,
-              openedAt: new Date(),
-            },
-          });
-          if (boxUpdated.count === 0) {
-            // A caixa foi aberta por outra request (raríssimo). Devolve o
-            // prêmio pro pool (rollback do claim).
-            await tx.surpriseBoxPrize.update({
-              where: { id: drawn.id },
-              data: { claimedAt: null },
-            });
-            return "BOX_RACE" as const;
-          }
-
-          const prize = await tx.surpriseBoxPrize.findUnique({
-            where: { id: drawn.id },
-            select: { id: true, title: true, prize: true },
-          });
-          return prize;
+      const result = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.surpriseBoxPrize.updateMany({
+          where: { id: drawn.id, claimedAt: null, locked: false },
+          data: { claimedAt: new Date() },
         });
+        if (claimed.count === 0) return null; // race, outro vencedor
+
+        const boxUpdated = await tx.surpriseBox.updateMany({
+          where: { id: boxId, status: "UNOPENED" },
+          data: {
+            status: "OPENED_PRIZE",
+            prizeId: drawn.id,
+            openedAt: new Date(),
+          },
+        });
+        if (boxUpdated.count === 0) {
+          // A caixa foi aberta por outra request (raríssimo). Devolve o
+          // prêmio pro pool (rollback do claim).
+          await tx.surpriseBoxPrize.update({
+            where: { id: drawn.id },
+            data: { claimedAt: null },
+          });
+          return "BOX_RACE" as const;
+        }
+
+        const prize = await tx.surpriseBoxPrize.findUnique({
+          where: { id: drawn.id },
+          select: { id: true, title: true, prize: true },
+        });
+        return prize;
+      });
 
       if (result === "BOX_RACE") {
         // Outra request foi mais rápida, re-lê o resultado.
@@ -182,7 +191,7 @@ export async function openSurpriseBoxAction(
 // Lê o estado pós-abertura quando uma race aconteceu, outra request
 // fechou o estado, só precisamos retornar o que ficou gravado.
 async function refetchOpened(
-  boxId: string
+  boxId: string,
 ): Promise<ActionResult<OpenedBoxResult>> {
   const box = await prisma.surpriseBox.findUnique({
     where: { id: boxId },
@@ -206,16 +215,54 @@ async function refetchOpened(
 //
 // Returns null se pool vazio.
 async function drawPrize(
-  raffleId: string
+  raffleId: string,
+  compra: CompraQueAbre,
 ): Promise<{ id: string } | null> {
   const available = await prisma.surpriseBoxPrize.findMany({
     where: { raffleId, locked: false, claimedAt: null },
-    select: { id: true, mode: true, odds: true },
+    select: {
+      id: true,
+      mode: true,
+      odds: true,
+      tipoDeSaida: true,
+      saidaEmTitulos: true,
+      saidaTitulosDe: true,
+      saidaTitulosAte: true,
+      saidaDataDe: true,
+      saidaDataAte: true,
+      saidaDdds: true,
+    },
   });
   if (available.length === 0) return null;
 
+  // A SAÍDA AGENDADA MANDA; A CHANCE É A RESERVA.
+  //
+  // O ponto de saída é promessa: o prêmio vai para a primeira caixa aberta a
+  // partir dele. Então ele vem ANTES do sorteio, e não concorre com ele. Só
+  // quando nada está agendado para agora é que o sorteio por chance decide,
+  // que é o comportamento que os prêmios antigos, sem ponto, continuam tendo.
+  const vendidos = await prisma.ticket.count({
+    where: { raffleId, status: "PAID" },
+  });
+  const agendado = premioDaVez(
+    available.map((p) => ({
+      id: p.id,
+      saida: {
+        tipo: p.tipoDeSaida,
+        emTitulos: p.saidaEmTitulos,
+        titulosDe: p.saidaTitulosDe,
+        titulosAte: p.saidaTitulosAte,
+        dataDe: p.saidaDataDe,
+        dataAte: p.saidaDataAte,
+        ddds: p.saidaDdds,
+      },
+    })),
+    { vendidos, compra },
+  );
+  if (agendado) return { id: agendado };
+
   const percent = available.filter(
-    (p) => p.mode === "PERCENT" && p.odds != null
+    (p) => p.mode === "PERCENT" && p.odds != null,
   );
   const random = available.filter((p) => p.mode === "RANDOM");
 

@@ -43,3 +43,24 @@ export function formatPhone(value: string): string {
   }
   return digits;
 }
+
+/**
+ * O DDD de um telefone brasileiro, ou nulo.
+ *
+ * Usado pelo filtro de DDD dos prêmios personalizados. Nulo quando não há
+ * telefone ou quando o que há não tem tamanho de número brasileiro: o filtro
+ * pede um DDD para conferir, e inventar um a partir de lixo faria o prêmio
+ * sair para a pessoa errada.
+ */
+export function dddDoTelefone(
+  telefone: string | null | undefined,
+): string | null {
+  const digitos = (telefone ?? "").replace(/\D/g, "");
+  // Com 55 na frente, tira o país antes de ler o DDD.
+  const nacional =
+    digitos.length > 11 && digitos.startsWith("55")
+      ? digitos.slice(2)
+      : digitos;
+  if (nacional.length !== 10 && nacional.length !== 11) return null;
+  return nacional.slice(0, 2);
+}

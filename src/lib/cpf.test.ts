@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCpf, formatPhone, isValidCpf, onlyDigits } from "@/lib/cpf";
+import {
+  dddDoTelefone,
+  formatCpf,
+  formatPhone,
+  isValidCpf,
+  onlyDigits,
+} from "@/lib/cpf";
 
 describe("onlyDigits", () => {
   it("remove tudo que não é dígito", () => {
@@ -41,5 +47,26 @@ describe("formatPhone", () => {
 
   it("formata fixo (10 dígitos)", () => {
     expect(formatPhone("1133334444")).toBe("(11) 3333-4444");
+  });
+});
+
+describe("dddDoTelefone", () => {
+  it("lê o DDD de números de 10 e 11 dígitos", () => {
+    expect(dddDoTelefone("62998110279")).toBe("62");
+    expect(dddDoTelefone("(11) 3333-4444")).toBe("11");
+  });
+
+  it("tira o código do país antes de ler", () => {
+    // Sem isto, +55 62 ... devolveria "55" e o filtro nunca casaria.
+    expect(dddDoTelefone("5562998110279")).toBe("62");
+    expect(dddDoTelefone("+55 (62) 99811-0279")).toBe("62");
+  });
+
+  it("sem telefone, ou com lixo, devolve nulo", () => {
+    // O filtro pede um DDD para conferir. Inventar um a partir de lixo faria o
+    // prêmio sair para a pessoa errada.
+    for (const v of [null, undefined, "", "abc", "123", "9999999999999999"]) {
+      expect(dddDoTelefone(v)).toBeNull();
+    }
   });
 });

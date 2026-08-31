@@ -9,6 +9,7 @@
 // os formulários da aba são auto-contidos (admin edita N linhas e salva).
 
 import { revalidatePath } from "next/cache";
+import { agendarSaida } from "@/lib/saida";
 import { SkinRarity } from "@prisma/client";
 import { z } from "zod";
 
@@ -43,10 +44,11 @@ import { dataDeSaoPauloParaUtc } from "@/lib/promocao-em-dobro";
 
 // Qualquer image/* passa. Barrar por lista fixa rejeitava AVIF, HEIC e GIF,
 // e o navegador nem sempre preenche file.type, daí o fallback pela extensão.
-const IMAGE_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
+const IMAGE_EXT =
+  /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
 export async function uploadRaffleImageAction(
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionResult<{ id: string; url: string }>> {
   try {
     const session = await getAdminOrThrow();
@@ -137,12 +139,12 @@ const addImageByUrlSchema = z.object({
     .url("URL inválida")
     .refine(
       (v) => v.startsWith("http://") || v.startsWith("https://"),
-      "Use uma URL http(s)"
+      "Use uma URL http(s)",
     ),
 });
 
 export async function addRaffleImageByUrlAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult<{ id: string; url: string }>> {
   try {
     const session = await getAdminOrThrow();
@@ -150,8 +152,7 @@ export async function addRaffleImageByUrlAction(
     if (!parsed.success) {
       return {
         ok: false,
-        error:
-          parsed.error.issues[0]?.message ?? "URL inválida",
+        error: parsed.error.issues[0]?.message ?? "URL inválida",
         fieldErrors: parsed.error.flatten().fieldErrors,
       };
     }
@@ -199,7 +200,7 @@ const deleteImageSchema = z.object({
 });
 
 export async function deleteRaffleImageAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -211,7 +212,10 @@ export async function deleteRaffleImageAction(
       select: { url: true, raffleId: true, isCover: true },
     });
     if (!img) return { ok: false, error: "Imagem não encontrada" };
-    const tenantId = await assertRaffleInActiveTenant(img.raffleId, session.user);
+    const tenantId = await assertRaffleInActiveTenant(
+      img.raffleId,
+      session.user,
+    );
 
     await prisma.raffleImage.delete({ where: { id: parsed.data.id } });
 
@@ -264,7 +268,7 @@ const setCoverSchema = z.object({
 });
 
 export async function setRaffleCoverAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -272,7 +276,7 @@ export async function setRaffleCoverAction(
     if (!parsed.success) return { ok: false, error: "Dados inválidos" };
     const tenantId = await assertRaffleInActiveTenant(
       parsed.data.raffleId,
-      session.user
+      session.user,
     );
 
     await prisma.$transaction(async (tx) => {
@@ -328,7 +332,7 @@ const prizesSchema = z.object({
     .default("")
     .refine(
       (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
-      "URL deve começar com http:// ou https://"
+      "URL deve começar com http:// ou https://",
     ),
   ebookButtonText: z.string().max(60).optional().default(""),
   prizes: z
@@ -344,7 +348,7 @@ const prizesSchema = z.object({
           .default("")
           .refine(
             (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
-            "URL da imagem deve começar com http:// ou https://"
+            "URL da imagem deve começar com http:// ou https://",
           ),
         skinName: z.string().max(200).optional().default(""),
         skinRarity: z
@@ -400,15 +404,15 @@ const prizesSchema = z.object({
           .default("")
           .refine(
             (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
-            "O link de inspeção deve começar com http:// ou https://"
+            "O link de inspeção deve começar com http:// ou https://",
           ),
-      })
+      }),
     )
     .max(10, "Máximo de 10 prêmios"),
 });
 
 export async function setRafflePrizesAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -506,7 +510,7 @@ const promotionsSchema = z.object({
         price: z.coerce.number().min(0).max(99_999_999.99),
         label: z.string().max(60).optional().nullable(),
         type: z.enum(["QTY", "MORE_THAN"]).default("QTY"),
-      })
+      }),
     )
     .max(20, "Máximo de 20 promoções"),
 });
@@ -515,11 +519,13 @@ const promotionsSchema = z.object({
 // tenant. Credenciais não passam por aqui, só a escolha do provider.
 const paymentProviderSchema = z.object({
   raffleId: z.string().cuid(),
-  paymentProvider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]).nullable(),
+  paymentProvider: z
+    .enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"])
+    .nullable(),
 });
 
 export async function setRafflePaymentProviderAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -555,7 +561,7 @@ export async function setRafflePaymentProviderAction(
 }
 
 export async function setRafflePromotionsAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -575,8 +581,7 @@ export async function setRafflePromotionsAction(
       doubleFrom,
       doubleUntil,
       accumulative,
-    } =
-      parsed.data;
+    } = parsed.data;
     const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
     // O comeco da promocao existe para a BARRA poder ser honesta: sem ele nao
@@ -655,13 +660,13 @@ const awardedTicketsSchema = z.object({
       z.object({
         number: z.coerce.number().int().min(1).max(10_000_000),
         prizeDescription: z.string().min(1).max(200),
-      })
+      }),
     )
     .max(500, "Máximo de 500 títulos premiados por sorteio"),
 });
 
 export async function setRaffleAwardedTicketsAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -695,7 +700,7 @@ export async function setRaffleAwardedTicketsAction(
       return { ok: false, error: "Sorteio não encontrado" };
     }
     const out = items.filter(
-      (i) => i.number < 1 || i.number > raffle.totalNumbers
+      (i) => i.number < 1 || i.number > raffle.totalNumbers,
     );
     if (out.length > 0) {
       return {
@@ -786,7 +791,7 @@ const surpriseBoxCombosSchema = z.object({
         boxCount: z.coerce.number().int().min(1).max(1000),
         visible: z.boolean().default(true),
         highlighted: z.boolean().default(false),
-      })
+      }),
     )
     .max(20, "Máximo de 20 combos"),
 });
@@ -794,7 +799,7 @@ const surpriseBoxCombosSchema = z.object({
 // Substitui a lista inteira a cada save (mesmo padrão de Promotion/Prize).
 // Dedup por threshold, combos com mesma quantidade colidem no @@unique.
 export async function setRaffleSurpriseBoxCombosAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -888,7 +893,7 @@ const surpriseBoxPrizeBatchSchema = z.object({
 // Cria N unidades do mesmo prêmio (1 linha = 1 unidade no banco, modelo
 // que casa com a listagem pública "115/500 Disponível/Ganhador").
 export async function createSurpriseBoxPrizesAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult<{ count: number }>> {
   try {
     const session = await getAdminOrThrow();
@@ -900,7 +905,8 @@ export async function createSurpriseBoxPrizesAction(
         fieldErrors: parsed.error.flatten().fieldErrors,
       };
     }
-    const { raffleId, title, prize, quantity, mode, odds, locked } = parsed.data;
+    const { raffleId, title, prize, quantity, mode, odds, locked } =
+      parsed.data;
     // O tenant vem da própria checagem, que passou a devolvê-lo: buscar o
     // sorteio outra vez só para ler o tenantId seria a mesma consulta duas
     // vezes.
@@ -920,8 +926,35 @@ export async function createSurpriseBoxPrizesAction(
       ),
     );
 
-    const result = await prisma.surpriseBoxPrize.createMany({
-      data: Array.from({ length: quantity }, () => ({
+    // O PONTO DE SAÍDA JÁ NASCE COM O PRÊMIO.
+    //
+    // Antes o prêmio entrava no bolo e ninguém sabia quando ele apareceria.
+    // Agora cada unidade recebe um ponto, calculado a partir de onde a venda
+    // está: campanha parada agenda cedo, campanha adiantada agenda
+    // proporcional ao que ainda falta vender.
+    //
+    // Cada unidade puxa a anterior, e é isso que faz elas saírem uma atrás da
+    // outra em vez de todas caírem no mesmo ponto. Por isso o loop acumula, em
+    // vez de calcular as N de uma vez.
+    const [vendidos, ultimo, campanha] = await Promise.all([
+      prisma.ticket.count({ where: { raffleId, status: "PAID" } }),
+      prisma.surpriseBoxPrize.findFirst({
+        where: { raffleId, saidaEmTitulos: { not: null } },
+        orderBy: { saidaEmTitulos: "desc" },
+        select: { saidaEmTitulos: true },
+      }),
+      prisma.raffle.findUnique({
+        where: { id: raffleId },
+        select: { totalNumbers: true },
+      }),
+    ]);
+    const total = campanha?.totalNumbers ?? 0;
+    let ultimoAgendado = ultimo?.saidaEmTitulos ?? null;
+
+    const linhas = Array.from({ length: quantity }, () => {
+      const ponto = agendarSaida({ vendidos, total, ultimoAgendado });
+      ultimoAgendado = ponto;
+      return {
         raffleId,
         title: title.trim(),
         prize: prize.trim(),
@@ -930,8 +963,11 @@ export async function createSurpriseBoxPrizesAction(
         // Em RANDOM zera odds; em PERCENT usa o valor (NULL se admin não passou).
         odds: mode === "PERCENT" && odds != null ? odds : null,
         locked,
-      })),
+        saidaEmTitulos: ponto,
+      };
     });
+
+    const result = await prisma.surpriseBoxPrize.createMany({ data: linhas });
 
     await registrarLog({
       acao: "sorteio.conteudo_alterado",
@@ -955,7 +991,7 @@ const surpriseBoxPrizeIdSchema = z.object({
 // Toggle lock/unlock de um prêmio. Prêmio com claimedAt setado (já saiu
 // numa caixa) não pode mudar lock, não faria diferença.
 export async function toggleSurpriseBoxPrizeLockAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -970,10 +1006,13 @@ export async function toggleSurpriseBoxPrizeLockAction(
     if (!prize) return { ok: false, error: "Prêmio não encontrado" };
     const tenantId = await assertRaffleInActiveTenant(
       prize.raffleId,
-      session.user
+      session.user,
     );
     if (prize.claimedAt) {
-      return { ok: false, error: "Prêmio já foi sorteado, não pode ser bloqueado" };
+      return {
+        ok: false,
+        error: "Prêmio já foi sorteado, não pode ser bloqueado",
+      };
     }
 
     await prisma.surpriseBoxPrize.update({
@@ -1014,7 +1053,7 @@ const editarPremioDeCaixaSchema = z.object({
  * que sai dele.
  */
 export async function updateSurpriseBoxPrizeAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -1026,7 +1065,8 @@ export async function updateSurpriseBoxPrizeAction(
       where: { id: { in: prizeIds } },
       select: { id: true, raffleId: true },
     });
-    if (premios.length === 0) return { ok: false, error: "Prêmio não encontrado" };
+    if (premios.length === 0)
+      return { ok: false, error: "Prêmio não encontrado" };
 
     // Todas as unidades têm de ser do mesmo sorteio: sem isto, uma lista
     // montada à mão editaria prêmio de outra campanha do mesmo tenant.
@@ -1076,7 +1116,7 @@ const caixaIdSchema = z.object({ boxId: z.string().cuid() });
  * é onde apagar prêmio sempre morou.
  */
 export async function deleteSurpriseBoxAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -1112,11 +1152,10 @@ export async function deleteSurpriseBoxAction(
   }
 }
 
-
 // Remove um prêmio do pool. Prêmio já sorteado (claimedAt setado) não
 // pode ser deletado, preserva histórico do ganhador.
 export async function deleteSurpriseBoxPrizeAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -1131,10 +1170,13 @@ export async function deleteSurpriseBoxPrizeAction(
     if (!prize) return { ok: false, error: "Prêmio não encontrado" };
     const tenantId = await assertRaffleInActiveTenant(
       prize.raffleId,
-      session.user
+      session.user,
     );
     if (prize.claimedAt) {
-      return { ok: false, error: "Prêmio já foi sorteado, não pode ser excluído" };
+      return {
+        ok: false,
+        error: "Prêmio já foi sorteado, não pode ser excluído",
+      };
     }
 
     await prisma.surpriseBoxPrize.delete({
@@ -1180,7 +1222,7 @@ export interface WinnerInfo {
 }
 
 export async function setRaffleWinnerAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult<WinnerInfo>> {
   try {
     const session = await getAdminOrThrow();
@@ -1294,7 +1336,7 @@ const clearWinnerSchema = z.object({
 // Desfaz a definição de ganhador, volta a rifa pro estado ACTIVE se
 // estava FINISHED. Útil se o admin declarou o número errado.
 export async function clearRaffleWinnerAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult> {
   try {
     const session = await getAdminOrThrow();
@@ -1302,7 +1344,7 @@ export async function clearRaffleWinnerAction(
     if (!parsed.success) return { ok: false, error: "Dados inválidos" };
     const tenantId = await assertRaffleInActiveTenant(
       parsed.data.raffleId,
-      session.user
+      session.user,
     );
 
     // Mesma trava do lado de cá: apagar o ganhador de um sorteio automático

@@ -1232,6 +1232,15 @@ enum SurpriseBoxStatus {
 // - mode: RANDOM (uniforme) | PERCENT (chance individual em odds).
 // - odds: usado só em PERCENT. 0-100. Soma dos PERCENT pode ser < 100,
 //   resto vira chance de caixa vazia.
+/// Como um premio instantaneo decide a hora de sair.
+enum TipoDeSaida {
+  /// Por andamento da venda: sai ao alcancar um titulo. E o padrao, e o
+  /// agendamento e feito sozinho no cadastro.
+  PROGRESSO
+  /// Por condicao da compra: tamanho, data e DDD.
+  PERSONALIZADO
+}
+
 model SurpriseBoxPrize {
   id       String @id @default(cuid())
   raffleId String
@@ -1244,6 +1253,31 @@ model SurpriseBoxPrize {
   mode       SurpriseBoxPrizeMode @default(RANDOM)
   odds       Decimal?             @db.Decimal(5, 2) // só em PERCENT
   locked     Boolean              @default(false)
+
+  /// QUANDO ESTE PREMIO SAI.
+  ///
+  /// Antes o premio so era escolhido na hora da abertura, por chance ou
+  /// uniforme: nem quem cadastrou sabia quando ele apareceria, e um item
+  /// grande podia sair na primeira caixa ou nunca. Agora ele nasce com um
+  /// ponto de saida, e esse ponto e promessa: vai para a PRIMEIRA caixa
+  /// aberta a partir dali.
+  tipoDeSaida TipoDeSaida @default(PROGRESSO)
+
+  /// O ponto de saida, em TITULOS VENDIDOS. So em PROGRESSO.
+  ///
+  /// Em titulos e nao em porcentagem de proposito: porcentagem e leitura, nao
+  /// dado. Guardada como numero, ela mudaria de significado no dia em que a
+  /// campanha alterasse o total de numeros, sem ninguem ter tocado no premio.
+  saidaEmTitulos Int?
+
+  /// Condicoes da COMPRA que pode levar. So em PERSONALIZADO, e cada campo em
+  /// branco simplesmente nao filtra.
+  saidaTitulosDe  Int?
+  saidaTitulosAte Int?
+  saidaDataDe     DateTime?
+  saidaDataAte    DateTime?
+  /// DDDs que podem levar. Vazio = qualquer um.
+  saidaDdds       String[]
   claimedAt  DateTime? // setado atomicamente quando uma caixa abre e leva esse item
 
   raffle       Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
