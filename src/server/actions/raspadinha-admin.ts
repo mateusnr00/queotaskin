@@ -12,6 +12,8 @@
 // divergir na forma de cadastrar só criaria duas telas para aprender.
 
 import { revalidatePath } from "next/cache";
+import { chaveDoNome, raridadeDoPremio } from "@/lib/premio-nome";
+import type { SkinRarity } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -125,7 +127,6 @@ export async function salvarCombosDaRaspadinhaAction(
 
 const premioSchema = z.object({
   raffleId: z.string().min(1),
-  tipo: z.enum(["PIX", "SKIN"]),
   rotulo: z.string().min(1).max(200),
   /** Em reais, quando é Pix. Serve para somar quanto já foi dado. */
   valor: z.coerce.number().min(0).max(99_999_999).optional().nullable(),
@@ -154,7 +155,7 @@ export async function criarPremiosDaRaspadinhaAction(
         fieldErrors: parsed.error.flatten().fieldErrors,
       };
     }
-    const { raffleId, tipo, rotulo, valor, quantidade, chance, travado } =
+    const { raffleId, rotulo, valor, quantidade, chance, travado } =
       parsed.data;
     const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
 
@@ -173,16 +174,39 @@ export async function criarPremiosDaRaspadinhaAction(
     const total = campanha?.totalNumbers ?? 0;
     let ultimoAgendado = ultimo?.saidaEmTitulos ?? null;
 
+    // O TIPO SAI DO NOME, E NÃO DE UM SELETOR.
+    //
+    // O cadastro tinha um seletor de Pix ou skin, e ele obrigava a encaixar em
+    // uma das duas caixas um prêmio que pode ser uma peça de computador. Agora
+    // o prêmio é o que se digita, e a classificação é conferida contra o
+    // catálogo do tenant, do mesmo jeito que a caixa surpresa já fazia com a
+    // raridade. Nome que não é skin fica sem raridade e sem cor, que é o caso
+    // normal de "R$ 250 no Pix" e de "Placa de vídeo RTX 4070".
+    const catalogo = new Map<string, SkinRarity | null>(
+      (
+        await prisma.skinTemplate.findMany({
+          where: { tenantId },
+          select: { name: true, skinRarity: true },
+        })
+      ).map((sk) => [chaveDoNome(sk.name), sk.skinRarity]),
+    );
+    const nome = rotulo.trim();
+    const ehSkin = catalogo.has(chaveDoNome(nome));
+    const skinRarity = raridadeDoPremio(nome, catalogo);
+
     const linhas = Array.from({ length: quantidade }, () => {
       const ponto = agendarSaida({ vendidos, total, ultimoAgendado });
       ultimoAgendado = ponto;
       return {
         raffleId,
-        tipo,
-        rotulo: rotulo.trim(),
-        // Valor só faz sentido em Pix: em skin ele não somaria nada e ainda
-        // apareceria nos totais como dinheiro entregue.
-        valor: tipo === "PIX" && valor != null ? valor : null,
+        // Continua gravado, mas como classificação e não como escolha de quem
+        // cadastra: o público mostra o que foi digitado, seja o que for.
+        tipo: ehSkin ? ("SKIN" as const) : ("PIX" as const),
+        rotulo: nome,
+        skinRarity,
+        // O valor é opcional e serve ao total do painel, "quanto já está
+        // prometido". Não decide mais o que aparece para quem ganhou.
+        valor: valor != null ? valor : null,
         chance: chance != null ? chance : null,
         travado,
         saidaEmTitulos: ponto,

@@ -11,6 +11,10 @@
 // divergir na forma de cadastrar só criaria duas telas para aprender.
 
 import { useState, useTransition } from "react";
+import {
+  CampoDePremio,
+  type SkinDoCatalogoSimples,
+} from "@/components/admin/campo-de-premio";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Lock, Plus, Settings, Trash2, Unlock } from "lucide-react";
@@ -79,11 +83,14 @@ export interface ConfigDaRaspadinha {
 export function RaspadinhasModal({
   raffleId,
   initial,
+  catalogo,
   aberto,
   aoFechar,
 }: {
   raffleId: string;
   initial: ConfigDaRaspadinha;
+  /** O catálogo de skins do tenant, para sugerir o nome do prêmio. */
+  catalogo: SkinDoCatalogoSimples[];
   aberto: boolean;
   aoFechar: () => void;
 }) {
@@ -233,6 +240,7 @@ export function RaspadinhasModal({
 
       <InserirPremio
         raffleId={raffleId}
+        catalogo={catalogo}
         aberto={inserindo}
         aoFechar={() => setInserindo(false)}
       />
@@ -317,10 +325,7 @@ function LinhaDePremio({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{premio.rotulo}</span>
-          <Badge variant="outline" className="text-[10px]">
-            {premio.tipo === "PIX" ? "Pix" : "Skin"}
-          </Badge>
-          {premio.tipo === "PIX" && premio.valor != null && (
+          {premio.valor != null && (
             <Badge variant="outline" className="text-[10px] tabular-nums">
               {formatBRL(premio.valor)}
             </Badge>
@@ -513,15 +518,16 @@ function Combos({
 
 function InserirPremio({
   raffleId,
+  catalogo,
   aberto,
   aoFechar,
 }: {
   raffleId: string;
+  catalogo: SkinDoCatalogoSimples[];
   aberto: boolean;
   aoFechar: () => void;
 }) {
   const router = useRouter();
-  const [tipo, setTipo] = useState<"PIX" | "SKIN">("PIX");
   const [rotulo, setRotulo] = useState("");
   const [valor, setValor] = useState("");
   const [quantidade, setQuantidade] = useState("1");
@@ -531,7 +537,6 @@ function InserirPremio({
     setSalvando(true);
     const r = await criarPremiosDaRaspadinhaAction({
       raffleId,
-      tipo,
       rotulo,
       valor: valor.trim() === "" ? null : Number(valor.replace(",", ".")),
       quantidade: Number(quantidade) || 1,
@@ -565,51 +570,36 @@ function InserirPremio({
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Tipo</Label>
-            <Select
-              value={tipo}
-              onValueChange={(v) => v && setTipo(v as "PIX" | "SKIN")}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue labels={{ PIX: "Pix", SKIN: "Skin" }} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PIX">Pix</SelectItem>
-                <SelectItem value="SKIN">Skin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="rasp-rotulo">
-              O que a pessoa ganha
-            </Label>
-            <Input
-              id="rasp-rotulo"
-              value={rotulo}
-              onChange={(e) => setRotulo(e.target.value)}
-              placeholder={
-                tipo === "PIX" ? "R$ 250 no Pix" : "AK-47 | Redline (FT)"
-              }
+            <Label className="text-xs">O que a pessoa ganha</Label>
+            {/* O mesmo campo da caixa surpresa: sugere o nome do catálogo e
+                mostra a raridade. Não há mais seletor de Pix ou skin, porque
+                o prêmio pode ser uma peça de computador, e obrigar a encaixar
+                em uma das duas caixas era a pergunta errada. O que classifica
+                é o próprio nome, conferido contra o catálogo no servidor. */}
+            <CampoDePremio
+              placeholder="AK-47 | Redline (FT), R$ 250 no Pix, RTX 4070..."
+              valor={rotulo}
+              aoMudar={setRotulo}
+              catalogo={catalogo}
             />
           </div>
-          {tipo === "PIX" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor="rasp-valor">
-                Valor em reais
-              </Label>
-              <Input
-                id="rasp-valor"
-                inputMode="decimal"
-                value={valor}
-                onChange={(e) => setValor(e.target.value)}
-                placeholder="250,00"
-                className="font-mono"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Serve para somar quanto já foi prometido em dinheiro.
-              </p>
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs" htmlFor="rasp-valor">
+              Quanto vale, em reais (opcional)
+            </Label>
+            <Input
+              id="rasp-valor"
+              inputMode="decimal"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="250,00"
+              className="font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Só para somar quanto já está prometido no painel. Não aparece para
+              quem ganha: lá aparece o que você digitou acima.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs" htmlFor="rasp-qtd">
               Quantidade de unidades

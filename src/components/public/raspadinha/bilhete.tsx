@@ -128,17 +128,17 @@ export function Bilhete({
 
   function seguirLuz(e: React.PointerEvent) {
     const caixa = e.currentTarget.getBoundingClientRect();
-    luz.current = Math.min(1, Math.max(0, (e.clientX - caixa.left) / caixa.width));
+    luz.current = Math.min(
+      1,
+      Math.max(0, (e.clientX - caixa.left) / caixa.width),
+    );
   }
 
   const peliculaSaiu = saindo || revelado || concluiu;
 
   return (
     <figure
-      className={cn(
-        "group relative select-none",
-        ganhou && "bilhete-premiado",
-      )}
+      className={cn("group relative select-none", ganhou && "bilhete-premiado")}
     >
       <div
         ref={refDaMoldura}
@@ -363,24 +363,15 @@ function Conteudo({
             compacto ? "text-sm" : "text-2xl",
           )}
         >
-          {premio.tipo === "PIX" && premio.valor != null
-            ? premio.valor.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-                minimumFractionDigits: 0,
-              })
-            : premio.rotulo}
+          {/* O QUE FOI DIGITADO, SEJA O QUE FOR.
+              Antes, prêmio marcado como Pix trocava o texto pelo valor em
+              reais e ganhava um "no Pix" embaixo. Isso vinha de um seletor que
+              obrigava a encaixar todo prêmio em Pix ou skin, e o cadastro
+              deixou de ter esse seletor: o prêmio pode ser uma peça de
+              computador, e "no Pix" embaixo de uma placa de vídeo seria uma
+              promessa errada para quem ganhou. */}
+          {premio.rotulo}
         </p>
-        {premio.tipo === "PIX" && (
-          <p
-            className={cn(
-              "font-bold uppercase tracking-[0.24em] text-[#3d2c08]/70",
-              compacto ? "text-[7px]" : "text-[9px]",
-            )}
-          >
-            no Pix
-          </p>
-        )}
       </div>
     );
   }

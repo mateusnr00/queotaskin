@@ -26,6 +26,16 @@ describe("numeroDoTitulo", () => {
     expect(casasDoTitulo(0)).toBe(2);
   });
 
+  it("campanha de cem tem três casas, porque vai ATÉ o cem", () => {
+    // O caso que a lista de títulos premiados errava: ela contava as casas
+    // sobre 99 e escrevia "07" ao lado de "100", com larguras diferentes na
+    // mesma coluna. Uma campanha de 1 a 100 tem três dígitos, e o último
+    // título é quem manda.
+    expect(casasDoTitulo(100)).toBe(3);
+    expect(numeroDoTitulo(7, 100)).toBe("007");
+    expect(numeroDoTitulo(100, 100)).toBe("100");
+  });
+
   it("não corta número maior que a campanha", () => {
     // Não deveria acontecer, mas cortar o número seria pior do que mostrá-lo
     // largo: o título é a identidade de quem ganhou.
@@ -159,7 +169,9 @@ describe("tituloDaFita", () => {
     // bolo pequeno, mas com dez títulos a chance de três iguais é remota.
     let repetidos = 0;
     for (let i = 1; i < 60; i++) {
-      if (tituloDaFita("x", i, bolo, 100) === tituloDaFita("x", i - 1, bolo, 100)) {
+      if (
+        tituloDaFita("x", i, bolo, 100) === tituloDaFita("x", i - 1, bolo, 100)
+      ) {
         repetidos++;
       }
     }

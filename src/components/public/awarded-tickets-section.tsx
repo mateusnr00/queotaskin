@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { buttonVariants } from "@/components/ui/button";
+import { casasDoTitulo } from "@/lib/titulo";
 import {
   ContadorDePremios,
   LinhaDePremio,
@@ -51,9 +52,12 @@ export function AwardedTicketsSection({
 
   const winnersCount = tickets.filter((t) => t.participantName).length;
   const total = tickets.length;
-  // Padding do número segue a quantidade total de cotas: 100 → 099, 99999
-  // → 99999, igual SkinsLendarias.
-  const padDigits = Math.max(2, String(Math.max(totalNumbers - 1, 0)).length);
+  // A largura do número vem do tamanho da campanha, pela mesma regra da fita
+  // do sorteio e do comprovante. Aqui ela era contada sobre `totalNumbers - 1`,
+  // herdado de quando os títulos começavam no zero: numa campanha de cem, que
+  // vai de 1 a 100, isso dava duas casas e o 100 saía com três, um dígito a
+  // mais que todos os outros da mesma lista.
+  const padDigits = casasDoTitulo(totalNumbers);
   const visible =
     expanded || tickets.length <= COLLAPSED_VISIBLE
       ? tickets
@@ -102,7 +106,7 @@ export function AwardedTicketsSection({
         <DialogTrigger
           className={cn(
             buttonVariants({ variant: "outline" }),
-            "w-full h-12 justify-between"
+            "w-full h-12 justify-between",
           )}
         >
           <span className="inline-flex items-center gap-2 font-semibold">

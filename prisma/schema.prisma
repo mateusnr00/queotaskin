@@ -1367,6 +1367,12 @@ model RaspadinhaPremio {
   /// Em reais, quando o tipo e PIX. Serve para somar quanto ja foi dado.
   valor  Decimal?                 @db.Decimal(10, 2)
 
+  /// Raridade da skin, quando o nome bate com o catalogo do tenant. Nula
+  /// quando o premio nao e skin, que e o caso normal de "R$ 250 no Pix" ou de
+  /// uma placa de video. So serve para a cor do nome, a mesma leitura que o
+  /// jogador ja tem dentro do jogo.
+  skinRarity SkinRarity?
+
   /// Chance em porcentagem. Nulo entra no sorteio uniforme entre os que
   /// tambem nao tem chance definida, igual ao modo RANDOM da caixa.
   chance Decimal? @db.Decimal(5, 2)

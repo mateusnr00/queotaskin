@@ -11,6 +11,7 @@
 // - Adicionar em lote via textarea ("número, prêmio" por linha).
 
 import { useState, useTransition } from "react";
+import { casasDoTitulo } from "@/lib/titulo";
 import {
   Dialog,
   DialogContent,
@@ -160,6 +161,10 @@ export function RaffleAwardedTicketsTab({
         ],
   );
   const [bulkText, setBulkText] = useState("");
+  // Quantas casas o título tem nesta campanha. A mesma conta que a fita do
+  // sorteio e o comprovante usam, para o número ser escrito igual em toda
+  // parte.
+  const casas = casasDoTitulo(totalNumbers);
   const [condicoes, setCondicoes] = useState<{
     indice: number;
     row: AwardedRow;
@@ -408,7 +413,19 @@ export function RaffleAwardedTicketsTab({
 
         {/* ===== Lista de números ===== */}
         <div className="border-t pt-4 space-y-2">
-          <h3 className="text-sm font-semibold">Lista de Títulos Premiados</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">
+              Lista de Títulos Premiados
+            </h3>
+            {/* Quantos dígitos o título tem nesta campanha. Vem do total de
+                números, e não de um valor fixo: numa campanha de 100 os
+                títulos vão de 001 a 100, e em uma de 5.000 vão até 5000.
+                Fixar em dois deixaria o 100 sem casa. */}
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              Títulos de {String(1).padStart(casas, "0")} a{" "}
+              {String(totalNumbers).padStart(casas, "0")} · {casas} dígitos
+            </span>
+          </div>
           <div className="hidden md:grid md:grid-cols-[120px_1fr_auto_auto] gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             <span>Número</span>
             <span>Prêmio</span>
@@ -424,7 +441,7 @@ export function RaffleAwardedTicketsTab({
                 <Input
                   type="number"
                   inputMode="numeric"
-                  placeholder="123"
+                  placeholder={String(1).padStart(casas, "0")}
                   value={it.number}
                   onChange={(e) => update(idx, "number", e.target.value)}
                   min={1}

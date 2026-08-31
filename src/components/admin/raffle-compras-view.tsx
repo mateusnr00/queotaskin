@@ -314,6 +314,7 @@ export function RaffleComprasView({
       <RaspadinhasModal
         raffleId={raffle.id}
         initial={raspadinha}
+        catalogo={surpriseBox.catalogo}
         aberto={raspadinhasOpen}
         aoFechar={() => setRaspadinhasOpen(false)}
       />
