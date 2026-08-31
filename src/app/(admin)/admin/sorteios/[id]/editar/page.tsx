@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { toPrizeDraft } from "@/lib/prize-mapper";
 import { raffleUrl } from "@/lib/raffle-url";
+import { contarOcupados } from "@/server/services/vendidos";
 
 export const metadata: Metadata = { title: "Editar sorteio" };
 
@@ -130,33 +131,49 @@ export default async function EditRafflePage({
     birthDate: rawRF.birthDate ?? false,
   };
 
-  // Pra cada título premiado, descobre se já foi comprado e por quem.
-  // Mostra na UI ao lado do número (igual SkinsLendarias).
+  // Pra cada título premiado, descobre se o número ainda está à venda e, se
+  // não estiver, quem ficou com ele.
+  //
+  // As duas coisas vêm da MESMA consulta, sem filtro de status, porque
+  // "ocupado" aqui é qualquer bilhete existente: reservado também bloqueia. Um
+  // título premiado num número que já tem dono não paga ninguém, a marcação
+  // acontece na entrada do pagamento, e aquele pagamento já entrou, então a
+  // aba precisa dizer isso na cara em vez de deixar o prêmio parecendo no ar.
   const awardedNumbers = raffle.awardedTickets.map((a) => a.number);
   const claimedTickets =
     awardedNumbers.length === 0
       ? []
       : await prisma.ticket.findMany({
-          where: {
-            raffleId: raffle.id,
-            number: { in: awardedNumbers },
-            status: { in: ["PAID", "AWARDED"] },
-          },
+          where: { raffleId: raffle.id, number: { in: awardedNumbers } },
           select: {
             number: true,
+            status: true,
             reservation: { select: { participantName: true } },
           },
         });
   const participantByNumber = new Map<string, string>();
+  const ocupadosNaLista = new Set<number>();
   for (const t of claimedTickets) {
-    if (t.reservation?.participantName) {
+    ocupadosNaLista.add(t.number);
+    if (
+      t.reservation?.participantName &&
+      (t.status === "PAID" || t.status === "AWARDED")
+    ) {
       participantByNumber.set(String(t.number), t.reservation.participantName);
     }
   }
+  // Quantos títulos da campanha ainda estão livres. O botão de sortear só
+  // escolhe entre eles, e o número em si é a resposta para "ainda dá para
+  // cadastrar mais premiados?".
+  const titulosDisponiveis = Math.max(
+    0,
+    raffle.totalNumbers - (await contarOcupados(raffle.id)),
+  );
   const initialAwardedTickets = raffle.awardedTickets.map((a) => ({
     number: a.number,
     prizeDescription: a.prizeDescription,
     participantName: participantByNumber.get(String(a.number)) ?? null,
+    ocupado: ocupadosNaLista.has(a.number),
     // As condições precisam ir e voltar: a ação de salvar APAGA e recria a
     // lista inteira, então uma condição que não chega ao formulário some no
     // primeiro salvamento da aba, sem ninguém perceber.
@@ -294,6 +311,7 @@ export default async function EditRafflePage({
         tenantPaymentDefault={tenant.paymentProvider}
         configuredProviders={configuredProviders}
         initialAwardedTickets={initialAwardedTickets}
+        titulosDisponiveis={titulosDisponiveis}
         initialAwardedConfig={initialAwardedConfig}
         defaultValues={{
           title: raffle.title,

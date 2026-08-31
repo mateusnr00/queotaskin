@@ -32,7 +32,10 @@ import {
   Trophy,
 } from "lucide-react";
 
-import { RaffleImagesTab, type RaffleImageItem } from "@/components/admin/raffle-images-tab";
+import {
+  RaffleImagesTab,
+  type RaffleImageItem,
+} from "@/components/admin/raffle-images-tab";
 import {
   SeletorDeSkin,
   type SkinDoCatalogo,
@@ -129,11 +132,14 @@ interface RaffleFormProps {
     sigilopay: boolean;
     nexuspag: boolean;
   };
-  initialAwardedTickets?: {
-    number: number;
-    prizeDescription: string;
-    participantName?: string | null;
-  }[];
+  // O tipo vem da própria aba, e não copiado aqui: a lista ganhou condições de
+  // saída e a marca de número já vendido, e uma cópia desatualizada apagaria
+  // esses campos na travessia sem o compilador dizer nada.
+  initialAwardedTickets?: React.ComponentProps<
+    typeof RaffleAwardedTicketsTab
+  >["initialItems"];
+  /** Quantos números da campanha ainda estão à venda. */
+  titulosDisponiveis?: number;
   initialAwardedConfig?: {
     enabled: boolean;
     showList: boolean;
@@ -245,9 +251,7 @@ const ABERTA_A_TODOS = "aberta";
 /** Rótulo por valor, para o Select mostrar o nome do rank já escolhido. */
 const ROTULOS_DE_RANK: Record<string, string> = {
   [ABERTA_A_TODOS]: "Aberta a todos",
-  ...Object.fromEntries(
-    ESCADA_DE_RANK.map((d) => [String(d.valor), d.label]),
-  ),
+  ...Object.fromEntries(ESCADA_DE_RANK.map((d) => [String(d.valor), d.label])),
 };
 
 export function RaffleForm({
@@ -269,6 +273,7 @@ export function RaffleForm({
     nexuspag: false,
   },
   initialAwardedTickets = [],
+  titulosDisponiveis,
   initialAwardedConfig = {
     enabled: true,
     showList: true,
@@ -407,7 +412,7 @@ export function RaffleForm({
 
   const form = useForm<RaffleGeneralInput>({
     resolver: zodResolver(
-      raffleGeneralSchema
+      raffleGeneralSchema,
     ) as unknown as Resolver<RaffleGeneralInput>,
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
   });
@@ -443,9 +448,7 @@ export function RaffleForm({
     const valido = await form.trigger();
     if (!valido) {
       setActiveTab("geral");
-      toast.error(
-        "Preencha os campos obrigatórios em Geral para continuar."
-      );
+      toast.error("Preencha os campos obrigatórios em Geral para continuar.");
       return;
     }
 
@@ -473,7 +476,7 @@ export function RaffleForm({
   function salvar(
     values: RaffleGeneralInput,
     abaDeDestino: string | null,
-    aoFalhar?: () => void
+    aoFalhar?: () => void,
   ) {
     if (values.isFree) values.pricePerNumber = 0;
 
@@ -496,13 +499,13 @@ export function RaffleForm({
         return;
       }
       toast.success(
-        mode.kind === "create" ? "Sorteio criado" : "Sorteio salvo"
+        mode.kind === "create" ? "Sorteio criado" : "Sorteio salvo",
       );
       if (mode.kind === "create") {
         router.push(
           `/admin/sorteios/${result.data.id}/editar${
             abaDeDestino ? `?aba=${abaDeDestino}` : ""
-          }`
+          }`,
         );
       } else {
         router.refresh();
@@ -847,8 +850,7 @@ export function RaffleForm({
                 control={form.control}
                 name="salesStart"
                 render={({ field }) => {
-                  const mode =
-                    field.value != null ? "scheduled" : "immediate";
+                  const mode = field.value != null ? "scheduled" : "immediate";
                   return (
                     <FormItem>
                       <FormLabel>Início das vendas</FormLabel>
@@ -901,7 +903,7 @@ export function RaffleForm({
                               field.onChange(
                                 e.target.value
                                   ? new Date(e.target.value)
-                                  : null
+                                  : null,
                               )
                             }
                           />
@@ -924,14 +926,12 @@ export function RaffleForm({
                         type="datetime-local"
                         value={
                           field.value
-                            ? new Date(field.value)
-                                .toISOString()
-                                .slice(0, 16)
+                            ? new Date(field.value).toISOString().slice(0, 16)
                             : ""
                         }
                         onChange={(e) =>
                           field.onChange(
-                            e.target.value ? new Date(e.target.value) : null
+                            e.target.value ? new Date(e.target.value) : null,
                           )
                         }
                       />
@@ -1105,7 +1105,7 @@ export function RaffleForm({
                                 TIMEOUT_OPTIONS.map((o) => [
                                   String(o.value),
                                   o.label,
-                                ])
+                                ]),
                               )}
                             />
                           </SelectTrigger>
@@ -1176,9 +1176,7 @@ export function RaffleForm({
                           value={field.value ?? ""}
                           onChange={(e) =>
                             field.onChange(
-                              e.target.value
-                                ? Number(e.target.value)
-                                : null
+                              e.target.value ? Number(e.target.value) : null,
                             )
                           }
                         />
@@ -1203,7 +1201,7 @@ export function RaffleForm({
                         value={field.value ?? ""}
                         onChange={(e) =>
                           field.onChange(
-                            e.target.value ? Number(e.target.value) : null
+                            e.target.value ? Number(e.target.value) : null,
                           )
                         }
                       />
@@ -1252,9 +1250,10 @@ export function RaffleForm({
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      Só quem estiver nesse rank ou acima consegue reservar. Vale
-                      para campanha paga e para a gratuita, e é o que permite
-                      soltar sorteio grátis como recompensa de quem já comprou.
+                      Só quem estiver nesse rank ou acima consegue reservar.
+                      Vale para campanha paga e para a gratuita, e é o que
+                      permite soltar sorteio grátis como recompensa de quem já
+                      comprou.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -1294,9 +1293,7 @@ export function RaffleForm({
                           value={field.value ?? ""}
                           onChange={(e) =>
                             field.onChange(
-                              e.target.value
-                                ? Number(e.target.value)
-                                : null
+                              e.target.value ? Number(e.target.value) : null,
                             )
                           }
                         />
@@ -1319,9 +1316,7 @@ export function RaffleForm({
                           value={field.value ?? ""}
                           onChange={(e) =>
                             field.onChange(
-                              e.target.value
-                                ? Number(e.target.value)
-                                : null
+                              e.target.value ? Number(e.target.value) : null,
                             )
                           }
                         />
@@ -1410,6 +1405,7 @@ export function RaffleForm({
                   100
                 }
                 catalogo={catalogoDePremios}
+                titulosDisponiveis={titulosDisponiveis}
                 initialItems={initialAwardedTickets}
                 initialConfig={initialAwardedConfig}
               />
@@ -1468,8 +1464,8 @@ export function RaffleForm({
               form.formState.isDirty
                 ? "Você tem alterações não salvas"
                 : isEdit
-                ? "Tudo salvo"
-                : "Preencha os campos obrigatórios pra criar"
+                  ? "Tudo salvo"
+                  : "Preencha os campos obrigatórios pra criar"
             }
           >
             <Button
@@ -1590,7 +1586,7 @@ function SelectionCardsField({
         // UI sempre mostra 6 slots, mesmo que o array tenha menos itens.
         const slots: (number | "")[] = Array.from(
           { length: 6 },
-          (_, i) => cards[i] ?? ""
+          (_, i) => cards[i] ?? "",
         );
 
         function setSlot(idx: number, raw: string) {
@@ -1598,7 +1594,7 @@ function SelectionCardsField({
           next[idx] = raw ? Math.max(1, Number(raw) || 0) : "";
           // Persiste só os preenchidos (mantém ordem dos slots).
           const cleaned = next.filter(
-            (v): v is number => typeof v === "number" && v >= 1
+            (v): v is number => typeof v === "number" && v >= 1,
           );
           cardsField.onChange(cleaned);
         }
@@ -1765,8 +1761,8 @@ function AvisoDoPrecoSugerido({
       {valor.volume != null && valor.volume < 5 && (
         <>
           {" "}
-          Só {valor.volume} venda{valor.volume === 1 ? "" : "s"} nas últimas 24h,
-          então esse preço é pouco confiável.
+          Só {valor.volume} venda{valor.volume === 1 ? "" : "s"} nas últimas
+          24h, então esse preço é pouco confiável.
         </>
       )}
     </FormDescription>

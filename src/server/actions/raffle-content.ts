@@ -23,6 +23,9 @@ import {
   uploadRaffleImage,
 } from "@/lib/storage";
 import { registrarLog } from "@/server/services/activity-log";
+import { expireForRaffle } from "@/server/services/reservations";
+import { contarOcupados } from "@/server/services/vendidos";
+import { sortearTitulosLivres } from "@/server/services/titulos-livres";
 import type { ActionResult } from "@/server/actions/auth";
 import { MAX_IMAGES_PER_RAFFLE, MAX_IMAGE_BYTES } from "@/lib/raffle-images";
 import { dataDeSaoPauloParaUtc } from "@/lib/promocao-em-dobro";
@@ -783,6 +786,101 @@ export async function setRaffleAwardedTicketsAction(
   } catch (err) {
     console.error("[setRaffleAwardedTicketsAction]", err);
     return { ok: false, error: "Erro ao salvar títulos premiados" };
+  }
+}
+
+const sorteioDeTitulosSchema = z.object({
+  raffleId: z.string().cuid(),
+  quantidade: z.number().int().min(1).max(50),
+  /** Números que já estão na lista da tela, salvos ou não. */
+  evitar: z.array(z.number().int().positive()).max(500).default([]),
+});
+
+/**
+ * Sorteia títulos premiados entre os que AINDA ESTÃO À VENDA.
+ *
+ * Precisa ser no servidor porque a resposta mora no banco: quais números já
+ * têm dono. O botão antigo sorteava no navegador, em 1..total, sabendo apenas
+ * o que estava na própria tela. Numa campanha com metade vendida, metade dos
+ * sorteios caía em número já comprado, e um título premiado nesse número não
+ * paga ninguém: a marcação acontece quando o pagamento entra, e o pagamento
+ * daquele número já entrou.
+ *
+ * Devolve junto quantos títulos restam livres, que é o número que a tela
+ * mostra: sem ele, o admin só descobre que a campanha acabou quando o sorteio
+ * volta vazio.
+ */
+export async function sortearTitulosPremiadosAction(
+  raw: unknown,
+): Promise<
+  ActionResult<{ numeros: number[]; disponiveis: number; pedidos: number }>
+> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = sorteioDeTitulosSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: "Dados inválidos" };
+    }
+    const { raffleId, quantidade, evitar } = parsed.data;
+    await assertRaffleInActiveTenant(raffleId, session.user);
+
+    const raffle = await prisma.raffle.findUnique({
+      where: { id: raffleId },
+      select: { totalNumbers: true },
+    });
+    if (!raffle) return { ok: false, error: "Sorteio não encontrado" };
+
+    // Reserva vencida devolve os números dela, e o que faz isso acontecer é
+    // esta chamada: sem ela, um carrinho abandonado ontem ainda bloquearia o
+    // título hoje.
+    await expireForRaffle(raffleId);
+
+    const numeros = await sortearTitulosLivres({
+      total: raffle.totalNumbers,
+      quantidade,
+      evitar: new Set(evitar),
+      consulta: {
+        async ocupadosEntre(candidatos) {
+          const linhas = await prisma.ticket.findMany({
+            where: { raffleId, number: { in: candidatos } },
+            select: { number: true },
+          });
+          return new Set(linhas.map((l) => l.number));
+        },
+        async livresVarrendo(limite) {
+          const donos = new Set(
+            (
+              await prisma.ticket.findMany({
+                where: { raffleId },
+                select: { number: true },
+              })
+            ).map((l) => l.number),
+          );
+          const livres: number[] = [];
+          for (
+            let n = 1;
+            n <= raffle.totalNumbers && livres.length < limite;
+            n++
+          ) {
+            if (!donos.has(n)) livres.push(n);
+          }
+          return livres;
+        },
+      },
+    });
+
+    const ocupados = await contarOcupados(raffleId);
+    return {
+      ok: true,
+      data: {
+        numeros,
+        disponiveis: Math.max(0, raffle.totalNumbers - ocupados),
+        pedidos: quantidade,
+      },
+    };
+  } catch (err) {
+    console.error("[sortearTitulosPremiadosAction]", err);
+    return { ok: false, error: "Erro ao sortear títulos disponíveis" };
   }
 }
 
