@@ -1387,3 +1387,109 @@ export async function clearRaffleWinnerAction(
     return { ok: false, error: "Erro ao limpar ganhador" };
   }
 }
+
+const saidaDoPremioSchema = z.object({
+  prizeId: z.string().min(1),
+  tipoDeSaida: z.enum(["PROGRESSO", "PERSONALIZADO"]),
+  /** 0 a 100. Convertida em título no servidor, que é onde fica gravado. */
+  porcentagem: z.coerce.number().min(0).max(100).optional().nullable(),
+  titulosDe: z.coerce.number().int().min(1).optional().nullable(),
+  titulosAte: z.coerce.number().int().min(1).optional().nullable(),
+  dataDe: z.string().optional().nullable(),
+  dataAte: z.string().optional().nullable(),
+  ddds: z.array(z.string().regex(/^\d{2}$/)).default([]),
+});
+
+/**
+ * Configurações de saída de UMA unidade de prêmio.
+ *
+ * Uma unidade, e não o grupo: cada uma tem o seu ponto, elas saem uma atrás da
+ * outra, e mudar as quatro de uma vez faria as quatro caírem juntas.
+ *
+ * A tela fala em porcentagem porque é como se pensa a campanha; o banco guarda
+ * o título. A conta é feita aqui, com o total da campanha em mãos, e não no
+ * navegador, onde um total desatualizado gravaria o ponto errado.
+ */
+export async function salvarSaidaDoPremioAction(
+  raw: unknown,
+): Promise<ActionResult<{ saidaEmTitulos: number | null }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = saidaDoPremioSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: "Dados inválidos" };
+    }
+    const d = parsed.data;
+
+    const premio = await prisma.surpriseBoxPrize.findUnique({
+      where: { id: d.prizeId },
+      select: { raffleId: true, claimedAt: true },
+    });
+    if (!premio) return { ok: false, error: "Prêmio não encontrado" };
+    const tenantId = await assertRaffleInActiveTenant(
+      premio.raffleId,
+      session.user,
+    );
+    if (premio.claimedAt) {
+      return { ok: false, error: "Prêmio já saiu, não dá para reagendar" };
+    }
+
+    const campanha = await prisma.raffle.findUnique({
+      where: { id: premio.raffleId },
+      select: { totalNumbers: true },
+    });
+    const total = campanha?.totalNumbers ?? 0;
+
+    // Faixa invertida é engano de digitação, e gravada ela cria um prêmio que
+    // nunca sai: nenhuma compra cabe entre 100 e 10.
+    if (
+      d.tipoDeSaida === "PERSONALIZADO" &&
+      d.titulosDe != null &&
+      d.titulosAte != null &&
+      d.titulosDe > d.titulosAte
+    ) {
+      return { ok: false, error: "A faixa de títulos está invertida." };
+    }
+    const de = d.dataDe ? new Date(d.dataDe) : null;
+    const ate = d.dataAte ? new Date(d.dataAte) : null;
+    if (de && ate && de > ate) {
+      return { ok: false, error: "A janela de datas está invertida." };
+    }
+
+    // Arredonda para cima e nunca para zero: título 0 não existe, e um ponto
+    // em zero sairia na próxima caixa, que não é o que "0,5%" quer dizer.
+    const emTitulos =
+      d.tipoDeSaida === "PROGRESSO" && d.porcentagem != null && total > 0
+        ? Math.min(total, Math.max(1, Math.ceil((d.porcentagem / 100) * total)))
+        : null;
+
+    await prisma.surpriseBoxPrize.update({
+      where: { id: d.prizeId },
+      data: {
+        tipoDeSaida: d.tipoDeSaida,
+        saidaEmTitulos: emTitulos,
+        // Cada tipo limpa o que é do outro: deixar resto gravado faria a
+        // condição antiga voltar a valer numa troca de tipo futura.
+        saidaTitulosDe: d.tipoDeSaida === "PERSONALIZADO" ? d.titulosDe : null,
+        saidaTitulosAte:
+          d.tipoDeSaida === "PERSONALIZADO" ? d.titulosAte : null,
+        saidaDataDe: d.tipoDeSaida === "PERSONALIZADO" ? de : null,
+        saidaDataAte: d.tipoDeSaida === "PERSONALIZADO" ? ate : null,
+        saidaDdds: d.tipoDeSaida === "PERSONALIZADO" ? d.ddds : [],
+      },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: premio.raffleId },
+      detalhes: { o_que: "saída de prêmio da caixa", tipo: d.tipoDeSaida },
+    });
+
+    revalidatePath(`/admin/sorteios/${premio.raffleId}/compras`);
+    return { ok: true, data: { saidaEmTitulos: emTitulos } };
+  } catch (err) {
+    console.error("[salvarSaidaDoPremioAction]", err);
+    return { ok: false, error: "Erro ao salvar a saída" };
+  }
+}

@@ -19,9 +19,9 @@ import {
   AlertCircle,
   ArrowLeftRight,
   Award,
+  Check,
   ChevronLeft,
   ChevronRight,
-  Check,
   CreditCard,
   Disc3,
   ExternalLink,
@@ -32,14 +32,15 @@ import {
   Loader2,
   Lock,
   MoreVertical,
+  Pencil,
   Phone,
   RotateCcw,
   Search,
+  Settings,
   Square,
-  Unlock,
-  Pencil,
   Trash2,
   Trophy,
+  Unlock,
   X,
 } from "lucide-react";
 import type {
@@ -56,6 +57,7 @@ import {
 import {
   clearRaffleWinnerAction,
   createSurpriseBoxPrizesAction,
+  salvarSaidaDoPremioAction,
   deleteSurpriseBoxAction,
   deleteSurpriseBoxPrizeAction,
   updateSurpriseBoxPrizeAction,
@@ -69,6 +71,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -250,19 +253,23 @@ const STATUS_BADGE: Record<
 > = {
   PENDING: {
     label: "Aguardando pagamento",
-    className: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    className:
+      "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
   },
   PAID: {
     label: "Pago",
-    className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+    className:
+      "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
   },
   EXPIRED: {
     label: "Expirado",
-    className: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    className:
+      "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
   },
   CANCELLED: {
     label: "Cancelado",
-    className: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    className:
+      "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
   },
   REFUNDED: {
     label: "Reembolsado",
@@ -406,16 +413,10 @@ function RaffleHeaderCard({
         >
           <ExternalLink className="h-4 w-4" />
         </HeaderActionButton>
-        <HeaderActionButton
-          label="Ranking de compras"
-          onClick={onOpenRanking}
-        >
+        <HeaderActionButton label="Ranking de compras" onClick={onOpenRanking}>
           <Trophy className="h-4 w-4" />
         </HeaderActionButton>
-        <HeaderActionButton
-          label="Caixas surpresas"
-          onClick={onOpenCaixas}
-        >
+        <HeaderActionButton label="Caixas surpresas" onClick={onOpenCaixas}>
           <Gift className="h-4 w-4" />
         </HeaderActionButton>
         <HeaderActionButton
@@ -429,7 +430,7 @@ function RaffleHeaderCard({
           <Award
             className={cn(
               "h-4 w-4",
-              raffle.winnerTicketNumber != null && "text-amber-500"
+              raffle.winnerTicketNumber != null && "text-amber-500",
             )}
           />
         </HeaderActionButton>
@@ -645,16 +646,14 @@ function RankingRow({ buyer }: { buyer: TopBuyer }) {
   const firstName = buyer.name.trim().split(/\s+/)[0] ?? buyer.name;
   const phoneDigits = (buyer.phone ?? "").replace(/\D/g, "");
   const phoneMasked =
-    phoneDigits.length >= 10
-      ? `(${phoneDigits.slice(0, 2)}) ****-****`
-      : "-";
+    phoneDigits.length >= 10 ? `(${phoneDigits.slice(0, 2)}) ****-****` : "-";
   const isFirst = buyer.rank === 1;
   return (
     <li className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
       <span
         className={cn(
           "tabular-nums font-bold shrink-0",
-          isFirst ? "text-3xl text-amber-500" : "text-lg text-muted-foreground"
+          isFirst ? "text-3xl text-amber-500" : "text-lg text-muted-foreground",
         )}
         style={{ minWidth: isFirst ? "3rem" : "2.5rem" }}
       >
@@ -664,7 +663,7 @@ function RankingRow({ buyer }: { buyer: TopBuyer }) {
         <div
           className={cn(
             "font-semibold truncate",
-            isFirst ? "text-base" : "text-sm"
+            isFirst ? "text-base" : "text-sm",
           )}
         >
           {firstName} ...
@@ -731,12 +730,7 @@ function CaixasModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-7xl max-h-[85vh] overflow-y-auto">
-        {open && (
-          <CaixasModalBody
-            raffleId={raffleId}
-            initial={initial}
-          />
-        )}
+        {open && <CaixasModalBody raffleId={raffleId} initial={initial} />}
       </DialogContent>
     </Dialog>
   );
@@ -753,10 +747,10 @@ function CaixasModalBody({
   const [accumulative, setAccumulative] = useState(initial.accumulative);
   const [abrirTodas, setAbrirTodas] = useState(initial.abrirTodas);
   const [exibirGanhadores, setExibirGanhadores] = useState(
-    initial.exibirGanhadores
+    initial.exibirGanhadores,
   );
   const [displayOrder, setDisplayOrder] = useState<SurpriseBoxDisplayOrder>(
-    initial.displayOrder
+    initial.displayOrder,
   );
   const prizes = initial.prizes;
   const [combos, setCombos] = useState<ComboDraft[]>(() =>
@@ -766,7 +760,7 @@ function CaixasModalBody({
       boxCount: String(c.boxCount),
       visible: c.visible,
       highlighted: c.highlighted,
-    }))
+    })),
   );
   const [distribOpen, setDistribOpen] = useState(false);
   const [inserirOpen, setInserirOpen] = useState(false);
@@ -792,7 +786,7 @@ function CaixasModalBody({
           Number.isFinite(c.threshold) &&
           c.threshold > 0 &&
           Number.isFinite(c.boxCount) &&
-          c.boxCount > 0
+          c.boxCount > 0,
       );
 
     // Sem duplicar threshold (constraint do banco).
@@ -1165,7 +1159,7 @@ function InserirCaixaBody({
       toast.success(
         result.data?.count === 1
           ? "Prêmio cadastrado"
-          : `${result.data?.count} prêmios cadastrados`
+          : `${result.data?.count} prêmios cadastrados`,
       );
       onClose();
     });
@@ -1231,9 +1225,7 @@ function InserirCaixaBody({
           <Label className="text-xs font-medium">Modo</Label>
           <Select
             value={modo}
-            onValueChange={(v) =>
-              v && setModo(v as SurpriseBoxPrizeMode)
-            }
+            onValueChange={(v) => v && setModo(v as SurpriseBoxPrizeMode)}
             disabled={isPending}
           >
             <SelectTrigger>
@@ -1709,8 +1701,7 @@ function SeloDeSaida({
       </Badge>
     );
   }
-  const fmt = (n: number) =>
-    `${n.toFixed(n < 10 ? 1 : 0).replace(".", ",")}%`;
+  const fmt = (n: number) => `${n.toFixed(n < 10 ? 1 : 0).replace(".", ",")}%`;
   const primeiro = pcts[0]!;
   const ultimo = pcts[pcts.length - 1]!;
   return (
@@ -1740,202 +1731,457 @@ function PrizesTable({
   totalNumbers: number;
   disabled: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editando, setEditando] = useState<{
     ids: string[];
     title: string;
     prize: string;
   } | null>(null);
+  const [configurando, setConfigurando] = useState<SurpriseBoxPrizeRow | null>(
+    null,
+  );
 
   function toggleLock(prizeId: string) {
     startTransition(async () => {
       const result = await toggleSurpriseBoxPrizeLockAction({ prizeId });
-      if (!result.ok) toast.error(result.error);
-      else toast.success("Bloqueio atualizado");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Bloqueio atualizado");
+      // SEM ISTO A TELA FICA MENTINDO ATÉ ALGUÉM RECARREGAR.
+      //
+      // A lista vem de props do servidor, então trocar o cadeado no banco não
+      // mudava nada na tela: era preciso recarregar a página para ver o novo
+      // estado. O refresh rebusca do servidor e a linha se atualiza no lugar.
+      router.refresh();
     });
   }
 
   function remove(prizeId: string) {
     startTransition(async () => {
       const result = await deleteSurpriseBoxPrizeAction({ prizeId });
-      if (!result.ok) toast.error(result.error);
-      else toast.success("Prêmio removido");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Prêmio removido");
+      router.refresh();
     });
   }
 
   // O que já saiu para alguém não é mais estoque: sai daqui e vive na tabela
-  // de caixas distribuídas. Antes ficava nas duas cabeças ao mesmo tempo, com
-  // o contador em "1/1", e não dava para distinguir o que ainda pode sair do
-  // que já foi entregue.
+  // de caixas distribuídas.
   const noPool = prizes.filter((p) => !p.claimed);
 
-  // Agrupa por (title|prize|mode|odds|tipoDeSaida) pra mostrar "X unidades".
+  // UMA LINHA POR UNIDADE, E NÃO POR NOME.
   //
-  // O PONTO DE SAÍDA NÃO ENTRA NA CHAVE de propósito: cada unidade tem o seu,
-  // porque elas saem uma atrás da outra. Agrupar por ele quebraria um cadastro
-  // de três unidades em três linhas de uma, que é o contrário do que esta
-  // lista existe para fazer. O grupo mostra a FAIXA que as unidades cobrem.
-  const groups = new Map<
-    string,
-    {
-      title: string;
-      prize: string;
-      mode: SurpriseBoxPrizeMode;
-      odds: number | null;
-      tipoDeSaida: TipoDeSaida;
-      pontos: (number | null)[];
-      ids: { id: string; locked: boolean; claimed: boolean }[];
-    }
-  >();
-  for (const p of noPool) {
-    const key = [p.title, p.prize, p.mode, p.odds ?? "-", p.tipoDeSaida].join(
-      "\u0000",
-    );
-    if (!groups.has(key)) {
-      groups.set(key, {
-        title: p.title,
-        prize: p.prize,
-        mode: p.mode,
-        odds: p.odds,
-        tipoDeSaida: p.tipoDeSaida,
-        pontos: [],
-        ids: [],
-      });
-    }
-    const g = groups.get(key)!;
-    g.pontos.push(p.saidaEmTitulos);
-    g.ids.push({ id: p.id, locked: p.locked, claimed: p.claimed });
+  // Antes as unidades de mesmo nome vinham agrupadas em "4 unidades". Isso
+  // fazia sentido quando elas eram intercambiáveis, e deixou de fazer quando
+  // cada uma ganhou o SEU ponto de saída e o SEU cadeado: agrupada, a
+  // porcentagem virava uma faixa que não dizia qual unidade sai quando, e não
+  // havia onde clicar para configurar uma delas.
+  //
+  // Ordenadas pelo ponto de saída, que é a ordem em que elas vão sair de
+  // verdade. Sem ponto vai para o fim: quem não tem hora marcada sai por
+  // sorteio, depois de quem tem.
+  const unidades = [...noPool].sort((a, b) => {
+    const pa = a.saidaEmTitulos ?? Number.MAX_SAFE_INTEGER;
+    const pb = b.saidaEmTitulos ?? Number.MAX_SAFE_INTEGER;
+    return pa - pb;
+  });
+
+  // Quantas unidades de cada nome, para numerar "2 de 4" e deixar claro que
+  // linhas parecidas não são repetição da tela.
+  const totalPorNome = new Map<string, number>();
+  for (const u of unidades) {
+    const k = `${u.title}|${u.prize}`;
+    totalPorNome.set(k, (totalPorNome.get(k) ?? 0) + 1);
   }
+  const vistos = new Map<string, number>();
 
   return (
     <>
-    <div className="rounded-lg border overflow-hidden">
-      <div className="px-3 py-2 border-b bg-muted/30 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Prêmios cadastrados ({noPool.length})
-      </div>
-      <ul className="divide-y">
-        {[...groups.values()].map((g) => {
-          const total = g.ids.length;
-          const locked = g.ids.filter((x) => x.locked).length;
-          const operable = g.ids[0];
-          const allLocked = locked === total && total > 0;
-          return (
-            <li
-              key={`${g.title}-${g.prize}-${g.mode}-${g.odds ?? ""}-${g.tipoDeSaida}`}
-              className="flex items-center justify-between gap-3 px-3 py-2.5"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">
-                    {g.prize}
-                  </span>
-                  {/* Só o que resta no pool: o contador "sorteados/total"
-                      perdeu o sentido quando o sorteado saiu desta lista. */}
-                  <Badge variant="outline" className="text-[10px] tabular-nums">
-                    {total} {total === 1 ? "unidade" : "unidades"}
-                  </Badge>
-                  {g.mode === "PERCENT" && g.odds != null && (
-                    <Badge variant="outline" className="text-[10px]">
-                      chance {g.odds}%
-                    </Badge>
-                  )}
-                  {/* QUANDO ELE SAI, que é a pergunta que a lista não
-                      respondia. Antes dava para cadastrar um prêmio grande e
-                      não ter ideia de quando ele apareceria. */}
-                  <SeloDeSaida
-                    tipo={g.tipoDeSaida}
-                    pontos={g.pontos}
-                    totalNumbers={totalNumbers}
-                  />
-                  {allLocked && (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                      Bloqueado
-                    </Badge>
-                  )}
+      <div className="overflow-hidden rounded-lg border">
+        <div className="border-b bg-muted/30 px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          Prêmios cadastrados ({unidades.length})
+        </div>
+        <ul className="divide-y">
+          {unidades.map((u) => {
+            const chave = `${u.title}|${u.prize}`;
+            const quantos = totalPorNome.get(chave) ?? 1;
+            const indice = (vistos.get(chave) ?? 0) + 1;
+            vistos.set(chave, indice);
+            return (
+              <li
+                key={u.id}
+                className="flex items-center justify-between gap-3 px-3 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {u.prize}
+                    </span>
+                    {quantos > 1 && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] tabular-nums"
+                      >
+                        {indice} de {quantos}
+                      </Badge>
+                    )}
+                    {u.mode === "PERCENT" && u.odds != null && (
+                      <Badge variant="outline" className="text-[10px]">
+                        chance {u.odds}%
+                      </Badge>
+                    )}
+                    <SeloDeSaida
+                      tipo={u.tipoDeSaida}
+                      pontos={[u.saidaEmTitulos]}
+                      totalNumbers={totalNumbers}
+                    />
+                    {u.locked && (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-500/40 text-[10px] text-amber-500"
+                      >
+                        Bloqueado
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {u.title}
+                  </p>
                 </div>
-                <p className="text-[11px] text-muted-foreground truncate">
-                  {g.title}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  disabled={disabled || isPending}
-                  onClick={() =>
-                    setEditando({
-                      ids: g.ids.map((x) => x.id),
-                      title: g.title,
-                      prize: g.prize,
-                    })
-                  }
-                  aria-label="Editar prêmio"
-                  title="Editar o nome do prêmio"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                {operable && (
+                <div className="flex items-center gap-1">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-foreground"
                     disabled={disabled || isPending}
-                    onClick={() => toggleLock(operable.id)}
-                    aria-label={
-                      operable.locked
-                        ? "Desbloquear prêmio"
-                        : "Bloquear prêmio"
+                    onClick={() =>
+                      setEditando({
+                        ids: [u.id],
+                        title: u.title,
+                        prize: u.prize,
+                      })
                     }
-                    title={
-                      operable.locked
-                        ? "Desbloquear prêmio"
-                        : "Bloquear prêmio"
-                    }
+                    aria-label="Editar prêmio"
+                    title="Editar o nome do prêmio"
                   >
-                    {operable.locked ? (
-                      <Lock className="h-4 w-4" />
-                    ) : (
-                      <Unlock className="h-4 w-4" />
-                    )}
+                    <Pencil className="h-4 w-4" />
                   </Button>
-                )}
-                {operable && (
+                  {/* A engrenagem, que é onde mora a saída. Separada do
+                      cadeado: bloquear é guardar o prêmio, configurar é dizer
+                      quando ele sai, e juntar os dois num botão só é o que
+                      deixava a configuração escondida. */}
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
                     disabled={disabled || isPending}
-                    onClick={() => remove(operable.id)}
+                    onClick={() => setConfigurando(u)}
+                    aria-label="Configurar a saída deste prêmio"
+                    title="Quando este prêmio sai"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    disabled={disabled || isPending}
+                    onClick={() => toggleLock(u.id)}
+                    aria-label={u.locked ? "Desbloquear" : "Bloquear"}
+                    title={
+                      u.locked
+                        ? "Desbloquear: volta a poder sair"
+                        : "Bloquear: fica guardado e não sai"
+                    }
+                  >
+                    {u.locked ? (
+                      <Lock className="h-4 w-4 text-amber-500" />
+                    ) : (
+                      <Unlock className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    disabled={disabled || isPending}
+                    onClick={() => remove(u.id)}
                     aria-label="Remover prêmio"
-                    title="Remover 1 unidade desse prêmio"
+                    title="Remover esta unidade"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
-    <EditarPremioModal
-      aberto={editando != null}
-      aoFechar={() => setEditando(null)}
-      catalogo={catalogo}
-      prizeIds={editando?.ids ?? []}
-      tituloInicial={editando?.title ?? ""}
-      premioInicial={editando?.prize ?? ""}
-    />
+      <EditarPremioModal
+        aberto={editando != null}
+        aoFechar={() => setEditando(null)}
+        catalogo={catalogo}
+        prizeIds={editando?.ids ?? []}
+        tituloInicial={editando?.title ?? ""}
+        premioInicial={editando?.prize ?? ""}
+      />
+
+      <ConfigDeSaidaModal
+        premio={configurando}
+        totalNumbers={totalNumbers}
+        aoFechar={() => setConfigurando(null)}
+      />
     </>
   );
 }
 
-// Sub-modal "Distribuição das Caixas", espelha o print do SkinsLendarias.
+/**
+ * Configurações de saída de UMA unidade de prêmio.
+ *
+ * Dois tipos, e eles respondem perguntas diferentes:
+ *
+ * PORCENTAGEM responde "em que ponto da venda". A unidade que a campanha é
+ * medida no dia a dia, e o campo fala nela; o banco guarda o título, porque
+ * porcentagem gravada mudaria de significado se o total de números mudasse.
+ *
+ * PERSONALIZADO responde "para qual compra". É o caso do disparo: se o
+ * WhatsApp sai às 14h, a data inicial às 14h faz o prêmio esperar a compra que
+ * veio dele, em vez de sair para quem comprou de manhã.
+ *
+ * Campo em branco não filtra. Um personalizado sem nenhuma condição vale para
+ * qualquer compra, que é diferente de não valer para nenhuma.
+ */
+function ConfigDeSaidaModal({
+  premio,
+  totalNumbers,
+  aoFechar,
+}: {
+  premio: SurpriseBoxPrizeRow | null;
+  totalNumbers: number;
+  aoFechar: () => void;
+}) {
+  const router = useRouter();
+  const [salvando, setSalvando] = useState(false);
+  const [tipo, setTipo] = useState<TipoDeSaida>("PROGRESSO");
+  const [pct, setPct] = useState("");
+  const [titulosDe, setTitulosDe] = useState("");
+  const [titulosAte, setTitulosAte] = useState("");
+  const [dataDe, setDataDe] = useState("");
+  const [dataAte, setDataAte] = useState("");
+  const [ddds, setDdds] = useState("");
+
+  // O formulário nasce do prêmio que abriu. Guardar o id do último aberto é o
+  // que evita reescrever o que a pessoa está digitando a cada renderização.
+  const [ultimoId, setUltimoId] = useState<string | null>(null);
+  if (premio && premio.id !== ultimoId) {
+    setUltimoId(premio.id);
+    setTipo(premio.tipoDeSaida);
+    const p = porcentagemDaSaida(premio.saidaEmTitulos, totalNumbers);
+    setPct(p == null ? "" : p.toFixed(2).replace(".", ","));
+    setTitulosDe(premio.saidaTitulosDe?.toString() ?? "");
+    setTitulosAte(premio.saidaTitulosAte?.toString() ?? "");
+    setDataDe(paraCampoDeData(premio.saidaDataDe));
+    setDataAte(paraCampoDeData(premio.saidaDataAte));
+    setDdds(premio.saidaDdds.join(", "));
+  }
+
+  const emTitulos = (() => {
+    const n = Number(pct.replace(",", "."));
+    if (!Number.isFinite(n) || totalNumbers <= 0) return null;
+    return Math.min(
+      totalNumbers,
+      Math.max(1, Math.ceil((n / 100) * totalNumbers)),
+    );
+  })();
+
+  async function salvar() {
+    if (!premio) return;
+    setSalvando(true);
+    const result = await salvarSaidaDoPremioAction({
+      prizeId: premio.id,
+      tipoDeSaida: tipo,
+      porcentagem: pct.trim() === "" ? null : Number(pct.replace(",", ".")),
+      titulosDe: titulosDe.trim() === "" ? null : Number(titulosDe),
+      titulosAte: titulosAte.trim() === "" ? null : Number(titulosAte),
+      dataDe: dataDe.trim() === "" ? null : new Date(dataDe).toISOString(),
+      dataAte: dataAte.trim() === "" ? null : new Date(dataAte).toISOString(),
+      ddds: ddds
+        .split(/[\s,]+/)
+        .map((d) => d.replace(/\D/g, ""))
+        .filter((d) => d.length === 2),
+    });
+    setSalvando(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Saída salva");
+    aoFechar();
+    router.refresh();
+  }
+
+  return (
+    <Dialog open={premio != null} onOpenChange={(o) => !o && aoFechar()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Configurações de saída</DialogTitle>
+          <DialogDescription>
+            Quando <strong>{premio?.prize}</strong> vai sair. Ele vai para a
+            primeira caixa aberta a partir do ponto escolhido.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tipo de saída</Label>
+            <Select
+              value={tipo}
+              onValueChange={(v) => v && setTipo(v as TipoDeSaida)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  labels={{
+                    PROGRESSO: "Porcentagem da venda",
+                    PERSONALIZADO: "Personalizado",
+                  }}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PROGRESSO">Porcentagem da venda</SelectItem>
+                <SelectItem value="PERSONALIZADO">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {tipo === "PROGRESSO" ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="saida-pct">
+                Porcentagem
+              </Label>
+              <Input
+                id="saida-pct"
+                inputMode="decimal"
+                value={pct}
+                onChange={(e) => setPct(e.target.value)}
+                placeholder="12,50"
+                className="font-mono"
+              />
+              {/* O título correspondente, ao vivo. Porcentagem sozinha é
+                  abstrata numa campanha de 5.000 números: dizer "o 625º" é o
+                  que deixa conferir se o ponto é o pretendido. */}
+              <p className="text-[11px] text-muted-foreground">
+                {emTitulos == null
+                  ? "Em branco, este prêmio volta para o sorteio por chance."
+                  : `Sai quando a venda chegar no título ${emTitulos.toLocaleString("pt-BR")} de ${totalNumbers.toLocaleString("pt-BR")}.`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs" htmlFor="saida-tde">
+                    Títulos, no mínimo
+                  </Label>
+                  <Input
+                    id="saida-tde"
+                    inputMode="numeric"
+                    value={titulosDe}
+                    onChange={(e) => setTitulosDe(e.target.value)}
+                    placeholder="10"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs" htmlFor="saida-tate">
+                    Títulos, no máximo
+                  </Label>
+                  <Input
+                    id="saida-tate"
+                    inputMode="numeric"
+                    value={titulosAte}
+                    onChange={(e) => setTitulosAte(e.target.value)}
+                    placeholder="sem limite"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs" htmlFor="saida-dde">
+                    A partir de
+                  </Label>
+                  <Input
+                    id="saida-dde"
+                    type="datetime-local"
+                    value={dataDe}
+                    onChange={(e) => setDataDe(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs" htmlFor="saida-date">
+                    Até
+                  </Label>
+                  <Input
+                    id="saida-date"
+                    type="datetime-local"
+                    value={dataAte}
+                    onChange={(e) => setDataAte(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs" htmlFor="saida-ddd">
+                  DDDs (opcional)
+                </Label>
+                <Input
+                  id="saida-ddd"
+                  value={ddds}
+                  onChange={(e) => setDdds(e.target.value)}
+                  placeholder="62, 11, 21"
+                  className="font-mono"
+                />
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Campo em branco não filtra. Para um disparo de WhatsApp das 14h,
+                ponha 14h em <strong>A partir de</strong>: o prêmio espera a
+                compra que veio dele em vez de sair para quem comprou de manhã.
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={salvando}
+            onClick={salvar}
+            className="h-9 w-full rounded-lg bg-primary text-sm font-bold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-60"
+          >
+            {salvando ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** ISO para o formato que datetime-local aceita, no fuso de quem olha. */
+function paraCampoDeData(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 // Toggle "Combos Acumulativos" no topo + tabela editável de tiers.
 function DistribuicaoCaixasModal({
   open,
@@ -2023,7 +2269,7 @@ function DistribuicaoCaixasBody({
 
   function toggleVisible(key: string, value: boolean) {
     const next = draft.map((r) =>
-      r.key === key ? { ...r, visible: value } : r
+      r.key === key ? { ...r, visible: value } : r,
     );
     setDraft(next);
     commit(next, accum);
@@ -2031,7 +2277,7 @@ function DistribuicaoCaixasBody({
 
   function toggleHighlighted(key: string, value: boolean) {
     const next = draft.map((r) =>
-      r.key === key ? { ...r, highlighted: value } : r
+      r.key === key ? { ...r, highlighted: value } : r,
     );
     setDraft(next);
     commit(next, accum);
@@ -2225,7 +2471,7 @@ function WinnerBody({
   const router = useRouter();
   const alreadySet = raffle.winnerTicketNumber != null;
   const [ticketNumber, setTicketNumber] = useState(
-    alreadySet ? String(raffle.winnerTicketNumber) : ""
+    alreadySet ? String(raffle.winnerTicketNumber) : "",
   );
   const [note, setNote] = useState(raffle.winnerNote ?? "");
   const [finish, setFinish] = useState(true);
@@ -2240,7 +2486,7 @@ function WinnerBody({
     if (alreadySet && raffle.winnerTicketNumber !== n) {
       if (
         !confirm(
-          `Substituir o ganhador ${raffle.winnerTicketNumber} pelo ${n}?`
+          `Substituir o ganhador ${raffle.winnerTicketNumber} pelo ${n}?`,
         )
       ) {
         return;
@@ -2260,11 +2506,11 @@ function WinnerBody({
       const w = result.data!;
       if (w.participantName) {
         toast.success(
-          `Ganhador: ${w.participantName} (título ${w.ticketNumber})`
+          `Ganhador: ${w.participantName} (título ${w.ticketNumber})`,
         );
       } else {
         toast.warning(
-          `Número ${w.ticketNumber} salvo, mas não achamos o comprador (talvez ninguém tenha comprado esse título).`
+          `Número ${w.ticketNumber} salvo, mas não achamos o comprador (talvez ninguém tenha comprado esse título).`,
         );
       }
       router.refresh();
@@ -2274,9 +2520,7 @@ function WinnerBody({
 
   function clearWinner() {
     if (
-      !confirm(
-        "Remover o ganhador registrado? A rifa volta pro estado ACTIVE."
-      )
+      !confirm("Remover o ganhador registrado? A rifa volta pro estado ACTIVE.")
     ) {
       return;
     }
@@ -2481,7 +2725,9 @@ function StatPill({
   numClass: string;
 }) {
   return (
-    <div className={cn("rounded-lg border bg-card px-4 py-3 text-center", accent)}>
+    <div
+      className={cn("rounded-lg border bg-card px-4 py-3 text-center", accent)}
+    >
       <div className={cn("text-sm font-bold tabular-nums", numClass)}>
         {value.toLocaleString("pt-BR")} {label}
       </div>
@@ -2508,7 +2754,9 @@ function TotalCard({
       <div className="min-w-0 flex-1">
         <div className="text-lg font-bold tracking-tight">{title}</div>
         <div className={cn("text-xs", colorClass)}>{subtitle}</div>
-        <div className={cn("mt-0.5 text-sm font-bold tabular-nums", colorClass)}>
+        <div
+          className={cn("mt-0.5 text-sm font-bold tabular-nums", colorClass)}
+        >
           {formatBRL(total)}
         </div>
       </div>
@@ -2540,13 +2788,13 @@ function TabsBar({ tab, counts }: { tab: Filters["tab"]; counts: Counts }) {
               "shrink-0 px-4 py-3 text-xs font-medium border-b-2 -mb-px transition-colors flex items-center gap-2",
               active
                 ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             <span
               className={cn(
                 "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white tabular-nums",
-                t.dotClass
+                t.dotClass,
               )}
             >
               {value}
@@ -2744,7 +2992,7 @@ function ReservationRowItem({
         <span
           className={cn(
             "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-semibold",
-            badge.className
+            badge.className,
           )}
         >
           {badge.label}
@@ -2782,7 +3030,7 @@ function RowActions({
       `Sua reserva _${row.id}_ está aguardando pagamento.\n\n` +
       `Campanha: *${raffle.title}*\n` +
       `Valor: ${formatBRL(row.totalAmount)}\n\n` +
-      `Pague aqui: ${typeof window !== "undefined" ? window.location.origin : ""}/comprovante/${row.id}`
+      `Pague aqui: ${typeof window !== "undefined" ? window.location.origin : ""}/comprovante/${row.id}`,
   );
   const waHref = row.participantPhone
     ? `https://wa.me/${numeroInternacional(row.participantPhone)}?text=${waMessage}`
@@ -2899,7 +3147,7 @@ function ReservationDetailsModal({
               onClick={() => {
                 navigator.clipboard.writeText(row.id).then(
                   () => toast.success("ID copiado"),
-                  () => toast.error("Falha ao copiar")
+                  () => toast.error("Falha ao copiar"),
                 );
               }}
               className="shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -2916,7 +3164,7 @@ function ReservationDetailsModal({
                 <span
                   className={cn(
                     "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-semibold",
-                    badge.className
+                    badge.className,
                   )}
                 >
                   {badge.label}
@@ -3069,7 +3317,7 @@ function Pagination({
         aria-disabled={page === 1}
         className={cn(
           "inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted",
-          page === 1 && "pointer-events-none opacity-40"
+          page === 1 && "pointer-events-none opacity-40",
         )}
         aria-label="Página anterior"
       >
@@ -3080,7 +3328,7 @@ function Pagination({
         aria-disabled={page >= totalPages}
         className={cn(
           "inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted",
-          page >= totalPages && "pointer-events-none opacity-40"
+          page >= totalPages && "pointer-events-none opacity-40",
         )}
         aria-label="Próxima página"
       >
@@ -3089,4 +3337,3 @@ function Pagination({
     </div>
   );
 }
-
