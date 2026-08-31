@@ -26,6 +26,7 @@ import {
   CaixaSurpresaArte,
 } from "@/components/public/caixa-surpresa-arte";
 import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
+import { ordemEmbaralhada } from "@/lib/titulo";
 import { EstouroDeConfete } from "@/components/public/estouro-de-confete";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -107,12 +108,12 @@ export function SurpriseBoxesClaim({
 
   const unopenedCount = useMemo(
     () => boxes.filter((b) => b.status === "UNOPENED").length,
-    [boxes]
+    [boxes],
   );
 
   const premiadasCount = useMemo(
     () => boxes.filter((b) => b.status === "OPENED_PRIZE").length,
-    [boxes]
+    [boxes],
   );
 
   async function openOne(boxId: string) {
@@ -124,7 +125,7 @@ export function SurpriseBoxesClaim({
       if (relogioDoConfete.current) clearTimeout(relogioDoConfete.current);
       relogioDoConfete.current = setTimeout(
         () => setConfeteId(null),
-        DURACAO_DO_CONFETE
+        DURACAO_DO_CONFETE,
       );
     }
 
@@ -154,8 +155,8 @@ export function SurpriseBoxesClaim({
               status: data.status,
               prize: data.prize ? { prize: data.prize.prize } : null,
             }
-          : b
-      )
+          : b,
+      ),
     );
     if (data.status === "OPENED_PRIZE" && data.prize) {
       toast.success(`Você ganhou: ${data.prize.prize}!`);
@@ -163,7 +164,23 @@ export function SurpriseBoxesClaim({
   }
 
   function openAll() {
-    const targets = boxes.filter((b) => b.status === "UNOPENED");
+    // EM ORDEM EMBARALHADA, e não de cima para baixo.
+    //
+    // O prêmio agendado vai para a primeira caixa aberta a partir do ponto
+    // dele, que é a promessa da saída programada. Abrindo a fila de cima para
+    // baixo, "a primeira aberta" era sempre a primeira da lista, e as três
+    // premiadas de uma compra saíam grudadas no topo, uma atrás da outra, com
+    // seis vazias embaixo. O resultado é o mesmo, o sorteio é o mesmo, mas
+    // ler três prêmios em fila e depois só vazio entrega o mecanismo e mata a
+    // surpresa que a caixa existe para dar.
+    //
+    // Embaralhamento estável, e não sorteio a cada clique: a ordem de abrir
+    // não decide QUEM ganha (isso é do servidor), só onde o prêmio cai na
+    // lista, e uma ordem reproduzível é mais fácil de conferir depois.
+    const targets = ordemEmbaralhada(
+      boxes.filter((b) => b.status === "UNOPENED"),
+      (b) => b.id,
+    );
     if (targets.length === 0) return;
     startAllTransition(async () => {
       // Sem a animação por caixa aqui: vinte aberturas de 1,3s dariam meio
@@ -353,28 +370,28 @@ function BoxRow({
   return (
     <div className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2.5 min-w-0 text-white">
-        {/* Fundo escuro atrás da caixa. A arte é laranja e a faixa também,
+        <div className="flex items-center gap-2.5 min-w-0 text-white">
+          {/* Fundo escuro atrás da caixa. A arte é laranja e a faixa também,
             e sem essa separação a caixa vira um borrão na faixa em vez de
             se ler como caixa. */}
-        <span className="flex shrink-0 items-center justify-center rounded-lg bg-black/25 px-1.5 py-1">
-          <CaixaSurpresaArte aberta tamanho={40} />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider leading-tight text-white/80">
-            Você ganhou
-          </p>
-          {/* Quebra em duas linhas em vez de cortar. O nome do item agora é
+          <span className="flex shrink-0 items-center justify-center rounded-lg bg-black/25 px-1.5 py-1">
+            <CaixaSurpresaArte aberta tamanho={40} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider leading-tight text-white/80">
+              Você ganhou
+            </p>
+            {/* Quebra em duas linhas em vez de cortar. O nome do item agora é
               a única coisa escrita na linha, e "AK-47 | Redline (Testa…"
               esconde justamente o desgaste, que é o que muda o valor da
               skin. */}
-          {/* Sem o selo "ABERTA" ao lado, o nome fica com a largura toda.
+            {/* Sem o selo "ABERTA" ao lado, o nome fica com a largura toda.
               O selo era redundante: a faixa já diz "Você ganhou" e traz o
               botão de reivindicar, e era ele que espremia o nome até cortar
               o desgaste, que é justamente o que muda o valor da skin. */}
-          <p className="text-sm font-bold leading-tight">{box.prize.prize}</p>
+            <p className="text-sm font-bold leading-tight">{box.prize.prize}</p>
+          </div>
         </div>
-      </div>
       </div>
 
       {/* O passo seguinte a ganhar. Sem ele a faixa dizia o prêmio e parava
