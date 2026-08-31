@@ -21,6 +21,8 @@
 // igual em vez de terem bugs diferentes.
 
 import { randomInt } from "node:crypto";
+import { premioDaVez, type CompraQueAbre } from "@/lib/saida";
+import { dddDoTelefone } from "@/lib/cpf";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -63,7 +65,7 @@ function paraFora(p: {
 }
 
 export async function revelarRaspadinhaAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<ActionResult<ResultadoDaRaspadinha>> {
   try {
     const parsed = revelarSchema.safeParse(raw);
@@ -85,6 +87,10 @@ export async function revelarRaspadinhaAction(
           select: {
             status: true,
             userId: true,
+            paidAt: true,
+            createdAt: true,
+            participantPhone: true,
+            _count: { select: { tickets: true } },
             raffle: { select: { tenantId: true } },
           },
         },
@@ -93,7 +99,10 @@ export async function revelarRaspadinhaAction(
 
     // A mesma mensagem para bilhete inexistente e para bilhete de outra
     // pessoa: distinguir os dois contaria a um estranho que aquele id existe.
-    const naoEncontrada = { ok: false as const, error: "Raspadinha não encontrada" };
+    const naoEncontrada = {
+      ok: false as const,
+      error: "Raspadinha não encontrada",
+    };
     if (!bilhete) return naoEncontrada;
     if (bilhete.reservationId !== reservationId) return naoEncontrada;
     if (bilhete.reservation.raffle.tenantId !== tenant.id) return naoEncontrada;
@@ -118,7 +127,11 @@ export async function revelarRaspadinhaAction(
     }
 
     for (let tentativa = 0; tentativa < TENTATIVAS; tentativa++) {
-      const sorteado = await sortearPremio(bilhete.raffleId);
+      const sorteado = await sortearPremio(bilhete.raffleId, {
+        titulos: bilhete.reservation._count.tickets,
+        quando: bilhete.reservation.paidAt ?? bilhete.reservation.createdAt,
+        ddd: dddDoTelefone(bilhete.reservation.participantPhone),
+      });
 
       if (!sorteado) {
         // Acabaram os prêmios disponíveis. O bilhete fecha sem prêmio, e não
@@ -158,15 +171,23 @@ export async function revelarRaspadinhaAction(
           where: { id: bilhete.id },
           select: {
             status: true,
-            premio: { select: { id: true, tipo: true, rotulo: true, valor: true } },
+            premio: {
+              select: { id: true, tipo: true, rotulo: true, valor: true },
+            },
           },
         });
         return atual?.status === "PREMIADA" && atual.premio
-          ? { ok: true, data: { status: "PREMIADA", premio: paraFora(atual.premio) } }
+          ? {
+              ok: true,
+              data: { status: "PREMIADA", premio: paraFora(atual.premio) },
+            }
           : { ok: true, data: { status: "SEM_PREMIO", premio: null } };
       }
 
-      return { ok: true, data: { status: "PREMIADA", premio: paraFora(sorteado) } };
+      return {
+        ok: true,
+        data: { status: "PREMIADA", premio: paraFora(sorteado) },
+      };
     }
 
     // Três disputas perdidas seguidas: a essa altura o bolo esvaziou.
@@ -191,13 +212,55 @@ export async function revelarRaspadinhaAction(
  * randomInt do node:crypto, e não Math.random: aqui se decide dinheiro, e o
  * gerador comum é previsível o bastante para não servir.
  */
-async function sortearPremio(raffleId: string) {
+async function sortearPremio(raffleId: string, compra: CompraQueAbre) {
   const disponiveis = await prisma.raspadinhaPremio.findMany({
     where: { raffleId, travado: false, claimedAt: null },
-    select: { id: true, tipo: true, rotulo: true, valor: true, chance: true },
+    select: {
+      id: true,
+      tipo: true,
+      rotulo: true,
+      valor: true,
+      chance: true,
+      tipoDeSaida: true,
+      saidaEmTitulos: true,
+      saidaTitulosDe: true,
+      saidaTitulosAte: true,
+      saidaDataDe: true,
+      saidaDataAte: true,
+      saidaDdds: true,
+    },
     orderBy: { createdAt: "asc" },
   });
   if (disponiveis.length === 0) return null;
+
+  // A SAÍDA AGENDADA MANDA; A CHANCE É A RESERVA.
+  //
+  // Mesma regra da caixa surpresa, e pelo mesmo motivo: o ponto de saída é
+  // promessa, então vem ANTES do sorteio em vez de concorrer com ele. Só
+  // quando nada está agendado para agora é que a chance decide, que é o
+  // comportamento que os prêmios sem ponto continuam tendo.
+  const vendidos = await prisma.ticket.count({
+    where: { raffleId, status: "PAID" },
+  });
+  const agendado = premioDaVez(
+    disponiveis.map((p) => ({
+      id: p.id,
+      saida: {
+        tipo: p.tipoDeSaida,
+        emTitulos: p.saidaEmTitulos,
+        titulosDe: p.saidaTitulosDe,
+        titulosAte: p.saidaTitulosAte,
+        dataDe: p.saidaDataDe,
+        dataAte: p.saidaDataAte,
+        ddds: p.saidaDdds,
+      },
+    })),
+    { vendidos, compra },
+  );
+  if (agendado) {
+    const escolhido = disponiveis.find((p) => p.id === agendado);
+    if (escolhido) return escolhido;
+  }
 
   const comChance = disponiveis.filter((p) => p.chance != null);
   const semChance = disponiveis.filter((p) => p.chance == null);

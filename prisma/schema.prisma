@@ -1357,6 +1357,23 @@ model RaspadinhaPremio {
   /// um premio grande antes de solta-lo.
   travado Boolean @default(false)
 
+  /// QUANDO ESTE PREMIO SAI. Mesma mecanica da caixa surpresa, ver
+  /// src/lib/saida.ts: o ponto e promessa, e o premio vai para a PRIMEIRA
+  /// raspadinha revelada a partir dele.
+  tipoDeSaida TipoDeSaida @default(PROGRESSO)
+
+  /// O ponto de saida, em TITULOS VENDIDOS. So em PROGRESSO. Em titulos e nao
+  /// em porcentagem porque porcentagem gravada mudaria de significado se o
+  /// total de numeros da campanha mudasse.
+  saidaEmTitulos Int?
+
+  /// Condicoes da COMPRA que pode levar. So em PERSONALIZADO.
+  saidaTitulosDe  Int?
+  saidaTitulosAte Int?
+  saidaDataDe     DateTime?
+  saidaDataAte    DateTime?
+  saidaDdds       String[]
+
   /// Quando foi levado. Nulo = ainda disponivel.
   claimedAt DateTime?
 
