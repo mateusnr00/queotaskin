@@ -28,6 +28,7 @@ import { Loader2 } from "lucide-react";
 import { desenharChamada, desenharPelicula } from "./pelicula";
 import { LIMITE_DE_RASPAGEM, useRaspagem } from "./use-raspagem";
 import { Particulas, type ControleDeParticulas } from "./particulas";
+import { desgasteCurto, separarDesgaste } from "@/lib/premio-nome";
 import { cn } from "@/lib/utils";
 
 export type EstadoDoBilhete =
@@ -72,6 +73,21 @@ export function Bilhete({
   const [saindo, setSaindo] = useState(false);
   const [impacto, setImpacto] = useState(false);
 
+  // O QUE SAIU JÁ APARECE ENQUANTO A PESSOA RASPA.
+  //
+  // Antes o sorteio só era pedido ao servidor quando a raspagem TERMINAVA, e
+  // até lá não havia nada atrás da película: quem raspava via a janela ficar
+  // branca e o resultado surgir de uma vez no fim, que é o oposto de uma
+  // raspadinha. Agora o pedido sai no primeiro traço e a resposta chega com o
+  // dedo ainda na tela, então o prêmio vai aparecendo debaixo do que já foi
+  // raspado.
+  //
+  // Este congelado no primeiro render é o que separa "já estava revelado
+  // quando a página abriu" de "acabou de revelar agora": no primeiro caso a
+  // película nem existe, no segundo ela precisa continuar ali até o gesto
+  // terminar, senão o resultado apareceria antes de a pessoa raspar.
+  const [nasceuRevelado] = useState(revelado);
+
   // "Compacto" quer dizer que ESTE bilhete ficou pequeno, e quem sabe isso e
   // a largura medida, nao a quantidade de bilhetes do pedido: no telefone a
   // grade tem uma coluna so, entao um pedido de oito ainda renderiza cartoes
@@ -113,14 +129,16 @@ export function Bilhete({
 
   const concluir = useCallback(() => {
     setImpacto(true);
-    depois(130, () => {
-      setSaindo(true);
-      aoRevelar();
-    });
-  }, [aoRevelar, depois]);
+    depois(130, () => setSaindo(true));
+  }, [depois]);
 
   const { refDoCanvas, comecou, concluiu, revelarSemGesto } = useRaspagem({
-    ativo: estado === "disponivel" || estado === "raspando",
+    // Não olha mais o estado: o pedido ao servidor troca o estado para
+    // "revelando" no meio do gesto, e amarrar o gesto ao estado fazia a
+    // raspagem morrer no primeiro traço.
+    ativo: !nasceuRevelado,
+    // O sorteio sai daqui, no primeiro traço, e não mais no fim.
+    aoComecar: aoRevelar,
     aoConcluir: concluir,
     desenharPelicula: pintar,
     aoRaspar: (x, y) => particulas.current?.emitir(x, y),
@@ -134,7 +152,11 @@ export function Bilhete({
     );
   }
 
-  const peliculaSaiu = saindo || revelado || concluiu;
+  // A película sai quando o gesto termina, e não quando a resposta chega.
+  // O terceiro caso é o "raspar todas" e o botão de revelar: ali o bilhete se
+  // resolve sem gesto nenhum, e a película não tem por que ficar.
+  const peliculaSaiu =
+    nasceuRevelado || saindo || concluiu || (revelado && !comecou);
 
   return (
     <figure
@@ -286,22 +308,12 @@ export function Bilhete({
             )}
           </div>
 
-          {/* ================= RODAPÉ ================= */}
-          <footer
-            className={cn(
-              "mt-1 text-center font-bold tracking-[0.1em]",
-              TINTA_FRACA,
-              compacto ? "text-[7px]" : "text-[9px]",
-            )}
-          >
-            <span aria-hidden className="opacity-60">
-              {"★★ "}
-            </span>
-            TICKET Nº <span className="tabular-nums">{numero}</span>
-            <span aria-hidden className="opacity-60">
-              {" ★★"}
-            </span>
-          </footer>
+          {/* O número do bilhete saiu do rodapé.
+              Ele não serve para nada de quem raspa: não é usado para
+              reclamar, não entra em conversa com o suporte e não aparece em
+              lugar nenhum além dali. Ocupava a última linha do cartão, que é
+              justamente a altura que faltava para a janela raspável. O número
+              continua no HTML, no aviso de leitor de tela abaixo. */}
         </div>
 
         {/* A ordem na coleção, no canto. Fica FORA do fluxo para não empurrar
@@ -347,6 +359,8 @@ function Conteudo({
   }
 
   if (estado === "premiada" && premio) {
+    const { nome, desgaste } = separarDesgaste(premio.rotulo);
+    const sigla = desgasteCurto(desgaste);
     return (
       <div className="premio-surge flex h-full flex-col items-center justify-center gap-0.5 px-2 text-center">
         <p
@@ -357,21 +371,47 @@ function Conteudo({
         >
           Você ganhou
         </p>
+        {/* O QUE FOI DIGITADO, SEJA O QUE FOR.
+            Antes, prêmio marcado como Pix trocava o texto pelo valor em reais
+            e ganhava um "no Pix" embaixo. Isso vinha de um seletor que
+            obrigava a encaixar todo prêmio em Pix ou skin, e o cadastro deixou
+            de ter esse seletor: o prêmio pode ser uma peça de computador, e
+            "no Pix" embaixo de uma placa de vídeo seria uma promessa errada.
+
+            O DESGASTE VIRA SIGLA. Escrito por extenso, "(Field-Tested)" come
+            metade da janela e empurra o nome da skin para duas ou três linhas
+            num espaço de dois centímetros. FT, no canto, diz a mesma coisa
+            para quem joga. Texto que não é desgaste conhecido fica como está,
+            entre parênteses, porque cortar seria inventar. */}
         <p
           className={cn(
             "font-black leading-none text-[#2a1d04]",
             compacto ? "text-sm" : "text-2xl",
           )}
         >
-          {/* O QUE FOI DIGITADO, SEJA O QUE FOR.
-              Antes, prêmio marcado como Pix trocava o texto pelo valor em
-              reais e ganhava um "no Pix" embaixo. Isso vinha de um seletor que
-              obrigava a encaixar todo prêmio em Pix ou skin, e o cadastro
-              deixou de ter esse seletor: o prêmio pode ser uma peça de
-              computador, e "no Pix" embaixo de uma placa de vídeo seria uma
-              promessa errada para quem ganhou. */}
-          {premio.rotulo}
+          {nome}
         </p>
+        {sigla ? (
+          <span
+            className={cn(
+              "rounded border border-[#3d2c08]/25 bg-[#3d2c08]/[0.07] px-1 py-px font-bold tracking-wider text-[#3d2c08]/80",
+              compacto ? "text-[7px]" : "text-[9px]",
+            )}
+          >
+            {sigla}
+          </span>
+        ) : (
+          desgaste && (
+            <span
+              className={cn(
+                "font-semibold text-[#3d2c08]/70",
+                compacto ? "text-[7px]" : "text-[9px]",
+              )}
+            >
+              ({desgaste})
+            </span>
+          )
+        )}
       </div>
     );
   }

@@ -65,8 +65,14 @@ export default async function ComprasPage({
   // tabela existia com o cabeçalho pronto e o corpo fixo em "Sem Registros",
   // com um comentário dizendo que vinha depois: nunca veio, e por isso o
   // prêmio sorteado não aparecia em lugar nenhum como premiação.
+  //
+  // SÓ AS PREMIADAS. Caixa aberta sem prêmio não é registro de nada: uma
+  // compra de cinquenta caixas empilhava cinquenta linhas "Sem prêmio" para
+  // esconder as duas que interessam, e é nas premiadas que o painel age
+  // (avisar no WhatsApp, corrigir o item, remover). O que já saiu continua
+  // contado no cadastro do prêmio, que é onde a conta vive.
   const caixasDistribuidas = await prisma.surpriseBox.findMany({
-    where: { raffleId: id },
+    where: { raffleId: id, prizeId: { not: null } },
     orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
     select: {
       id: true,

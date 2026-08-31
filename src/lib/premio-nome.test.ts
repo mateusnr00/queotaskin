@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { SkinRarity } from "@prisma/client";
 
-import { chaveDoNome, raridadeDoPremio, separarDesgaste } from "./premio-nome";
+import {
+  chaveDoNome,
+  desgasteCurto,
+  raridadeDoPremio,
+  separarDesgaste,
+} from "./premio-nome";
 
 describe("separarDesgaste", () => {
   it("separa o desgaste em inglês, como a Steam escreve", () => {
@@ -95,5 +100,33 @@ describe("raridadeDoPremio", () => {
 
   it("skin cadastrada sem raridade não inventa cor", () => {
     expect(raridadeDoPremio("Agente sem raridade", catalogo)).toBeNull();
+  });
+});
+
+describe("desgasteCurto", () => {
+  it("traduz os cinco desgastes para sigla", () => {
+    // A janela da raspadinha tem uns dois centímetros: "(Field-Tested)" por
+    // extenso come metade dela e quebra o nome da skin em três linhas.
+    expect(desgasteCurto("Factory New")).toBe("FN");
+    expect(desgasteCurto("Minimal Wear")).toBe("MW");
+    expect(desgasteCurto("Field-Tested")).toBe("FT");
+    expect(desgasteCurto("Well-Worn")).toBe("WW");
+    expect(desgasteCurto("Battle-Scarred")).toBe("BS");
+  });
+
+  it("aceita o nome em português, que também aparece no cadastro", () => {
+    expect(desgasteCurto("Testada em Campo")).toBe("FT");
+    expect(desgasteCurto("Nova de Fábrica")).toBe("FN");
+  });
+
+  it("não liga para caixa nem para espaço em volta", () => {
+    expect(desgasteCurto("  field-tested ")).toBe("FT");
+  });
+
+  it("o que não é desgaste devolve nulo", () => {
+    // Quem chama mostra o texto como está: cortar seria inventar.
+    expect(desgasteCurto("2 unidades")).toBeNull();
+    expect(desgasteCurto(null)).toBeNull();
+    expect(desgasteCurto("")).toBeNull();
   });
 });

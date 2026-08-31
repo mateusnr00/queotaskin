@@ -1552,10 +1552,11 @@ function TabelaDeCaixas({
                     <Gift className="h-5 w-5" />
                   </span>
                   <p className="text-sm font-semibold">
-                    Nenhuma caixa distribuída ainda
+                    Nenhuma caixa premiada ainda
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Elas aparecem aqui conforme as compras alcançam os combos.
+                    A lista mostra só as caixas que saíram com prêmio. As
+                    vazias não aparecem.
                   </p>
                 </td>
               </tr>

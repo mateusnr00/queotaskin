@@ -4,9 +4,9 @@
 // página: a action que salva os títulos premiados resolve a raridade a partir
 // do mesmo nome, e um "use client" não pode ser importado por ela.
 
-import type { SkinRarity } from "@prisma/client";
+import type { SkinRarity, SkinWear } from "@prisma/client";
 
-import { WEAR_LABEL, WEAR_STEAM } from "@/lib/cs2";
+import { WEAR_LABEL, WEAR_SHORT, WEAR_STEAM } from "@/lib/cs2";
 import { chaveDeBusca } from "@/lib/cs2-catalogo";
 
 /** Os desgastes escritos por extenso, em ingles e em portugues. */
@@ -32,6 +32,31 @@ export function separarDesgaste(texto: string): {
     return { nome: texto, desgaste: null };
   }
   return { nome: casa[1].trim(), desgaste: dentro };
+}
+
+/**
+ * O desgaste em duas letras: FN, MW, FT, WW, BS.
+ *
+ * Serve onde o espaço não cabe o nome inteiro, como a janela da raspadinha,
+ * que tem uns dois centímetros de largura. Aceita o nome em inglês e em
+ * português porque os dois aparecem no cadastro: o campo de prêmio escreve o
+ * da Steam, mas o texto também é digitado à mão.
+ *
+ * Devolve nulo quando o que veio entre parênteses não é desgaste conhecido, e
+ * aí quem chama mostra o texto como está.
+ */
+export function desgasteCurto(desgaste: string | null): string | null {
+  if (!desgaste) return null;
+  const alvo = desgaste.trim().toLowerCase();
+  for (const chave of Object.keys(WEAR_SHORT) as SkinWear[]) {
+    if (
+      WEAR_STEAM[chave].toLowerCase() === alvo ||
+      WEAR_LABEL[chave].toLowerCase() === alvo
+    ) {
+      return WEAR_SHORT[chave];
+    }
+  }
+  return null;
 }
 
 /**
