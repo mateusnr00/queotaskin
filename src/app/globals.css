@@ -887,6 +887,37 @@
   animation: selo-liberado 420ms ease-out both;
 }
 
+/* Um brilho atravessa o selo, uma vez só, logo depois da entrada.
+ *
+ * É o que faz o bloco ser lido como conquista e não como aviso: a entrada
+ * sozinha só posiciona, e recompensa que aparece sem cerimônia não parece
+ * recompensa. Uma passada e acaba; nada fica piscando, porque o botão de
+ * participar logo abaixo é o elemento em movimento permanente desta dobra. */
+@keyframes selo-varredura {
+  from {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
+
+.selo-liberado::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 35%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, white 16%, transparent),
+    transparent
+  );
+  animation: selo-varredura 900ms cubic-bezier(0.22, 1, 0.36, 1) 380ms both;
+}
+
 
 /* A barra do rank, no portao da campanha exclusiva.
 
@@ -952,6 +983,12 @@
   .bilhete-impacto,
   .premio-surge {
     animation: none;
+  }
+
+  /* A varredura some inteira, e não só para de andar: parada ela deixaria um
+     brilho estático cobrindo um terço do selo, que é pior que não ter. */
+  .selo-liberado::after {
+    display: none;
   }
 
   /* O rotulo da barra precisa aparecer de qualquer jeito: ele nasce em

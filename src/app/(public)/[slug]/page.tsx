@@ -8,6 +8,7 @@ import { expireForRaffle } from "@/server/services/reservations";
 import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
 import { dobroAtivo } from "@/lib/promocao-em-dobro";
 import { FaixaDeDobro } from "@/components/public/faixa-de-dobro";
+import { FaixaDeGratuito } from "@/components/public/faixa-de-gratuito";
 import { ReservationForm } from "@/components/public/reservation-form";
 import type { RequiredFields } from "@/components/public/reservation-form";
 import { SocialShare } from "@/components/public/social-share";
@@ -536,6 +537,7 @@ export default async function PublicRaffleDetailPage({
                 soldCount,
                 raffle.totalNumbers,
                 statusConfig,
+                raffle.isFree,
               )}
             />
           )}
@@ -626,11 +628,7 @@ export default async function PublicRaffleDetailPage({
             página lê primeiro quanto já foi vendido e só depois descobre o
             valor, que é a informação que ele veio buscar. */}
           {raffle.isFree ? (
-            <div className="rounded-xl border bg-gradient-to-br from-accent/40 to-accent/10 px-4 py-4 text-center">
-              <span className="text-xl font-extrabold uppercase tracking-tight text-primary sm:text-2xl">
-                {raffle.freeLabel || "SORTEIO GRATUITO"}
-              </span>
-            </div>
+            <FaixaDeGratuito rotulo={raffle.freeLabel} />
           ) : (
             <PrecoDaCampanha preco={formatBRL(Number(raffle.pricePerNumber))} />
           )}
@@ -694,6 +692,7 @@ export default async function PublicRaffleDetailPage({
                     requiredFields={requiredFields}
                     currentUser={currentUser}
                     pricePerNumber={Number(raffle.pricePerNumber)}
+                    gratuita={raffle.isFree}
                     selectionCards={raffle.selectionCards ?? []}
                     selectionCardsBestseller={
                       raffle.selectionCardsBestseller ?? -1

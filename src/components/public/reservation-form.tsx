@@ -7,7 +7,7 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Minus, Plus, X } from "lucide-react";
+import { Gift, Minus, Plus, X } from "lucide-react";
 
 import { createReservationAction } from "@/server/actions/reservations";
 import { guardarOuRecuperarMarcas } from "@/lib/utm";
@@ -95,6 +95,13 @@ interface ReservationFormProps {
    *  só na hora de confirmar. */
   currentUser: CurrentUser | null;
   pricePerNumber: number;
+  /**
+   * Campanha gratuita (isFree). Não dá para inferir de pricePerNumber === 0:
+   * o que decide é a configuração da campanha, e o texto do botão muda por
+   * causa dela. "R$ 0,00" embaixo de "Quero participar" faz a pessoa procurar
+   * onde está a pegadinha justamente quando não existe nenhuma.
+   */
+  gratuita?: boolean;
   // Quick-picks configurados pelo admin. Array vazio = sem cards (mostra
   // só o stepper -/+). bestsellerIndex >= 0 destaca o card no índice
   // correspondente com badge "MAIS POPULAR".
@@ -113,6 +120,7 @@ export function ReservationForm({
   requiredFields,
   currentUser,
   pricePerNumber,
+  gratuita = false,
   selectionCards,
   selectionCardsBestseller,
 }: ReservationFormProps) {
@@ -284,6 +292,7 @@ export function ReservationForm({
           <AccountSummary
             currentUser={currentUser}
             requiredFields={requiredFields}
+            gratuita={gratuita}
           />
         )}
 
@@ -307,7 +316,12 @@ export function ReservationForm({
         {/* O total vai no botão, como nas três referências do mercado: o
             número decidido some de vista assim que a pessoa rola, e repetir
             o valor no ponto do clique evita a dúvida de "quanto mesmo vou
-            pagar?" bem na hora de confirmar. */}
+            pagar?" bem na hora de confirmar.
+
+            Na campanha gratuita não há total a repetir, e "R$ 0,00" embaixo
+            do botão trabalha contra: um valor zerado onde a pessoa espera um
+            preço faz procurar a pegadinha. O botão diz o que é, e o "Grátis"
+            fica no próprio rótulo. */}
         <Button
           type="submit"
           // O pulso para quando não há o que enviar: anel chamando atenção
@@ -320,6 +334,11 @@ export function ReservationForm({
         >
           {isPending ? (
             "Reservando..."
+          ) : gratuita ? (
+            <span className="flex items-center gap-2">
+              <Gift aria-hidden className="h-4 w-4" />
+              Participar Grátis
+            </span>
           ) : (
             <>
               <span>Quero participar</span>
@@ -339,6 +358,7 @@ export function ReservationForm({
           onOpenChange={setPedindoConta}
           quantidade={effectiveQty}
           total={formatBRL(effectiveQty * pricePerNumber)}
+          gratuita={gratuita}
           onAuthenticated={aoEntrarNaConta}
         />
       </form>
@@ -520,9 +540,12 @@ function ManualPicker({
 function AccountSummary({
   currentUser,
   requiredFields,
+  gratuita,
 }: {
   currentUser: CurrentUser;
   requiredFields: RequiredFields;
+  /** Sem compra não há comprador: quem entra de graça está participando. */
+  gratuita?: boolean;
 }) {
   const showName = requiredFields.name;
   const showPhone = requiredFields.phone && Boolean(currentUser.phone);
@@ -532,7 +555,7 @@ function AccountSummary({
   return (
     <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm space-y-0.5">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Comprando como
+        {gratuita ? "Participando como" : "Comprando como"}
       </div>
       {showName && <div className="font-semibold">{currentUser.name}</div>}
       {showPhone && (

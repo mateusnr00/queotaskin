@@ -46,14 +46,17 @@ export function AccountGateDialog({
   onOpenChange,
   quantidade,
   total,
+  gratuita = false,
   onAuthenticated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Quantos números a pessoa escolheu, lembra do que está em jogo. */
   quantidade: number;
-  /** Valor formatado da compra. */
+  /** Valor formatado da compra. Ignorado quando a campanha é gratuita. */
   total: string;
+  /** Campanha gratuita: o que está em jogo não é o valor, é ser de graça. */
+  gratuita?: boolean;
   /** Chamado após entrar; quem chama retoma a reserva de onde parou. */
   onAuthenticated: () => void;
 }) {
@@ -63,10 +66,17 @@ export function AccountGateDialog({
   // O que está em jogo entra na própria linha de apoio, e não num quadro
   // separado: o cartão de /registro já diz "é rápido, três campos", e aqui
   // essa frase pode terminar dizendo o que se ganha com a pressa.
+  const um = quantidade === 1;
   const promessa =
     quantidade > 0
-      ? `${quantidade} ${quantidade === 1 ? "número" : "números"} por ${total}`
+      ? `${quantidade} ${um ? "número" : "números"} ${
+          gratuita ? "de graça" : `por ${total}`
+        }`
       : null;
+  // "seus 1 número ficam garantidos" saía torto desde sempre, e a frase é a
+  // última coisa que se lê antes de criar a conta.
+  const seus = um ? "seu" : "seus";
+  const garantidos = um ? "fica garantido" : "ficam garantidos";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,10 +107,10 @@ export function AccountGateDialog({
           <DialogDescription className="text-sm leading-relaxed">
             {criando
               ? promessa
-                ? `É rápido: três campos e seus ${promessa} ficam garantidos.`
+                ? `É rápido: três campos e ${seus} ${promessa} ${garantidos}.`
                 : "É rápido: três campos e você já pode escolher seus números."
               : promessa
-                ? `Entre com nome e CPF e seus ${promessa} ficam garantidos.`
+                ? `Entre com nome e CPF e ${seus} ${promessa} ${garantidos}.`
                 : "Entre com o nome e o CPF do cadastro."}
           </DialogDescription>
         </DialogHeader>

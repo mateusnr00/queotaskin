@@ -84,3 +84,30 @@ describe("statusDaCampanha", () => {
     expect(statusDaCampanha(40, 100, cedo)).toBe(STATUS_PADRAO.almostGone);
   });
 });
+
+describe("campanha gratuita", () => {
+  it('troca o "Adquira já!" padrão por "Participe já!"', () => {
+    expect(statusDaCampanha(0, 100, CONFIGURACAO_PADRAO, true)).toBe(
+      "Participe já!",
+    );
+  });
+
+  it("respeita o texto do painel, mesmo sendo gratuita", () => {
+    // Quem escreveu sabe o que quis dizer; trocar por baixo seria decidir
+    // pelo admin numa campanha só.
+    expect(
+      statusDaCampanha(
+        0,
+        100,
+        { ...CONFIGURACAO_PADRAO, earlyText: "Corre que é de graça" },
+        true,
+      ),
+    ).toBe("Corre que é de graça");
+  });
+
+  it("não mexe nas outras faixas", () => {
+    expect(statusDaCampanha(90, 100, CONFIGURACAO_PADRAO, true)).toBe(
+      "Últimos números!",
+    );
+  });
+});

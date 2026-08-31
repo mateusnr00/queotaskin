@@ -24,6 +24,8 @@ export interface ConfiguracaoDeStatus {
 /** Usados quando o tenant não personalizou o texto. */
 export const STATUS_PADRAO = {
   early: "Adquira já!",
+  /** O mesmo degrau, na campanha gratuita: não se adquire o que é de graça. */
+  earlyGratuita: "Participe já!",
   halfway: "Mais da metade vendida",
   almostGone: "Últimos números!",
   soldOut: "Aguardando sorteio",
@@ -47,9 +49,15 @@ export const CONFIGURACAO_PADRAO: ConfiguracaoDeStatus = {
 export function statusDaCampanha(
   vendidos: number,
   total: number,
-  config: ConfiguracaoDeStatus = CONFIGURACAO_PADRAO
+  config: ConfiguracaoDeStatus = CONFIGURACAO_PADRAO,
+  gratuita = false
 ): string {
-  const inicio = config.earlyText?.trim() || STATUS_PADRAO.early;
+  // O texto do painel manda, quando existe: quem escreveu sabe o que quis
+  // dizer. Só o padrão troca, porque "Adquira já!" numa campanha que não
+  // cobra nada contradiz o resto da página.
+  const inicio =
+    config.earlyText?.trim() ||
+    (gratuita ? STATUS_PADRAO.earlyGratuita : STATUS_PADRAO.early);
 
   // Campanha sem números configurados não tem percentual que faça sentido:
   // dividir por zero daria Infinity e prenderia o selo em "esgotado".
