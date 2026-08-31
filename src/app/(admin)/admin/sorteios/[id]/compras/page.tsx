@@ -96,6 +96,29 @@ export default async function ComprasPage({
     },
   });
 
+  // Quem já levou prêmio na raspadinha. A caixa surpresa mostrava os dela
+  // desde sempre; a raspadinha não tinha onde, e o prêmio sorteado sumia da
+  // vista de quem precisa entregar.
+  const raspadinhasPremiadas = await prisma.raspadinha.findMany({
+    where: { raffleId: id, status: "PREMIADA" },
+    orderBy: { raspadaEm: "desc" },
+    take: 200,
+    select: {
+      id: true,
+      numero: true,
+      raspadaEm: true,
+      premio: { select: { rotulo: true, skinRarity: true } },
+      reservation: {
+        select: {
+          participantName: true,
+          participantPhone: true,
+          paidAt: true,
+          user: { select: { phoneCountry: true } },
+        },
+      },
+    },
+  });
+
   const catalogoDePremios = (
     await prisma.skinTemplate.findMany({
       where: { tenantId },
@@ -364,6 +387,17 @@ export default async function ComprasPage({
             saidaDataDe: p.saidaDataDe?.toISOString() ?? null,
             saidaDataAte: p.saidaDataAte?.toISOString() ?? null,
             saidaDdds: p.saidaDdds,
+          })),
+          ganhadores: raspadinhasPremiadas.map((r) => ({
+            id: r.id,
+            numero: r.numero,
+            premio: r.premio?.rotulo ?? "-",
+            raridade: r.premio?.skinRarity ?? null,
+            ganhador: r.reservation.participantName,
+            telefone: r.reservation.participantPhone,
+            paisDoTelefone: r.reservation.user?.phoneCountry ?? null,
+            raspadaEm: r.raspadaEm?.toISOString() ?? null,
+            pagoEm: r.reservation.paidAt?.toISOString() ?? null,
           })),
         }}
       />

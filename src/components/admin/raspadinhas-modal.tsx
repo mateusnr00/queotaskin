@@ -17,7 +17,16 @@ import {
 } from "@/components/admin/campo-de-premio";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CreditCard, Lock, Plus, Settings, Trash2, Unlock } from "lucide-react";
+import {
+  CreditCard,
+  Lock,
+  Plus,
+  Settings,
+  Trash2,
+  Trophy,
+  Unlock,
+} from "lucide-react";
+import type { SkinRarity } from "@prisma/client";
 
 import {
   Dialog,
@@ -39,7 +48,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatDateTime } from "@/lib/format";
+import { RARITY_TEXT_VAR } from "@/lib/cs2";
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
+import { numeroDoBilhete } from "@/lib/raspadinha";
+import { linkDoWhatsapp, mensagemDeParabens } from "@/lib/whatsapp";
 import { porcentagemDaSaida, type TipoDeSaida } from "@/lib/saida";
 import {
   conferirRaspadinhasAction,
@@ -74,12 +87,26 @@ export interface ComboDaRaspadinha {
   visivel: boolean;
 }
 
+/** Um bilhete que já saiu premiado, com quem levou. */
+export interface GanhadorDaRaspadinha {
+  id: string;
+  numero: number;
+  premio: string;
+  raridade: SkinRarity | null;
+  ganhador: string;
+  telefone: string | null;
+  paisDoTelefone: string | null;
+  raspadaEm: string | null;
+  pagoEm: string | null;
+}
+
 export interface ConfigDaRaspadinha {
   ativa: boolean;
   rasparTodas: boolean;
   totalNumbers: number;
   combos: ComboDaRaspadinha[];
   premios: PremioDaRaspadinhaRow[];
+  ganhadores: GanhadorDaRaspadinha[];
 }
 
 export function RaspadinhasModal({
@@ -145,79 +172,84 @@ export function RaspadinhasModal({
   return (
     <>
       <Dialog open={aberto} onOpenChange={(o) => !o && aoFechar()}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        {/* Mais largo, e com respiro entre os blocos.
+            No 2xl anterior a tabela de ganhadores não cabia sem rolagem
+            lateral, e os blocos ficavam colados uns nos outros: a tela era uma
+            coluna contínua de controles, sem hierarquia nenhuma. */}
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <CabecalhoDeModal
             icone={<CreditCard className="h-5 w-5" />}
             tom="premio"
             titulo="Raspadinhas premiadas"
-            descricao="Quem compra ganha raspadinhas pelos combos abaixo. Cada prêmio sai no ponto da venda que você agendar."
+            descricao="Quem compra ganha raspadinhas pelos combos. Cada prêmio sai no ponto da venda que você agendar."
             acessorio={
               <Badge variant="outline" className="text-[10px] tabular-nums">
-                {unidades.length} prêmio(s)
+                {unidades.length} no bolo
               </Badge>
             }
           />
 
-          <div className="space-y-4">
-            <div className="divide-y divide-white/[0.06] rounded-2xl border border-white/10 bg-white/[0.02]">
-              <label className="flex cursor-pointer items-start gap-3 px-3.5 py-3">
-                <Switch
-                  checked={ativa}
-                  disabled={isPending}
-                  onCheckedChange={(v) =>
-                    salvarConfig({ ativa: v, rasparTodas })
-                  }
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">
-                    Ativar raspadinhas
+          <div className="space-y-3.5">
+            <Bloco titulo="Como funciona">
+              <div className="divide-y divide-white/[0.06]">
+                <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
+                  <Switch
+                    checked={ativa}
+                    disabled={isPending}
+                    onCheckedChange={(v) =>
+                      salvarConfig({ ativa: v, rasparTodas })
+                    }
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">
+                      Ativar raspadinhas
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Desligado, ninguém recebe raspadinha nas compras novas.
+                    </span>
                   </span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    Desligado, ninguém recebe raspadinha nas compras novas.
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
+                  <Switch
+                    checked={rasparTodas}
+                    disabled={isPending || !ativa}
+                    onCheckedChange={(v) =>
+                      salvarConfig({ ativa, rasparTodas: v })
+                    }
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">
+                      Botão &ldquo;Raspar todas&rdquo;
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Abre as raspadinhas de uma vez, sem raspar uma por uma.
+                    </span>
                   </span>
-                </span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 px-3.5 py-3">
-                <Switch
-                  checked={rasparTodas}
-                  disabled={isPending || !ativa}
-                  onCheckedChange={(v) =>
-                    salvarConfig({ ativa, rasparTodas: v })
-                  }
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">
-                    Botão &ldquo;Raspar todas&rdquo;
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    Abre as raspadinhas de uma vez, sem raspar uma por uma.
-                  </span>
-                </span>
-              </label>
-            </div>
+                </label>
+              </div>
+            </Bloco>
 
             {/* O aviso que a caixa surpresa também dá: sem combo, ninguém
                 recebe raspadinha nenhuma e a mecânica fica ligada sem efeito. */}
             {ativa && initial.combos.length === 0 && (
-              <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-                Cadastre combos abaixo: sem eles, ninguém recebe raspadinha.
+              <p className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-xs leading-relaxed text-amber-300">
+                Cadastre um combo abaixo: sem ele, ninguém recebe raspadinha.
               </p>
             )}
 
-            <Combos raffleId={raffleId} combos={initial.combos} />
+            <Bloco
+              titulo="Distribuição"
+              nota="Quantos títulos dão quantas raspadinhas. Vale o maior degrau alcançado, e os degraus não se somam."
+            >
+              <Combos raffleId={raffleId} combos={initial.combos} />
+            </Bloco>
 
-            <Conferencia raffleId={raffleId} />
-
-            <div>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  Prêmios ({unidades.length})
-                  {emPix > 0 && (
-                    <span className="ml-2 normal-case">
-                      · {formatBRL(emPix)} em Pix
-                    </span>
-                  )}
-                </span>
+            <Bloco
+              titulo="Prêmios no bolo"
+              nota={
+                emPix > 0 ? `${formatBRL(emPix)} em Pix prometidos.` : undefined
+              }
+              acao={
                 <Button
                   type="button"
                   size="sm"
@@ -228,10 +260,10 @@ export function RaspadinhasModal({
                   <Plus className="mr-1.5 h-4 w-4" />
                   Inserir prêmio
                 </Button>
-              </div>
-
+              }
+            >
               {unidades.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-10 text-center">
+                <div className="px-4 py-10 text-center">
                   <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground">
                     <CreditCard className="h-5 w-5" />
                   </span>
@@ -241,7 +273,7 @@ export function RaspadinhasModal({
                   </p>
                 </div>
               ) : (
-                <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10">
+                <ul className="divide-y divide-white/[0.06]">
                   {unidades.map((u) => {
                     const quantos = totalPorNome.get(u.rotulo) ?? 1;
                     const indice = (vistos.get(u.rotulo) ?? 0) + 1;
@@ -259,7 +291,21 @@ export function RaspadinhasModal({
                   })}
                 </ul>
               )}
-            </div>
+            </Bloco>
+
+            <Bloco
+              titulo="Quem já ganhou"
+              nota="Os bilhetes que saíram premiados, do mais recente para o mais antigo."
+              acessorio={
+                <Badge variant="outline" className="text-[10px] tabular-nums">
+                  {initial.ganhadores.length}
+                </Badge>
+              }
+            >
+              <Ganhadores ganhadores={initial.ganhadores} />
+            </Bloco>
+
+            <Conferencia raffleId={raffleId} />
           </div>
         </DialogContent>
       </Dialog>
@@ -466,49 +512,71 @@ function Combos({
     router.refresh();
   }
 
+  // Sem borda e sem título próprios: quem dá o nome e a moldura é o bloco que
+  // envolve. Com os dois, a tela mostrava "DISTRIBUIÇÃO" duas vezes, uma
+  // dentro da outra, em caixas aninhadas.
   return (
-    <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
-      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-        Distribuição
-      </p>
+    <div className="space-y-2 px-4 py-3">
       <ul className="space-y-2">
+        {/* No celular a frase quebrava no meio: "A partir de [10] títulos,
+            ganha" numa linha e o segundo campo com a lixeira na outra, sem
+            dizer a que ele se referia. Ali cada campo ganha o próprio rótulo
+            e a linha vira duas colunas; da largura de tablet para cima volta a
+            ser a frase corrida, que é mais rápida de ler. */}
         {linhas.map((c, i) => (
-          <li key={i} className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">A partir de</span>
-            <Input
-              inputMode="numeric"
-              value={c.minimo}
-              onChange={(e) =>
-                setLinhas((antes) =>
-                  antes.map((x, j) =>
-                    j === i ? { ...x, minimo: Number(e.target.value) || 0 } : x,
-                  ),
-                )
-              }
-              className="h-8 w-20 font-mono text-xs"
-            />
-            <span className="text-xs text-muted-foreground">
+          <li
+            key={i}
+            className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 sm:flex sm:flex-wrap sm:items-center"
+          >
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              A partir de
+            </span>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground sm:hidden">
+                A partir de
+              </Label>
+              <Input
+                inputMode="numeric"
+                value={c.minimo}
+                onChange={(e) =>
+                  setLinhas((antes) =>
+                    antes.map((x, j) =>
+                      j === i
+                        ? { ...x, minimo: Number(e.target.value) || 0 }
+                        : x,
+                    ),
+                  )
+                }
+                className="h-9 w-full font-mono text-xs sm:h-8 sm:w-20"
+              />
+            </div>
+            <span className="hidden text-xs text-muted-foreground sm:inline">
               títulos, ganha
             </span>
-            <Input
-              inputMode="numeric"
-              value={c.quantidade}
-              onChange={(e) =>
-                setLinhas((antes) =>
-                  antes.map((x, j) =>
-                    j === i
-                      ? { ...x, quantidade: Number(e.target.value) || 0 }
-                      : x,
-                  ),
-                )
-              }
-              className="h-8 w-20 font-mono text-xs"
-            />
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground sm:hidden">
+                Ganha
+              </Label>
+              <Input
+                inputMode="numeric"
+                value={c.quantidade}
+                onChange={(e) =>
+                  setLinhas((antes) =>
+                    antes.map((x, j) =>
+                      j === i
+                        ? { ...x, quantidade: Number(e.target.value) || 0 }
+                        : x,
+                    ),
+                  )
+                }
+                className="h-9 w-full font-mono text-xs sm:h-8 sm:w-20"
+              />
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              className="h-9 w-9 text-muted-foreground hover:text-destructive sm:h-8 sm:w-8"
               onClick={() =>
                 setLinhas((antes) => antes.filter((_, j) => j !== i))
               }
@@ -946,5 +1014,186 @@ function Conferencia({ raffleId }: { raffleId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Um bloco do modal: nome em cima, conteúdo dentro, borda em volta.
+ *
+ * O modal era uma coluna contínua de controles, um encostado no outro, sem
+ * dizer onde um assunto acabava e o outro começava: chave, chave, campo,
+ * campo, lista. Cada bloco agora responde a uma pergunta e diz qual é.
+ */
+function Bloco({
+  titulo,
+  nota,
+  acao,
+  acessorio,
+  children,
+}: {
+  titulo: string;
+  nota?: string;
+  /** Um botão à direita do nome. */
+  acao?: React.ReactNode;
+  /** Um selo pequeno ao lado do nome. */
+  acessorio?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+      <header className="flex flex-wrap items-start justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[11px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+              {titulo}
+            </h3>
+            {acessorio}
+          </div>
+          {nota && (
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              {nota}
+            </p>
+          )}
+        </div>
+        {acao}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Quem já levou prêmio na raspadinha.
+ *
+ * A caixa surpresa mostrava a dela desde sempre e a raspadinha não tinha
+ * onde: o prêmio era sorteado, saía para alguém, e sumia da vista de quem
+ * precisa entregar. Sem esta lista, descobrir quem ganhou o quê exigia abrir
+ * o banco.
+ *
+ * Tabela no computador e cartões no celular, como a fila de entregas: oito
+ * colunas num telefone viram rolagem lateral, e a pessoa arrasta para ler
+ * cada coluna perdendo de vista a linha em que estava.
+ */
+function Ganhadores({ ganhadores }: { ganhadores: GanhadorDaRaspadinha[] }) {
+  if (ganhadores.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground">
+          <Trophy className="h-5 w-5" />
+        </span>
+        <p className="text-sm font-semibold">Ninguém ganhou ainda</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Os bilhetes premiados aparecem aqui assim que alguém raspar.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Celular: um cartão por ganhador. */}
+      <ul className="divide-y divide-white/[0.06] md:hidden">
+        {ganhadores.map((g) => (
+          <li key={g.id} className="space-y-1.5 px-4 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold">
+                {g.ganhador}
+              </p>
+              <BotaoDeParabens ganhador={g} />
+            </div>
+            <NomeDoPremio ganhador={g} />
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              Bilhete {numeroDoBilhete(g.numero)}
+              {g.raspadaEm ? ` · ${formatDateTime(new Date(g.raspadaEm))}` : ""}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      {/* Computador: tabela, que é onde comparar linhas ajuda. */}
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/[0.06] text-left">
+              <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+                Ganhador
+              </th>
+              <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+                Prêmio
+              </th>
+              <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+                Bilhete
+              </th>
+              <th className="px-4 py-2 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+                Raspou em
+              </th>
+              <th className="w-12 px-4 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.06]">
+            {ganhadores.map((g) => (
+              <tr key={g.id} className="hover:bg-white/[0.02]">
+                <td className="px-4 py-2.5 font-medium">{g.ganhador}</td>
+                <td className="px-4 py-2.5">
+                  <NomeDoPremio ganhador={g} />
+                </td>
+                <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground tabular-nums">
+                  {numeroDoBilhete(g.numero)}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground tabular-nums">
+                  {g.raspadaEm ? formatDateTime(new Date(g.raspadaEm)) : "-"}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <BotaoDeParabens ganhador={g} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/** O nome do prêmio com a cor da raridade, quando ela existe. */
+function NomeDoPremio({ ganhador }: { ganhador: GanhadorDaRaspadinha }) {
+  return (
+    <span
+      className="text-sm font-medium"
+      style={
+        ganhador.raridade
+          ? { color: RARITY_TEXT_VAR[ganhador.raridade] }
+          : undefined
+      }
+    >
+      {ganhador.premio}
+    </span>
+  );
+}
+
+/**
+ * O atalho para avisar quem ganhou, com a mensagem pronta.
+ *
+ * Mesmo gesto da tabela de caixas surpresas: quem entrega o prêmio abre o
+ * WhatsApp daqui, e não copiando o telefone para outro lugar.
+ */
+function BotaoDeParabens({ ganhador }: { ganhador: GanhadorDaRaspadinha }) {
+  const link = linkDoWhatsapp(
+    ganhador.telefone,
+    mensagemDeParabens({ nome: ganhador.ganhador, premio: ganhador.premio }),
+    ganhador.paisDoTelefone,
+  );
+  if (!link) return null;
+  return (
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Avisar no WhatsApp"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10"
+    >
+      <IconeDoWhatsapp className="h-4 w-4" />
+      <span className="sr-only">Avisar {ganhador.ganhador} no WhatsApp</span>
+    </a>
   );
 }

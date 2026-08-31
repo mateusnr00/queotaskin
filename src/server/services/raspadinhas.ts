@@ -73,8 +73,3 @@ export async function gerarRaspadinhasParaReserva(
     return criar;
   });
 }
-
-/** O número como aparece impresso no bilhete: seis dígitos, com zeros. */
-export function numeroDoBilhete(numero: number): string {
-  return numero.toString().padStart(6, "0");
-}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { numeroDoBilhete } from "./raspadinhas";
+import { numeroDoBilhete } from "@/lib/raspadinha";
 
 describe("numeroDoBilhete", () => {
   it("preenche com zeros até seis dígitos", () => {

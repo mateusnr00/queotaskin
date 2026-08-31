@@ -14,7 +14,7 @@ import { XpGanho } from "@/components/public/xp-ganho";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
 import { TitulosPremiadosGanhos } from "@/components/public/titulos-premiados-ganhos";
 import { ColecaoDeRaspadinhas } from "@/components/public/raspadinha/colecao";
-import { numeroDoBilhete } from "@/server/services/raspadinhas";
+import { numeroDoBilhete } from "@/lib/raspadinha";
 import { ExpiredReservation } from "@/components/public/expired-reservation";
 import { TrilhaDoPedido } from "@/components/public/trilha-do-pedido";
 import { TituloDaAba } from "@/components/public/titulo-da-aba";
