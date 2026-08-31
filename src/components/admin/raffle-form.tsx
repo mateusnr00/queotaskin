@@ -20,16 +20,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
   Award,
+  CalendarClock,
   Camera,
   CreditCard,
+  Eye,
   Info,
   Loader2,
   Settings,
   Sparkles,
+  Tag,
   TagsIcon,
   Ticket,
   Trash2,
   Trophy,
+  UserRound,
 } from "lucide-react";
 
 import {
@@ -48,6 +52,7 @@ import type { PrizeDraft } from "@/components/admin/skin-prize-editor";
 import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
 import { RaffleAwardedTicketsTab } from "@/components/admin/raffle-awarded-tickets-tab";
+import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
 import { ESCADA_DE_RANK } from "@/lib/rank";
 import type { SkinDoCatalogoSimples } from "@/components/admin/campo-de-premio";
 
@@ -553,7 +558,7 @@ export function RaffleForm({
               Mostrar home → 3 selects → Modo descrição → Texto → Status
               → Início vendas → Data sorteio → 3 switches → Campos req. */}
           <TabsContent value="geral">
-            <Card className="p-5 md:p-6 space-y-5">
+            <div className="space-y-4">
               {!isEdit && (
                 <SeletorDeSkin
                   skins={skins}
@@ -574,117 +579,87 @@ export function RaffleForm({
                 />
               )}
 
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Título *</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Ex: Rifa do iPhone 16"
-                        onChange={(e) => {
-                          field.onChange(e);
-                          acompanharTitulo(e.target.value);
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>URL Amigável *</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        placeholder="ex: rifa-iphone-16"
-                        autoComplete="off"
-                        onChange={(e) => {
-                          // A partir daqui a URL é dele, o título não mexe
-                          // mais nela.
-                          setUrlEscritaAMao(true);
-                          const v = e.target.value
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, "");
-                          field.onChange(v);
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {mode.kind === "create"
-                        ? "Sai do título sozinha. Se já existir sorteio com essa URL, um número entra no fim."
-                        : "Essa é a URL que corresponderá ao sorteio."}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="shortDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Breve Descrição *</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        placeholder="Aparece nos cards"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="privacy"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Privacidade</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={(v) => v && field.onChange(v)}
-                    >
+              <SecaoDoFormulario
+                titulo="Identidade da campanha"
+                descricao="O nome, o endereço e a chamada que aparecem em toda parte do site."
+                icone={<Tag className="h-4 w-4" />}
+              >
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Título *</FormLabel>
                       <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue
-                            labels={{
-                              PUBLIC: "Público",
-                              PRIVATE: "Privado (acessa apenas com link)",
-                            }}
-                          />
-                        </SelectTrigger>
+                        <Input
+                          {...field}
+                          placeholder="Ex: Rifa do iPhone 16"
+                          onChange={(e) => {
+                            field.onChange(e);
+                            acompanharTitulo(e.target.value);
+                          }}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="PUBLIC">Público</SelectItem>
-                        <SelectItem value="PRIVATE">
-                          Privado (acessa apenas com link)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <SwitchField
-                control={form.control}
-                name="showOnHome"
-                label="Mostrar o sorteio na página inicial"
-              />
+                <FormField
+                  control={form.control}
+                  name="slug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>URL Amigável *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          placeholder="ex: rifa-iphone-16"
+                          autoComplete="off"
+                          onChange={(e) => {
+                            // A partir daqui a URL é dele, o título não mexe
+                            // mais nela.
+                            setUrlEscritaAMao(true);
+                            const v = e.target.value
+                              .toLowerCase()
+                              .replace(/[^a-z0-9-]/g, "");
+                            field.onChange(v);
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {mode.kind === "create"
+                          ? "Sai do título sozinha. Se já existir sorteio com essa URL, um número entra no fim."
+                          : "Essa é a URL que corresponderá ao sorteio."}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <div className="grid gap-4 md:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="shortDescription"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Breve Descrição *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          placeholder="Aparece nos cards"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        A frase que aparece embaixo do nome nos cards da
+                        vitrine.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="category"
@@ -712,13 +687,19 @@ export function RaffleForm({
                     </FormItem>
                   )}
                 />
+              </SecaoDoFormulario>
 
+              <SecaoDoFormulario
+                titulo="A página que o comprador vê"
+                descricao="Quem alcança a campanha e o que ela conta sobre o prêmio."
+                icone={<Eye className="h-4 w-4" />}
+              >
                 <FormField
                   control={form.control}
-                  name="reservationModel"
+                  name="privacy"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Modelo de Reserva</FormLabel>
+                      <FormLabel>Privacidade</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={(v) => v && field.onChange(v)}
@@ -727,23 +708,23 @@ export function RaffleForm({
                           <SelectTrigger className="w-full">
                             <SelectValue
                               labels={{
-                                MANUAL: "Escolhe os bilhetes manualmente",
-                                RANDOM_NUMBERS: "Números aleatórios",
-                                SEQUENTIAL: "Sequencial",
+                                PUBLIC: "Público",
+                                PRIVATE: "Privado (acessa apenas com link)",
                               }}
                             />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="MANUAL">
-                            Escolhe os bilhetes manualmente
+                          <SelectItem value="PUBLIC">Público</SelectItem>
+                          <SelectItem value="PRIVATE">
+                            Privado (acessa apenas com link)
                           </SelectItem>
-                          <SelectItem value="RANDOM_NUMBERS">
-                            Números aleatórios
-                          </SelectItem>
-                          <SelectItem value="SEQUENTIAL">Sequencial</SelectItem>
                         </SelectContent>
                       </Select>
+                      <FormDescription>
+                        Privada sai da vitrine e da home: só chega quem receber
+                        o link.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -751,10 +732,10 @@ export function RaffleForm({
 
                 <FormField
                   control={form.control}
-                  name="modality"
+                  name="descriptionMode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Modalidade</FormLabel>
+                      <FormLabel>Modo de Descrição</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={(v) => v && field.onChange(v)}
@@ -763,79 +744,148 @@ export function RaffleForm({
                           <SelectTrigger className="w-full">
                             <SelectValue
                               labels={{
-                                OWN_DRAW: "Sorteio próprio",
-                                LOTERIA_FEDERAL: "Loteria Federal",
+                                COLLAPSED: "Colapsado/Retraído",
+                                EXPANDED: "Expandido",
                               }}
                             />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="OWN_DRAW">
-                            Sorteio próprio
+                          <SelectItem value="COLLAPSED">
+                            Colapsado/Retraído
                           </SelectItem>
-                          <SelectItem value="LOTERIA_FEDERAL">
-                            Loteria Federal
-                          </SelectItem>
+                          <SelectItem value="EXPANDED">Expandido</SelectItem>
                         </SelectContent>
                       </Select>
+                      <FormDescription>
+                        Se o texto abaixo já vem aberto na página ou atrás de um
+                        &ldquo;ver mais&rdquo;.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <FormField
-                control={form.control}
-                name="descriptionMode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Modo de Descrição</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={(v) => v && field.onChange(v)}
-                    >
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Texto</FormLabel>
                       <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue
-                            labels={{
-                              COLLAPSED: "Colapsado/Retraído",
-                              EXPANDED: "Expandido",
-                            }}
-                          />
-                        </SelectTrigger>
+                        <Textarea
+                          {...field}
+                          value={field.value ?? ""}
+                          rows={8}
+                          placeholder="Detalhes da rifa, regulamento, etc..."
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="COLLAPSED">
-                          Colapsado/Retraído
-                        </SelectItem>
-                        <SelectItem value="EXPANDED">Expandido</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Texto</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        value={field.value ?? ""}
-                        rows={8}
-                        placeholder="Detalhes da rifa, regulamento, etc..."
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                {/* Guardada e registrada no histórico, mas nenhuma consulta
+                    pública lê esta coluna: a home lista toda campanha PUBLIC e
+                    ACTIVE, e o card grande é decidido por `principal`. Dizer
+                    isso na cara é melhor do que deixar uma chave que parece
+                    funcionar, e apagá-la em silêncio esconderia a escolha de
+                    quem cuida do site. */}
+                <SwitchField
+                  control={form.control}
+                  name="showOnHome"
+                  label="Mostrar o sorteio na página inicial"
+                  aviso="sem efeito"
+                  description="A home hoje lista toda campanha pública e ativa, sem olhar esta chave. Quem manda no card grande é a campanha marcada como principal, na lista de sorteios."
+                />
+              </SecaoDoFormulario>
 
-              {/* O campo "Texto do status" saiu daqui.
+              <SecaoDoFormulario
+                titulo="Venda e sorteio"
+                descricao="Como os números chegam a quem compra, quando a venda abre e quando ela fecha."
+                icone={<CalendarClock className="h-4 w-4" />}
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="reservationModel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Modelo de Reserva</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => v && field.onChange(v)}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                labels={{
+                                  MANUAL: "Escolhe os bilhetes manualmente",
+                                  RANDOM_NUMBERS: "Números aleatórios",
+                                  SEQUENTIAL: "Sequencial",
+                                }}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="MANUAL">
+                              Escolhe os bilhetes manualmente
+                            </SelectItem>
+                            <SelectItem value="RANDOM_NUMBERS">
+                              Números aleatórios
+                            </SelectItem>
+                            <SelectItem value="SEQUENTIAL">
+                              Sequencial
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Como os números chegam a quem compra.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="modality"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Modalidade</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => v && field.onChange(v)}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                labels={{
+                                  OWN_DRAW: "Sorteio próprio",
+                                  LOTERIA_FEDERAL: "Loteria Federal",
+                                }}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="OWN_DRAW">
+                              Sorteio próprio
+                            </SelectItem>
+                            <SelectItem value="LOTERIA_FEDERAL">
+                              Loteria Federal
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          De onde sai o número ganhador.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* O campo "Texto do status" saiu daqui.
                   
                   Ele alimentava o selo enquanto a venda não chegava na
                   metade, e foi por ali que "corre que está acabando" apareceu
@@ -844,169 +894,196 @@ export function RaffleForm({
                   Configurações > Mensagens, num lugar só para todas as
                   campanhas. */}
 
-              {/* Início das vendas, select Imediatamente/Agendado, revela
+                {/* Início das vendas, select Imediatamente/Agendado, revela
                   o datetime-local só quando Agendado. */}
-              <FormField
-                control={form.control}
-                name="salesStart"
-                render={({ field }) => {
-                  const mode = field.value != null ? "scheduled" : "immediate";
-                  return (
-                    <FormItem>
-                      <FormLabel>Início das vendas</FormLabel>
-                      <Select
-                        value={mode}
-                        onValueChange={(v) => {
-                          if (!v) return;
-                          if (v === "immediate") {
-                            field.onChange(null);
-                          } else if (!field.value) {
-                            // Default: amanhã 00:00, admin ajusta no
-                            // datetime picker que aparece abaixo.
-                            const tomorrow = new Date();
-                            tomorrow.setDate(tomorrow.getDate() + 1);
-                            tomorrow.setHours(0, 0, 0, 0);
-                            field.onChange(tomorrow);
-                          }
-                        }}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue
-                              labels={{
-                                immediate: "Imediatamente",
-                                scheduled: "Agendado",
-                              }}
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="immediate">
-                            Imediatamente
-                          </SelectItem>
-                          <SelectItem value="scheduled">Agendado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {mode === "scheduled" && (
-                        <FormControl>
-                          <Input
-                            type="datetime-local"
-                            className="mt-2"
-                            value={
-                              field.value
-                                ? new Date(field.value)
-                                    .toISOString()
-                                    .slice(0, 16)
-                                : ""
+                <FormField
+                  control={form.control}
+                  name="salesStart"
+                  render={({ field }) => {
+                    const mode =
+                      field.value != null ? "scheduled" : "immediate";
+                    return (
+                      <FormItem>
+                        <FormLabel>Início das vendas</FormLabel>
+                        <Select
+                          value={mode}
+                          onValueChange={(v) => {
+                            if (!v) return;
+                            if (v === "immediate") {
+                              field.onChange(null);
+                            } else if (!field.value) {
+                              // Default: amanhã 00:00, admin ajusta no
+                              // datetime picker que aparece abaixo.
+                              const tomorrow = new Date();
+                              tomorrow.setDate(tomorrow.getDate() + 1);
+                              tomorrow.setHours(0, 0, 0, 0);
+                              field.onChange(tomorrow);
                             }
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value
-                                  ? new Date(e.target.value)
-                                  : null,
-                              )
-                            }
-                          />
-                        </FormControl>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  );
-                }}
-              />
-
-              <FormField
-                control={form.control}
-                name="drawDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Data do Sorteio</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="datetime-local"
-                        value={
-                          field.value
-                            ? new Date(field.value).toISOString().slice(0, 16)
-                            : ""
-                        }
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? new Date(e.target.value) : null,
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="space-y-2">
-                <SwitchField
-                  control={form.control}
-                  name="autoCloseOnDraw"
-                  label="Encerrar automático na data do sorteio"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="showDrawDate"
-                  label="Mostrar a data do sorteio para os participantes"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="allowReceiptDownload"
-                  label="Permite download do comprovante"
-                />
-              </div>
-
-              {/* Campos requeridos pra realizar a reserva. Nome/Telefone/
-                  CPF são sempre exigidos (vêm do cadastro). */}
-              <div className="space-y-3 border-t pt-5">
-                <p className="text-sm font-medium">
-                  Campos requeridos para realizar a reserva
-                </p>
-                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                  {(
-                    [
-                      { key: "name", label: "Nome", disabled: true },
-                      { key: "phone", label: "Telefone", disabled: true },
-                      { key: "cpf", label: "CPF", disabled: true },
-                      { key: "email", label: "E-mail", disabled: false },
-                      {
-                        key: "socialName",
-                        label: "Nome Social",
-                        disabled: false,
-                      },
-                      {
-                        key: "birthDate",
-                        label: "Data de Nascimento",
-                        disabled: false,
-                      },
-                    ] as const
-                  ).map((f) => (
-                    <FormField
-                      key={f.key}
-                      control={form.control}
-                      name={`requiredFields.${f.key}` as const}
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-xl border bg-muted/30 px-3.5 py-2.5 hover:border-primary/30 hover:bg-muted/60 transition-colors">
-                          <FormLabel className="m-0 text-sm font-medium">
-                            {f.label}
-                          </FormLabel>
+                          }}
+                        >
                           <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              disabled={f.disabled}
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                labels={{
+                                  immediate: "Imediatamente",
+                                  scheduled: "Agendado",
+                                }}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="immediate">
+                              Imediatamente
+                            </SelectItem>
+                            <SelectItem value="scheduled">Agendado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {mode === "scheduled" && (
+                          <FormControl>
+                            <Input
+                              type="datetime-local"
+                              className="mt-2"
+                              value={
+                                field.value
+                                  ? new Date(field.value)
+                                      .toISOString()
+                                      .slice(0, 16)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value
+                                    ? new Date(e.target.value)
+                                    : null,
+                                )
+                              }
                             />
                           </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  ))}
+                        )}
+                        <FormDescription>
+                          Agendado deixa a campanha pronta e fora do ar até a
+                          hora marcada.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="drawDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data do Sorteio</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="datetime-local"
+                          value={
+                            field.value
+                              ? new Date(field.value).toISOString().slice(0, 16)
+                              : ""
+                          }
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value ? new Date(e.target.value) : null,
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Pode ficar em branco: as duas chaves abaixo dependem
+                        dela, e sem data nenhuma das duas faz efeito.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-2">
+                  <SwitchField
+                    control={form.control}
+                    name="autoCloseOnDraw"
+                    label="Encerrar automático na data do sorteio"
+                    description="Chegou a data marcada acima, a campanha para de vender sozinha. Sem data, não faz nada."
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="showDrawDate"
+                    label="Mostrar a data do sorteio para os participantes"
+                    description="A data aparece na página da campanha. Só vale com data preenchida."
+                  />
+                  {/* Mesmo caso do "mostrar na página inicial": a coluna
+                      existe e é salva, mas o comprovante não tem botão de
+                      baixar em lugar nenhum. */}
+                  <SwitchField
+                    control={form.control}
+                    name="allowReceiptDownload"
+                    label="Permite download do comprovante"
+                    aviso="sem efeito"
+                    description="A tela do comprovante ainda não tem botão de baixar, então esta chave fica só guardada."
+                  />
                 </div>
-              </div>
-            </Card>
+              </SecaoDoFormulario>
+
+              <SecaoDoFormulario
+                titulo="O que pedir de quem compra"
+                descricao="O que o formulário da reserva vai pedir de quem compra."
+                icone={<UserRound className="h-4 w-4" />}
+              >
+                {/* Campos requeridos pra realizar a reserva. Nome/Telefone/
+                  CPF são sempre exigidos (vêm do cadastro). */}
+                <div className="space-y-3">
+                  <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                    {(
+                      [
+                        { key: "name", label: "Nome", disabled: true },
+                        { key: "phone", label: "Telefone", disabled: true },
+                        { key: "cpf", label: "CPF", disabled: true },
+                        { key: "email", label: "E-mail", disabled: false },
+                        {
+                          key: "socialName",
+                          label: "Nome Social",
+                          disabled: false,
+                        },
+                        {
+                          key: "birthDate",
+                          label: "Data de Nascimento",
+                          disabled: false,
+                        },
+                      ] as const
+                    ).map((f) => (
+                      <FormField
+                        key={f.key}
+                        control={form.control}
+                        name={`requiredFields.${f.key}` as const}
+                        render={({ field }) => (
+                          <FormItem className="flex items-center justify-between rounded-xl border bg-muted/30 px-3.5 py-2.5 hover:border-primary/30 hover:bg-muted/60 transition-colors">
+                            <FormLabel className="m-0 text-sm font-medium">
+                              {f.label}
+                            </FormLabel>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={f.disabled}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </div>
+                  {/* Os três primeiros vêm travados desde sempre, e a tela
+                      nunca disse por quê. Sem essa linha, um switch cinza
+                      parece defeito. */}
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Nome, telefone e CPF não se mexem por aqui: eles vêm do
+                    cadastro de quem compra.
+                  </p>
+                </div>
+              </SecaoDoFormulario>
+            </div>
           </TabsContent>
 
           {/* =================== TÍTULOS =================== */}
@@ -1015,72 +1092,216 @@ export function RaffleForm({
               switches (gratuita/taxa) → maxPerBuyer → min/max/inicial →
               Cards de Seleção (até 6) + bestseller → switches finais. */}
           <TabsContent value="titulos">
-            <Card className="p-5 md:p-6 space-y-5">
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="pricePerNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Preço da cota (R$)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          placeholder="0,00"
-                          disabled={isFree}
-                          {...field}
-                          onChange={(e) => {
-                            field.onChange(e);
-                            setPrecoEditadoAMao(true);
-                          }}
-                          value={isFree ? 0 : (field.value ?? "")}
-                        />
-                      </FormControl>
-                      {isFree ? (
-                        <FormDescription>
-                          Campanha gratuita. Preço forçado em R$ 0,00.
-                        </FormDescription>
-                      ) : (
-                        <AvisoDoPrecoSugerido
-                          buscando={buscandoValor}
-                          valor={valorNaSteam}
-                          erro={erroDoValor}
-                          cotas={Number(form.watch("totalNumbers")) || 0}
-                          editadoAMao={precoEditadoAMao}
-                        />
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <div className="space-y-4">
+              <SecaoDoFormulario
+                titulo="Preço e tamanho"
+                descricao="Quanto custa o título, quantos existem e quanto tempo a reserva fica de pé esperando o pagamento."
+                icone={<Ticket className="h-4 w-4" />}
+              >
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="pricePerNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Preço da cota (R$)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            placeholder="0,00"
+                            disabled={isFree}
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              setPrecoEditadoAMao(true);
+                            }}
+                            value={isFree ? 0 : (field.value ?? "")}
+                          />
+                        </FormControl>
+                        {isFree ? (
+                          <FormDescription>
+                            Campanha gratuita. Preço forçado em R$ 0,00.
+                          </FormDescription>
+                        ) : (
+                          <AvisoDoPrecoSugerido
+                            buscando={buscandoValor}
+                            valor={valorNaSteam}
+                            erro={erroDoValor}
+                            cotas={Number(form.watch("totalNumbers")) || 0}
+                            editadoAMao={precoEditadoAMao}
+                          />
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="totalNumbers"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quantidade de cotas</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={10}
-                          max={10_000_000}
-                          placeholder="100"
-                          {...field}
-                          onChange={(e) => {
-                            field.onChange(e);
-                            // A divisão muda junto com o divisor: trocar de
-                            // 100 para 200 cotas sem refazer a conta deixaria
-                            // a rifa arrecadando o dobro da skin.
-                            if (valorNaSteam) {
-                              aplicarSugestao(valorNaSteam.brl, e.target.value);
+                  <FormField
+                    control={form.control}
+                    name="totalNumbers"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Quantidade de cotas</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={10}
+                            max={10_000_000}
+                            placeholder="100"
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              // A divisão muda junto com o divisor: trocar de
+                              // 100 para 200 cotas sem refazer a conta deixaria
+                              // a rifa arrecadando o dobro da skin.
+                              if (valorNaSteam) {
+                                aplicarSugestao(
+                                  valorNaSteam.brl,
+                                  e.target.value,
+                                );
+                              }
+                            }}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="reservationTimeoutMinutes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Tempo para uma reserva pendente expirar
+                        </FormLabel>
+                        <Select
+                          value={String(field.value)}
+                          onValueChange={(v) => v && field.onChange(Number(v))}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                labels={Object.fromEntries(
+                                  TIMEOUT_OPTIONS.map((o) => [
+                                    String(o.value),
+                                    o.label,
+                                  ]),
+                                )}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {TIMEOUT_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={String(o.value)}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SwitchField
+                    control={form.control}
+                    name="isFree"
+                    label="Campanha gratuita"
+                    description="Ninguém paga nada. Combina com a trava de rank abaixo para recompensar quem já comprou."
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="hasFee"
+                    label="Adicionar taxa"
+                    description="Um valor fixo somado ao total da compra."
+                  />
+                </div>
+
+                {isFree && (
+                  <FormField
+                    control={form.control}
+                    name="freeLabel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Texto exibido no card de preço</FormLabel>
+                        <FormControl>
+                          <Input
+                            maxLength={60}
+                            placeholder="SORTEIO GRATUITO"
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(e.target.value || null)
                             }
-                          }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {hasFee && (
+                  <FormField
+                    control={form.control}
+                    name="feeAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Valor da taxa (R$)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value ? Number(e.target.value) : null,
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </SecaoDoFormulario>
+
+              <SecaoDoFormulario
+                titulo="Quem pode comprar, e quanto"
+                descricao="Os limites por pessoa e por compra, e a trava de rank para campanha exclusiva."
+                icone={<UserRound className="h-4 w-4" />}
+              >
+                <FormField
+                  control={form.control}
+                  name="maxPerBuyer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quantidade de cotas por comprador</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="0"
                           value={field.value ?? ""}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value ? Number(e.target.value) : null,
+                            )
+                          }
                         />
                       </FormControl>
+                      <FormDescription>
+                        Coloque 0 para não ter limites de cotas por comprador.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1088,285 +1309,171 @@ export function RaffleForm({
 
                 <FormField
                   control={form.control}
-                  name="reservationTimeoutMinutes"
+                  name="minLevel"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
-                        Tempo para uma reserva pendente expirar
-                      </FormLabel>
+                      <FormLabel>Campanha exclusiva: rank mínimo</FormLabel>
+                      {/* Lista, e não campo numérico. Digitar "23" não diz a
+                        ninguém que isso é Pro Player, e a escada passou a ter
+                        patente no topo: sem ver os nomes, a exclusiva de GOAT
+                        não seria descoberta. */}
                       <Select
-                        value={String(field.value)}
-                        onValueChange={(v) => v && field.onChange(Number(v))}
+                        value={
+                          field.value ? String(field.value) : ABERTA_A_TODOS
+                        }
+                        onValueChange={(v) =>
+                          field.onChange(
+                            v === ABERTA_A_TODOS ? null : Number(v),
+                          )
+                        }
                       >
                         <FormControl>
                           <SelectTrigger className="w-full">
-                            <SelectValue
-                              labels={Object.fromEntries(
-                                TIMEOUT_OPTIONS.map((o) => [
-                                  String(o.value),
-                                  o.label,
-                                ]),
-                              )}
-                            />
+                            <SelectValue labels={ROTULOS_DE_RANK} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {TIMEOUT_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={String(o.value)}>
-                              {o.label}
+                          <SelectItem value={ABERTA_A_TODOS}>
+                            Aberta a todos
+                          </SelectItem>
+                          {ESCADA_DE_RANK.map((degrau) => (
+                            <SelectItem
+                              key={degrau.valor}
+                              value={String(degrau.valor)}
+                            >
+                              {degrau.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormDescription>
+                        Só quem estiver nesse rank ou acima consegue reservar.
+                        Vale para campanha paga e para a gratuita, e é o que
+                        permite soltar sorteio grátis como recompensa de quem já
+                        comprou.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <SwitchField
-                  control={form.control}
-                  name="isFree"
-                  label="Campanha gratuita"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="hasFee"
-                  label="Adicionar taxa"
-                />
-              </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="minPurchase"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Quantidade mínima por reserva *</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="maxPurchase"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Quantidade máxima por reserva *</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="100"
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value ? Number(e.target.value) : null,
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="initialQuantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Quantidade inicial por reserva</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder=""
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value ? Number(e.target.value) : null,
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </SecaoDoFormulario>
 
-              {isFree && (
-                <FormField
-                  control={form.control}
-                  name="freeLabel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Texto exibido no card de preço</FormLabel>
-                      <FormControl>
-                        <Input
-                          maxLength={60}
-                          placeholder="SORTEIO GRATUITO"
-                          value={field.value ?? ""}
-                          onChange={(e) =>
-                            field.onChange(e.target.value || null)
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {hasFee && (
-                <FormField
-                  control={form.control}
-                  name="feeAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor da taxa (R$)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value ? Number(e.target.value) : null,
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              <FormField
-                control={form.control}
-                name="maxPerBuyer"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantidade de cotas por comprador</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        placeholder="0"
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? Number(e.target.value) : null,
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Coloque 0 para não ter limites de cotas por comprador.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="minLevel"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Campanha exclusiva: rank mínimo</FormLabel>
-                    {/* Lista, e não campo numérico. Digitar "23" não diz a
-                        ninguém que isso é Pro Player, e a escada passou a ter
-                        patente no topo: sem ver os nomes, a exclusiva de GOAT
-                        não seria descoberta. */}
-                    <Select
-                      value={field.value ? String(field.value) : ABERTA_A_TODOS}
-                      onValueChange={(v) =>
-                        field.onChange(v === ABERTA_A_TODOS ? null : Number(v))
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue labels={ROTULOS_DE_RANK} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={ABERTA_A_TODOS}>
-                          Aberta a todos
-                        </SelectItem>
-                        {ESCADA_DE_RANK.map((degrau) => (
-                          <SelectItem
-                            key={degrau.valor}
-                            value={String(degrau.valor)}
-                          >
-                            {degrau.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Só quem estiver nesse rank ou acima consegue reservar.
-                      Vale para campanha paga e para a gratuita, e é o que
-                      permite soltar sorteio grátis como recompensa de quem já
-                      comprou.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="minPurchase"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quantidade mínima por reserva *</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="maxPurchase"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quantidade máxima por reserva *</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder="100"
-                          value={field.value ?? ""}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value ? Number(e.target.value) : null,
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="initialQuantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quantidade inicial por reserva</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder=""
-                          value={field.value ?? ""}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value ? Number(e.target.value) : null,
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Cards de seleção rápida (quick-picks). Até 6 valores que
+              <SecaoDoFormulario
+                titulo="Cards de seleção rápida"
+                descricao="Até seis atalhos de quantidade na página da campanha. Campo em branco não vira card."
+                icone={<Sparkles className="h-4 w-4" />}
+              >
+                {/* Cards de seleção rápida (quick-picks). Até 6 valores que
                   viram botões "+N" no form de reserva público. Inputs
                   vazios são ignorados (não vira card). bestseller marca
                   qual card recebe destaque "MAIS POPULAR". */}
-              <div className="space-y-3 border-t pt-5">
-                <p className="text-sm font-medium">
-                  Configurações dos Cards de Seleção
-                </p>
                 <SelectionCardsField control={form.control} />
-              </div>
+              </SecaoDoFormulario>
 
-              {/* Switches finais, barra de progresso, rankings e extras. */}
-              <div className="space-y-2 border-t pt-5">
-                <SwitchField
-                  control={form.control}
-                  name="showProgressBar"
-                  label="Mostrar barra de progresso das vendas"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="showDailyRanking"
-                  label="Mostrar Ranking Diário de Maiores Compradores"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="showOverallRanking"
-                  label="Mostrar Ranking Geral de Maiores Compradores"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="showParticipantName"
-                  label="Mostrar o nome do participante em números pagos"
-                />
-                <SwitchField
-                  control={form.control}
-                  name="showShareButtons"
-                  label="Mostrar botões de compartilhar"
-                />
-              </div>
-            </Card>
+              <SecaoDoFormulario
+                titulo="O que mostrar na página"
+                descricao="Barra de progresso, rankings e nome de quem comprou."
+                icone={<Eye className="h-4 w-4" />}
+              >
+                {/* Switches finais, barra de progresso, rankings e extras. */}
+                <div className="space-y-2">
+                  <SwitchField
+                    control={form.control}
+                    name="showProgressBar"
+                    label="Mostrar barra de progresso das vendas"
+                    description="Quanto já foi vendido, na página da campanha."
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="showDailyRanking"
+                    label="Mostrar Ranking Diário de Maiores Compradores"
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="showOverallRanking"
+                    label="Mostrar Ranking Geral de Maiores Compradores"
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="showParticipantName"
+                    label="Mostrar o nome do participante em números pagos"
+                    description="Aparece para qualquer visitante, então só ligue se a campanha combinou isso."
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="showShareButtons"
+                    label="Mostrar botões de compartilhar"
+                  />
+                </div>
+              </SecaoDoFormulario>
+            </div>
           </TabsContent>
 
           {/* =================== IMAGENS =================== */}
@@ -1675,11 +1782,14 @@ function SwitchField({
   name,
   label,
   description,
+  aviso,
 }: {
   control: ReturnType<typeof useForm<RaffleGeneralInput>>["control"];
   name: keyof RaffleGeneralInput;
   label: string;
   description?: string;
+  /** Um selo ao lado do nome, para chave que ainda não faz efeito nenhum. */
+  aviso?: string;
 }) {
   return (
     <FormField
@@ -1688,8 +1798,13 @@ function SwitchField({
       render={({ field }) => (
         <FormItem className="group/switch flex items-start justify-between gap-3 rounded-xl border bg-muted/30 px-3.5 py-3 hover:border-primary/30 hover:bg-muted/60 transition-colors data-[state=checked]:border-primary/40">
           <div className="flex-1 space-y-0.5">
-            <FormLabel className="m-0 text-sm font-medium leading-snug cursor-pointer">
+            <FormLabel className="m-0 flex flex-wrap items-center gap-2 text-sm font-medium leading-snug cursor-pointer">
               {label}
+              {aviso && (
+                <span className="rounded-full border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-400 uppercase">
+                  {aviso}
+                </span>
+              )}
             </FormLabel>
             {description && (
               <p className="text-[11px] text-muted-foreground leading-snug">
