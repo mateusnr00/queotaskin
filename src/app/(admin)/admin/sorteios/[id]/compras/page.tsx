@@ -51,6 +51,8 @@ export default async function ComprasPage({
       images: { orderBy: { order: "asc" }, take: 1 },
       surpriseBoxCombos: { orderBy: { threshold: "asc" } },
       surpriseBoxPrizes: { orderBy: { createdAt: "asc" } },
+      raspadinhaCombos: { orderBy: { minimo: "asc" } },
+      raspadinhaPremios: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!raffle || raffle.tenantId !== tenantId) notFound();
@@ -313,6 +315,32 @@ export default async function ComprasPage({
             // ISO na travessia servidor/cliente: Date atravessa, mas o
             // formato de volta depende do serializador, e a data aqui vira
             // campo de formulário.
+            saidaDataDe: p.saidaDataDe?.toISOString() ?? null,
+            saidaDataAte: p.saidaDataAte?.toISOString() ?? null,
+            saidaDdds: p.saidaDdds,
+          })),
+        }}
+        raspadinha={{
+          ativa: raffle.raspadinhaEnabled,
+          rasparTodas: raffle.raspadinhaRasparTodas,
+          totalNumbers: raffle.totalNumbers,
+          combos: raffle.raspadinhaCombos.map((c) => ({
+            minimo: c.minimo,
+            quantidade: c.quantidade,
+            visivel: c.visivel,
+          })),
+          premios: raffle.raspadinhaPremios.map((p) => ({
+            id: p.id,
+            tipo: p.tipo,
+            rotulo: p.rotulo,
+            valor: p.valor != null ? Number(p.valor) : null,
+            chance: p.chance != null ? Number(p.chance) : null,
+            travado: p.travado,
+            claimed: p.claimedAt != null,
+            tipoDeSaida: p.tipoDeSaida,
+            saidaEmTitulos: p.saidaEmTitulos,
+            saidaTitulosDe: p.saidaTitulosDe,
+            saidaTitulosAte: p.saidaTitulosAte,
             saidaDataDe: p.saidaDataDe?.toISOString() ?? null,
             saidaDataAte: p.saidaDataAte?.toISOString() ?? null,
             saidaDdds: p.saidaDdds,

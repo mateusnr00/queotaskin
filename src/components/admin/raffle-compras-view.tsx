@@ -11,6 +11,10 @@
 //   participante (TODO), Detalhes.
 
 import { useEffect, useState, useTransition } from "react";
+import {
+  RaspadinhasModal,
+  type ConfigDaRaspadinha,
+} from "@/components/admin/raspadinhas-modal";
 import { porcentagemDaSaida, type TipoDeSaida } from "@/lib/saida";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -234,6 +238,7 @@ interface Props {
   totalRows: number;
   totalPages: number;
   surpriseBox: SurpriseBoxConfig;
+  raspadinha: ConfigDaRaspadinha;
 }
 
 const TABS: { key: Filters["tab"]; label: string; dotClass: string }[] = [
@@ -286,10 +291,12 @@ export function RaffleComprasView({
   totalRows,
   totalPages,
   surpriseBox,
+  raspadinha,
 }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [caixasOpen, setCaixasOpen] = useState(false);
+  const [raspadinhasOpen, setRaspadinhasOpen] = useState(false);
   const [winnerOpen, setWinnerOpen] = useState(false);
 
   return (
@@ -300,7 +307,15 @@ export function RaffleComprasView({
         onToggleDetails={() => setShowDetails((v) => !v)}
         onOpenRanking={() => setRankingOpen(true)}
         onOpenCaixas={() => setCaixasOpen(true)}
+        onOpenRaspadinhas={() => setRaspadinhasOpen(true)}
         onOpenWinner={() => setWinnerOpen(true)}
+      />
+
+      <RaspadinhasModal
+        raffleId={raffle.id}
+        initial={raspadinha}
+        aberto={raspadinhasOpen}
+        aoFechar={() => setRaspadinhasOpen(false)}
       />
 
       <RankingModal
@@ -349,6 +364,7 @@ function RaffleHeaderCard({
   onToggleDetails,
   onOpenRanking,
   onOpenCaixas,
+  onOpenRaspadinhas,
   onOpenWinner,
 }: {
   raffle: RaffleSummary;
@@ -356,6 +372,7 @@ function RaffleHeaderCard({
   onToggleDetails: () => void;
   onOpenRanking: () => void;
   onOpenCaixas: () => void;
+  onOpenRaspadinhas: () => void;
   onOpenWinner: () => void;
 }) {
   return (
@@ -442,7 +459,7 @@ function RaffleHeaderCard({
         </HeaderActionButton>
         <HeaderActionButton
           label="Raspadinhas premiadas"
-          onClick={() => toast.info("Raspadinhas premiadas: em breve")}
+          onClick={onOpenRaspadinhas}
         >
           <CreditCard className="h-4 w-4" />
         </HeaderActionButton>

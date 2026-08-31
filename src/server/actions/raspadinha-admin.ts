@@ -1,0 +1,384 @@
+"use server";
+
+// O cadastro da raspadinha, do painel.
+//
+// A mecânica existia inteira no banco e na hora de raspar, mas não havia por
+// onde cadastrar nada: o botão do painel abria um aviso de "em breve", e sem
+// prêmio nenhum a raspadinha nunca chegava ao público. Estas ações são o que
+// faltava para ela sair do papel.
+//
+// Espelham as da caixa surpresa de propósito. As duas mecânicas são a mesma
+// coisa por baixo, um bolo de prêmios sorteado no instante da revelação, e
+// divergir na forma de cadastrar só criaria duas telas para aprender.
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import { prisma } from "@/lib/db";
+import { getAdminOrThrow } from "@/lib/auth-helpers";
+import { assertRaffleInActiveTenant } from "@/lib/tenant";
+import { registrarLog } from "@/server/services/activity-log";
+import { agendarSaida } from "@/lib/saida";
+import type { ActionResult } from "@/server/actions/auth";
+
+/** Recarrega a tela de onde o cadastro é feito. */
+function recarregar(raffleId: string) {
+  revalidatePath(`/admin/sorteios/${raffleId}/compras`);
+}
+
+const configSchema = z.object({
+  raffleId: z.string().min(1),
+  ativa: z.boolean(),
+  rasparTodas: z.boolean(),
+});
+
+/** Liga a mecânica e o botão de raspar todas de uma vez. */
+export async function salvarConfigDaRaspadinhaAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = configSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    const { raffleId, ativa, rasparTodas } = parsed.data;
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
+
+    await prisma.raffle.update({
+      where: { id: raffleId },
+      data: {
+        raspadinhaEnabled: ativa,
+        raspadinhaRasparTodas: rasparTodas,
+      },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "configuração da raspadinha", ativa },
+    });
+    recarregar(raffleId);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[salvarConfigDaRaspadinhaAction]", err);
+    return { ok: false, error: "Erro ao salvar a configuração" };
+  }
+}
+
+const combosSchema = z.object({
+  raffleId: z.string().min(1),
+  combos: z
+    .array(
+      z.object({
+        minimo: z.coerce.number().int().min(1),
+        quantidade: z.coerce.number().int().min(1),
+        visivel: z.boolean().default(true),
+      }),
+    )
+    .max(20),
+});
+
+/**
+ * Quantos títulos dão quantas raspadinhas.
+ *
+ * Substitui a lista inteira em vez de casar item a item: o painel edita uma
+ * tabela pequena de uma vez, e reconciliar linha por linha só criaria estados
+ * intermediários possíveis de gravar pela metade.
+ */
+export async function salvarCombosDaRaspadinhaAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = combosSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    const { raffleId, combos } = parsed.data;
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
+
+    // Dois combos no mesmo mínimo é ambíguo, e o banco recusaria com um erro
+    // que não diz nada. Recusar aqui explica o que houve.
+    const minimos = new Set(combos.map((c) => c.minimo));
+    if (minimos.size !== combos.length) {
+      return { ok: false, error: "Há dois combos com o mesmo mínimo." };
+    }
+
+    await prisma.$transaction([
+      prisma.raspadinhaCombo.deleteMany({ where: { raffleId } }),
+      prisma.raspadinhaCombo.createMany({
+        data: combos.map((c) => ({ ...c, raffleId })),
+      }),
+    ]);
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "combos da raspadinha", quantos: combos.length },
+    });
+    recarregar(raffleId);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[salvarCombosDaRaspadinhaAction]", err);
+    return { ok: false, error: "Erro ao salvar os combos" };
+  }
+}
+
+const premioSchema = z.object({
+  raffleId: z.string().min(1),
+  tipo: z.enum(["PIX", "SKIN"]),
+  rotulo: z.string().min(1).max(200),
+  /** Em reais, quando é Pix. Serve para somar quanto já foi dado. */
+  valor: z.coerce.number().min(0).max(99_999_999).optional().nullable(),
+  quantidade: z.coerce.number().int().min(1).max(100),
+  chance: z.coerce.number().min(0).max(100).optional().nullable(),
+  travado: z.boolean().default(false),
+});
+
+/**
+ * Cria N unidades do mesmo prêmio, cada uma com o seu ponto de saída.
+ *
+ * Uma linha por unidade, como na caixa: é o que permite cada uma sair na sua
+ * hora e ser bloqueada sozinha. Cada uma puxa a anterior, e é isso que faz
+ * elas saírem uma atrás da outra em vez de caírem no mesmo ponto.
+ */
+export async function criarPremiosDaRaspadinhaAction(
+  raw: unknown,
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = premioSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "Dados inválidos",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+    const { raffleId, tipo, rotulo, valor, quantidade, chance, travado } =
+      parsed.data;
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
+
+    const [vendidos, ultimo, campanha] = await Promise.all([
+      prisma.ticket.count({ where: { raffleId, status: "PAID" } }),
+      prisma.raspadinhaPremio.findFirst({
+        where: { raffleId, saidaEmTitulos: { not: null } },
+        orderBy: { saidaEmTitulos: "desc" },
+        select: { saidaEmTitulos: true },
+      }),
+      prisma.raffle.findUnique({
+        where: { id: raffleId },
+        select: { totalNumbers: true },
+      }),
+    ]);
+    const total = campanha?.totalNumbers ?? 0;
+    let ultimoAgendado = ultimo?.saidaEmTitulos ?? null;
+
+    const linhas = Array.from({ length: quantidade }, () => {
+      const ponto = agendarSaida({ vendidos, total, ultimoAgendado });
+      ultimoAgendado = ponto;
+      return {
+        raffleId,
+        tipo,
+        rotulo: rotulo.trim(),
+        // Valor só faz sentido em Pix: em skin ele não somaria nada e ainda
+        // apareceria nos totais como dinheiro entregue.
+        valor: tipo === "PIX" && valor != null ? valor : null,
+        chance: chance != null ? chance : null,
+        travado,
+        saidaEmTitulos: ponto,
+      };
+    });
+
+    const result = await prisma.raspadinhaPremio.createMany({ data: linhas });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: "prêmios da raspadinha", quantos: result.count },
+    });
+    recarregar(raffleId);
+    return { ok: true, data: { count: result.count } };
+  } catch (err) {
+    console.error("[criarPremiosDaRaspadinhaAction]", err);
+    return { ok: false, error: "Erro ao cadastrar o prêmio" };
+  }
+}
+
+const idSchema = z.object({ premioId: z.string().min(1) });
+
+/** Guarda o prêmio, ou solta. Já sorteado não volta atrás. */
+export async function travarPremioDaRaspadinhaAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = idSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    const premio = await prisma.raspadinhaPremio.findUnique({
+      where: { id: parsed.data.premioId },
+      select: { raffleId: true, travado: true, claimedAt: true },
+    });
+    if (!premio) return { ok: false, error: "Prêmio não encontrado" };
+    const tenantId = await assertRaffleInActiveTenant(
+      premio.raffleId,
+      session.user,
+    );
+    if (premio.claimedAt) {
+      return { ok: false, error: "Prêmio já saiu, não pode ser travado" };
+    }
+
+    await prisma.raspadinhaPremio.update({
+      where: { id: parsed.data.premioId },
+      data: { travado: !premio.travado },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: premio.raffleId },
+      detalhes: { o_que: "trava de prêmio da raspadinha" },
+    });
+    recarregar(premio.raffleId);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[travarPremioDaRaspadinhaAction]", err);
+    return { ok: false, error: "Erro ao alterar a trava" };
+  }
+}
+
+/** Remove uma unidade. Já sorteada fica: é histórico de quem ganhou. */
+export async function removerPremioDaRaspadinhaAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = idSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    const premio = await prisma.raspadinhaPremio.findUnique({
+      where: { id: parsed.data.premioId },
+      select: { raffleId: true, claimedAt: true },
+    });
+    if (!premio) return { ok: false, error: "Prêmio não encontrado" };
+    const tenantId = await assertRaffleInActiveTenant(
+      premio.raffleId,
+      session.user,
+    );
+    if (premio.claimedAt) {
+      return {
+        ok: false,
+        error: "Prêmio já saiu para alguém e não pode ser removido",
+      };
+    }
+
+    await prisma.raspadinhaPremio.delete({
+      where: { id: parsed.data.premioId },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: premio.raffleId },
+      detalhes: { o_que: "remoção de prêmio da raspadinha" },
+    });
+    recarregar(premio.raffleId);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[removerPremioDaRaspadinhaAction]", err);
+    return { ok: false, error: "Erro ao remover o prêmio" };
+  }
+}
+
+const saidaSchema = z.object({
+  premioId: z.string().min(1),
+  tipoDeSaida: z.enum(["PROGRESSO", "PERSONALIZADO"]),
+  porcentagem: z.coerce.number().min(0).max(100).optional().nullable(),
+  titulosDe: z.coerce.number().int().min(1).optional().nullable(),
+  titulosAte: z.coerce.number().int().min(1).optional().nullable(),
+  dataDe: z.string().optional().nullable(),
+  dataAte: z.string().optional().nullable(),
+  ddds: z.array(z.string().regex(/^\d{2}$/)).default([]),
+});
+
+/**
+ * Configurações de saída de UMA unidade.
+ *
+ * Igual à da caixa: a tela fala em porcentagem porque é como se pensa a
+ * campanha, e a conta para título é feita aqui, com o total em mãos, e não no
+ * navegador, onde um total desatualizado gravaria o ponto errado.
+ */
+export async function salvarSaidaDaRaspadinhaAction(
+  raw: unknown,
+): Promise<ActionResult<{ saidaEmTitulos: number | null }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = saidaSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    const d = parsed.data;
+
+    const premio = await prisma.raspadinhaPremio.findUnique({
+      where: { id: d.premioId },
+      select: { raffleId: true, claimedAt: true },
+    });
+    if (!premio) return { ok: false, error: "Prêmio não encontrado" };
+    const tenantId = await assertRaffleInActiveTenant(
+      premio.raffleId,
+      session.user,
+    );
+    if (premio.claimedAt) {
+      return { ok: false, error: "Prêmio já saiu, não dá para reagendar" };
+    }
+
+    if (
+      d.tipoDeSaida === "PERSONALIZADO" &&
+      d.titulosDe != null &&
+      d.titulosAte != null &&
+      d.titulosDe > d.titulosAte
+    ) {
+      return { ok: false, error: "A faixa de títulos está invertida." };
+    }
+    const de = d.dataDe ? new Date(d.dataDe) : null;
+    const ate = d.dataAte ? new Date(d.dataAte) : null;
+    if (de && ate && de > ate) {
+      return { ok: false, error: "A janela de datas está invertida." };
+    }
+
+    const campanha = await prisma.raffle.findUnique({
+      where: { id: premio.raffleId },
+      select: { totalNumbers: true },
+    });
+    const total = campanha?.totalNumbers ?? 0;
+    const emTitulos =
+      d.tipoDeSaida === "PROGRESSO" && d.porcentagem != null && total > 0
+        ? Math.min(total, Math.max(1, Math.ceil((d.porcentagem / 100) * total)))
+        : null;
+
+    await prisma.raspadinhaPremio.update({
+      where: { id: d.premioId },
+      data: {
+        tipoDeSaida: d.tipoDeSaida,
+        saidaEmTitulos: emTitulos,
+        saidaTitulosDe: d.tipoDeSaida === "PERSONALIZADO" ? d.titulosDe : null,
+        saidaTitulosAte:
+          d.tipoDeSaida === "PERSONALIZADO" ? d.titulosAte : null,
+        saidaDataDe: d.tipoDeSaida === "PERSONALIZADO" ? de : null,
+        saidaDataAte: d.tipoDeSaida === "PERSONALIZADO" ? ate : null,
+        saidaDdds: d.tipoDeSaida === "PERSONALIZADO" ? d.ddds : [],
+      },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: premio.raffleId },
+      detalhes: { o_que: "saída de prêmio da raspadinha", tipo: d.tipoDeSaida },
+    });
+    recarregar(premio.raffleId);
+    return { ok: true, data: { saidaEmTitulos: emTitulos } };
+  } catch (err) {
+    console.error("[salvarSaidaDaRaspadinhaAction]", err);
+    return { ok: false, error: "Erro ao salvar a saída" };
+  }
+}
