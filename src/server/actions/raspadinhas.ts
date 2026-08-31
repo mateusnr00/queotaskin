@@ -22,6 +22,7 @@
 
 import { randomInt } from "node:crypto";
 import {
+  podeSairAgora,
   premioDaVez,
   soltaNestaAbertura,
   type CompraQueAbre,
@@ -275,8 +276,27 @@ async function sortearPremio(
     })),
     { vendidos, compra },
   );
-  const comChance = disponiveis.filter((p) => p.chance != null);
-  const semChance = disponiveis.filter((p) => p.chance == null);
+  // Só quem já pode sair entra no sorteio, mesma regra da caixa surpresa: sem
+  // isto, um prêmio marcado para 60% podia ser pego pela chance ou pelo
+  // sorteio uniforme já na primeira compra, e o ponto cadastrado não valia
+  // nada.
+  const liberados = disponiveis.filter((p) =>
+    podeSairAgora(
+      {
+        tipo: p.tipoDeSaida,
+        emTitulos: p.saidaEmTitulos,
+        titulosDe: p.saidaTitulosDe,
+        titulosAte: p.saidaTitulosAte,
+        dataDe: p.saidaDataDe,
+        dataAte: p.saidaDataAte,
+        ddds: p.saidaDdds,
+      },
+      { vendidos, compra },
+    ),
+  );
+
+  const comChance = liberados.filter((p) => p.chance != null);
+  const semChance = liberados.filter((p) => p.chance == null);
 
   // OS PRÊMIOS SE ESPALHAM PELOS BILHETES DA COMPRA.
   //

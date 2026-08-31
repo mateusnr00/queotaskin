@@ -37,6 +37,7 @@ import {
 } from "@/lib/auth-helpers";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation, getUserXp } from "@/server/services/xp";
 import { degrauDoRank, meetsMinLevel, rankFromXp } from "@/lib/rank";
 import type { ActionResult } from "@/server/actions/auth";
@@ -57,7 +58,7 @@ const optionalExtras = {
     .transform(onlyDigits)
     .refine(
       (v) => v === "" || (v.length >= 10 && v.length <= 11),
-      "Telefone inválido"
+      "Telefone inválido",
     )
     .optional()
     .or(z.literal("")),
@@ -86,7 +87,7 @@ const reserveSchema = z.union([
 ]);
 
 export async function createReservationAction(
-  raw: unknown
+  raw: unknown,
 ): Promise<
   ActionResult<{ reservationId: string; numbers: number[]; total: number }>
 > {
@@ -95,7 +96,8 @@ export async function createReservationAction(
   if (!session?.user?.id) {
     return {
       ok: false,
-      error: "Você precisa estar logado para reservar. Crie sua conta ou entre.",
+      error:
+        "Você precisa estar logado para reservar. Crie sua conta ou entre.",
     };
   }
 
@@ -285,12 +287,12 @@ export async function createReservationAction(
           ? await pickSequentialNumbers(
               raffle.id,
               input.quantity,
-              raffle.totalNumbers
+              raffle.totalNumbers,
             )
           : await pickAvailableNumbers(
               raffle.id,
               input.quantity,
-              raffle.totalNumbers
+              raffle.totalNumbers,
             );
 
       const reservation = await createReservation({
@@ -363,7 +365,7 @@ export async function createReservationAction(
 // comprovante quando a primeira tentativa de gerar o Pix falhou (env não
 // configurada, gateway fora do ar, body rejeitado, etc).
 export async function retryPixForReservationAction(
-  reservationId: string
+  reservationId: string,
 ): Promise<ActionResult<{ pixCode: string }>> {
   if (typeof reservationId !== "string" || reservationId.length === 0) {
     return { ok: false, error: "ID de reserva inválido" };
@@ -403,7 +405,7 @@ export async function retryPixForReservationAction(
 // quando ativada pelo botão "Já paguei" do usuário). Marca como PAID
 // se o gateway confirmar.
 export async function checkPaymentStatusAction(
-  reservationId: string
+  reservationId: string,
 ): Promise<ActionResult<{ status: "PENDING" | "APPROVED" | "REJECTED" }>> {
   if (typeof reservationId !== "string" || reservationId.length === 0) {
     return { ok: false, error: "ID de reserva inválido" };
@@ -447,7 +449,7 @@ export async function checkPaymentStatusAction(
     reservation.payment.id,
     reservation.payment.externalId,
     reservation.id,
-    { force: true }
+    { force: true },
   );
   if (polled === null) {
     return { ok: false, error: "Não foi possível consultar o gateway" };
@@ -462,7 +464,7 @@ export async function checkPaymentStatusAction(
 // + Ticket transicionam juntos. Idempotente (chamar 2x em PAID não faz
 // nada). Restrita ao tenant do admin pra impedir cross-tenant.
 export async function markReservationPaidAction(
-  reservationId: string
+  reservationId: string,
 ): Promise<ActionResult<{ recreatedTickets?: number[] }>> {
   try {
     if (typeof reservationId !== "string" || reservationId.length === 0) {
@@ -500,16 +502,13 @@ export async function markReservationPaidAction(
     // resolveu, buscar de novo pagaria outra consulta à toa.
     const tenantId = await assertRaffleInActiveTenant(
       reservation.raffleId,
-      session.user
+      session.user,
     );
 
     if (reservation.status === "PAID") {
       return { ok: true, data: {} };
     }
-    if (
-      reservation.status !== "PENDING" &&
-      reservation.status !== "EXPIRED"
-    ) {
+    if (reservation.status !== "PENDING" && reservation.status !== "EXPIRED") {
       return {
         ok: false,
         error: `Não dá pra marcar como paga uma reserva ${reservation.status}.`,
@@ -522,10 +521,7 @@ export async function markReservationPaidAction(
     // pegar os mesmos números entre o pick e o insert: aceitamos (chance
     // baixa, e o insert falha em P2002 se acontecer, admin tenta de novo).
     let toRecreate: number[] | null = null;
-    if (
-      reservation.status === "EXPIRED" &&
-      reservation._count.tickets === 0
-    ) {
+    if (reservation.status === "EXPIRED" && reservation._count.tickets === 0) {
       try {
         toRecreate = await computeTicketsToRecreate(reservation.id);
       } catch (err) {
@@ -612,19 +608,26 @@ export async function markReservationPaidAction(
 
     // Auto-upgrade tickets pra AWARDED quando o número for um título premiado.
     await autoAwardTicketsForReservation(reservation.id).catch((err) =>
-      console.error("[markReservationPaidAction] autoAward falhou:", err)
+      console.error("[markReservationPaidAction] autoAward falhou:", err),
     );
     // Gera as Caixas Surpresas baseado nos combos da rifa.
     await autoGenerateSurpriseBoxesForReservation(reservation.id).catch((err) =>
       console.error(
         "[markReservationPaidAction] autoGenerateSurpriseBoxes falhou:",
-        err
-      )
+        err,
+      ),
+    );
+    // E as raspadinhas, pelos combos delas. Faltava aqui: aprovar no painel
+    // dava caixa e não dava raspadinha, na mesma compra.
+    await gerarRaspadinhasParaReserva(reservation.id).catch((err) =>
+      console.error(
+        "[markReservationPaidAction] gerarRaspadinhas falhou:",
+        err,
+      ),
     );
 
     // Credita o XP do rank também na confirmação manual pelo painel.
     await awardXpForReservation(reservation.id);
-
 
     revalidatePath(`/comprovante/${reservationId}`);
     return {

@@ -20,6 +20,7 @@ import { extractWebhookInfo } from "@/lib/codepay";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation } from "@/server/services/xp";
 
 interface RouteParams {
@@ -95,7 +96,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       } catch (err) {
         console.error(
           "[codepay webhook] computeTicketsToRecreate falhou:",
-          err
+          err,
         );
       }
     }
@@ -149,11 +150,20 @@ export async function POST(req: Request, { params }: RouteParams) {
       detalhes: { pagamentoId: payment.id, caminho: "webhook" },
     });
     await autoAwardTicketsForReservation(payment.reservationId).catch((err) =>
-      console.error("[codepay webhook] autoAwardTickets falhou:", err)
+      console.error("[codepay webhook] autoAwardTickets falhou:", err),
     );
     await autoGenerateSurpriseBoxesForReservation(payment.reservationId).catch(
       (err) =>
-        console.error("[codepay webhook] autoGenerateSurpriseBoxes falhou:", err)
+        console.error(
+          "[codepay webhook] autoGenerateSurpriseBoxes falhou:",
+          err,
+        ),
+    );
+    // Os outros três webhooks já geravam; este ficou de fora quando a
+    // raspadinha nasceu, e por isso a mesma compra vinha com caixa e sem
+    // raspadinha dependendo do gateway.
+    await gerarRaspadinhasParaReserva(payment.reservationId).catch((err) =>
+      console.error("[codepay webhook] gerarRaspadinhas falhou:", err),
     );
 
     // Credita o XP do rank. Idempotente: reentrega do webhook não dobra.

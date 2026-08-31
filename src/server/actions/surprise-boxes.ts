@@ -21,6 +21,7 @@
 
 import { randomInt } from "node:crypto";
 import {
+  podeSairAgora,
   premioDaVez,
   soltaNestaAbertura,
   type CompraQueAbre,
@@ -274,10 +275,33 @@ async function drawPrize(
     })),
     { vendidos, compra },
   );
-  const percent = available.filter(
+  // SÓ QUEM JÁ PODE SAIR ENTRA NO SORTEIO.
+  //
+  // O agendamento valia só para um lado: empurrava o prêmio para fora na hora
+  // marcada, mas não o segurava antes dela. O sorteio por chance e o uniforme
+  // continuavam pegando qualquer prêmio do bolo, inclusive um marcado para
+  // 60%, então uma compra grande no começo esvaziava tudo de uma vez e os
+  // pontos cadastrados não valiam nada. Foi exatamente o relato: vinte e cinco
+  // por cento vendido e sete prêmios saindo juntos.
+  const liberados = available.filter((p) =>
+    podeSairAgora(
+      {
+        tipo: p.tipoDeSaida,
+        emTitulos: p.saidaEmTitulos,
+        titulosDe: p.saidaTitulosDe,
+        titulosAte: p.saidaTitulosAte,
+        dataDe: p.saidaDataDe,
+        dataAte: p.saidaDataAte,
+        ddds: p.saidaDdds,
+      },
+      { vendidos, compra },
+    ),
+  );
+
+  const percent = liberados.filter(
     (p) => p.mode === "PERCENT" && p.odds != null,
   );
-  const random = available.filter((p) => p.mode === "RANDOM");
+  const random = liberados.filter((p) => p.mode === "RANDOM");
 
   // OS PRÊMIOS SE ESPALHAM PELAS CAIXAS DA COMPRA.
   //

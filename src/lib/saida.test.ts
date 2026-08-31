@@ -6,6 +6,7 @@ import {
   porcentagemDaSaida,
   premioDaVez,
   type Saida,
+  podeSairAgora,
   soltaNestaAbertura,
 } from "@/lib/saida";
 
@@ -315,5 +316,72 @@ describe("soltaNestaAbertura", () => {
       }
       expect(saiu).toBe(3);
     }
+  });
+});
+
+describe("podeSairAgora", () => {
+  const compra = {
+    titulos: 25,
+    quando: new Date("2026-08-31T12:00:00Z"),
+    ddd: "62",
+  };
+
+  it("prêmio marcado para mais adiante fica guardado", () => {
+    // O relato: vinte e cinco por cento vendido e sete prêmios saindo juntos,
+    // inclusive os marcados para porcentagens bem maiores. O agendamento
+    // empurrava o prêmio para fora na hora certa mas não o segurava antes.
+    expect(
+      podeSairAgora(
+        { ...SAIDA, tipo: "PROGRESSO", emTitulos: 60 },
+        { vendidos: 25, compra },
+      ),
+    ).toBe(false);
+  });
+
+  it("chegando o ponto, libera", () => {
+    expect(
+      podeSairAgora(
+        { ...SAIDA, tipo: "PROGRESSO", emTitulos: 25 },
+        { vendidos: 25, compra },
+      ),
+    ).toBe(true);
+    expect(
+      podeSairAgora(
+        { ...SAIDA, tipo: "PROGRESSO", emTitulos: 24 },
+        { vendidos: 25, compra },
+      ),
+    ).toBe(true);
+  });
+
+  it("prêmio sem ponto marcado continua livre", () => {
+    // Os prêmios antigos, cadastrados antes de existir agendamento. Prender
+    // estes seria prender prêmio que ninguém agendou.
+    expect(
+      podeSairAgora(
+        { ...SAIDA, tipo: "PROGRESSO", emTitulos: null },
+        { vendidos: 0, compra },
+      ),
+    ).toBe(true);
+  });
+
+  it("personalizado só sai para a compra que casa", () => {
+    const so62 = { ...SAIDA, tipo: "PERSONALIZADO" as const, ddds: ["62"] };
+    expect(podeSairAgora(so62, { vendidos: 99, compra })).toBe(true);
+    expect(
+      podeSairAgora(so62, { vendidos: 99, compra: { ...compra, ddd: "11" } }),
+    ).toBe(false);
+  });
+
+  it("com sete prêmios e a venda em 25, só os vencidos entram no bolo", () => {
+    // A cena inteira do relato, em uma asserção: campanha de cem, vinte e
+    // cinco vendidos, prêmios espalhados de 10 a 90.
+    const pontos = [10, 20, 25, 40, 60, 75, 90];
+    const liberados = pontos.filter((emTitulos) =>
+      podeSairAgora(
+        { ...SAIDA, tipo: "PROGRESSO", emTitulos },
+        { vendidos: 25, compra },
+      ),
+    );
+    expect(liberados).toEqual([10, 20, 25]);
   });
 });

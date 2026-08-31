@@ -158,6 +158,29 @@ export function soltaNestaAbertura(
   return sorteio < premios / aberturasRestantes;
 }
 
+/**
+ * Este prêmio já pode sair, ou ainda está guardado para mais adiante?
+ *
+ * O AGENDAMENTO SÓ VALIA PARA UM LADO, e este é o defeito que isto corrige.
+ * Ele empurrava o prêmio para fora quando a hora chegava, mas não o segurava
+ * antes dela: o sorteio por chance e o sorteio uniforme continuavam podendo
+ * pegar qualquer prêmio do bolo, inclusive um marcado para sair em 60%. Uma
+ * compra grande no começo da campanha esvaziava o bolo inteiro, e os pontos
+ * de saída cadastrados com cuidado não valiam nada.
+ *
+ * Sem ponto marcado (`emTitulos` nulo) o prêmio continua livre para sair a
+ * qualquer momento: é o comportamento dos prêmios antigos, e mudar isso
+ * prenderia prêmio que ninguém agendou.
+ */
+export function podeSairAgora(
+  saida: Saida,
+  { vendidos, compra }: { vendidos: number; compra: CompraQueAbre },
+): boolean {
+  if (saida.tipo === "PERSONALIZADO") return compraCasaComSaida(saida, compra);
+  if (saida.emTitulos == null) return true;
+  return saida.emTitulos <= vendidos;
+}
+
 export interface PremioAgendado {
   id: string;
   saida: Saida;

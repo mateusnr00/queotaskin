@@ -13,6 +13,7 @@ import { registrarLog } from "@/server/services/activity-log";
 import { awardXpForReservation } from "@/server/services/xp";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import {
   getProviderForRaffle,
   type PaymentProviderClient,
@@ -49,7 +50,7 @@ export type PixErrorCode =
  * só para o site inteiro, e o token é um por gateway.
  */
 function buildWebhookUrl(
-  provider: PaymentProviderClient
+  provider: PaymentProviderClient,
 ): { url: string } | { faltando: string } {
   const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
   if (!base) return { faltando: "NEXT_PUBLIC_APP_URL" };
@@ -60,16 +61,15 @@ function buildWebhookUrl(
   if (!token) return { faltando: envKey };
   return {
     url: `${base}/api/webhooks/${provider.webhookPath}/${encodeURIComponent(
-      token
+      token,
     )}`,
   };
 }
 
-
 export async function ensurePixForReservation(
   reservationId: string,
   /** IP do cliente final (opcional, gateway exige, mas default funciona). */
-  ip?: string
+  ip?: string,
 ): Promise<EnsurePixResult> {
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
@@ -260,7 +260,7 @@ export async function pollPaymentStatusIfPending(
   paymentId: string,
   externalId: string,
   reservationId: string,
-  options: { force?: boolean } = {}
+  options: { force?: boolean } = {},
 ): Promise<"PENDING" | "APPROVED" | "REJECTED" | null> {
   if (!options.force) {
     const last = lastStatusPollByPayment.get(paymentId) ?? 0;
@@ -352,16 +352,30 @@ export async function pollPaymentStatusIfPending(
       // está confirmado neste ponto, e derrubar a função por causa de um
       // prêmio deixaria os outros sem entregar também.
       await awardXpForReservation(reservationId).catch((err) =>
-        console.error("[pollPaymentStatusIfPending] awardXp falhou:", err)
+        console.error("[pollPaymentStatusIfPending] awardXp falhou:", err),
       );
       await autoAwardTicketsForReservation(reservationId).catch((err) =>
-        console.error("[pollPaymentStatusIfPending] autoAwardTickets falhou:", err)
-      );
-      await autoGenerateSurpriseBoxesForReservation(reservationId).catch((err) =>
         console.error(
-          "[pollPaymentStatusIfPending] autoGenerateSurpriseBoxes falhou:",
-          err
-        )
+          "[pollPaymentStatusIfPending] autoAwardTickets falhou:",
+          err,
+        ),
+      );
+      await autoGenerateSurpriseBoxesForReservation(reservationId).catch(
+        (err) =>
+          console.error(
+            "[pollPaymentStatusIfPending] autoGenerateSurpriseBoxes falhou:",
+            err,
+          ),
+      );
+      // A raspadinha andava só com três dos seis caminhos de confirmação, e
+      // este era um dos que faltavam: quem tinha o pagamento confirmado por
+      // aqui comprava vinte e cinco títulos e não recebia raspadinha nenhuma,
+      // enquanto as caixas surpresas da mesma compra vinham normalmente.
+      await gerarRaspadinhasParaReserva(reservationId).catch((err) =>
+        console.error(
+          "[pollPaymentStatusIfPending] gerarRaspadinhas falhou:",
+          err,
+        ),
       );
     } else if (resolved === "REJECTED") {
       await prisma.payment.update({
