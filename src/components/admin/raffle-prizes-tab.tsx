@@ -8,7 +8,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { BookOpen, Info, Plus } from "lucide-react";
+import { BookOpen, Plus, Trophy } from "lucide-react";
 
 import { setRafflePrizesAction } from "@/server/actions/raffle-content";
 import {
@@ -18,7 +18,7 @@ import {
 } from "@/components/admin/skin-prize-editor";
 import { Button } from "@/components/ui/button";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
-import { Card } from "@/components/ui/card";
+import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -50,16 +50,20 @@ export function RafflePrizesTab({
   initialConfig,
 }: Props) {
   const [show, setShow] = useState(initialConfig.show);
-  const [showSkinSpecs, setShowSkinSpecs] = useState(initialConfig.showSkinSpecs);
+  const [showSkinSpecs, setShowSkinSpecs] = useState(
+    initialConfig.showSkinSpecs,
+  );
   const [ebook, setEbook] = useState<EbookConfig>(initialConfig.ebook);
 
   const [prizes, setPrizes] = useState<PrizeDraft[]>(
-    initialPrizes.length > 0 ? initialPrizes : [{ ...EMPTY_PRIZE }]
+    initialPrizes.length > 0 ? initialPrizes : [{ ...EMPTY_PRIZE }],
   );
   const [isPending, startTransition] = useTransition();
 
   function updatePrize(idx: number, patch: Partial<PrizeDraft>) {
-    setPrizes((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+    setPrizes((prev) =>
+      prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)),
+    );
   }
   function addPrize() {
     if (prizes.length >= MAX_PRIZES) return;
@@ -67,11 +71,16 @@ export function RafflePrizesTab({
   }
   function removePrize(idx: number) {
     setPrizes((prev) =>
-      prev.length === 1 ? [{ ...EMPTY_PRIZE }] : prev.filter((_, i) => i !== idx)
+      prev.length === 1
+        ? [{ ...EMPTY_PRIZE }]
+        : prev.filter((_, i) => i !== idx),
     );
   }
 
-  function updateEbook<K extends keyof EbookConfig>(key: K, value: EbookConfig[K]) {
+  function updateEbook<K extends keyof EbookConfig>(
+    key: K,
+    value: EbookConfig[K],
+  ) {
     setEbook((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -103,131 +112,129 @@ export function RafflePrizesTab({
 
   return (
     <>
-      <Card className="p-5 md:p-6 space-y-5">
-        <div className="flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm">
-          <Info className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300 mt-0.5" />
-          <p className="text-blue-900 dark:text-blue-200">
-            Informe os prêmios pelos quais os participantes concorrem. Você pode
-            cadastrar até {MAX_PRIZES} prêmios. Eles aparecem ordenados na
-            página pública do sorteio. Quando você preenche a ficha da skin,
-            o card ganha a cor oficial da raridade do CS2.
-          </p>
-        </div>
-
-        {/* ============ E-BOOK ============ */}
-        <div className="space-y-3 border-t pt-4">
-          <ToggleRow
-            checked={ebook.enabled}
-            onChange={(v) => updateEbook("enabled", v)}
-            label="Disponibilizar E-book"
-            description="Quando ativo, o cliente recebe um link de download no comprovante após o pagamento confirmado."
-            icon={<BookOpen className="h-4 w-4" />}
-          />
-          {ebook.enabled && (
-            <div className="space-y-3 pl-1">
-              <div className="flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs">
-                <Info className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300 mt-0.5" />
-                <p className="text-blue-900 dark:text-blue-200">
-                  O e-book será liberado pra download quando a compra for
-                  concluída.
-                </p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="ebook-title">Título</Label>
-                  <Input
-                    id="ebook-title"
-                    placeholder="E-book Exclusivo"
-                    value={ebook.title}
-                    onChange={(e) => updateEbook("title", e.target.value)}
-                    maxLength={120}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="ebook-button">Texto do botão</Label>
-                  <Input
-                    id="ebook-button"
-                    placeholder="Baixar E-book"
-                    value={ebook.buttonText}
-                    onChange={(e) => updateEbook("buttonText", e.target.value)}
-                    maxLength={60}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ebook-text">Texto</Label>
-                <Textarea
-                  id="ebook-text"
-                  rows={2}
-                  placeholder="Você acaba de adquirir o e-book exclusivo da campanha."
-                  value={ebook.text}
-                  onChange={(e) => updateEbook("text", e.target.value)}
-                  maxLength={500}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ebook-url">Link de acesso</Label>
-                <Input
-                  id="ebook-url"
-                  inputMode="url"
-                  placeholder="https://exemplo.com/ebook.pdf"
-                  value={ebook.url}
-                  onChange={(e) => updateEbook("url", e.target.value)}
-                  maxLength={2048}
-                />
-              </div>
+      <div className="space-y-4">
+        {/* A LISTA VEM PRIMEIRO. Antes ela era o último bloco, embaixo do
+            e-book e dos dois interruptores, quando é ela o motivo de alguém
+            abrir esta aba. O aviso azul que ocupava o topo virou a linha de
+            descrição da seção. */}
+        <SecaoDoFormulario
+          titulo="Prêmios da campanha"
+          descricao={`Pelo que os participantes concorrem, na ordem em que aparecem na página. Até ${MAX_PRIZES}. Preenchendo a ficha da skin, o card ganha a cor oficial da raridade do CS2.`}
+          icone={<Trophy className="h-4 w-4" />}
+        >
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Lista de prêmios
+              </p>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {prizes.filter((p) => p.description.trim()).length}/{MAX_PRIZES}
+              </span>
             </div>
-          )}
-        </div>
-
-        {/* ============ MOSTRAR PRÊMIOS ============ */}
-        <div className="space-y-4 border-t pt-4">
-          <ToggleRow
-            checked={show}
-            onChange={setShow}
-            label="Mostrar Prêmios"
-            description="Quando ativo, a lista de prêmios aparece na página pública do sorteio."
-          />
-
-          <ToggleRow
-            checked={showSkinSpecs}
-            onChange={setShowSkinSpecs}
-            label="Mostrar ficha técnica da skin"
-            description="Exibe raridade, desgaste, float, coleção e valor de mercado acima do preço. Ocupa espaço no celular, então vale nas skins caras, onde o float justifica o valor. Desligado por padrão."
-          />
-        </div>
-
-        {/* ============ LISTA DE PRÊMIOS ============ */}
-        <div className="border-t pt-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Lista de Prêmios</p>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {prizes.filter((p) => p.description.trim()).length}/{MAX_PRIZES}
-            </span>
+            {prizes.map((prize, idx) => (
+              <SkinPrizeEditor
+                key={idx}
+                index={idx}
+                prize={prize}
+                onChange={(patch) => updatePrize(idx, patch)}
+                onRemove={() => removePrize(idx)}
+              />
+            ))}
+            {prizes.length < MAX_PRIZES && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addPrize}
+                className="gap-1.5 rounded-full"
+              >
+                <Plus className="h-4 w-4" />
+                Novo prêmio
+              </Button>
+            )}
           </div>
-          {prizes.map((prize, idx) => (
-            <SkinPrizeEditor
-              key={idx}
-              index={idx}
-              prize={prize}
-              onChange={(patch) => updatePrize(idx, patch)}
-              onRemove={() => removePrize(idx)}
-            />
-          ))}
 
-          {prizes.length < MAX_PRIZES && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addPrize}
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              Novo prêmio
-            </Button>
-          )}
-        </div>
-      </Card>
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <ToggleRow
+              checked={show}
+              onChange={setShow}
+              label="Mostrar a lista na página da campanha"
+              description="Desligado, os prêmios continuam cadastrados, mas o visitante não os vê."
+            />
+            <ToggleRow
+              checked={showSkinSpecs}
+              onChange={setShowSkinSpecs}
+              label="Mostrar a ficha técnica da skin"
+              description="Raridade, desgaste, float, coleção e valor de mercado acima do preço. Ocupa espaço no celular, então vale nas skins caras, onde o float justifica o valor."
+            />
+          </div>
+        </SecaoDoFormulario>
+
+        <SecaoDoFormulario
+          titulo="E-book de brinde"
+          descricao="Um arquivo liberado no comprovante depois que o pagamento é confirmado."
+          icone={<BookOpen className="h-4 w-4" />}
+        >
+          <div className="space-y-3">
+            <ToggleRow
+              checked={ebook.enabled}
+              onChange={(v) => updateEbook("enabled", v)}
+              label="Disponibilizar e-book"
+              description="Um link de download no comprovante, depois do pagamento confirmado."
+            />
+            {ebook.enabled && (
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ebook-title">Título</Label>
+                    <Input
+                      id="ebook-title"
+                      placeholder="E-book Exclusivo"
+                      value={ebook.title}
+                      onChange={(e) => updateEbook("title", e.target.value)}
+                      maxLength={120}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ebook-button">Texto do botão</Label>
+                    <Input
+                      id="ebook-button"
+                      placeholder="Baixar E-book"
+                      value={ebook.buttonText}
+                      onChange={(e) =>
+                        updateEbook("buttonText", e.target.value)
+                      }
+                      maxLength={60}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ebook-text">Texto</Label>
+                  <Textarea
+                    id="ebook-text"
+                    rows={2}
+                    placeholder="Você acaba de adquirir o e-book exclusivo da campanha."
+                    value={ebook.text}
+                    onChange={(e) => updateEbook("text", e.target.value)}
+                    maxLength={500}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ebook-url">Link de acesso</Label>
+                  <Input
+                    id="ebook-url"
+                    inputMode="url"
+                    placeholder="https://exemplo.com/ebook.pdf"
+                    value={ebook.url}
+                    onChange={(e) => updateEbook("url", e.target.value)}
+                    maxLength={2048}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </SecaoDoFormulario>
+      </div>
       <StickySaveBar status="Prêmios e e-book desta campanha">
         <Button type="button" onClick={save} disabled={isPending}>
           {isPending ? "Salvando..." : "Salvar alterações"}

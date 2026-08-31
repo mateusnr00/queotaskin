@@ -11,12 +11,17 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, AlertCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  CreditCard,
+  ExternalLink,
+} from "lucide-react";
 
 import { setRafflePaymentProviderAction } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
-import { Card } from "@/components/ui/card";
+import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
 import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
 
 import { Label } from "@/components/ui/label";
@@ -73,7 +78,9 @@ export function RafflePaymentTab({
   tenantDefault,
   configuredProviders,
 }: Props) {
-  const [choice, setChoice] = useState<ProviderChoice>(toChoice(initialProvider));
+  const [choice, setChoice] = useState<ProviderChoice>(
+    toChoice(initialProvider),
+  );
   const [saved, setSaved] = useState<ProviderChoice>(toChoice(initialProvider));
   const [isPending, startTransition] = useTransition();
 
@@ -109,15 +116,11 @@ export function RafflePaymentTab({
 
   return (
     <>
-      <Card className="p-5 space-y-5">
-        <div>
-          <h2 className="text-base font-semibold">Gateway de pagamento</h2>
-          <p className="text-sm text-muted-foreground">
-            Escolha qual provider gera o PIX desse sorteio. Reservas já criadas
-            continuam no gateway antigo até serem pagas ou expirarem.
-          </p>
-        </div>
-
+      <SecaoDoFormulario
+        titulo="Quem gera o PIX desta campanha"
+        descricao="Reservas já criadas continuam no gateway antigo até serem pagas ou expirarem, então trocar aqui só vale para as compras novas."
+        icone={<CreditCard className="h-4 w-4" />}
+      >
         <div className="space-y-1.5">
           <Label>Provider pra esse sorteio</Label>
           <Select
@@ -152,27 +155,29 @@ export function RafflePaymentTab({
           </p>
         </div>
 
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+        {/* O estado de agora, e não a escolha: é ele que diz se a campanha
+            consegue receber. */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3.5 text-sm">
           {effectiveConfigured ? (
-            <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-300">
+            <div className="flex items-start gap-2 text-emerald-400">
               <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
               <div>
                 <div className="font-medium">
                   Esse sorteio vai gerar PIX via {labelFor(effective)}.
                 </div>
-                <div className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
-                  Credenciais configuradas no tenant.
+                <div className="text-xs text-emerald-400/80">
+                  As credenciais já estão cadastradas no site.
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+            <div className="flex items-start gap-2 text-amber-400">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <div className="font-medium">
                   Credenciais de {labelFor(effective)} não configuradas.
                 </div>
-                <div className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                <div className="text-xs text-amber-400/80">
                   Cadastre as credenciais no site primeiro, senão esse sorteio
                   não vai gerar PIX.
                 </div>
@@ -187,7 +192,7 @@ export function RafflePaymentTab({
             </div>
           )}
         </div>
-      </Card>
+      </SecaoDoFormulario>
       <StickySaveBar
         status={dirty ? "Você tem alterações não salvas" : "Tudo salvo"}
       >

@@ -53,6 +53,7 @@ import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
 import { RaffleAwardedTicketsTab } from "@/components/admin/raffle-awarded-tickets-tab";
 import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
+import { cn } from "@/lib/utils";
 import { ESCADA_DE_RANK } from "@/lib/rank";
 import type { SkinDoCatalogoSimples } from "@/components/admin/campo-de-premio";
 
@@ -544,6 +545,7 @@ export function RaffleForm({
               {/* Última da fila e só na edição: não há o que excluir num
                   sorteio que ainda não existe. */}
               <TabIcon
+                perigo
                 value="excluir"
                 icon={Trash2}
                 label="Excluir"
@@ -1653,18 +1655,25 @@ function TabIcon({
   icon: Icon,
   label,
   disabled,
+  perigo,
 }: {
   value: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   label: string;
   disabled?: boolean;
+  /** A aba que apaga a campanha não pode parecer igual às outras oito. */
+  perigo?: boolean;
 }) {
   return (
     <TabsTrigger
       value={value}
       disabled={disabled}
-      className="flex-none gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium data-active:shadow-sm data-active:ring-1 data-active:ring-border/60"
+      className={cn(
+        "flex-none gap-2 rounded-xl px-3.5 py-2 text-xs font-medium sm:text-sm data-active:shadow-sm data-active:ring-1 data-active:ring-border/60",
+        perigo &&
+          "text-destructive/80 hover:text-destructive data-active:text-destructive data-active:ring-destructive/40",
+      )}
       title={disabled ? "Em breve" : undefined}
     >
       <Icon className="h-4 w-4" />

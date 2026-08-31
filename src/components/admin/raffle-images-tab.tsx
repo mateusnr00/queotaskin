@@ -6,7 +6,15 @@
 
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ImagePlus, Link2, Loader2, Star, Trash2, Upload } from "lucide-react";
+import {
+  Camera,
+  ImagePlus,
+  Link2,
+  Loader2,
+  Star,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
 import {
   addRaffleImageByUrlAction,
@@ -15,7 +23,7 @@ import {
   uploadRaffleImageAction,
 } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
 import { Input } from "@/components/ui/input";
 import { normalizeImage } from "@/lib/image-normalize";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
@@ -154,7 +162,11 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
 
   return (
     <>
-      <Card className="p-5 md:p-6 space-y-4">
+      <SecaoDoFormulario
+        titulo="Imagens da campanha"
+        descricao={`A primeira vira a capa nos cards e no compartilhamento. Qualquer formato serve, e a imagem é reduzida antes do envio. Até ${MAX_IMAGES_PER_RAFFLE} por campanha.`}
+        icone={<Camera className="h-4 w-4" />}
+      >
         <input
           ref={inputRef}
           type="file"
@@ -212,10 +224,10 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
         </div>
 
         {images.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-2">
-            Nenhuma imagem ainda. Envie pelo menos uma para a rifa aparecer com
-            capa nos cards.
-          </p>
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-xs leading-relaxed text-amber-300">
+            Nenhuma imagem ainda. Sem capa, a campanha aparece nos cards com um
+            fundo genérico, e é a capa que faz alguém parar para ler.
+          </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {images.map((img) => (
@@ -271,10 +283,8 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
         {/* Esta aba não tem botão de salvar: enviar, definir capa e remover
             já gravam na hora. A barra fica assim mesmo para a pessoa não
             procurar um "Salvar" que não existe. */}
-      </Card>
-      <StickySaveBar
-        status={`Qualquer formato de imagem serve. Ela é reduzida automaticamente antes do envio. Até ${MAX_IMAGES_PER_RAFFLE} imagens por sorteio. Alterações aqui são salvas na hora.`}
-      />
+      </SecaoDoFormulario>
+      <StickySaveBar status="Enviar, definir capa e remover já gravam na hora: esta aba não tem botão de salvar." />
     </>
   );
 }

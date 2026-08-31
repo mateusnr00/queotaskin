@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowLeft, ChevronRight, ExternalLink } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  History,
+  ShoppingCart,
+  Ticket,
+} from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { RaffleForm } from "@/components/admin/raffle-form";
@@ -11,6 +17,7 @@ import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { toPrizeDraft } from "@/lib/prize-mapper";
 import { raffleUrl } from "@/lib/raffle-url";
 import { contarOcupados } from "@/server/services/vendidos";
+import { Etiqueta, Moldura } from "@/components/ui/moldura";
 
 export const metadata: Metadata = { title: "Editar sorteio" };
 
@@ -198,67 +205,81 @@ export default async function EditRafflePage({
 
   return (
     <div className="space-y-6">
-      {/* Header card: breadcrumb compacto, título da rifa em destaque,
-          status pill + ações alinhados à direita. */}
+      {/* O topo da edição.
+          Era um cartão em degradê que só repetia o nome, e daqui não havia
+          caminho para a lista de compras: para ver quem comprou era preciso
+          voltar em sorteios e entrar de novo pela outra porta. Os três
+          destinos que se usam junto com a edição agora ficam na mesma linha. */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/admin/sorteios"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Voltar para sorteios
-          </Link>
-          <Link
-            href={`/admin/logs?alvoTipo=Raffle&alvoId=${raffle.id}`}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            Ver histórico deste sorteio
-          </Link>
-        </div>
+        <Link
+          href="/admin/sorteios"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Voltar para sorteios
+        </Link>
 
-        <div className="rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0 space-y-2">
-              <nav className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
-                <Link href="/admin" className="hover:text-foreground">
-                  Admin
-                </Link>
-                <ChevronRight className="h-3 w-3" />
-                <Link href="/admin/sorteios" className="hover:text-foreground">
-                  Sorteios
-                </Link>
-                <ChevronRight className="h-3 w-3" />
-                <span>Editar</span>
-              </nav>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl md:text-2xl font-bold tracking-tight truncate">
-                  {raffle.title}
-                </h1>
-                {/* URL absoluta do host público, não caminho relativo.
-                    Este painel roda em admin.<domínio>, e ali o caminho da
-                    campanha não é página pública: o link caía de volta no
-                    admin em vez de abrir o sorteio. */}
-                <Link
-                  href={urlPublica}
-                  target="_blank"
-                  className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  /{raffle.slug}
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
+        <Moldura>
+          <div className="space-y-4 p-4 md:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Etiqueta icone={<Ticket aria-hidden className="h-3 w-3" />}>
+                    Editando a campanha
+                  </Etiqueta>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {raffle.totalNumbers.toLocaleString("pt-BR")} títulos ·{" "}
+                    {titulosDisponiveis.toLocaleString("pt-BR")} livres
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
+                    {raffle.title}
+                  </h1>
+                  {/* URL absoluta do host público, não caminho relativo.
+                      Este painel roda em admin.<domínio>, e ali o caminho da
+                      campanha não é página pública: o link caía de volta no
+                      admin em vez de abrir o sorteio. */}
+                  <Link
+                    href={urlPublica}
+                    target="_blank"
+                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    /{raffle.slug}
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
+                {raffle.shortDescription && (
+                  <p className="line-clamp-1 text-sm text-muted-foreground">
+                    {raffle.shortDescription}
+                  </p>
+                )}
               </div>
-              {raffle.shortDescription && (
-                <p className="text-sm text-muted-foreground line-clamp-1">
-                  {raffle.shortDescription}
-                </p>
-              )}
+              <div className="shrink-0">
+                <RaffleStatusActions id={raffle.id} status={raffle.status} />
+              </div>
             </div>
-            <div className="shrink-0">
-              <RaffleStatusActions id={raffle.id} status={raffle.status} />
+
+            <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+              <LinkDoTopo
+                href={`/admin/sorteios/${raffle.id}/compras`}
+                icone={<ShoppingCart aria-hidden className="h-4 w-4" />}
+                rotulo="Lista de compras"
+              />
+              <LinkDoTopo
+                href={urlPublica}
+                icone={<ExternalLink aria-hidden className="h-4 w-4" />}
+                rotulo="Ver a página"
+                externo
+              />
+              <LinkDoTopo
+                href={`/admin/logs?alvoTipo=Raffle&alvoId=${raffle.id}`}
+                icone={<History aria-hidden className="h-4 w-4" />}
+                rotulo="Histórico"
+              />
             </div>
           </div>
-        </div>
+        </Moldura>
       </div>
 
       <RaffleForm
@@ -352,5 +373,29 @@ export default async function EditRafflePage({
         }}
       />
     </div>
+  );
+}
+
+/** Um atalho do topo da edição: ícone, nome, e nada mais. */
+function LinkDoTopo({
+  href,
+  icone,
+  rotulo,
+  externo,
+}: {
+  href: string;
+  icone: React.ReactNode;
+  rotulo: string;
+  externo?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      target={externo ? "_blank" : undefined}
+      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 py-2 text-xs font-semibold text-muted-foreground transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:border-white/20 hover:bg-white/[0.05] hover:text-foreground"
+    >
+      {icone}
+      {rotulo}
+    </Link>
   );
 }
