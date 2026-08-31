@@ -12,7 +12,7 @@
 // divergir na forma de cadastrar só criaria duas telas para aprender.
 
 import { revalidatePath } from "next/cache";
-import { chaveDoNome, raridadeDoPremio } from "@/lib/premio-nome";
+import { chaveDoNome, raridadeDoPremio, separarDesgaste } from "@/lib/premio-nome";
 import type { SkinRarity } from "@prisma/client";
 import { z } from "zod";
 
@@ -192,7 +192,12 @@ export async function criarPremiosDaRaspadinhaAction(
       ).map((sk) => [chaveDoNome(sk.name), sk.skinRarity]),
     );
     const nome = rotulo.trim();
-    const ehSkin = catalogo.has(chaveDoNome(nome));
+    // O desgaste sai da chave antes de conferir com o catálogo. Ele passou a
+    // vir junto do nome ("AWP | Asiimov (Field-Tested)"), e a comparação com
+    // o desgaste dentro nunca casava: a mesma skin era classificada como skin
+    // sem desgaste e como Pix com desgaste, ainda que a raridade, que já
+    // separava, saísse certa nas duas.
+    const ehSkin = catalogo.has(chaveDoNome(separarDesgaste(nome).nome));
     const skinRarity = raridadeDoPremio(nome, catalogo);
 
     const linhas = Array.from({ length: quantidade }, () => {

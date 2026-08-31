@@ -119,16 +119,32 @@ export function CampoDePremio({
           WEAR_LABEL[d].toLowerCase() === partes.desgaste.toLowerCase()),
     ) ?? null;
 
+  // O nome do jeito que vai ficar gravado, sem o desgaste: do catálogo quando
+  // casou (para corrigir "ak47 redline" para "AK-47 | Redline"), senão o que
+  // a pessoa escreveu.
+  const nomeBase = skin?.name ?? partes.nome.trim();
+
+  // Skin fora do catálogo também precisa de desgaste.
+  //
+  // Antes o seletor só aparecia com o nome casando, e o catálogo é do tenant:
+  // quem ainda não cadastrou a skin, ou escreveu de um jeito que não casou,
+  // ficava sem como escolher e tinha que digitar "(Field-Tested)" na mão,
+  // adivinhando a grafia que o servidor entende. A barra vertical é o que
+  // separa arma de acabamento no nome do CS2, então ela é um sinal bom o
+  // bastante de que aquilo é skin e não "R$ 250 no Pix".
+  const foraDoCatalogo = !skin && nomeBase.includes("|");
   const opcoesDeDesgaste = skin
     ? WEARS_EM_ORDEM.filter((d) => skin.desgastes.includes(d))
-    : [];
+    : foraDoCatalogo
+      ? WEARS_EM_ORDEM
+      : [];
 
   function escolherDesgaste(d: (typeof WEARS_EM_ORDEM)[number]) {
-    if (!skin) return;
+    if (nomeBase === "") return;
     // Clicar no que já está escolhido tira o desgaste: sem isso, marcado uma
     // vez, não haveria como voltar para a skin sem apagar o campo inteiro.
     aoMudar(
-      d === desgasteAtual ? skin.name : `${skin.name} (${WEAR_STEAM[d]})`,
+      d === desgasteAtual ? nomeBase : `${nomeBase} (${WEAR_STEAM[d]})`,
     );
   }
 

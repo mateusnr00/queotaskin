@@ -160,6 +160,59 @@
     @apply font-sans;
   }
 }
+
+/* A barra de rolagem.
+ *
+ * A do sistema entra clara, larga e encostada na borda arredondada, e dentro
+ * de um modal escuro ela vira a coisa mais visível da tela: uma faixa branca
+ * de ponta a ponta ao lado do conteúdo. Aqui ela fica fina, sem trilho, e na
+ * cor do texto com pouca opacidade, então marca onde está sem disputar
+ * atenção com o que está sendo lido.
+ *
+ * Vale para a página e para qualquer caixa que role, porque o problema é o
+ * mesmo nos dois lugares. Firefox só entende as duas primeiras linhas; o
+ * resto é para os navegadores de WebKit, que ignoram aquelas.
+ */
+@layer base {
+  html,
+  .rolagem-discreta {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 25%, transparent)
+      transparent;
+  }
+
+  html::-webkit-scrollbar,
+  .rolagem-discreta::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  html::-webkit-scrollbar-track,
+  .rolagem-discreta::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html::-webkit-scrollbar-thumb,
+  .rolagem-discreta::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--foreground) 22%, transparent);
+    border-radius: 999px;
+    /* A borda transparente é o que dá respiro entre a barra e o conteúdo:
+       sem ela a barra encosta no texto e no canto arredondado do modal. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  html::-webkit-scrollbar-thumb:hover,
+  .rolagem-discreta::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--foreground) 38%, transparent);
+    background-clip: padding-box;
+  }
+
+  /* Canto onde as duas barras se encontram, que sai cinza por padrão. */
+  .rolagem-discreta::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
 /* Chamadas de atenção da página de sorteio.
  *
  * Todas de baixa amplitude de propósito: o objetivo é o olho perceber

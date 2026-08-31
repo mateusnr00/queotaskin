@@ -178,7 +178,11 @@ export function RaspadinhasModal({
             No 2xl anterior a tabela de ganhadores não cabia sem rolagem
             lateral, e os blocos ficavam colados uns nos outros: a tela era uma
             coluna contínua de controles, sem hierarquia nenhuma. */}
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+        {/* O topo fica parado e só o miolo rola. Com a modal inteira rolando,
+            o título e o botão de fechar subiam junto com o conteúdo: numa
+            tela de 92vh cheia de prêmios, quem descia até o fim perdia a
+            referência do que estava editando e como sair. */}
+        <DialogContent className="grid max-h-[92vh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-3xl">
           <CabecalhoDeModal
             icone={<CreditCard className="h-5 w-5" />}
             tom="premio"
@@ -191,7 +195,9 @@ export function RaspadinhasModal({
             }
           />
 
-          <div className="space-y-3.5">
+          {/* A margem negativa com o padding do mesmo tamanho põe a barra de
+              rolagem na borda da modal, e não no meio do conteúdo. */}
+          <div className="rolagem-discreta -mr-2 space-y-3.5 overflow-y-auto pr-2">
             <Bloco titulo="Como funciona">
               <div className="divide-y divide-white/[0.06]">
                 <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
