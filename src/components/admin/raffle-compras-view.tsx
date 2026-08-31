@@ -26,6 +26,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Coins,
   CreditCard,
   Disc3,
   ExternalLink,
@@ -135,6 +136,12 @@ interface Stats {
   paidTotal: number;
   pendingTotal: number;
   soldPercent: number;
+  /** O que o gateway ficou, somando faixa por faixa. */
+  taxas: number;
+  /** Pagamentos de gateway sem faixa cadastrada: o líquido está otimista. */
+  semTaxa: number;
+  /** As reservas que um admin marcou como pagas pelo painel. */
+  aprovadasNoPainel: { quantidade: number; valor: number };
 }
 
 interface Counts {
@@ -2953,7 +2960,7 @@ function PainelDeNumeros({
 }) {
   return (
     <Moldura>
-      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 md:p-5">
+      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 md:p-5">
         {/* Dinheiro primeiro, e nas duas primeiras placas, porque é a pergunta
             que traz alguém a esta tela. */}
         <Placa
@@ -2962,11 +2969,29 @@ function PainelDeNumeros({
           nota={
             stats.pagos === 0
               ? "nenhuma compra paga"
-              : `${stats.pagos.toLocaleString("pt-BR")} compra(s) paga(s)`
+              : `${stats.pagos.toLocaleString("pt-BR")} compra(s) paga(s)` +
+                (stats.aprovadasNoPainel.quantidade > 0
+                  ? `, ${stats.aprovadasNoPainel.quantidade} no painel`
+                  : "")
           }
           icone={<Check className="h-3 w-3" />}
           tom="bom"
           destaque
+        />
+        {/* O bruto sozinho não é o que sobra: o gateway já ficou com a parte
+            dele antes de o dinheiro cair. */}
+        <Placa
+          rotulo="Líquido"
+          valor={formatBRL(Math.max(0, stats.paidTotal - stats.taxas))}
+          nota={
+            stats.taxas > 0
+              ? `${formatBRL(stats.taxas)} em taxas`
+              : stats.semTaxa > 0
+                ? "gateway sem taxa cadastrada"
+                : "sem taxa cadastrada"
+          }
+          icone={<Coins className="h-3 w-3" />}
+          tom={stats.taxas > 0 ? "custo" : "neutro"}
         />
         <Placa
           rotulo="Aguardando pagamento"

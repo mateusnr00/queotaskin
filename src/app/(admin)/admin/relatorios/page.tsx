@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -31,6 +32,7 @@ import {
   faturamentoPorCanal,
   metodoDePagamento,
   totaisComparativo,
+  abatimentosDoPeriodo,
 } from "@/server/services/estatisticas";
 import { limitarIntervalo, type Granularidade } from "@/lib/periodo";
 
@@ -73,12 +75,13 @@ export default async function AdminReportsPage({
 
   const recorte = { tenantId, from, to, raffleId };
 
-  const [comparativo, serie, canais, metodos, raffleOptions] =
+  const [comparativo, serie, canais, metodos, abatimentos, raffleOptions] =
     await Promise.all([
       totaisComparativo(recorte),
       serieDeVendas(recorte),
       faturamentoPorCanal(recorte),
       metodoDePagamento(recorte),
+      abatimentosDoPeriodo(recorte),
       prisma.raffle.findMany({
         where: { tenantId },
         orderBy: { createdAt: "desc" },
@@ -181,6 +184,65 @@ export default async function AdminReportsPage({
         />
       </div>
 
+      {/* O que sai do faturamento antes de virar dinheiro na conta.
+          Sem este bloco, o número de cima era comparado com o extrato do
+          gateway e não fechava nunca: uma parte o gateway ficou, e a outra
+          (a aprovação feita no painel) nunca entrou em conta nenhuma. */}
+      <Card className="space-y-3 p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">Do bruto ao líquido</h2>
+          <span className="text-xs text-muted-foreground">
+            no período escolhido
+          </span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <LinhaDaConta
+            rotulo="Faturamento"
+            valor={formatBRL(comparativo.atual.faturamento)}
+          />
+          <LinhaDaConta
+            rotulo="Taxas do gateway"
+            valor={`- ${formatBRL(abatimentos.taxas)}`}
+            tom="custo"
+          />
+          <LinhaDaConta
+            rotulo="Líquido"
+            valor={formatBRL(
+              Math.max(0, comparativo.atual.faturamento - abatimentos.taxas),
+            )}
+            tom="bom"
+          />
+        </div>
+        {abatimentos.semTaxa > 0 && (
+          <p className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3.5 py-2.5 text-xs leading-relaxed text-amber-300">
+            {abatimentos.semTaxa} pagamento(s) vieram de um gateway sem faixa de
+            taxa cadastrada, então o líquido acima está otimista. Cadastre em{" "}
+            <Link
+              href="/admin/configuracoes/pagamentos"
+              className="font-semibold underline underline-offset-2"
+            >
+              Configurações, Pagamentos
+            </Link>
+            .
+          </p>
+        )}
+        {abatimentos.manuais.quantidade > 0 && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Fora da conta: {abatimentos.manuais.quantidade} reserva(s) somando{" "}
+            {formatBRL(abatimentos.manuais.valor)} foram aprovadas no painel por
+            um admin. Não passaram por gateway, então não entram no faturamento.
+            Elas ficam no{" "}
+            <Link
+              href="/admin/logs?acao=pagamento.aprovado"
+              className="underline underline-offset-2"
+            >
+              registro
+            </Link>
+            .
+          </p>
+        )}
+      </Card>
+
       <Card className="p-5">
         <h2 className="mb-3 font-semibold">Faturamento e reservas no tempo</h2>
         <GraficoCombo pontos={serie.pontos} />
@@ -237,6 +299,32 @@ export default async function AdminReportsPage({
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+/** Uma parcela da conta do bruto ao líquido. */
+function LinhaDaConta({
+  rotulo,
+  valor,
+  tom = "neutro",
+}: {
+  rotulo: string;
+  valor: string;
+  tom?: "neutro" | "custo" | "bom";
+}) {
+  const cor =
+    tom === "custo"
+      ? "text-amber-400"
+      : tom === "bom"
+        ? "text-emerald-400"
+        : "";
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+      <p className="text-[11px] font-bold tracking-[0.14em] text-muted-foreground uppercase">
+        {rotulo}
+      </p>
+      <p className={`mt-1 text-xl font-black tabular-nums ${cor}`}>{valor}</p>
     </div>
   );
 }

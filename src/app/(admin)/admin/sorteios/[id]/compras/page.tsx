@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import type { Prisma, ReservationStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { abatimentosDoPeriodo } from "@/server/services/estatisticas";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { RaffleComprasView } from "@/components/admin/raffle-compras-view";
@@ -192,6 +193,16 @@ export default async function ComprasPage({
     }),
   ]);
 
+  // O que o gateway ficou desta campanha, e o que foi aprovado no painel.
+  // Sem os dois, "Recebido" é o valor bruto e ninguém sabe por que a conta
+  // não bate com o extrato.
+  const abatimentos = await abatimentosDoPeriodo({
+    tenantId,
+    raffleId: raffle.id,
+    from: new Date(0),
+    to: new Date(),
+  });
+
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
   const soldPercent =
     raffle.totalNumbers > 0
@@ -247,6 +258,9 @@ export default async function ComprasPage({
           paidTotal: Number(paidAgg._sum.totalAmount ?? 0),
           pendingTotal: Number(pendingAgg._sum.totalAmount ?? 0),
           soldPercent,
+          taxas: abatimentos.taxas,
+          semTaxa: abatimentos.semTaxa,
+          aprovadasNoPainel: abatimentos.manuais,
         }}
         counts={{
           all: countAll,

@@ -6,12 +6,28 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { PaymentSettingsForm } from "@/components/admin/payment-settings-form";
+import { TaxasDoGateway } from "@/components/admin/taxas-do-gateway";
+import type { FaixaDeTaxa } from "@/lib/taxa-de-gateway";
 
 export const metadata: Metadata = { title: "Pagamentos" };
 
 export default async function PagamentosPage() {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+  const taxas = await prisma.taxaDeGateway.findMany({
+    where: { tenantId },
+    orderBy: [{ provider: "asc" }, { apartirDe: "asc" }],
+    select: { provider: true, apartirDe: true, percentual: true, fixo: true },
+  });
+  const taxasPorGateway: Record<string, FaixaDeTaxa[]> = {};
+  for (const t of taxas) {
+    (taxasPorGateway[t.provider] ??= []).push({
+      apartirDe: Number(t.apartirDe),
+      percentual: Number(t.percentual),
+      fixo: Number(t.fixo),
+    });
+  }
 
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: tenantId },
@@ -65,6 +81,8 @@ export default async function PagamentosPage() {
           ]}
         />
       </div>
+
+      <TaxasDoGateway taxasPorGateway={taxasPorGateway} />
 
       <PaymentSettingsForm
         initial={{

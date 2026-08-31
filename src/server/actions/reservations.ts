@@ -550,7 +550,16 @@ export async function markReservationPaidAction(
     await prisma.$transaction(async (tx) => {
       await tx.reservation.update({
         where: { id: reservation.id },
-        data: { status: "PAID", paidAt: now },
+        data: {
+          status: "PAID",
+          paidAt: now,
+          // A marca fica na reserva, e não só no histórico: o relatório
+          // precisa filtrar isso numa consulta, e o histórico é texto para
+          // ler, não coluna para somar. Dinheiro que não passou pelo gateway
+          // não é receita do mês, e sem a marca ele entrava no total sem
+          // ninguém ter pago nada.
+          aprovadaNoPainel: true,
+        },
       });
       await tx.ticket.updateMany({
         where: { reservationId: reservation.id, status: "RESERVED" },

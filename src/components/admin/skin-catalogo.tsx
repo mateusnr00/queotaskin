@@ -9,7 +9,16 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Camera, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import {
   atualizarSkinAction,
@@ -86,7 +95,9 @@ function normalizar(texto: string) {
 
 export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
   const router = useRouter();
-  const [editando, setEditando] = useState<SkinDoCatalogo | "nova" | null>(null);
+  const [editando, setEditando] = useState<SkinDoCatalogo | "nova" | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
   const [busca, setBusca] = useState("");
   // Quantas linhas desenhar de uma vez. Com o catálogo cheio, mandar todas
@@ -136,7 +147,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
         // mais era atualizado.
         aoMudarArtes={(artes) =>
           setEditando((atual) =>
-            atual && atual !== "nova" ? { ...atual, artes } : atual
+            atual && atual !== "nova" ? { ...atual, artes } : atual,
           )
         }
         aoFechar={() => setEditando(null)}
@@ -213,7 +224,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
                     ? {
                         backgroundImage: `radial-gradient(circle at 50% 120%, ${rarityColor(
                           skin.skinRarity,
-                          0.35
+                          0.35,
                         )}, transparent 75%)`,
                       }
                     : {}),
@@ -248,7 +259,9 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
                   estreita cortaria justamente o nome. */}
               <div className="hidden shrink-0 items-center gap-2 text-[10px] sm:flex">
                 {skin.skinStatTrak && (
-                  <span className="font-semibold text-orange-500">StatTrak</span>
+                  <span className="font-semibold text-orange-500">
+                    StatTrak
+                  </span>
                 )}
                 {skin.skinWear && (
                   <span className="text-muted-foreground">
@@ -332,13 +345,16 @@ function FormularioSkin({
   aoMudarArtes: (artes: ArteDaSkin[]) => void;
 }) {
   const [dados, setDados] = useState<Omit<SkinDoCatalogo, "id">>(
-    inicial ?? VAZIA
+    inicial ?? VAZIA,
   );
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function campo<K extends keyof typeof dados>(chave: K, valor: (typeof dados)[K]) {
+  function campo<K extends keyof typeof dados>(
+    chave: K,
+    valor: (typeof dados)[K],
+  ) {
     setDados((d) => ({ ...d, [chave]: valor }));
   }
 
@@ -404,210 +420,245 @@ function FormularioSkin({
   }
 
   return (
-    <Card className="space-y-5 p-5 md:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold">
-            {inicial ? "Editar skin" : "Cadastrar skin"}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Só o nome é obrigatório. O resto aparece na ficha do prêmio quando
-            a campanha liga a ficha técnica.
-          </p>
+    <div className="space-y-3">
+      {/* O caminho de volta, escrito.
+          O formulário toma a página inteira no lugar da lista, e a única
+          saída era um "x" no canto de cima e um "Cancelar" no fim de uma
+          página comprida: no meio dela, com a lista de artes aberta, não
+          havia nada dizendo como voltar sem sair pelo botão do navegador. E
+          "Cancelar" ao lado de "Salvar" lê como descartar, não como voltar. */}
+      <button
+        type="button"
+        onClick={aoFechar}
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Voltar para o catálogo
+      </button>
+
+      <Card className="space-y-5 p-5 md:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold">
+              {inicial ? "Editar skin" : "Cadastrar skin"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Só o nome é obrigatório. O resto aparece na ficha do prêmio quando
+              a campanha liga a ficha técnica.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={aoFechar}
+            aria-label="Voltar para o catálogo"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={aoFechar}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) enviarFoto(f);
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={enviandoFoto || isPending}
-          // A caixa tem a proporção do quadro, então o que aparece aqui é o
-          // que foi gravado, sem faixa vazia em cima e embaixo sugerindo que
-          // a foto ficou menor do que ficou.
-          style={{ aspectRatio: PROPORCAO_DA_SKIN }}
-          className={cn(
-            "relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors sm:w-56",
-            dados.imageUrl
-              ? "border-transparent bg-muted/30 ring-1 ring-border"
-              : "border-border hover:border-primary"
-          )}
-        >
-          {dados.imageUrl ? (
-            // Sem recuo: a moldura tem a proporção do quadro, então arte
-            // feita no tamanho padrão encosta nas quatro bordas. Um p-2 aqui
-            // deixaria uma faixa permanente sugerindo que a foto ficou menor
-            // do que o quadro.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={dados.imageUrl}
-              alt="Foto da skin"
-              className="h-full w-full object-contain"
-            />
-          ) : (
-            <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
-              {enviandoFoto ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Camera className="h-5 w-5" />
-              )}
-              <span className="text-[10px] uppercase tracking-wider">
-                Enviar foto
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) enviarFoto(f);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={enviandoFoto || isPending}
+            // A caixa tem a proporção do quadro, então o que aparece aqui é o
+            // que foi gravado, sem faixa vazia em cima e embaixo sugerindo que
+            // a foto ficou menor do que ficou.
+            style={{ aspectRatio: PROPORCAO_DA_SKIN }}
+            className={cn(
+              "relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors sm:w-56",
+              dados.imageUrl
+                ? "border-transparent bg-muted/30 ring-1 ring-border"
+                : "border-border hover:border-primary",
+            )}
+          >
+            {dados.imageUrl ? (
+              // Sem recuo: a moldura tem a proporção do quadro, então arte
+              // feita no tamanho padrão encosta nas quatro bordas. Um p-2 aqui
+              // deixaria uma faixa permanente sugerindo que a foto ficou menor
+              // do que o quadro.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={dados.imageUrl}
+                alt="Foto da skin"
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
+                {enviandoFoto ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Camera className="h-5 w-5" />
+                )}
+                <span className="text-[10px] uppercase tracking-wider">
+                  Enviar foto
+                </span>
               </span>
-            </span>
-          )}
-        </button>
+            )}
+          </button>
 
-        <div className="flex-1 space-y-3">
+          <div className="flex-1 space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="skin-name">Nome da skin *</Label>
+              <Input
+                id="skin-name"
+                value={dados.name}
+                onChange={(e) => campo("name", e.target.value)}
+                placeholder="AWP | Dragon Lore"
+                maxLength={140}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="skin-rarity">Raridade</Label>
+                <select
+                  id="skin-rarity"
+                  value={dados.skinRarity ?? ""}
+                  onChange={(e) =>
+                    campo(
+                      "skinRarity",
+                      (e.target.value || null) as Raridade | null,
+                    )
+                  }
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                >
+                  <option value="">Não informada</option>
+                  {(Object.keys(RARITY_LABEL) as Raridade[]).map((r) => (
+                    <option key={r} value={r}>
+                      {RARITY_LABEL[r]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="skin-wear">Desgaste</Label>
+                <select
+                  id="skin-wear"
+                  value={dados.skinWear ?? ""}
+                  onChange={(e) =>
+                    campo(
+                      "skinWear",
+                      (e.target.value || null) as Desgaste | null,
+                    )
+                  }
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                >
+                  <option value="">Não informado</option>
+                  {(Object.keys(WEAR_LABEL) as Desgaste[]).map((w) => (
+                    <option key={w} value={w}>
+                      {WEAR_LABEL[w]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
-            <Label htmlFor="skin-name">Nome da skin *</Label>
+            <Label htmlFor="skin-float">Float</Label>
             <Input
-              id="skin-name"
-              value={dados.name}
-              onChange={(e) => campo("name", e.target.value)}
-              placeholder="AWP | Dragon Lore"
+              id="skin-float"
+              inputMode="decimal"
+              value={dados.skinFloat ?? ""}
+              onChange={(e) =>
+                campo(
+                  "skinFloat",
+                  e.target.value === "" ? null : Number(e.target.value),
+                )
+              }
+              placeholder="0.0342"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="skin-value">Valor de mercado (R$)</Label>
+            <Input
+              id="skin-value"
+              inputMode="decimal"
+              value={dados.skinValueBrl ?? ""}
+              onChange={(e) =>
+                campo(
+                  "skinValueBrl",
+                  e.target.value === "" ? null : Number(e.target.value),
+                )
+              }
+              placeholder="4890"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="skin-collection">Coleção</Label>
+            <Input
+              id="skin-collection"
+              value={dados.skinCollection ?? ""}
+              onChange={(e) => campo("skinCollection", e.target.value || null)}
+              placeholder="The Cobblestone Collection"
               maxLength={140}
             />
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="skin-rarity">Raridade</Label>
-              <select
-                id="skin-rarity"
-                value={dados.skinRarity ?? ""}
-                onChange={(e) =>
-                  campo("skinRarity", (e.target.value || null) as Raridade | null)
-                }
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-              >
-                <option value="">Não informada</option>
-                {(Object.keys(RARITY_LABEL) as Raridade[]).map((r) => (
-                  <option key={r} value={r}>
-                    {RARITY_LABEL[r]}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="skin-wear">Desgaste</Label>
-              <select
-                id="skin-wear"
-                value={dados.skinWear ?? ""}
-                onChange={(e) =>
-                  campo("skinWear", (e.target.value || null) as Desgaste | null)
-                }
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-              >
-                <option value="">Não informado</option>
-                {(Object.keys(WEAR_LABEL) as Desgaste[]).map((w) => (
-                  <option key={w} value={w}>
-                    {WEAR_LABEL[w]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
         </div>
-      </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="skin-float">Float</Label>
-          <Input
-            id="skin-float"
-            inputMode="decimal"
-            value={dados.skinFloat ?? ""}
-            onChange={(e) =>
-              campo("skinFloat", e.target.value === "" ? null : Number(e.target.value))
-            }
-            placeholder="0.0342"
-          />
+        <div className="flex flex-wrap gap-6">
+          <label className="flex items-center gap-2 text-sm">
+            <Switch
+              checked={dados.skinStatTrak}
+              onCheckedChange={(v) => campo("skinStatTrak", v)}
+            />
+            StatTrak
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch
+              checked={dados.skinSouvenir}
+              onCheckedChange={(v) => campo("skinSouvenir", v)}
+            />
+            Souvenir
+          </label>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="skin-value">Valor de mercado (R$)</Label>
-          <Input
-            id="skin-value"
-            inputMode="decimal"
-            value={dados.skinValueBrl ?? ""}
-            onChange={(e) =>
-              campo("skinValueBrl", e.target.value === "" ? null : Number(e.target.value))
-            }
-            placeholder="4890"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="skin-collection">Coleção</Label>
-          <Input
-            id="skin-collection"
-            value={dados.skinCollection ?? ""}
-            onChange={(e) => campo("skinCollection", e.target.value || null)}
-            placeholder="The Cobblestone Collection"
-            maxLength={140}
-          />
-        </div>
-      </div>
 
-      <div className="flex flex-wrap gap-6">
-        <label className="flex items-center gap-2 text-sm">
-          <Switch
-            checked={dados.skinStatTrak}
-            onCheckedChange={(v) => campo("skinStatTrak", v)}
-          />
-          StatTrak
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <Switch
-            checked={dados.skinSouvenir}
-            onCheckedChange={(v) => campo("skinSouvenir", v)}
-          />
-          Souvenir
-        </label>
-      </div>
-
-      {/* As artes ficam por último e fora do estado do formulário: cada uma
+        {/* As artes ficam por último e fora do estado do formulário: cada uma
           salva sozinha ao ser enviada, e não junto com "Salvar skin". São
           arquivos, não campos, e amarrá-las ao botão faria a pessoa enviar
           cinco imagens e perder todas ao fechar sem salvar. */}
-      <ArtesDaSkin
-        // A key reinicia a lista de artes ao trocar de skin, no lugar de um
-        // efeito copiando prop em estado.
-        key={inicial?.id ?? "nova"}
-        skinId={inicial?.id ?? null}
-        desgastesDisponiveis={dados.desgastesDisponiveis}
-        artes={inicial?.artes ?? []}
-        // O retrato do pai anda junto. Sem isto, fechar o formulário e
-        // reabrir a mesma skin mostraria as artes de antes: `editando` é
-        // capturado no clique de editar e nunca mais era atualizado.
-        aoMudar={aoMudarArtes}
-      />
+        <ArtesDaSkin
+          // A key reinicia a lista de artes ao trocar de skin, no lugar de um
+          // efeito copiando prop em estado.
+          key={inicial?.id ?? "nova"}
+          skinId={inicial?.id ?? null}
+          desgastesDisponiveis={dados.desgastesDisponiveis}
+          artes={inicial?.artes ?? []}
+          // O retrato do pai anda junto. Sem isto, fechar o formulário e
+          // reabrir a mesma skin mostraria as artes de antes: `editando` é
+          // capturado no clique de editar e nunca mais era atualizado.
+          aoMudar={aoMudarArtes}
+        />
 
-      <div className="flex justify-end gap-2 border-t pt-4">
-        <Button type="button" variant="ghost" onClick={aoFechar}>
-          Cancelar
-        </Button>
-        <Button
-          type="button"
-          onClick={salvar}
-          disabled={isPending || !dados.name.trim()}
-        >
-          {isPending ? "Salvando..." : "Salvar skin"}
-        </Button>
-      </div>
-    </Card>
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button type="button" variant="ghost" onClick={aoFechar}>
+            Voltar sem salvar
+          </Button>
+          <Button
+            type="button"
+            onClick={salvar}
+            disabled={isPending || !dados.name.trim()}
+          >
+            {isPending ? "Salvando..." : "Salvar skin"}
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }

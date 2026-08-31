@@ -13,6 +13,7 @@
 
 import { prisma } from "@/lib/db";
 import { CANAIS } from "@/lib/canais-de-campanha";
+import { taxaTotal, type FaixaDeTaxa } from "@/lib/taxa-de-gateway";
 import {
   chaveDoBucket,
   escolherGranularidade,
@@ -44,14 +45,28 @@ function rotuloDoCanal(canal: string | null): string {
   return ROTULO_POR_CANAL.get(canal) ?? canal;
 }
 
-/** O where das reservas pagas de um período, com o recorte de tenant/sorteio. */
+/**
+ * O where das reservas pagas de um período, com o recorte de tenant/sorteio.
+ *
+ * Aprovação no painel fica de fora. É uma reserva paga para todo o resto do
+ * sistema (os títulos valem, o prêmio sai, o comprovante existe), mas o
+ * dinheiro dela não passou por gateway nenhum: é cortesia, acerto por fora ou
+ * teste. Contá-la aqui faz a receita do mês crescer sem ninguém ter pago, e
+ * quem confere o extrato do gateway não acha a diferença.
+ */
 function wherePagasNoPeriodo({ tenantId, from, to, raffleId }: RecorteDePeriodo) {
   return {
     status: "PAID" as const,
+    aprovadaNoPainel: false,
     paidAt: { gte: from, lte: to },
     raffle: { tenantId },
     ...(raffleId ? { raffleId } : {}),
   };
+}
+
+/** As mesmas reservas, mas só as aprovadas no painel. Para a nota da tela. */
+function whereAprovadasNoPainel(opts: RecorteDePeriodo) {
+  return { ...wherePagasNoPeriodo(opts), aprovadaNoPainel: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +188,83 @@ export async function funilDeConversao(
 // ---------------------------------------------------------------------------
 // Faturamento por canal (UTM)
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// O que sai do faturamento antes de virar dinheiro na conta
+// ---------------------------------------------------------------------------
+
+export interface AbatimentosDoPeriodo {
+  /** Quanto os gateways ficaram, somando faixa por faixa. */
+  taxas: number;
+  /**
+   * Pagamentos cujo gateway não tem faixa cadastrada.
+   *
+   * Eles entram no faturamento e saem da conta de taxa, então o líquido fica
+   * otimista. A tela precisa dizer isso: número incompleto apresentado como
+   * final é pior do que número nenhum.
+   */
+  semTaxa: number;
+  /** As aprovações feitas no painel, que ficaram fora do faturamento. */
+  manuais: { quantidade: number; valor: number };
+}
+
+/**
+ * Taxas de gateway e aprovações manuais do período.
+ *
+ * As duas coisas juntas porque respondem à mesma pergunta: por que o número da
+ * tela não é o número do extrato. Uma parte o gateway ficou, a outra nunca
+ * existiu.
+ */
+export async function abatimentosDoPeriodo(
+  opts: RecorteDePeriodo,
+): Promise<AbatimentosDoPeriodo> {
+  const [faixas, pagas, manuais] = await Promise.all([
+    prisma.taxaDeGateway.findMany({
+      where: { tenantId: opts.tenantId },
+      select: { provider: true, apartirDe: true, percentual: true, fixo: true },
+    }),
+    prisma.reservation.findMany({
+      where: wherePagasNoPeriodo(opts),
+      select: {
+        totalAmount: true,
+        payment: { select: { provider: true } },
+      },
+    }),
+    prisma.reservation.aggregate({
+      where: whereAprovadasNoPainel(opts),
+      _sum: { totalAmount: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const porProvider = new Map<string, FaixaDeTaxa[]>();
+  for (const f of faixas) {
+    const lista = porProvider.get(f.provider) ?? [];
+    lista.push({
+      apartirDe: Number(f.apartirDe),
+      percentual: Number(f.percentual),
+      fixo: Number(f.fixo),
+    });
+    porProvider.set(f.provider, lista);
+  }
+
+  const { total, semTaxa } = taxaTotal(
+    pagas.map((r) => ({
+      valor: Number(r.totalAmount),
+      provider: r.payment?.provider ?? null,
+    })),
+    porProvider,
+  );
+
+  return {
+    taxas: total,
+    semTaxa,
+    manuais: {
+      quantidade: manuais._count._all,
+      valor: Number(manuais._sum.totalAmount ?? 0),
+    },
+  };
+}
 
 export interface CanalFaturamento {
   canal: string;

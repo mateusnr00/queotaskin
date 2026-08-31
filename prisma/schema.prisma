@@ -318,19 +318,19 @@ model Tenant {
   // Identidade visual e textos do site (antes singleton em SiteSettings).
   // Cada tenant edita os próprios em Admin → Configurações / Personalizar
   // tema. Quando vazio/NULL, o componente cai num fallback razoável.
-  logoUrl                           String?
+  logoUrl           String?
   // Ícone da aba do navegador. Separado da logo de propósito: a logo é uma
   // faixa larga, e o favicon é lido a 16px, a mesma imagem nos dois lugares
   // vira um borrão na aba. Quando vazio, cai na logo.
-  faviconUrl                        String?
+  faviconUrl        String?
   // Arte de fundo das telas de entrar e criar conta. Fica no Tenant e não
   // num arquivo do repositório porque é escolha de marca de cada site, e
   // trocar arte não pode depender de deploy.
-  authBackgroundUrl                 String?
+  authBackgroundUrl String?
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
-  logoShape                         LogoShape @default(RECTANGLE)
-  siteDescription                   String?
+  logoShape         LogoShape @default(RECTANGLE)
+  siteDescription   String?
   /// Câmbio usado para converter o custo da entrega, digitado pelo painel.
   ///
   /// A skin é comprada do fornecedor em YUAN, e é isso que fica gravado em
@@ -341,9 +341,9 @@ model Tenant {
   /// de certo. Sem taxa cadastrada, a tela mostra só yuan e diz por quê.
   ///
   /// Quantos REAIS vale 1 yuan.
-  cnyToBrl                          Decimal?  @db.Decimal(12, 6)
+  cnyToBrl          Decimal?  @db.Decimal(12, 6)
   /// Quantos REAIS vale 1 dólar.
-  usdToBrl                          Decimal?  @db.Decimal(12, 6)
+  usdToBrl          Decimal?  @db.Decimal(12, 6)
 
   supportPhone                      String?
   supportEmail                      String?
@@ -410,13 +410,14 @@ model Tenant {
   rankEnabled                       Boolean   @default(true)
   rankShowOnHome                    Boolean   @default(true)
 
-  hosts        TenantHost[]
-  raffles      Raffle[]
-  members      User[]         @relation("TenantMembers")
-  xpEntries    XpEntry[]
-  boostEntries BoostEntry[]
-  progress     UserProgress[]
-  activityLogs ActivityLog[]  @relation("TenantActivityLogs")
+  hosts          TenantHost[]
+  taxasDeGateway TaxaDeGateway[]
+  raffles        Raffle[]
+  members        User[]          @relation("TenantMembers")
+  xpEntries      XpEntry[]
+  boostEntries   BoostEntry[]
+  progress       UserProgress[]
+  activityLogs   ActivityLog[]   @relation("TenantActivityLogs")
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -651,7 +652,7 @@ model Raffle {
   ///
   /// Decimal, e não Float: dinheiro em ponto flutuante acumula erro de
   /// centavo, e a soma da coluna é o número que interessa.
-  deliveryCost  Decimal?  @db.Decimal(10, 2)
+  deliveryCost Decimal? @db.Decimal(10, 2)
 
   /// O PTAX de venda do dia em que ESTA entrega saiu: reais por yuan.
   ///
@@ -1296,7 +1297,7 @@ model SurpriseBoxPrize {
   saidaDataAte    DateTime?
   /// DDDs que podem levar. Vazio = qualquer um.
   saidaDdds       String[]
-  claimedAt  DateTime? // setado atomicamente quando uma caixa abre e leva esse item
+  claimedAt       DateTime? // setado atomicamente quando uma caixa abre e leva esse item
 
   raffle       Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   claimedByBox SurpriseBox?
@@ -1472,16 +1473,24 @@ model Reservation {
   participantSocialName String?
   participantBirthDate  DateTime?
 
-  totalAmount   Decimal           @db.Decimal(10, 2)
+  totalAmount      Decimal           @db.Decimal(10, 2)
   /// A reserva saiu com a promocao em dobro valendo.
   ///
   /// Guardado na reserva, e nao recalculado depois: a promocao acaba, e sem
   /// esta marca uma reserva feita durante a janela seria reconstruida com
   /// metade dos numeros se o webhook chegasse atrasado.
-  dobroAplicado Boolean           @default(false)
-  status        ReservationStatus @default(PENDING)
-  expiresAt     DateTime
-  paidAt        DateTime?
+  dobroAplicado    Boolean           @default(false)
+  /// Um admin marcou esta reserva como paga pelo painel.
+  ///
+  /// Dinheiro que nao passou pelo gateway: cortesia, pagamento combinado por
+  /// fora, teste. Some do relatorio por isso, senao a receita do mes cresce
+  /// sem ninguem ter pago nada. Continua PAGA para todo o resto (os titulos
+  /// valem, o premio sai, o comprovante existe), e o registro de quem marcou
+  /// fica no historico.
+  aprovadaNoPainel Boolean           @default(false)
+  status           ReservationStatus @default(PENDING)
+  expiresAt        DateTime
+  paidAt           DateTime?
 
   affiliateId String?
   utmSource   String?
@@ -1529,6 +1538,38 @@ model Payment {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+}
+
+/// Quanto o gateway cobra por pagamento aprovado.
+///
+/// Uma linha por FAIXA de valor, porque e assim que eles cobram: ate cem
+/// reais um fixo, acima disso um percentual mais outro fixo. Uma linha unica
+/// com percentual e fixo nao representaria isso, e a conta do relatorio sairia
+/// errada exatamente nas compras grandes, que sao as que pesam.
+///
+/// A taxa nao e cobrada pela plataforma: ela ja foi descontada pelo gateway
+/// antes de o dinheiro cair. O que estas linhas fazem e o relatorio parar de
+/// contar como receita um dinheiro que nunca chegou.
+model TaxaDeGateway {
+  id       String          @id @default(cuid())
+  tenantId String
+  provider PaymentProvider
+
+  /// A partir de qual valor de compra, em reais, esta faixa vale. Zero e a
+  /// faixa base, usada por tudo que nao alcanca uma faixa maior.
+  apartirDe  Decimal @default(0) @db.Decimal(10, 2)
+  /// Percentual sobre o valor da compra. 2 significa 2%.
+  percentual Decimal @default(0) @db.Decimal(6, 3)
+  /// Valor fixo somado, em reais. 0.45 e quarenta e cinco centavos.
+  fixo       Decimal @default(0) @db.Decimal(10, 2)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, provider, apartirDe])
+  @@index([tenantId, provider])
 }
 
 model PaymentWebhookEvent {

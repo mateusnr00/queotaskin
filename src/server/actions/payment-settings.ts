@@ -199,3 +199,90 @@ export async function updatePaymentSettingsAction(
   revalidatePath("/admin/configuracoes/pagamentos");
   return { ok: true, data: undefined };
 }
+
+// ---------------------------------------------------------------------------
+// TAXAS DO GATEWAY
+// ---------------------------------------------------------------------------
+
+const faixaSchema = z.object({
+  /** A partir de qual valor de compra, em reais. */
+  apartirDe: z.number().min(0).max(1_000_000),
+  /** 2 significa 2%. Teto alto de propósito: quem cadastra errado vê o erro. */
+  percentual: z.number().min(0).max(100),
+  fixo: z.number().min(0).max(10_000),
+});
+
+const taxasSchema = z.object({
+  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]),
+  /** A lista inteira do gateway. Vazia apaga as faixas dele. */
+  faixas: z.array(faixaSchema).max(10),
+});
+
+/**
+ * Grava as faixas de taxa de um gateway.
+ *
+ * Substitui a lista inteira, como as outras telas de lista do painel: editar
+ * faixa por faixa exigiria id de cada uma na tela e um caminho de remoção
+ * separado, para um punhado de linhas que se lê de uma vez.
+ *
+ * Nenhum valor histórico é reescrito. A taxa é aplicada na leitura do
+ * relatório, sobre o valor de cada compra, então corrigir uma faixa hoje
+ * corrige também os meses passados, que é o que se espera de quem digitou o
+ * percentual errado. O outro caminho (congelar a taxa em cada pagamento)
+ * daria número imutável, mas exigiria a faixa cadastrada ANTES da primeira
+ * venda, e ninguém cadastra taxa antes de vender.
+ */
+export async function salvarTaxasDoGatewayAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+    const parsed = taxasSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: "Dados inválidos" };
+    }
+    const { provider, faixas } = parsed.data;
+
+    // Duas faixas com o mesmo começo é ambiguidade, não escolha: o banco
+    // recusaria pelo unique, e a mensagem dele não diz o que fazer.
+    const comecos = new Set<number>();
+    for (const f of faixas) {
+      if (comecos.has(f.apartirDe)) {
+        return {
+          ok: false,
+          error: `Duas faixas começam em ${f.apartirDe}. Deixe uma só.`,
+        };
+      }
+      comecos.add(f.apartirDe);
+    }
+
+    await prisma.$transaction([
+      prisma.taxaDeGateway.deleteMany({ where: { tenantId, provider } }),
+      ...(faixas.length > 0
+        ? [
+            prisma.taxaDeGateway.createMany({
+              data: faixas.map((f) => ({ tenantId, provider, ...f })),
+            }),
+          ]
+        : []),
+    ]);
+
+    // Sem credencial nenhuma aqui: são números de tabela de preço, e saber
+    // qual taxa foi cadastrada é justamente o que se procura quando o
+    // relatório muda de valor de um dia para o outro.
+    await registrarLog({
+      acao: "config.pagamento_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: `taxas do ${provider}`, faixas: faixas.length },
+    });
+
+    revalidatePath("/admin/configuracoes/pagamentos");
+    revalidatePath("/admin/relatorios");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[salvarTaxasDoGatewayAction]", err);
+    return { ok: false, error: "Erro ao salvar as taxas" };
+  }
+}
