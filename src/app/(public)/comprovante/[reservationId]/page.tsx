@@ -82,7 +82,12 @@ const reservationInclude = {
       // de quem comprou.
       prize: { select: { prize: true } },
     },
-    orderBy: { createdAt: "asc" as const },
+    // O id desempata, e não é detalhe: as caixas de uma compra nascem todas
+    // no MESMO instante (um createMany só), então ordenar apenas por createdAt
+    // deixa a ordem por conta do banco, e ela pode mudar a cada carregamento.
+    // Com o prêmio decidido na compra, isso faria a caixa premiada trocar de
+    // posição na tela entre um F5 e outro.
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
   },
 };
 
@@ -151,14 +156,11 @@ export default async function ReservationReceiptPage({
   // Fallback ao webhook: se a reserva ainda está PENDING e já existe
   // Payment, consulta o gateway pra ver se o pagamento foi confirmado.
   // Throttled internamente pra não estourar rate limit.
-  if (
-    reservation.status === "PENDING" &&
-    reservation.payment?.externalId
-  ) {
+  if (reservation.status === "PENDING" && reservation.payment?.externalId) {
     const polled = await pollPaymentStatusIfPending(
       reservation.payment.id,
       reservation.payment.externalId,
-      reservation.id
+      reservation.id,
     );
     if (polled === "APPROVED" || polled === "REJECTED") {
       reservation = await prisma.reservation.findUnique({
@@ -268,10 +270,17 @@ export default async function ReservationReceiptPage({
         : null,
     }));
 
+    // O PRÊMIO SÓ VIAJA DEPOIS DE ABERTA.
+    //
+    // Ele passou a ser decidido na confirmação do pagamento, e não mais no
+    // clique, então a caixa fechada já sabe o que tem dentro. Mandar isso para
+    // o navegador entregaria o jogo: bastaria abrir o inspetor para ver qual
+    // caixa vale a pena, e as outras virariam formalidade.
     const boxes = reservation.surpriseBoxes.map((b) => ({
       id: b.id,
       status: b.status as "UNOPENED" | "OPENED_PRIZE" | "OPENED_EMPTY",
-      prize: b.prize ? { prize: b.prize.prize } : null,
+      prize:
+        b.status !== "UNOPENED" && b.prize ? { prize: b.prize.prize } : null,
     }));
     return (
       <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
@@ -351,10 +360,7 @@ export default async function ReservationReceiptPage({
 
   // ── Estado expirado/cancelado: convida a refazer a reserva. Sem
   // countdown, sem PixError, sem badge, nada disso faz sentido aqui.
-  if (
-    reservation.status === "EXPIRED" ||
-    reservation.status === "CANCELLED"
-  ) {
+  if (reservation.status === "EXPIRED" || reservation.status === "CANCELLED") {
     return (
       <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
         <TituloDaAba texto="Reserva expirada" />
@@ -445,7 +451,8 @@ export default async function ReservationReceiptPage({
         <PixError
           reservationId={reservation.id}
           error={
-            pixError ?? "Pix ainda não foi gerado. Tente novamente em instantes."
+            pixError ??
+            "Pix ainda não foi gerado. Tente novamente em instantes."
           }
         />
       )}
@@ -509,7 +516,13 @@ async function getClientIp(): Promise<string> {
   return "0.0.0.0";
 }
 
-function Info({ label, children }: { label: string; children: React.ReactNode }) {
+function Info({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b py-3 last:border-b-0">
       <span className="shrink-0 text-xs text-muted-foreground">{label}</span>

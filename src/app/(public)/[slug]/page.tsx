@@ -172,6 +172,10 @@ export default async function PublicRaffleDetailPage({
             claimedAt: true,
             claimedByBox: {
               select: {
+                // O status entra junto: prêmio já tem dono desde a compra, e
+                // sem ele a lista pública anunciaria o ganhador antes de a
+                // pessoa abrir a própria caixa, estragando a surpresa dela.
+                status: true,
                 reservation: {
                   select: {
                     participantName: true,
@@ -400,6 +404,12 @@ export default async function PublicRaffleDetailPage({
   //
   // `ordemEmbaralhada` desfaz isso com um hash do id: estável para o mesmo
   // conjunto, e sem relação nenhuma com a ordem de cadastro.
+  /** O nome só sai depois de a caixa ser aberta, e só se a campanha permitir. */
+  const mostrarGanhador = (caixa: { status: string } | null | undefined) =>
+    raffle.surpriseBoxExibirGanhadores &&
+    caixa != null &&
+    caixa.status !== "UNOPENED";
+
   const caixasPublicas = (() => {
     if (!raffle.surpriseBoxEnabled) return [];
     const itens = raffle.surpriseBoxPrizes.map((p) => ({
@@ -409,15 +419,15 @@ export default async function PublicRaffleDetailPage({
       // Sem "exibir ganhadores" ligado, o prêmio ainda aparece, mas sem
       // nome: quem decide comprar quer ver o que já saiu, e isso não exige
       // expor quem levou.
-      ganhador: raffle.surpriseBoxExibirGanhadores
+      ganhador: mostrarGanhador(p.claimedByBox)
         ? (p.claimedByBox?.reservation.participantName ?? null)
         : null,
       // Segue a mesma chave do nome: sem "exibir ganhadores", nem o time sai.
-      time: raffle.surpriseBoxExibirGanhadores
+      time: mostrarGanhador(p.claimedByBox)
         ? (times.get(p.claimedByBox?.reservation.user?.favoriteTeamId ?? "") ??
           null)
         : null,
-      aberto: Boolean(p.claimedAt),
+      aberto: p.claimedByBox?.status !== "UNOPENED" && Boolean(p.claimedAt),
     }));
 
     if (raffle.surpriseBoxDisplayOrder === "DESC") return itens.reverse();

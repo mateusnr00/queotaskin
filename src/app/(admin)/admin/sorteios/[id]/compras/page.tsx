@@ -73,7 +73,9 @@ export default async function ComprasPage({
   // contado no cadastro do prêmio, que é onde a conta vive.
   const caixasDistribuidas = await prisma.surpriseBox.findMany({
     where: { raffleId: id, prizeId: { not: null } },
-    orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
+    // O id desempata: as caixas de uma compra nascem no mesmo instante, e sem
+    // ele a ordem da tabela muda a cada carregamento.
+    orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true,
       status: true,

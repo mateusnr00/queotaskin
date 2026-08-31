@@ -73,6 +73,7 @@ export async function openSurpriseBoxAction(
         reservationId: true,
         raffleId: true,
         prizeId: true,
+        premioSorteadoEm: true,
         prize: { select: { id: true, title: true, prize: true } },
         reservation: {
           select: {
@@ -114,7 +115,36 @@ export async function openSurpriseBoxAction(
       return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
     }
 
-    // Tenta até 3x, race em concorrência (prize foi pego por outra caixa).
+    // ABRIR É SÓ REVELAR. O prêmio foi decidido quando a caixa nasceu, na
+    // confirmação do pagamento (ver autoGenerateSurpriseBoxesForReservation).
+    // Antes ele era sorteado aqui, e por isso uma caixa fechada não dizia nada
+    // ao painel: quem administra só ficava sabendo do ganhador depois que a
+    // pessoa clicasse, o que podia levar dias ou não acontecer nunca.
+    if (box.premioSorteadoEm) {
+      const now = new Date();
+      if (box.prizeId && box.prize) {
+        const atualizou = await prisma.surpriseBox.updateMany({
+          where: { id: boxId, status: "UNOPENED" },
+          data: { status: "OPENED_PRIZE", openedAt: now },
+        });
+        if (atualizou.count === 0) return await refetchOpened(boxId);
+        return {
+          ok: true,
+          data: { status: "OPENED_PRIZE", prize: box.prize },
+        };
+      }
+      const atualizou = await prisma.surpriseBox.updateMany({
+        where: { id: boxId, status: "UNOPENED" },
+        data: { status: "OPENED_EMPTY", openedAt: now },
+      });
+      if (atualizou.count === 0) return await refetchOpened(boxId);
+      return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
+    }
+
+    // CAIXA ANTIGA, de antes desta mudança: nasceu sem sorteio nenhum, e o
+    // caminho dela continua sendo o de sempre, sortear na abertura. Sem isto,
+    // toda caixa fechada comprada antes do deploy viraria vazia de uma vez.
+    // Some sozinho conforme essas caixas vão sendo abertas.
     for (let attempt = 0; attempt < MAX_DRAW_RETRIES; attempt++) {
       // Recontado a cada tentativa: a caixa de agora ainda está UNOPENED, e
       // é ela que faz a última abertura soltar garantido.
@@ -135,7 +165,11 @@ export async function openSurpriseBoxAction(
         // Pool vazio → caixa vazia.
         const updated = await prisma.surpriseBox.updateMany({
           where: { id: boxId, status: "UNOPENED" },
-          data: { status: "OPENED_EMPTY", openedAt: new Date() },
+          data: {
+            status: "OPENED_EMPTY",
+            openedAt: new Date(),
+            premioSorteadoEm: new Date(),
+          },
         });
         if (updated.count === 0) {
           // Outra request abriu a mesma caixa no meio do caminho, re-lê.
@@ -158,6 +192,7 @@ export async function openSurpriseBoxAction(
             status: "OPENED_PRIZE",
             prizeId: drawn.id,
             openedAt: new Date(),
+            premioSorteadoEm: new Date(),
           },
         });
         if (boxUpdated.count === 0) {
@@ -193,7 +228,11 @@ export async function openSurpriseBoxAction(
     // Todos os retries falharam, sela como vazio pra não travar o usuário.
     await prisma.surpriseBox.updateMany({
       where: { id: boxId, status: "UNOPENED" },
-      data: { status: "OPENED_EMPTY", openedAt: new Date() },
+      data: {
+        status: "OPENED_EMPTY",
+        openedAt: new Date(),
+        premioSorteadoEm: new Date(),
+      },
     });
     return { ok: true, data: { status: "OPENED_EMPTY", prize: null } };
   } catch (err) {

@@ -1,0 +1,12 @@
+-- O prêmio da caixa surpresa passa a ser decidido na confirmação do pagamento.
+--
+-- Antes ele era sorteado no instante da abertura, e por isso uma caixa fechada
+-- não dizia nada: o painel só sabia que alguém tinha ganhado depois que a
+-- pessoa clicasse. Agora o sorteio acontece quando a caixa nasce, e abrir é só
+-- revelar o que já estava lá.
+--
+-- A coluna nova separa "ainda não sorteei" de "sorteei e não deu prêmio", que
+-- sem ela são a mesma coisa (prizeId nulo). As caixas que já existem ficam com
+-- ela nula e continuam sorteando na abertura, como sempre fizeram: sem isso,
+-- toda caixa fechada comprada antes deste deploy viraria vazia de uma vez.
+ALTER TABLE "SurpriseBox" ADD COLUMN "premioSorteadoEm" TIMESTAMP(3);

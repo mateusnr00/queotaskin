@@ -1318,9 +1318,23 @@ model SurpriseBox {
   raffleId      String
   reservationId String
   status        SurpriseBoxStatus @default(UNOPENED)
-  // 1:1, prêmio sorteado. NULL enquanto UNOPENED ou se OPENED_EMPTY.
+  /// O premio desta caixa, decidido na CONFIRMACAO DO PAGAMENTO e nao mais na
+  /// abertura. Nulo quando o sorteio nao deu premio nenhum.
+  ///
+  /// Mudou de momento porque o painel precisava saber quem ganhou sem esperar
+  /// a pessoa clicar: uma caixa fechada nao dizia nada, e um premio que ja
+  /// tinha dono ficava invisivel para quem precisa entregar. Abrir passou a
+  /// ser so revelar o que ja estava aqui.
   prizeId       String?           @unique
   openedAt      DateTime?
+
+  /// Quando o sorteio desta caixa foi feito.
+  ///
+  /// Separa "ainda nao sorteei" de "sorteei e nao deu premio", que sem isto
+  /// sao a mesma coisa: prizeId nulo. As caixas criadas antes desta mudanca
+  /// tem a coluna nula e continuam sorteando na abertura, como sempre
+  /// fizeram, senao virariam todas vazias de uma vez.
+  premioSorteadoEm DateTime?
 
   raffle      Raffle            @relation(fields: [raffleId], references: [id], onDelete: Cascade)
   reservation Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
