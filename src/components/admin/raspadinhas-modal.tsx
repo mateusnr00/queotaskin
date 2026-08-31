@@ -17,7 +17,7 @@ import {
 } from "@/components/admin/campo-de-premio";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Lock, Plus, Settings, Trash2, Unlock } from "lucide-react";
+import { CreditCard, Lock, Plus, Settings, Trash2, Unlock } from "lucide-react";
 
 import {
   Dialog,
@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { CabecalhoDeModal } from "@/components/admin/cabecalho-de-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,17 +145,21 @@ export function RaspadinhasModal({
     <>
       <Dialog open={aberto} onOpenChange={(o) => !o && aoFechar()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Raspadinhas premiadas ({unidades.length})</DialogTitle>
-            <DialogDescription>
-              Quem compra ganha raspadinhas pelos combos abaixo. Cada prêmio sai
-              no ponto da venda que você agendar.
-            </DialogDescription>
-          </DialogHeader>
+          <CabecalhoDeModal
+            icone={<CreditCard className="h-5 w-5" />}
+            tom="premio"
+            titulo="Raspadinhas premiadas"
+            descricao="Quem compra ganha raspadinhas pelos combos abaixo. Cada prêmio sai no ponto da venda que você agendar."
+            acessorio={
+              <Badge variant="outline" className="text-[10px] tabular-nums">
+                {unidades.length} prêmio(s)
+              </Badge>
+            }
+          />
 
           <div className="space-y-4">
-            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <label className="flex items-center gap-3 text-sm">
+            <div className="divide-y divide-white/[0.06] rounded-2xl border border-white/10 bg-white/[0.02]">
+              <label className="flex cursor-pointer items-start gap-3 px-3.5 py-3">
                 <Switch
                   checked={ativa}
                   disabled={isPending}
@@ -162,9 +167,16 @@ export function RaspadinhasModal({
                     salvarConfig({ ativa: v, rasparTodas })
                   }
                 />
-                Ativar raspadinhas
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    Ativar raspadinhas
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Desligado, ninguém recebe raspadinha nas compras novas.
+                  </span>
+                </span>
               </label>
-              <label className="flex items-center gap-3 pl-6 text-sm">
+              <label className="flex cursor-pointer items-start gap-3 px-3.5 py-3">
                 <Switch
                   checked={rasparTodas}
                   disabled={isPending || !ativa}
@@ -172,7 +184,14 @@ export function RaspadinhasModal({
                     salvarConfig({ ativa, rasparTodas: v })
                   }
                 />
-                Ativar &ldquo;Raspar todas&rdquo;
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    Botão &ldquo;Raspar todas&rdquo;
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Abre as raspadinhas de uma vez, sem raspar uma por uma.
+                  </span>
+                </span>
               </label>
             </div>
 
@@ -201,6 +220,7 @@ export function RaspadinhasModal({
                   size="sm"
                   onClick={() => setInserindo(true)}
                   disabled={isPending}
+                  className="rounded-full px-4"
                 >
                   <Plus className="mr-1.5 h-4 w-4" />
                   Inserir prêmio
@@ -208,14 +228,17 @@ export function RaspadinhasModal({
               </div>
 
               {unidades.length === 0 ? (
-                <div className="rounded-lg border px-4 py-10 text-center">
-                  <p className="text-sm font-semibold">Nenhum prêmio ainda.</p>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-10 text-center">
+                  <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground">
+                    <CreditCard className="h-5 w-5" />
+                  </span>
+                  <p className="text-sm font-semibold">Nenhum prêmio ainda</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Sem prêmio, toda raspadinha sai vazia.
                   </p>
                 </div>
               ) : (
-                <ul className="divide-y overflow-hidden rounded-lg border">
+                <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10">
                   {unidades.map((u) => {
                     const quantos = totalPorNome.get(u.rotulo) ?? 1;
                     const indice = (vistos.get(u.rotulo) ?? 0) + 1;

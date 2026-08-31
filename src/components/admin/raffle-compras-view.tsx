@@ -35,9 +35,9 @@ import {
   Info,
   Loader2,
   Lock,
-  MoreVertical,
   Pencil,
   Phone,
+  Plus,
   RotateCcw,
   Search,
   Settings,
@@ -55,7 +55,9 @@ import type {
 
 import { markReservationPaidAction } from "@/server/actions/reservations";
 import {
+  consultarDonoDoTituloAction,
   getTopBuyersAction,
+  type DonoDoTitulo,
   type TopBuyer,
 } from "@/server/actions/raffle-stats";
 import {
@@ -70,7 +72,11 @@ import {
   toggleSurpriseBoxPrizeLockAction,
 } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { CabecalhoDeModal } from "@/components/admin/cabecalho-de-modal";
+import { Moldura, Placa } from "@/components/ui/moldura";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { casasDoTitulo, numeroDoTitulo } from "@/lib/titulo";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -303,6 +309,9 @@ export function RaffleComprasView({
     <>
       <RaffleHeaderCard
         raffle={raffle}
+        stats={stats}
+        surpriseBox={surpriseBox}
+        raspadinha={raspadinha}
         showDetails={showDetails}
         onToggleDetails={() => setShowDetails((v) => !v)}
         onOpenRanking={() => setRankingOpen(true)}
@@ -336,9 +345,15 @@ export function RaffleComprasView({
         raffle={raffle}
       />
 
-      {showDetails && <StatsPanel stats={stats} />}
+      {/* Os números não dependem mais do olho.
+          Ele escondia duas coisas ao mesmo tempo: o dinheiro da campanha e o
+          telefone de quem comprou. Só a segunda é dado pessoal, e é por ela
+          que alguém aperta o botão numa tela que fica aberta o dia todo. Com
+          as duas juntas, esconder o telefone custava perder o quanto a
+          campanha arrecadou, então ninguém escondia. */}
+      <PainelDeNumeros stats={stats} totalNumbers={raffle.totalNumbers} />
 
-      <Card className="overflow-hidden p-0">
+      <Moldura>
         <TabsBar tab={filters.tab} counts={counts} />
         <SearchBar filters={filters} />
         <ReservationsTable
@@ -352,7 +367,7 @@ export function RaffleComprasView({
           totalRows={totalRows}
           pageSize={filters.pageSize}
         />
-      </Card>
+      </Moldura>
     </>
   );
 }
@@ -361,6 +376,9 @@ export function RaffleComprasView({
 
 function RaffleHeaderCard({
   raffle,
+  stats,
+  surpriseBox,
+  raspadinha,
   showDetails,
   onToggleDetails,
   onOpenRanking,
@@ -369,6 +387,9 @@ function RaffleHeaderCard({
   onOpenWinner,
 }: {
   raffle: RaffleSummary;
+  stats: Stats;
+  surpriseBox: SurpriseBoxConfig;
+  raspadinha: ConfigDaRaspadinha;
   showDetails: boolean;
   onToggleDetails: () => void;
   onOpenRanking: () => void;
@@ -376,96 +397,155 @@ function RaffleHeaderCard({
   onOpenRaspadinhas: () => void;
   onOpenWinner: () => void;
 }) {
+  const temGanhador = raffle.winnerTicketNumber != null;
+  const pct = Math.min(100, Math.max(0, stats.soldPercent));
   return (
-    <Card className="p-5 md:p-6 space-y-4">
-      <div className="flex items-start gap-4">
-        <RaffleAvatar imageUrl={raffle.imageUrl} title={raffle.title} />
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary line-clamp-2">
-            {raffle.title}
-          </h2>
-          {raffle.shortDescription && (
-            <p className="text-xs text-muted-foreground line-clamp-1">
-              {raffle.shortDescription}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="outline" className="text-xs">
-              {raffle.isFree
-                ? "GRÁTIS"
-                : formatBRL(raffle.pricePerNumber).replace("R$ ", "R$ ")}
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              {raffle.status}
-            </Badge>
+    <Moldura>
+      <div className="space-y-5 p-4 md:p-6">
+        <div className="flex items-start gap-4">
+          <RaffleAvatar imageUrl={raffle.imageUrl} title={raffle.title} />
+          <div className="min-w-0 flex-1 space-y-2">
+            <h2 className="line-clamp-2 text-lg font-black tracking-tight md:text-xl">
+              {raffle.title}
+            </h2>
+            {raffle.shortDescription && (
+              <p className="line-clamp-1 text-xs text-muted-foreground">
+                {raffle.shortDescription}
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className="text-[11px] font-bold">
+                {raffle.isFree ? "GRÁTIS" : formatBRL(raffle.pricePerNumber)}
+              </Badge>
+              <Badge variant="outline" className="text-[11px]">
+                {raffle.status}
+              </Badge>
+              {temGanhador && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/40 text-[11px] text-amber-400 tabular-nums"
+                >
+                  <Award className="mr-1 h-3 w-3" />
+                  ganhador{" "}
+                  {numeroDoTitulo(
+                    raffle.winnerTicketNumber!,
+                    raffle.totalNumbers,
+                  )}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Mais ações"
-          className="shrink-0"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </div>
 
-      {/* Ações do header, 6 botões espelhando SkinsLendarias. */}
-      <div className="border-t pt-3 flex items-center gap-1 flex-wrap">
-        <HeaderActionButton
-          label={showDetails ? "Esconder detalhes" : "Mostrar detalhes"}
-          onClick={onToggleDetails}
-        >
-          {showDetails ? (
-            <Eye className="h-4 w-4" />
-          ) : (
-            <EyeOff className="h-4 w-4" />
-          )}
-        </HeaderActionButton>
-        <HeaderActionButton
-          label="Visualizar página"
-          // Absoluta: este painel roda em admin.<domínio>, e ali o caminho
-          // relativo cai de volta no admin em vez de abrir a campanha.
-          href={raffle.urlPublica}
-          external
-        >
-          <ExternalLink className="h-4 w-4" />
-        </HeaderActionButton>
-        <HeaderActionButton label="Ranking de compras" onClick={onOpenRanking}>
-          <Trophy className="h-4 w-4" />
-        </HeaderActionButton>
-        <HeaderActionButton label="Caixas surpresas" onClick={onOpenCaixas}>
-          <Gift className="h-4 w-4" />
-        </HeaderActionButton>
-        <HeaderActionButton
-          label={
-            raffle.winnerTicketNumber != null
-              ? `Ganhador: ${raffle.winnerTicketNumber}`
-              : "Definir ganhador"
-          }
-          onClick={onOpenWinner}
-        >
-          <Award
-            className={cn(
-              "h-4 w-4",
-              raffle.winnerTicketNumber != null && "text-amber-500",
-            )}
+        {/* A barra de venda.
+            O número 85,20% sozinho, dentro de uma caixa cor de mostarda,
+            obrigava a leitura para virar noção. Uma barra diz o mesmo antes
+            de ser lida, e é o primeiro que se procura ao abrir a campanha. */}
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-sm font-black tabular-nums">
+              {stats.soldPercent.toFixed(2).replace(".", ",")}%
+              <span className="ml-1.5 text-[11px] font-medium text-muted-foreground">
+                vendido
+              </span>
+            </span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {stats.soldTickets.toLocaleString("pt-BR")} de{" "}
+              {raffle.totalNumbers.toLocaleString("pt-BR")} títulos
+            </span>
+          </div>
+          <div
+            className="h-2.5 overflow-hidden rounded-full bg-white/[0.06]"
+            role="progressbar"
+            aria-valuenow={Math.round(pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Títulos vendidos"
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary to-amber-400 transition-[width] duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* As ações da campanha.
+            Eram sete ícones nus em fila, sem uma palavra: presente, disco,
+            cartão e troféu, e descobrir qual era a raspadinha exigia passar o
+            mouse em cada um, o que no celular nem existe. */}
+        <div className="grid gap-2 border-t border-white/10 pt-4 sm:grid-cols-2 lg:grid-cols-3">
+          <AcaoDaCampanha
+            icone={<Award className="h-4 w-4" />}
+            rotulo={temGanhador ? "Ganhador registrado" : "Definir ganhador"}
+            nota={
+              temGanhador
+                ? `Título ${numeroDoTitulo(raffle.winnerTicketNumber!, raffle.totalNumbers)}`
+                : "Registrar o número sorteado"
+            }
+            aoClicar={onOpenWinner}
+            destaque={temGanhador}
           />
-        </HeaderActionButton>
-        <HeaderActionButton
-          label="Roletas premiadas"
-          onClick={() => toast.info("Roletas premiadas: em breve")}
-        >
-          <Disc3 className="h-4 w-4" />
-        </HeaderActionButton>
-        <HeaderActionButton
-          label="Raspadinhas premiadas"
-          onClick={onOpenRaspadinhas}
-        >
-          <CreditCard className="h-4 w-4" />
-        </HeaderActionButton>
+          <AcaoDaCampanha
+            icone={<Gift className="h-4 w-4" />}
+            rotulo="Caixas surpresas"
+            nota={
+              surpriseBox.prizes.length === 0
+                ? "Nenhum prêmio cadastrado"
+                : `${surpriseBox.prizes.length} prêmio(s)`
+            }
+            aoClicar={onOpenCaixas}
+          />
+          <AcaoDaCampanha
+            icone={<CreditCard className="h-4 w-4" />}
+            rotulo="Raspadinhas premiadas"
+            nota={
+              raspadinha.premios.length === 0
+                ? "Nenhum prêmio cadastrado"
+                : `${raspadinha.premios.length} prêmio(s)`
+            }
+            aoClicar={onOpenRaspadinhas}
+          />
+          <AcaoDaCampanha
+            icone={<Trophy className="h-4 w-4" />}
+            rotulo="Ranking de compras"
+            nota="Quem mais comprou"
+            aoClicar={onOpenRanking}
+          />
+          <AcaoDaCampanha
+            icone={<ExternalLink className="h-4 w-4" />}
+            rotulo="Ver a página"
+            nota="Como o cliente vê"
+            // Absoluta: este painel roda em admin.<domínio>, e ali o caminho
+            // relativo cai de volta no admin em vez de abrir a campanha.
+            href={raffle.urlPublica}
+          />
+          <AcaoDaCampanha
+            icone={
+              showDetails ? (
+                <Eye className="h-4 w-4" />
+              ) : (
+                <EyeOff className="h-4 w-4" />
+              )
+            }
+            rotulo={
+              showDetails ? "Esconder dados pessoais" : "Mostrar dados pessoais"
+            }
+            nota="Telefone, CPF e e-mail na lista"
+            aoClicar={onToggleDetails}
+            destaque={showDetails}
+          />
+          {/* Fica na fila, apagada e dizendo que ainda não existe. Como botão
+              normal que abria um aviso de "em breve", ela gastava um clique
+              para não fazer nada. */}
+          <AcaoDaCampanha
+            icone={<Disc3 className="h-4 w-4" />}
+            rotulo="Roletas premiadas"
+            nota="Em breve"
+            emBreve
+          />
+        </div>
       </div>
-    </Card>
+    </Moldura>
   );
 }
 
@@ -476,61 +556,94 @@ function RaffleAvatar({
   imageUrl: string | null;
   title: string;
 }) {
-  if (imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={imageUrl}
-        alt={title}
-        className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover ring-1 ring-border shrink-0"
-      />
-    );
-  }
-  const initial = title.trim().charAt(0).toUpperCase() || "?";
+  // A imagem que não carrega despejava o título inteiro no lugar dela, em
+  // texto solto, atravessando o círculo e empurrando o resto do cabeçalho.
+  // Vale a inicial, que é o que o resto do painel já mostra.
+  const [quebrou, setQuebrou] = useState(false);
+  const inicial = title.trim().charAt(0).toUpperCase() || "?";
   return (
-    <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-muted flex items-center justify-center text-2xl font-bold text-muted-foreground shrink-0">
-      {initial}
+    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] md:h-20 md:w-20">
+      {imageUrl && !quebrou ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl}
+          alt=""
+          onError={() => setQuebrou(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-2xl font-black text-muted-foreground">
+          {inicial}
+        </span>
+      )}
     </div>
   );
 }
 
-function HeaderActionButton({
-  label,
-  children,
-  onClick,
+/** Uma ação da campanha: ícone, o que ela faz, e o estado atual embaixo. */
+function AcaoDaCampanha({
+  icone,
+  rotulo,
+  nota,
+  aoClicar,
   href,
-  external,
+  destaque,
+  emBreve,
 }: {
-  label: string;
-  children: React.ReactNode;
-  onClick?: () => void;
+  icone: React.ReactNode;
+  rotulo: string;
+  nota: string;
+  aoClicar?: () => void;
   href?: string;
-  external?: boolean;
+  destaque?: boolean;
+  emBreve?: boolean;
 }) {
-  const className =
-    "inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors";
+  const classe = cn(
+    "group flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+    emBreve
+      ? "cursor-not-allowed border-white/[0.06] bg-white/[0.01] opacity-50"
+      : destaque
+        ? "border-primary/40 bg-primary/[0.07] hover:bg-primary/10"
+        : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]",
+  );
+  const corpo = (
+    <>
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+          destaque
+            ? "border-primary/40 bg-primary/10 text-primary"
+            : "border-white/10 bg-white/[0.04] text-muted-foreground",
+          !emBreve && "group-hover:scale-105",
+        )}
+      >
+        {icone}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">{rotulo}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">
+          {nota}
+        </span>
+      </span>
+    </>
+  );
+  if (emBreve) {
+    return (
+      <div className={classe} aria-disabled title="Ainda não disponível">
+        {corpo}
+      </div>
+    );
+  }
   if (href) {
     return (
-      <Link
-        href={href}
-        target={external ? "_blank" : undefined}
-        aria-label={label}
-        title={label}
-        className={className}
-      >
-        {children}
+      <Link href={href} target="_blank" className={classe}>
+        {corpo}
       </Link>
     );
   }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={className}
-    >
-      {children}
+    <button type="button" onClick={aoClicar} className={classe}>
+      {corpo}
     </button>
   );
 }
@@ -584,12 +697,12 @@ function RankingModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="inline-flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-amber-500" />
-            Top 10 Compradores
-          </DialogTitle>
-        </DialogHeader>
+        <CabecalhoDeModal
+          icone={<Trophy className="h-5 w-5" />}
+          tom="premio"
+          titulo="Top 10 compradores"
+          descricao="Soma dos títulos pagos, agrupada por quem comprou. Escolha um período para recortar."
+        />
 
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -843,38 +956,55 @@ function CaixasModalBody({
   // logo abaixo dos alerts pra dar feedback do que foi configurado.
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-lg">
-          <Gift className="h-5 w-5 text-amber-500" />
-          Caixas Surpresas ({prizes.length})
-        </DialogTitle>
-      </DialogHeader>
+      <CabecalhoDeModal
+        icone={<Gift className="h-5 w-5" />}
+        tom="premio"
+        titulo="Caixas surpresas"
+        descricao="Quem compra ganha caixas pelos combos. Cada prêmio sai no ponto da venda que você agendar."
+        acessorio={
+          <Badge variant="outline" className="text-[10px] tabular-nums">
+            {prizes.length} prêmio(s)
+          </Badge>
+        }
+      />
 
       <div className="space-y-4">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <Checkbox
-            checked={enabled}
-            disabled={isPending}
-            onCheckedChange={(next) => {
-              const val = next === true;
-              setEnabled(val);
-              persist({
-                enabled: val,
-                accumulative,
-                abrirTodas,
-                exibirGanhadores,
-                displayOrder,
-                combos,
-              });
-            }}
-          />
-          <span className="text-sm">Ativar Caixas Surpresas</span>
-        </label>
+        {/* Chaves em vez de caixinhas, e cada uma dizendo o que muda.
+            A raspadinha, que é a mesma mecânica, já era assim: com um lado em
+            checkbox e outro em switch, duas telas irmãs pareciam de produtos
+            diferentes. E "Abrir todas" sem uma linha embaixo não diz se abre
+            as caixas de uma compra ou as da campanha. */}
+        <div className="divide-y divide-white/[0.06] rounded-2xl border border-white/10 bg-white/[0.02]">
+          <label className="flex cursor-pointer items-start gap-3 px-3.5 py-3">
+            <Switch
+              checked={enabled}
+              disabled={isPending}
+              onCheckedChange={(next) => {
+                const val = next === true;
+                setEnabled(val);
+                persist({
+                  enabled: val,
+                  accumulative,
+                  abrirTodas,
+                  exibirGanhadores,
+                  displayOrder,
+                  combos,
+                });
+              }}
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">
+                Ativar caixas surpresas
+              </span>
+              <span className="block text-[11px] text-muted-foreground">
+                Desligado, ninguém recebe caixa nas compras novas.
+              </span>
+            </span>
+          </label>
 
-        {enabled && (
-          <div className="space-y-2 pl-6">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <Checkbox
+          {enabled && (
+            <label className="flex cursor-pointer items-start gap-3 px-3.5 py-3">
+              <Switch
                 checked={abrirTodas}
                 disabled={isPending}
                 onCheckedChange={(next) => {
@@ -890,11 +1020,21 @@ function CaixasModalBody({
                   });
                 }}
               />
-              <span className="text-sm">Ativar &ldquo;Abrir todas&rdquo;</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">
+                  Botão &ldquo;Abrir todas&rdquo;
+                </span>
+                <span className="block text-[11px] text-muted-foreground">
+                  Abre as caixas da compra de uma vez, sem clicar em cada uma.
+                </span>
+              </span>
             </label>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <Checkbox
+          )}
+
+          {enabled && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <Switch
                   checked={exibirGanhadores}
                   disabled={isPending}
                   onCheckedChange={(next) => {
@@ -910,7 +1050,14 @@ function CaixasModalBody({
                     });
                   }}
                 />
-                <span className="text-sm">Exibir Ganhadores</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    Mostrar os ganhadores
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    A lista de quem já abriu, na página da campanha.
+                  </span>
+                </span>
               </label>
               {exibirGanhadores && (
                 <Select
@@ -947,73 +1094,62 @@ function CaixasModalBody({
                 </Select>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {combos.length === 0 && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive dark:text-rose-300"
-          >
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>Cadastre combos para a distribuição das caixas!</span>
-          </div>
-        )}
-
-        {prizes.length === 0 && (
+        {/* Um aviso só, e com o que fazer a seguir.
+            Eram dois empilhados, um vermelho e um azul, dizendo a mesma coisa
+            por ângulos diferentes: sem combo e sem prêmio a mecânica está
+            ligada e não entrega nada. Vermelho ali também assustava sem
+            motivo, já que campanha nova começa exatamente assim. */}
+        {enabled && (combos.length === 0 || prizes.length === 0) && (
           <div
             role="status"
-            className="flex items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-700 dark:text-sky-300"
+            className="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] px-3.5 py-3 text-xs leading-relaxed text-amber-300"
           >
-            <Info className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>Nenhuma caixa premiada cadastrada para este produto!</span>
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              {combos.length === 0 && prizes.length === 0
+                ? "Falta o combo (quantos títulos dão quantas caixas) e falta prêmio. Sem os dois, ninguém recebe caixa."
+                : combos.length === 0
+                  ? "Falta o combo: sem ele ninguém recebe caixa, mesmo com prêmio cadastrado."
+                  : "Falta prêmio: as caixas saem, mas todas vazias."}
+            </span>
           </div>
         )}
 
-        {/* Filtrar por status + ações primárias */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-          <div className="flex-1 space-y-1.5">
-            <Label className="text-xs font-medium">Filtrar por status</Label>
-            <Select defaultValue="all" disabled>
-              <SelectTrigger className="h-9">
-                <SelectValue
-                  labels={{
-                    all: "Todos",
-                    paid: "Pagos",
-                    unpaid: "Não pagos",
-                  }}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="paid">Pagos</SelectItem>
-                <SelectItem value="unpaid">Não pagos</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex gap-1.5">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setDistribOpen(true)}
-            >
-              Combos
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setInserirOpen(true)}
-            >
-              Inserir
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => toast.info("Exportar PDF: em breve")}
-            >
-              PDF
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {/* O filtro por status saiu.
+              Ele vinha disabled desde sempre, sem nada por trás: um controle
+              que não controla nada ensina a desconfiar dos que funcionam. */}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            onClick={() => setDistribOpen(true)}
+          >
+            Combos
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            disabled
+            title="Ainda não disponível"
+          >
+            PDF (em breve)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="rounded-full px-4"
+            onClick={() => setInserirOpen(true)}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Inserir caixa
+          </Button>
         </div>
 
         {/* Resumo dos combos cadastrados (some quando 0) */}
@@ -1185,9 +1321,12 @@ function InserirCaixaBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="text-base">Inserir caixa</DialogTitle>
-      </DialogHeader>
+      <CabecalhoDeModal
+        icone={<Gift className="h-5 w-5" />}
+        tom="premio"
+        titulo="Inserir caixa"
+        descricao="Cada unidade nasce com o seu ponto de saída, uma atrás da outra."
+      />
 
       <div className="space-y-4">
         <div className="space-y-1.5">
@@ -1401,11 +1540,16 @@ function TabelaDeCaixas({
           <tbody className="divide-y">
             {caixas.length === 0 && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-3 py-12 text-center text-sm text-muted-foreground"
-                >
-                  Sem Registros
+                <td colSpan={7} className="px-3 py-12 text-center">
+                  <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground">
+                    <Gift className="h-5 w-5" />
+                  </span>
+                  <p className="text-sm font-semibold">
+                    Nenhuma caixa distribuída ainda
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Elas aparecem aqui conforme as compras alcançam os combos.
+                  </p>
                 </td>
               </tr>
             )}
@@ -1640,9 +1784,11 @@ function EditarPremioBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="text-base">Editar prêmio</DialogTitle>
-      </DialogHeader>
+      <CabecalhoDeModal
+        icone={<Pencil className="h-5 w-5" />}
+        titulo="Editar prêmio"
+        descricao="Vale para esta unidade só, e não para as outras de mesmo nome."
+      />
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="editar-titulo" className="text-xs font-medium">
@@ -2323,9 +2469,11 @@ function DistribuicaoCaixasBody({
         </div>
       )}
 
-      <DialogHeader>
-        <DialogTitle className="text-lg">Distribuição das Caixas</DialogTitle>
-      </DialogHeader>
+      <CabecalhoDeModal
+        icone={<Gift className="h-5 w-5" />}
+        titulo="Distribuição das caixas"
+        descricao="Quantos títulos dão quantas caixas, e em que ordem elas aparecem."
+      />
 
       <div className="space-y-4">
         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2494,10 +2642,49 @@ function WinnerBody({
   const [note, setNote] = useState(raffle.winnerNote ?? "");
   const [finish, setFinish] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const [conferido, setConferido] = useState<DonoDoTitulo | null>(null);
+
+  const n = Number(ticketNumber);
+  const valido =
+    ticketNumber.trim() !== "" &&
+    Number.isFinite(n) &&
+    n >= 1 &&
+    n <= raffle.totalNumbers;
+  const foraDaFaixa = ticketNumber.trim() !== "" && !valido;
+
+  /**
+   * Quem está com este título, enquanto se digita.
+   *
+   * Registrar o ganhador publica um nome, encerra a campanha e vira uma
+   * entrega. Antes só dava para saber quem era DEPOIS de gravar, pelo aviso do
+   * salvamento, e um dígito trocado já era público. Meio segundo de espera
+   * evita uma consulta por tecla.
+   */
+  useEffect(() => {
+    if (!valido) return;
+    let vivo = true;
+    const t = setTimeout(async () => {
+      const r = await consultarDonoDoTituloAction({
+        raffleId: raffle.id,
+        number: n,
+      });
+      if (vivo && r.ok) setConferido(r.data);
+    }, 500);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [valido, n, raffle.id]);
+
+  // A resposta guardada carrega o número que ela responde, então "ainda não
+  // conferi este" é uma comparação, e não um segundo estado para manter em dia.
+  // Zerar por efeito a cada tecla seria escrever estado durante o render, que é
+  // de onde vêm os renders em cascata.
+  const dono = conferido?.number === n ? conferido : null;
+  const conferindo = valido && dono == null;
 
   function save() {
-    const n = Number(ticketNumber);
-    if (!Number.isFinite(n) || n < 1 || n > raffle.totalNumbers) {
+    if (!valido) {
       toast.error(`Número deve estar entre 1 e ${raffle.totalNumbers}`);
       return;
     }
@@ -2556,25 +2743,28 @@ function WinnerBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-lg">
-          <Award className="h-5 w-5 text-amber-500" />
-          {alreadySet ? "Ganhador do sorteio" : "Definir ganhador"}
-        </DialogTitle>
-      </DialogHeader>
+      <CabecalhoDeModal
+        icone={<Award className="h-5 w-5" />}
+        tom="premio"
+        titulo={alreadySet ? "Ganhador do sorteio" : "Definir ganhador"}
+        descricao="O número entra na página da campanha junto com a nota, e quem estiver com ele vira o ganhador."
+      />
 
       <div className="space-y-4">
         {alreadySet && raffle.winnerDrawnAt && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-100 flex items-start gap-2">
-            <Award className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+          <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/[0.07] px-3.5 py-3 text-xs text-amber-200">
+            <Award className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
             <div>
-              <p className="font-semibold">
-                Ganhador registrado: título{" "}
+              <p className="font-bold">
+                Já registrado: título{" "}
                 <span className="tabular-nums">
-                  {raffle.winnerTicketNumber}
+                  {numeroDoTitulo(
+                    raffle.winnerTicketNumber!,
+                    raffle.totalNumbers,
+                  )}
                 </span>
               </p>
-              <p className="mt-0.5">
+              <p className="mt-0.5 opacity-90">
                 Sorteado em {formatDateTime(new Date(raffle.winnerDrawnAt))}.
               </p>
             </div>
@@ -2593,20 +2783,51 @@ function WinnerBody({
             max={raffle.totalNumbers}
             value={ticketNumber}
             onChange={(e) => setTicketNumber(e.target.value)}
-            placeholder="Ex: 70"
+            placeholder={String(1).padStart(
+              casasDoTitulo(raffle.totalNumbers),
+              "0",
+            )}
             disabled={isPending}
-            className="text-lg font-mono tabular-nums"
+            className="h-12 font-mono text-xl tabular-nums"
           />
-          <p className="text-[11px] text-muted-foreground">
-            Intervalo da rifa: 1 a {raffle.totalNumbers.toLocaleString("pt-BR")}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              {valido ? (
+                <>
+                  Vai aparecer como{" "}
+                  <strong className="font-mono">
+                    {numeroDoTitulo(n, raffle.totalNumbers)}
+                  </strong>
+                </>
+              ) : (
+                <>
+                  Títulos de{" "}
+                  {String(1).padStart(casasDoTitulo(raffle.totalNumbers), "0")}{" "}
+                  a {raffle.totalNumbers.toLocaleString("pt-BR")}
+                </>
+              )}
+            </p>
+            {foraDaFaixa && (
+              <Badge
+                variant="outline"
+                className="border-red-500/50 text-[10px] text-red-400"
+              >
+                fora do intervalo da campanha
+              </Badge>
+            )}
+          </div>
+          <ConferenciaDoTitulo
+            valido={valido}
+            conferindo={conferindo}
+            dono={dono}
+          />
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="winner-note" className="text-xs font-medium">
             Nota / comprovação (opcional)
           </Label>
-          <textarea
+          <Textarea
             id="winner-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -2614,7 +2835,7 @@ function WinnerBody({
             disabled={isPending}
             maxLength={2000}
             rows={4}
-            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="resize-none"
           />
           <p className="text-[11px] text-muted-foreground">
             Aparece publicamente pra dar transparência de como o número foi
@@ -2622,16 +2843,24 @@ function WinnerBody({
           </p>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer select-none">
+        <label className="flex cursor-pointer select-none items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-3.5 py-3">
           <Checkbox
             checked={finish}
             disabled={isPending}
             onCheckedChange={(v) => setFinish(v === true)}
+            className="mt-0.5"
           />
-          <span className="text-sm">Encerrar o sorteio (status FINISHED)</span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">
+              Encerrar a campanha
+            </span>
+            <span className="block text-[11px] text-muted-foreground">
+              Ela sai do ar para novas compras e passa a mostrar o resultado.
+            </span>
+          </span>
         </label>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 pt-3">
           {alreadySet && (
             <button
               type="button"
@@ -2647,16 +2876,17 @@ function WinnerBody({
             variant="outline"
             onClick={onClose}
             disabled={isPending}
+            className="rounded-full"
           >
             Cancelar
           </Button>
           <Button
             type="button"
             onClick={save}
-            disabled={isPending}
-            className="bg-amber-500 hover:bg-amber-600 text-white"
+            disabled={isPending || !valido}
+            className="rounded-full bg-amber-500 px-5 text-white hover:bg-amber-600"
           >
-            {isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+            {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             {alreadySet ? "Atualizar" : "Registrar ganhador"}
           </Button>
         </div>
@@ -2665,120 +2895,109 @@ function WinnerBody({
   );
 }
 
+/** O aviso de quem está com o título digitado, embaixo do campo. */
+function ConferenciaDoTitulo({
+  valido,
+  conferindo,
+  dono,
+}: {
+  valido: boolean;
+  conferindo: boolean;
+  dono: DonoDoTitulo | null;
+}) {
+  if (!valido) return null;
+  if (conferindo || !dono) {
+    return (
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Conferindo de quem é este título...
+      </p>
+    );
+  }
+  if (!dono.nome) {
+    return (
+      <p className="flex items-start gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-300">
+        <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
+        Ninguém comprou este título. Dá para registrar assim mesmo, mas a
+        campanha vai ficar sem ganhador para exibir.
+      </p>
+    );
+  }
+  const pago = dono.status === "PAID";
+  return (
+    <p
+      className={cn(
+        "flex items-start gap-1.5 rounded-xl border px-3 py-2 text-[11px]",
+        pago
+          ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300"
+          : "border-amber-500/30 bg-amber-500/[0.06] text-amber-300",
+      )}
+    >
+      <Check className="mt-px h-3.5 w-3.5 shrink-0" />
+      <span>
+        Este título é de <strong>{dono.nome}</strong>
+        {!pago && ", numa compra que ainda não foi paga"}.
+      </span>
+    </p>
+  );
+}
+
 // ============ STATS PANEL ============
 
-function StatsPanel({ stats }: { stats: Stats }) {
+function PainelDeNumeros({
+  stats,
+  totalNumbers,
+}: {
+  stats: Stats;
+  totalNumbers: number;
+}) {
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border bg-amber-500/15 text-amber-900 dark:text-amber-100 px-4 py-3 text-center text-sm font-bold tabular-nums">
-        {stats.soldPercent.toFixed(2)}%
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-3">
-        <StatPill
-          label="Livres"
-          value={stats.livres}
-          accent="border-foreground/20"
-          numClass=""
-        />
-        <StatPill
-          label="Reservados"
-          value={stats.reservados}
-          accent="border-amber-500/50 text-amber-700 dark:text-amber-300"
-          numClass="text-amber-700 dark:text-amber-300"
-        />
-        <StatPill
-          label="Pagos"
-          value={stats.pagos}
-          accent="border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
-          numClass="text-emerald-700 dark:text-emerald-300"
-        />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TotalCard
-          icon={
-            <span className="inline-flex h-12 w-12 rounded-full ring-2 ring-emerald-500/50 items-center justify-center text-emerald-600 dark:text-emerald-300">
-              <Check className="h-6 w-6" />
-            </span>
-          }
-          title="Pagos"
-          subtitle={
+    <Moldura>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 md:p-5">
+        {/* Dinheiro primeiro, e nas duas primeiras placas, porque é a pergunta
+            que traz alguém a esta tela. */}
+        <Placa
+          rotulo="Recebido"
+          valor={formatBRL(stats.paidTotal)}
+          nota={
             stats.pagos === 0
-              ? "nenhuma compra"
-              : `${stats.pagos} ${stats.pagos === 1 ? "compra" : "compras"}`
+              ? "nenhuma compra paga"
+              : `${stats.pagos.toLocaleString("pt-BR")} compra(s) paga(s)`
           }
-          total={stats.paidTotal}
-          colorClass="text-emerald-600 dark:text-emerald-300"
+          icone={<Check className="h-3 w-3" />}
+          tom="bom"
+          destaque
         />
-        <TotalCard
-          icon={
-            <span className="inline-flex h-12 w-12 rounded-full ring-2 ring-amber-500/50 items-center justify-center text-amber-600 dark:text-amber-300">
-              <Square className="h-6 w-6" />
-            </span>
-          }
-          title="Reservados"
-          subtitle={
+        <Placa
+          rotulo="Aguardando pagamento"
+          valor={formatBRL(stats.pendingTotal)}
+          nota={
             stats.reservados === 0
-              ? "nenhuma compra"
-              : `${stats.reservados} ${stats.reservados === 1 ? "compra" : "compras"}`
+              ? "nenhuma reserva aberta"
+              : `${stats.reservados.toLocaleString("pt-BR")} reserva(s) aberta(s)`
           }
-          total={stats.pendingTotal}
-          colorClass="text-amber-600 dark:text-amber-300"
+          icone={<Square className="h-3 w-3" />}
+          tom={stats.pendingTotal > 0 ? "custo" : "neutro"}
+        />
+        {/* Títulos e compras ficavam lado a lado dizendo só "148 Livres" e
+            "503 Pagos", como se as duas contassem a mesma coisa. Não contam:
+            148 é título, 503 é compra, e uma compra leva vários títulos. Os
+            rótulos passam a dizer qual é qual. */}
+        <Placa
+          rotulo="Títulos vendidos"
+          valor={stats.soldTickets.toLocaleString("pt-BR")}
+          nota={`de ${totalNumbers.toLocaleString("pt-BR")} da campanha`}
+          icone={<Trophy className="h-3 w-3" />}
+          tom="marca"
+        />
+        <Placa
+          rotulo="Títulos livres"
+          valor={stats.livres.toLocaleString("pt-BR")}
+          nota={stats.livres === 0 ? "campanha esgotada" : "ainda à venda"}
+          icone={<Square className="h-3 w-3" />}
         />
       </div>
-    </div>
-  );
-}
-
-function StatPill({
-  label,
-  value,
-  accent,
-  numClass,
-}: {
-  label: string;
-  value: number;
-  accent: string;
-  numClass: string;
-}) {
-  return (
-    <div
-      className={cn("rounded-lg border bg-card px-4 py-3 text-center", accent)}
-    >
-      <div className={cn("text-sm font-bold tabular-nums", numClass)}>
-        {value.toLocaleString("pt-BR")} {label}
-      </div>
-    </div>
-  );
-}
-
-function TotalCard({
-  icon,
-  title,
-  subtitle,
-  total,
-  colorClass,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  total: number;
-  colorClass: string;
-}) {
-  return (
-    <Card className="p-4 flex items-center gap-3">
-      {icon}
-      <div className="min-w-0 flex-1">
-        <div className="text-lg font-bold tracking-tight">{title}</div>
-        <div className={cn("text-xs", colorClass)}>{subtitle}</div>
-        <div
-          className={cn("mt-0.5 text-sm font-bold tabular-nums", colorClass)}
-        >
-          {formatBRL(total)}
-        </div>
-      </div>
-    </Card>
+    </Moldura>
   );
 }
 
@@ -2787,7 +3006,7 @@ function TotalCard({
 function TabsBar({ tab, counts }: { tab: Filters["tab"]; counts: Counts }) {
   const searchParams = useSearchParams();
   return (
-    <div className="flex overflow-x-auto border-b">
+    <div className="flex gap-1 overflow-x-auto border-b border-white/10 p-2">
       {TABS.map((t) => {
         const active = tab === t.key;
         const params = new URLSearchParams(searchParams.toString());
@@ -2803,16 +3022,19 @@ function TabsBar({ tab, counts }: { tab: Filters["tab"]; counts: Counts }) {
             key={t.key}
             href={`?${params.toString()}`}
             className={cn(
-              "shrink-0 px-4 py-3 text-xs font-medium border-b-2 -mb-px transition-colors flex items-center gap-2",
+              "flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
               active
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+                ? "bg-white/[0.07] text-foreground ring-1 ring-white/10"
+                : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground",
             )}
           >
             <span
               className={cn(
                 "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white tabular-nums",
                 t.dotClass,
+                // A bolinha do filtro apagado fica sem cor: seis bolinhas
+                // coloridas em fila competiam com a que está selecionada.
+                !active && "opacity-60",
               )}
             >
               {value}
@@ -2853,11 +3075,11 @@ function SearchBar({ filters }: { filters: Filters }) {
   }
 
   return (
-    <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto] p-4 border-b">
+    <div className="grid gap-2 border-b border-white/10 p-3 md:grid-cols-[1fr_200px_auto]">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Nome"
+          placeholder="Buscar pelo nome de quem comprou"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -2867,9 +3089,9 @@ function SearchBar({ filters }: { filters: Filters }) {
         />
       </div>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Título"
+          placeholder="Nº do título"
           inputMode="numeric"
           value={ticket}
           onChange={(e) => setTicket(e.target.value.replace(/\D/g, ""))}
@@ -2880,7 +3102,7 @@ function SearchBar({ filters }: { filters: Filters }) {
         />
       </div>
       <div className="flex items-center gap-1">
-        <Button type="button" onClick={submit}>
+        <Button type="button" onClick={submit} className="rounded-full px-5">
           Buscar
         </Button>
         <Button
@@ -2910,13 +3132,19 @@ function ReservationsTable({
 }) {
   if (reservations.length === 0) {
     return (
-      <div className="p-12 text-center text-sm text-muted-foreground">
-        Nenhuma compra encontrada com os filtros atuais.
+      <div className="px-6 py-16 text-center">
+        <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground">
+          <Search className="h-5 w-5" />
+        </span>
+        <p className="text-sm font-semibold">Nenhuma compra por aqui</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Troque a aba acima ou limpe a busca para ver as outras.
+        </p>
       </div>
     );
   }
   return (
-    <ul className="divide-y">
+    <ul className="divide-y divide-white/[0.06]">
       {reservations.map((r) => (
         <ReservationRowItem
           key={r.id}
@@ -2942,9 +3170,9 @@ function ReservationRowItem({
   const badge = STATUS_BADGE[row.status];
 
   return (
-    <li className="px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 hover:bg-muted/30 transition-colors">
-      <div className="flex items-start gap-3 flex-1 min-w-0">
-        <div className="h-10 w-10 rounded-full bg-sky-500 text-white flex items-center justify-center font-bold shrink-0">
+    <li className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-white/[0.02] md:flex-row md:items-center">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] font-bold text-muted-foreground">
           {initial}
         </div>
         <div className="min-w-0 flex-1 space-y-0.5">
@@ -2997,13 +3225,19 @@ function ReservationRowItem({
         </div>
       </div>
 
-      <div className="md:text-right md:min-w-[110px]">
-        <div className="text-xs text-muted-foreground tabular-nums line-through">
-          {row.ticketsCount}×{formatBRL(row.unitPrice)}
-        </div>
+      <div className="md:min-w-[130px] md:text-right">
         <div className="text-sm font-bold text-primary tabular-nums">
           {formatBRL(row.totalAmount)}
         </div>
+        {/* A conta por trás do total, sem o risco em cima.
+            Ela vinha com line-through, que num valor quer dizer preço
+            cancelado, e não "detalhe do total". Some quando a reserva não tem
+            título nenhum, porque ali "0 x R$ 4,99" não explica nada. */}
+        {row.ticketsCount > 0 && (
+          <div className="text-[11px] text-muted-foreground tabular-nums">
+            {row.ticketsCount} título(s) de {formatBRL(row.unitPrice)}
+          </div>
+        )}
       </div>
 
       <div className="md:min-w-[180px] md:text-center">
@@ -3143,12 +3377,11 @@ function ReservationDetailsModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Info className="h-5 w-5 text-primary" />
-            Detalhes da reserva
-          </DialogTitle>
-        </DialogHeader>
+        <CabecalhoDeModal
+          icone={<Info className="h-5 w-5" />}
+          titulo="Detalhes da reserva"
+          descricao="Os dados de contato de quem comprou e os títulos desta compra."
+        />
 
         <div className="space-y-4">
           <div className="rounded-lg border bg-muted/20 px-3 py-2 flex items-center justify-between gap-2">
