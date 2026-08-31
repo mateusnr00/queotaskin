@@ -92,6 +92,61 @@ export async function uploadImagem(
   return { url: data.publicUrl, path };
 }
 
+/**
+ * Envia um áudio para uma pasta do bucket.
+ *
+ * Separada de uploadImagem de propósito: o que se aceita aqui é outra lista,
+ * e o motivo é o mesmo que recusa SVG lá. O bucket é público e serve o
+ * arquivo com o tipo que a gente mandar; aceitar "qualquer coisa que o
+ * navegador chamou de áudio" deixaria subir um HTML servido como HTML no
+ * nosso domínio de storage. Por isso a extensão manda, e é uma lista curta.
+ */
+const AUDIO_MIME: Record<string, string> = {
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+  wav: "audio/wav",
+  webm: "audio/webm",
+};
+
+/** As extensões que o upload de áudio aceita, para a mensagem e o `accept`. */
+export const EXTENSOES_DE_AUDIO = Object.keys(AUDIO_MIME);
+
+export async function uploadAudio(
+  pasta: string,
+  file: File,
+): Promise<{ url: string; path: string }> {
+  const client = getStorageClient();
+  const bucket = readEnv("SUPABASE_STORAGE_BUCKET");
+  if (!client || !bucket) {
+    throw new Error(
+      "Storage não configurado. Defina NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e SUPABASE_STORAGE_BUCKET.",
+    );
+  }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const contentType = AUDIO_MIME[ext];
+  if (!contentType) {
+    throw new Error(
+      `Formato de áudio não aceito. Envie ${EXTENSOES_DE_AUDIO.join(", ")}.`,
+    );
+  }
+
+  const path = `${pasta}/${nanoid(10)}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { error } = await client.storage.from(bucket).upload(path, buffer, {
+    contentType,
+    upsert: false,
+  });
+  if (error) throw new Error(`Falha no upload: ${error.message}`);
+
+  const { data } = client.storage.from(bucket).getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+
 export async function deleteRaffleImage(path: string): Promise<void> {
   const client = getStorageClient();
   const bucket = readEnv("SUPABASE_STORAGE_BUCKET");

@@ -44,7 +44,11 @@ import { AnelDePreparo } from "@/components/sorteio/anel-de-preparo";
 import { CarretelDeTitulos } from "@/components/sorteio/carretel-de-titulos";
 import { Confete } from "@/components/sorteio/confete";
 import { useEstadoDoSorteio } from "@/components/sorteio/usar-estado-do-sorteio";
-import { useSom } from "@/components/sorteio/usar-som";
+import {
+  SEM_SONS,
+  useSom,
+  type SonsDoSorteio,
+} from "@/components/sorteio/usar-som";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 
@@ -69,8 +73,14 @@ function horaDeBrasilia(iso: string): string {
 export function TransmissaoDoSorteio({
   estadoInicial,
   reivindicacao,
+  sons = SEM_SONS,
 }: {
   estadoInicial: EstadoPublicoDoSorteio;
+  /**
+   * O que tocar em cada momento, vindo das Configurações do painel. Momento
+   * sem arquivo usa o som sintetizado; `ativo: false` esconde o botão.
+   */
+  sons?: SonsDoSorteio;
   /**
    * Preenchido só quando quem está olhando é o ganhador e há telefone de
    * suporte. Vem do servidor, resolvido por sessão, e por isso não pode ser
@@ -80,7 +90,7 @@ export function TransmissaoDoSorteio({
 }) {
   const { estado, agora, conexao, recarregar } =
     useEstadoDoSorteio(estadoInicial);
-  const som = useSom();
+  const som = useSom(sons);
   const router = useRouter();
 
   // A FASE VEM DO RELÓGIO, não da última resposta do servidor.
@@ -313,22 +323,25 @@ function Cabecalho({
 
       {/* O som fica no cabeçalho e nasce desligado: navegador não deixa
             tocar antes do clique, e ninguém quer barulho surpresa numa aba
-            aberta há dez minutos. */}
-      <button
-        type="button"
-        onClick={som.alternar}
-        aria-pressed={som.ligado}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-      >
-        {som.ligado ? (
-          <Volume2 className="h-5 w-5" />
-        ) : (
-          <VolumeX className="h-5 w-5" />
-        )}
-        <span className="sr-only">
-          {som.ligado ? "Desativar som" : "Ativar som"}
-        </span>
-      </button>
+            aberta há dez minutos. Desligado no painel, o botão nem aparece:
+            oferecer um controle que não faz nada é pior que não oferecer. */}
+      {som.disponivel && (
+        <button
+          type="button"
+          onClick={som.alternar}
+          aria-pressed={som.ligado}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          {som.ligado ? (
+            <Volume2 className="h-5 w-5" />
+          ) : (
+            <VolumeX className="h-5 w-5" />
+          )}
+          <span className="sr-only">
+            {som.ligado ? "Desativar som" : "Ativar som"}
+          </span>
+        </button>
+      )}
     </header>
   );
 }

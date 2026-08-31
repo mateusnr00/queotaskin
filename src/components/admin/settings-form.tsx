@@ -28,13 +28,17 @@ import {
   Trash2,
   Trophy,
   Upload,
+  Volume2,
 } from "lucide-react";
 
 import {
   removeLogoAction,
+  removerSomDoSorteioAction,
   setLogoByUrlAction,
   updateSiteAction,
   uploadLogoAction,
+  uploadSomDoSorteioAction,
+  type MomentoDeSom,
 } from "@/server/actions/settings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -53,11 +57,7 @@ import { cn } from "@/lib/utils";
 import { normalizeImage } from "@/lib/image-normalize";
 
 type LoginMode = "phone" | "cpf";
-type NumbersNomenclature =
-  | "titulos"
-  | "numeros"
-  | "bilhetes"
-  | "numeros_sorte";
+type NumbersNomenclature = "titulos" | "numeros" | "bilhetes" | "numeros_sorte";
 
 interface Props {
   initial: {
@@ -100,6 +100,11 @@ interface Props {
     showPromotionsPercentage: boolean;
     showCombosPrice: boolean;
     showFees: boolean;
+    somDoSorteioAtivo: boolean;
+    somContagemUrl: string | null;
+    somContagemFinalUrl: string | null;
+    somRolagemUrl: string | null;
+    somRevelacaoUrl: string | null;
   };
 }
 
@@ -139,6 +144,7 @@ export function SettingsForm({ initial }: Props) {
           <Tab value="ux" icon={Heart} label="Experiência do Usuário" />
           <Tab value="premios" icon={Trophy} label="Prêmios Instantâneos" />
           <Tab value="promos" icon={Tag} label="Preços / Promoções" />
+          <Tab value="som" icon={Volume2} label="Som do sorteio" />
         </TabsList>
       </div>
 
@@ -164,6 +170,10 @@ export function SettingsForm({ initial }: Props) {
 
       <TabsContent value="suporte">
         <SuporteTab initial={initial} />
+      </TabsContent>
+
+      <TabsContent value="som">
+        <SomTab initial={initial} />
       </TabsContent>
     </Tabs>
   );
@@ -196,22 +206,24 @@ function GeralTab({ initial }: Props) {
   const router = useRouter();
   const [logoUrl, setLogoUrl] = useState<string | null>(initial.logoUrl);
   const [logoShape, setLogoShape] = useState<"ROUND" | "RECTANGLE">(
-    initial.logoShape
+    initial.logoShape,
   );
   const [companyName, setCompanyName] = useState(initial.companyName);
-  const [siteDescription, setSiteDescription] = useState(initial.siteDescription);
+  const [siteDescription, setSiteDescription] = useState(
+    initial.siteDescription,
+  );
   const [logoUrlInput, setLogoUrlInput] = useState("");
   const [isAddingLogoUrl, setIsAddingLogoUrl] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [faviconUrl, setFaviconUrl] = useState<string | null>(
-    initial.faviconUrl
+    initial.faviconUrl,
   );
   const [enviandoFavicon, setEnviandoFavicon] = useState(false);
   const faviconRef = useRef<HTMLInputElement>(null);
   const [fundoUrl, setFundoUrl] = useState<string | null>(
-    initial.authBackgroundUrl
+    initial.authBackgroundUrl,
   );
   const [enviandoFundo, setEnviandoFundo] = useState(false);
   const fundoRef = useRef<HTMLInputElement>(null);
@@ -424,7 +436,7 @@ function GeralTab({ initial }: Props) {
               : "h-24 w-full max-w-[260px] rounded-xl",
             logoUrl
               ? "border-transparent ring-1 ring-border"
-              : "border-border hover:border-primary"
+              : "border-border hover:border-primary",
           )}
         >
           {logoUrl ? (
@@ -434,7 +446,7 @@ function GeralTab({ initial }: Props) {
               alt="Logo"
               className={cn(
                 "h-full w-full",
-                logoShape === "ROUND" ? "object-cover" : "object-contain p-2"
+                logoShape === "ROUND" ? "object-cover" : "object-contain p-2",
               )}
             />
           ) : (
@@ -475,7 +487,7 @@ function GeralTab({ initial }: Props) {
                 "flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                 logoShape === op.valor
                   ? "bg-background shadow-sm ring-1 ring-border"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {op.rotulo}
@@ -567,7 +579,7 @@ function GeralTab({ initial }: Props) {
             "group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors",
             faviconUrl
               ? "border-transparent bg-background ring-1 ring-border"
-              : "border-border hover:border-primary"
+              : "border-border hover:border-primary",
           )}
           title="Enviar ícone"
         >
@@ -592,8 +604,8 @@ function GeralTab({ initial }: Props) {
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-semibold">Ícone da aba (favicon)</p>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Aparece na aba do navegador e nos favoritos, num quadrado de 16 a
-            32 pixels. Imagem larga com texto vira um borrão nesse tamanho.
+            Aparece na aba do navegador e nos favoritos, num quadrado de 16 a 32
+            pixels. Imagem larga com texto vira um borrão nesse tamanho.
             Funciona melhor um símbolo, uma letra ou o miolo da marca.
             {!faviconUrl && " Enquanto estiver vazio, a logo é usada."}
           </p>
@@ -636,7 +648,7 @@ function GeralTab({ initial }: Props) {
             "group relative h-16 w-28 shrink-0 overflow-hidden rounded-lg border-2 border-dashed bg-black transition-colors",
             fundoUrl
               ? "border-transparent ring-1 ring-border"
-              : "border-border hover:border-primary"
+              : "border-border hover:border-primary",
           )}
           title="Enviar fundo"
         >
@@ -667,9 +679,9 @@ function GeralTab({ initial }: Props) {
             deitada. Menor que isso fica ampliado em monitor grande, e é o que
             deixa a arte com cara de baixa qualidade. Acima de 2560px no lado
             maior o envio reduz, então não adianta mandar mais. Arte escura
-            funciona melhor: o formulário fica por cima e há um véu
-            escurecendo. Deixe folga nas bordas, porque a imagem é cortada
-            para preencher a tela e telas estreitas comem as laterais.
+            funciona melhor: o formulário fica por cima e há um véu escurecendo.
+            Deixe folga nas bordas, porque a imagem é cortada para preencher a
+            tela e telas estreitas comem as laterais.
             {!fundoUrl && " Sem imagem, o fundo é um degradê escuro."}
           </p>
           {fundoUrl && (
@@ -814,35 +826,35 @@ function SuporteTab({ initial }: Props) {
 
 function UxTab({ initial }: Props) {
   const [campaignsTitle, setCampaignsTitle] = useState(
-    initial.homeCampaignsTitle
+    initial.homeCampaignsTitle,
   );
   const [campaignsCaption, setCampaignsCaption] = useState(
-    initial.homeCampaignsCaption
+    initial.homeCampaignsCaption,
   );
   const [showWinners, setShowWinners] = useState(initial.showWinnersOnHome);
   // Comportamentos globais (selects + 8 switches).
   const [affiliateCookieHours, setAffiliateCookieHours] = useState(
-    initial.affiliateCookieHours
+    initial.affiliateCookieHours,
   );
   const [rankingOrderBy, setRankingOrderBy] = useState(initial.rankingOrderBy);
   const [rankingCacheMinutes, setRankingCacheMinutes] = useState(
-    initial.rankingCacheMinutes
+    initial.rankingCacheMinutes,
   );
   const [requireAddress, setRequireAddress] = useState(
-    initial.requireAddressOnSignup
+    initial.requireAddressOnSignup,
   );
   const [allowPublicAffiliate, setAllowPublicAffiliate] = useState(
-    initial.allowPublicAffiliate
+    initial.allowPublicAffiliate,
   );
   const [shareButtonsGlobal, setShareButtonsGlobal] = useState(
-    initial.shareButtonsGlobal
+    initial.shareButtonsGlobal,
   );
   const [allowQuantityKeyboard, setAllowQuantityKeyboard] = useState(
-    initial.allowQuantityKeyboardInput
+    initial.allowQuantityKeyboardInput,
   );
   const [buyerPrivacy, setBuyerPrivacy] = useState(initial.buyerPrivacy);
   const [carouselAutoPlay, setCarouselAutoPlay] = useState(
-    initial.carouselAutoPlay
+    initial.carouselAutoPlay,
   );
   const [showCardPrices, setShowCardPrices] = useState(initial.showCardPrices);
   const [showAppButton, setShowAppButton] = useState(initial.showAppButton);
@@ -865,7 +877,7 @@ function UxTab({ initial }: Props) {
         homeCampaignsTitle: campaignsTitle.trim(),
         homeCampaignsCaption: campaignsCaption.trim(),
       },
-      "Texto da home atualizado"
+      "Texto da home atualizado",
     );
   }
 
@@ -873,14 +885,14 @@ function UxTab({ initial }: Props) {
     setShowWinners(v);
     apply(
       { showWinnersOnHome: v },
-      v ? "Ganhadores visíveis na home" : "Ganhadores ocultos"
+      v ? "Ganhadores visíveis na home" : "Ganhadores ocultos",
     );
   }
 
   // Helper genérico pros toggles inline (atualiza estado + persiste).
   function applyToggle(
     key: string,
-    setter: (v: boolean) => void
+    setter: (v: boolean) => void,
   ): (v: boolean) => void {
     return (v: boolean) => {
       setter(v);
@@ -901,9 +913,7 @@ function UxTab({ initial }: Props) {
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="campaignsTitle">
-              Título da seção de campanhas
-            </Label>
+            <Label htmlFor="campaignsTitle">Título da seção de campanhas</Label>
             <Input
               id="campaignsTitle"
               value={campaignsTitle}
@@ -945,8 +955,8 @@ function UxTab({ initial }: Props) {
             Mostrar seção de ganhadores na home
           </p>
           <p className="text-xs text-muted-foreground">
-            Quando ligado, a home pública mostra os últimos sorteados. Útil
-            só depois que houver sorteios concluídos com ganhador.
+            Quando ligado, a home pública mostra os últimos sorteados. Útil só
+            depois que houver sorteios concluídos com ganhador.
           </p>
         </div>
         <Switch
@@ -980,7 +990,7 @@ function UxTab({ initial }: Props) {
                   AFFILIATE_COOKIE_OPTIONS.map((n) => [
                     String(n),
                     `${n} horas`,
-                  ])
+                  ]),
                 )}
               />
             </SelectTrigger>
@@ -1037,10 +1047,7 @@ function UxTab({ initial }: Props) {
             <SelectTrigger className="w-full">
               <SelectValue
                 labels={Object.fromEntries(
-                  RANKING_CACHE_OPTIONS.map((n) => [
-                    String(n),
-                    `${n} minutos`,
-                  ])
+                  RANKING_CACHE_OPTIONS.map((n) => [String(n), `${n} minutos`]),
                 )}
               />
             </SelectTrigger>
@@ -1067,7 +1074,7 @@ function UxTab({ initial }: Props) {
           checked={allowPublicAffiliate}
           onChange={applyToggle(
             "allowPublicAffiliate",
-            setAllowPublicAffiliate
+            setAllowPublicAffiliate,
           )}
           disabled={isPending}
         />
@@ -1084,7 +1091,7 @@ function UxTab({ initial }: Props) {
           checked={allowQuantityKeyboard}
           onChange={applyToggle(
             "allowQuantityKeyboardInput",
-            setAllowQuantityKeyboard
+            setAllowQuantityKeyboard,
           )}
           disabled={isPending}
         />
@@ -1158,7 +1165,7 @@ function UxToggle({
 function CompraTab({ initial }: Props) {
   const [loginMode, setLoginMode] = useState<LoginMode>(initial.loginMode);
   const [nomenclature, setNomenclature] = useState<NumbersNomenclature>(
-    initial.numbersNomenclature
+    initial.numbersNomenclature,
   );
   const [heading, setHeading] = useState(initial.quantityCardsHeading);
   const [minAge, setMinAge] = useState<16 | 18 | 21>(initial.minPurchaseAge);
@@ -1189,9 +1196,7 @@ function CompraTab({ initial }: Props) {
           onValueChange={(v) => v && setLoginMode(v as LoginMode)}
         >
           <SelectTrigger className="w-full">
-            <SelectValue
-              labels={{ phone: "Telefone", cpf: "CPF" }}
-            />
+            <SelectValue labels={{ phone: "Telefone", cpf: "CPF" }} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="phone">Telefone</SelectItem>
@@ -1284,34 +1289,34 @@ const ALL_PRIZE_MODALITIES: PrizeModality[] = [
 function PremiosTab({ initial }: Props) {
   function sanitizeOrder(raw: string[]): PrizeModality[] {
     const known = raw.filter((s): s is PrizeModality =>
-      ALL_PRIZE_MODALITIES.includes(s as PrizeModality)
+      ALL_PRIZE_MODALITIES.includes(s as PrizeModality),
     );
     const missing = ALL_PRIZE_MODALITIES.filter((m) => !known.includes(m));
     return [...known, ...missing] as PrizeModality[];
   }
 
   const [order, setOrder] = useState<PrizeModality[]>(
-    sanitizeOrder(initial.instantPrizesOrder)
+    sanitizeOrder(initial.instantPrizesOrder),
   );
   const [sectionTitle, setSectionTitle] = useState(initial.awardedSectionTitle);
   const [showOnlyWhenDistributed, setShowOnlyWhenDistributed] = useState(
-    initial.showAwardedOnlyWhenDistributed
+    initial.showAwardedOnlyWhenDistributed,
   );
   const [showInNumbers, setShowInNumbers] = useState(
-    initial.showAwardedNumbers
+    initial.showAwardedNumbers,
   );
   const [showInBoxes, setShowInBoxes] = useState(
-    initial.showAwardedNumbersBoxes
+    initial.showAwardedNumbersBoxes,
   );
   const [showInRoulette, setShowInRoulette] = useState(
-    initial.showAwardedNumbersRoulette
+    initial.showAwardedNumbersRoulette,
   );
   const [showInScratch, setShowInScratch] = useState(
-    initial.showAwardedNumbersScratchCard
+    initial.showAwardedNumbersScratchCard,
   );
   const [aggregate, setAggregate] = useState(initial.aggregateInstantAwards);
   const [disableRepeat, setDisableRepeat] = useState(
-    initial.disableInstantAwardsRepeatWinners
+    initial.disableInstantAwardsRepeatWinners,
   );
   const [isPending, startTransition] = useTransition();
 
@@ -1328,7 +1333,7 @@ function PremiosTab({ initial }: Props) {
 
   function applyToggle(
     key: string,
-    setter: (v: boolean) => void
+    setter: (v: boolean) => void,
   ): (v: boolean) => void {
     return (v: boolean) => {
       setter(v);
@@ -1348,7 +1353,7 @@ function PremiosTab({ initial }: Props) {
   function saveTitle() {
     apply(
       { awardedSectionTitle: sectionTitle.trim() || "Títulos Premiados" },
-      "Título atualizado"
+      "Título atualizado",
     );
   }
 
@@ -1424,7 +1429,7 @@ function PremiosTab({ initial }: Props) {
           checked={showOnlyWhenDistributed}
           onChange={applyToggle(
             "showAwardedOnlyWhenDistributed",
-            setShowOnlyWhenDistributed
+            setShowOnlyWhenDistributed,
           )}
           disabled={isPending}
         />
@@ -1448,7 +1453,7 @@ function PremiosTab({ initial }: Props) {
           checked={showInRoulette}
           onChange={applyToggle(
             "showAwardedNumbersRoulette",
-            setShowInRoulette
+            setShowInRoulette,
           )}
           disabled={isPending}
         />
@@ -1458,7 +1463,7 @@ function PremiosTab({ initial }: Props) {
           checked={showInScratch}
           onChange={applyToggle(
             "showAwardedNumbersScratchCard",
-            setShowInScratch
+            setShowInScratch,
           )}
           disabled={isPending}
         />
@@ -1475,7 +1480,7 @@ function PremiosTab({ initial }: Props) {
           checked={disableRepeat}
           onChange={applyToggle(
             "disableInstantAwardsRepeatWinners",
-            setDisableRepeat
+            setDisableRepeat,
           )}
           disabled={isPending}
         />
@@ -1490,10 +1495,10 @@ function PremiosTab({ initial }: Props) {
 
 function PromosTab({ initial }: Props) {
   const [showPromotionsPercentage, setShowPromotionsPercentage] = useState(
-    initial.showPromotionsPercentage
+    initial.showPromotionsPercentage,
   );
   const [showCombosPrice, setShowCombosPrice] = useState(
-    initial.showCombosPrice
+    initial.showCombosPrice,
   );
   const [showFees, setShowFees] = useState(initial.showFees);
   const [isPending, startTransition] = useTransition();
@@ -1511,7 +1516,7 @@ function PromosTab({ initial }: Props) {
 
   function applyToggle(
     key: string,
-    setter: (v: boolean) => void
+    setter: (v: boolean) => void,
   ): (v: boolean) => void {
     return (v: boolean) => {
       setter(v);
@@ -1527,7 +1532,7 @@ function PromosTab({ initial }: Props) {
         checked={showPromotionsPercentage}
         onChange={applyToggle(
           "showPromotionsPercentage",
-          setShowPromotionsPercentage
+          setShowPromotionsPercentage,
         )}
         disabled={isPending}
       />
@@ -1549,3 +1554,248 @@ function PromosTab({ initial }: Props) {
   );
 }
 
+// ---------------- ABA SOM DO SORTEIO ----------------
+
+/**
+ * Os quatro momentos com som na transmissão.
+ *
+ * A ordem é a da tela: contagem, os dez segundos finais, o giro dos títulos,
+ * o número aparecendo. Cada um diz o que faz com o arquivo, porque a regra
+ * não é a mesma nos quatro: o giro repete até o número sair, os outros tocam
+ * uma vez.
+ */
+const MOMENTOS: {
+  chave: MomentoDeSom;
+  campo: keyof Props["initial"];
+  titulo: string;
+  descricao: string;
+}[] = [
+  {
+    chave: "contagem",
+    campo: "somContagemUrl",
+    titulo: "Contagem regressiva",
+    descricao:
+      "Toca a cada segundo enquanto a contagem corre. Use um som bem curto, tipo um tique: um trecho de dois segundos ficaria por cima do próximo.",
+  },
+  {
+    chave: "contagemFinal",
+    campo: "somContagemFinalUrl",
+    titulo: "Últimos dez segundos",
+    descricao:
+      "A mesma batida da contagem, mas na reta final. Também toca a cada segundo.",
+  },
+  {
+    chave: "rolagem",
+    campo: "somRolagemUrl",
+    titulo: "Giro dos títulos",
+    descricao:
+      "Toca em repetição do começo do giro até o número aparecer, e para sozinho. É o lugar da trilha de suspense.",
+  },
+  {
+    chave: "revelacao",
+    campo: "somRevelacaoUrl",
+    titulo: "Número na tela",
+    descricao:
+      "Toca uma vez, quando o número premiado aparece. Vinheta, aplauso, o que for a marca da casa.",
+  },
+];
+
+function SomTab({ initial }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [ativo, setAtivo] = useState(initial.somDoSorteioAtivo);
+
+  function alternarAtivo(valor: boolean) {
+    setAtivo(valor);
+    startTransition(async () => {
+      const r = await updateSiteAction({ somDoSorteioAtivo: valor });
+      if (!r.ok) {
+        setAtivo(!valor);
+        toast.error(r.error);
+        return;
+      }
+      toast.success(valor ? "Som ligado" : "Som desligado");
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card className="max-w-3xl space-y-5 p-5 md:p-6">
+      <div>
+        <h2 className="text-base font-bold">Som da transmissão</h2>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          A transmissão já vem com som próprio, gerado na hora e sem download.
+          Aqui você troca o de cada momento por um arquivo seu. Momento sem
+          arquivo continua com o som padrão.
+        </p>
+      </div>
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-muted/30 p-4">
+        <Switch
+          checked={ativo}
+          disabled={isPending}
+          onCheckedChange={alternarAtivo}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">
+            Som na página do sorteio
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+            Desligado, o botão de som some da transmissão e nada toca. Quem
+            assiste continua vendo tudo: o som nunca conta nada que a tela não
+            conte.
+          </span>
+        </span>
+      </label>
+
+      {/* Quem assiste precisa clicar no botão de som uma vez. Não é escolha
+          nossa: nenhum navegador deixa uma página tocar áudio sozinha, e
+          esconder isso do admin faria ele achar que o upload não funcionou. */}
+      <p className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+        Na transmissão, o som começa desligado e quem assiste toca no ícone de
+        alto-falante para ligar. Navegador nenhum deixa uma página tocar áudio
+        antes disso.
+      </p>
+
+      <div
+        className={cn("space-y-3", !ativo && "pointer-events-none opacity-50")}
+      >
+        {MOMENTOS.map((m) => (
+          <FaixaDeSom
+            key={m.chave}
+            momento={m.chave}
+            titulo={m.titulo}
+            descricao={m.descricao}
+            urlInicial={(initial[m.campo] as string | null) ?? null}
+          />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** Um momento: enviar, ouvir o que está lá, e voltar ao som padrão. */
+function FaixaDeSom({
+  momento,
+  titulo,
+  descricao,
+  urlInicial,
+}: {
+  momento: MomentoDeSom;
+  titulo: string;
+  descricao: string;
+  urlInicial: string | null;
+}) {
+  const router = useRouter();
+  const entrada = useRef<HTMLInputElement | null>(null);
+  const [url, setUrl] = useState(urlInicial);
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar(file: File) {
+    setEnviando(true);
+    const fd = new FormData();
+    fd.append("momento", momento);
+    fd.append("file", file);
+    const r = await uploadSomDoSorteioAction(fd);
+    setEnviando(false);
+    if (entrada.current) entrada.current.value = "";
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    setUrl(r.data.url);
+    toast.success("Áudio enviado");
+    router.refresh();
+  }
+
+  async function remover() {
+    setEnviando(true);
+    const r = await removerSomDoSorteioAction(momento);
+    setEnviando(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    setUrl(null);
+    toast.success("Voltou para o som padrão");
+    router.refresh();
+  }
+
+  return (
+    <div className="space-y-2.5 rounded-xl border bg-muted/30 p-4">
+      <input
+        ref={entrada}
+        type="file"
+        accept="audio/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void enviar(file);
+        }}
+      />
+
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            {titulo}
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                url
+                  ? "bg-primary/10 text-primary"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {url ? "Seu áudio" : "Som padrão"}
+            </span>
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            {descricao}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={enviando}
+            onClick={() => entrada.current?.click()}
+            className="h-8"
+          >
+            {enviando ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {url ? "Trocar" : "Enviar áudio"}
+          </Button>
+          {url && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={enviando}
+              onClick={() => void remover()}
+              className="h-8 px-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="sr-only">Remover áudio</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Ouvir antes vale mais que qualquer descrição: som cortado, alto
+          demais ou com dois segundos de silêncio na frente só aparece
+          tocando. */}
+      {url && (
+        <audio src={url} controls preload="none" className="h-9 w-full" />
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        MP3, M4A, AAC, OGG, WAV ou WEBM, até 2 MB.
+      </p>
+    </div>
+  );
+}

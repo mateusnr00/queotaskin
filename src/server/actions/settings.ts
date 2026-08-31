@@ -15,8 +15,10 @@ import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import {
   deleteRaffleImage,
+  EXTENSOES_DE_AUDIO,
   isStorageConfigured,
   pathFromPublicUrl,
+  uploadAudio,
   uploadRaffleImage,
 } from "@/lib/storage";
 import { THEME_PRESET_KEYS } from "@/lib/theme-presets";
@@ -132,6 +134,9 @@ const siteSettingsSchema = z.object({
   showPromotionsPercentage: z.boolean().optional(),
   showCombosPrice: z.boolean().optional(),
   showFees: z.boolean().optional(),
+  // Som da transmissão do sorteio. Desligado, o botão de som some da
+  // transmissão e nada toca.
+  somDoSorteioAtivo: z.boolean().optional(),
 });
 
 function isValidUrl(v: string): boolean {
@@ -272,6 +277,8 @@ export async function updateSiteAction(
     if (data.showCombosPrice !== undefined)
       update.showCombosPrice = data.showCombosPrice;
     if (data.showFees !== undefined) update.showFees = data.showFees;
+    if (data.somDoSorteioAtivo !== undefined)
+      update.somDoSorteioAtivo = data.somDoSorteioAtivo;
 
     if (Object.keys(update).length === 0) {
       return { ok: true, data: undefined };
@@ -551,5 +558,151 @@ export async function updateAnalyticsAction(
   } catch (err) {
     console.error("[updateAnalyticsAction]", err);
     return { ok: false, error: "Erro ao salvar o rastreamento" };
+  }
+}
+
+// =============================================================
+// SOM DO SORTEIO (Supabase Storage)
+// =============================================================
+
+// Um som de vinheta cabe folgado nisto. O limite existe porque a página da
+// transmissão abre no celular, muitas vezes na rede da rua, e um arquivo de
+// dez megas atrasaria justamente a tela que precisa começar na hora certa.
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/** Os quatro momentos com som na transmissão. */
+export type MomentoDeSom =
+  | "contagem"
+  | "contagemFinal"
+  | "rolagem"
+  | "revelacao";
+
+const COLUNA_POR_MOMENTO = {
+  contagem: "somContagemUrl",
+  contagemFinal: "somContagemFinalUrl",
+  rolagem: "somRolagemUrl",
+  revelacao: "somRevelacaoUrl",
+} as const;
+
+const COLUNAS_DE_SOM = {
+  somContagemUrl: true,
+  somContagemFinalUrl: true,
+  somRolagemUrl: true,
+  somRevelacaoUrl: true,
+} as const;
+
+function momentoDoFormulario(valor: unknown): MomentoDeSom | null {
+  return valor === "contagem" ||
+    valor === "contagemFinal" ||
+    valor === "rolagem" ||
+    valor === "revelacao"
+    ? valor
+    : null;
+}
+
+/** Apaga do bucket o arquivo que estava naquele momento, se for nosso. */
+async function apagarSomAnterior(
+  tenantId: string,
+  coluna: (typeof COLUNA_POR_MOMENTO)[MomentoDeSom],
+): Promise<void> {
+  const atual = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: COLUNAS_DE_SOM,
+  });
+  const anterior = atual?.[coluna];
+  if (!anterior) return;
+  const path = pathFromPublicUrl(anterior);
+  if (path) await deleteRaffleImage(path);
+}
+
+export async function uploadSomDoSorteioAction(
+  formData: FormData,
+): Promise<ActionResult<{ url: string }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+    const momento = momentoDoFormulario(formData.get("momento"));
+    if (!momento) return { ok: false, error: "Momento inválido" };
+    const coluna = COLUNA_POR_MOMENTO[momento];
+
+    if (!isStorageConfigured()) {
+      return {
+        ok: false,
+        error:
+          "Supabase Storage não está configurado. Defina NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e SUPABASE_STORAGE_BUCKET.",
+      };
+    }
+
+    const file = formData.get("file");
+    if (!(file instanceof File)) return { ok: false, error: "Arquivo inválido" };
+    if (file.size > MAX_AUDIO_BYTES) {
+      return {
+        ok: false,
+        error: "Áudio grande demais. O limite é 2 MB, use um trecho curto",
+      };
+    }
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!EXTENSOES_DE_AUDIO.includes(ext)) {
+      return {
+        ok: false,
+        error: `Formato não aceito. Envie ${EXTENSOES_DE_AUDIO.join(", ")}`,
+      };
+    }
+
+    await apagarSomAnterior(tenantId, coluna);
+    const { url } = await uploadAudio("sons", file);
+
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { [coluna]: url },
+    });
+
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: `som do sorteio: ${momento}` },
+    });
+
+    revalidatePath("/", "layout");
+    return { ok: true, data: { url } };
+  } catch (err) {
+    console.error("[uploadSomDoSorteioAction]", err);
+    const msg = err instanceof Error ? err.message : "Erro no upload";
+    return { ok: false, error: msg };
+  }
+}
+
+/** Volta o momento para o som sintetizado, apagando o arquivo do bucket. */
+export async function removerSomDoSorteioAction(
+  momentoBruto: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+    const momento = momentoDoFormulario(momentoBruto);
+    if (!momento) return { ok: false, error: "Momento inválido" };
+    const coluna = COLUNA_POR_MOMENTO[momento];
+
+    await apagarSomAnterior(tenantId, coluna);
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { [coluna]: null },
+    });
+
+    await registrarLog({
+      acao: "config.site_alterada",
+      tenantId,
+      alvo: { tipo: "Tenant", id: tenantId },
+      detalhes: { o_que: `som do sorteio removido: ${momento}` },
+    });
+
+    revalidatePath("/", "layout");
+    return { ok: true, data: undefined };
+  } catch (err) {
+    console.error("[removerSomDoSorteioAction]", err);
+    return { ok: false, error: "Erro ao remover o áudio" };
   }
 }

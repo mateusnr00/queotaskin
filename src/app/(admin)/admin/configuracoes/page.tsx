@@ -55,6 +55,11 @@ export default async function ConfiguracoesPage() {
       showPromotionsPercentage: true,
       showCombosPrice: true,
       showFees: true,
+      somDoSorteioAtivo: true,
+      somContagemUrl: true,
+      somContagemFinalUrl: true,
+      somRolagemUrl: true,
+      somRevelacaoUrl: true,
     },
   });
 
@@ -123,6 +128,11 @@ export default async function ConfiguracoesPage() {
           showPromotionsPercentage: tenant.showPromotionsPercentage,
           showCombosPrice: tenant.showCombosPrice,
           showFees: tenant.showFees,
+          somDoSorteioAtivo: tenant.somDoSorteioAtivo,
+          somContagemUrl: tenant.somContagemUrl,
+          somContagemFinalUrl: tenant.somContagemFinalUrl,
+          somRolagemUrl: tenant.somRolagemUrl,
+          somRevelacaoUrl: tenant.somRevelacaoUrl,
         }}
       />
     </div>

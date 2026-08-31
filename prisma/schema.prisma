@@ -410,6 +410,24 @@ model Tenant {
   rankEnabled                       Boolean   @default(true)
   rankShowOnHome                    Boolean   @default(true)
 
+  /// SOM DA TRANSMISSÃO DO SORTEIO.
+  ///
+  /// Desligado aqui, o botão de som some da transmissão e nada toca. Ligado,
+  /// cada momento usa o arquivo cadastrado e, sem arquivo, o som sintetizado
+  /// que já existia (oscilador, zero download). Guardamos a URL pública do
+  /// bucket, do mesmo jeito que logo e favicon.
+  somDoSorteioAtivo   Boolean @default(true)
+  /// Toca a cada segundo da contagem regressiva. Arquivo curto.
+  somContagemUrl      String?
+  /// Os dez segundos finais da contagem.
+  somContagemFinalUrl String?
+  /// A rolagem dos títulos. Com arquivo, ele toca em repetição do começo da
+  /// rolagem até o número aparecer, no lugar do clique por título: um arquivo
+  /// disparado a cada título viraria ruído sobreposto.
+  somRolagemUrl       String?
+  /// O número aparecendo na tela. Toca uma vez.
+  somRevelacaoUrl     String?
+
   hosts          TenantHost[]
   taxasDeGateway TaxaDeGateway[]
   raffles        Raffle[]

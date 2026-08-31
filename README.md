@@ -513,6 +513,29 @@ Localmente: suba com os valores curtos, venda todos os títulos de uma
 campanha e chame `GET /api/cron/sorteios` uma vez. Em produção o cron da
 Vercel faz isso sozinho a cada minuto, autenticado por `CRON_SECRET`.
 
+### Som
+
+A transmissão tem quatro momentos com som: cada segundo da contagem, os dez
+segundos finais, o giro dos títulos e o número aparecendo. Todos nascem
+sintetizados por oscilador, com zero bytes de download, e é assim que ficam
+enquanto ninguém mexer.
+
+Em **Configurações → Som do sorteio**, o painel troca cada momento por um
+arquivo próprio (MP3, M4A, AAC, OGG, WAV ou WEBM, até 2 MB) e pode desligar
+o som inteiro. Momento sem arquivo continua no oscilador, então a
+transmissão nunca fica muda por falta de upload.
+
+A regra do giro é diferente das outras três de propósito: o arquivo toca em
+repetição do começo do giro até o número aparecer, e para sozinho. É onde
+cabe a trilha de suspense; disparar um arquivo a cada título que passa
+viraria ruído sobreposto.
+
+Nada toca sozinho. Navegador nenhum permite áudio antes de um gesto, então o
+som nasce desligado e quem assiste liga no botão de alto-falante, que é onde
+os arquivos são criados e destravados. Desligado no painel, o botão nem
+aparece. E o som segue sendo decoração: tudo o que ele diz, a tela também
+diz.
+
 ## Pré-requisitos
 
 - **Node.js 20.19+ ou 22+** (atualmente Node 20.18.1 está instalado, recomendo atualizar)

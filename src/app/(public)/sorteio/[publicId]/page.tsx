@@ -15,6 +15,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { auth } from "@/auth";
+import { prisma } from "@/lib/db";
+import { getCurrentTenant } from "@/lib/tenant";
 import { idPublicoValido } from "@/lib/sorteio-ao-vivo";
 import {
   carregarEstadoPublico,
@@ -74,10 +76,35 @@ export default async function PaginaDoSorteio({
     session?.user?.id,
   ).catch(() => null);
 
+  // O som cadastrado no painel. Vai junto da primeira resposta, e não numa
+  // busca depois de montar: quem abre com a transmissão já em andamento
+  // precisa do arquivo pronto para o próximo momento, não daqui a um
+  // segundo. Nada disso toca sozinho, o botão de som continua mandando.
+  const tenant = await getCurrentTenant();
+  const config = tenant
+    ? await prisma.tenant.findUnique({
+        where: { id: tenant.id },
+        select: {
+          somDoSorteioAtivo: true,
+          somContagemUrl: true,
+          somContagemFinalUrl: true,
+          somRolagemUrl: true,
+          somRevelacaoUrl: true,
+        },
+      })
+    : null;
+
   return (
     <TransmissaoDoSorteio
       estadoInicial={estado}
       reivindicacao={reivindicacao}
+      sons={{
+        ativo: config?.somDoSorteioAtivo ?? true,
+        contagem: config?.somContagemUrl ?? null,
+        contagemFinal: config?.somContagemFinalUrl ?? null,
+        rolagem: config?.somRolagemUrl ?? null,
+        revelacao: config?.somRevelacaoUrl ?? null,
+      }}
     />
   );
 }
