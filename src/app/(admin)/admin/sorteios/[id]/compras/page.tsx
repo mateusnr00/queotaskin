@@ -81,8 +81,17 @@ export default async function ComprasPage({
       status: true,
       openedAt: true,
       createdAt: true,
+      vendidosNaSaida: true,
       prize: {
-        select: { id: true, title: true, prize: true, skinRarity: true },
+        select: {
+          id: true,
+          title: true,
+          prize: true,
+          skinRarity: true,
+          // O ponto onde ele DEVIA sair, para o painel poder comparar com o
+          // ponto onde ele saiu de verdade.
+          saidaEmTitulos: true,
+        },
       },
       reservation: {
         select: {
@@ -331,6 +340,8 @@ export default async function ComprasPage({
             telefone: c.reservation.participantPhone,
             paisDoTelefone: c.reservation.user?.phoneCountry ?? null,
             pagoEm: c.reservation.paidAt?.toISOString() ?? null,
+            programadoEmTitulos: c.prize?.saidaEmTitulos ?? null,
+            vendidosNaSaida: c.vendidosNaSaida,
           })),
           enabled: raffle.surpriseBoxEnabled,
           accumulative: raffle.surpriseBoxCombosAccumulative,

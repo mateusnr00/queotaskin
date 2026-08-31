@@ -193,6 +193,7 @@ export async function openSurpriseBoxAction(
             prizeId: drawn.id,
             openedAt: new Date(),
             premioSorteadoEm: new Date(),
+            vendidosNaSaida: drawn.vendidos,
           },
         });
         if (boxUpdated.count === 0) {
@@ -272,7 +273,7 @@ async function drawPrize(
   compra: CompraQueAbre,
   /** Caixas desta compra que ainda não foram abertas, contando a de agora. */
   caixasRestantes: number,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; vendidos: number } | null> {
   const available = await prisma.surpriseBoxPrize.findMany({
     where: { raffleId, locked: false, claimedAt: null },
     select: {
@@ -363,7 +364,7 @@ async function drawPrize(
     randomInt(0, 10_000) / 10_000,
   );
 
-  if (agendado && solta) return { id: agendado };
+  if (agendado && solta) return { id: agendado, vendidos };
 
   // Roll 0-100. Prêmios PERCENT ocupam faixas cumulativas; se o roll cai
   // numa faixa, ganhou esse prêmio. Caso contrário, cai pro pool RANDOM.
@@ -376,14 +377,14 @@ async function drawPrize(
   for (const p of shuffledPercent) {
     cumulative += Number(p.odds);
     if (roll < cumulative) {
-      return { id: p.id };
+      return { id: p.id, vendidos };
     }
   }
 
   // Nenhum PERCENT casou, picks uniforme entre os RANDOM disponíveis.
   if (random.length > 0 && solta) {
     const pick = random[randomInt(random.length)]!;
-    return { id: pick.id };
+    return { id: pick.id, vendidos };
   }
 
   // Sem RANDOM e nenhum PERCENT casou → vazio.

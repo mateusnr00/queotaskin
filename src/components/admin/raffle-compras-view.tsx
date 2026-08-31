@@ -230,6 +230,10 @@ export interface SurpriseBoxConfig {
 export interface CaixaDistribuida {
   id: string;
   status: SurpriseBoxStatus;
+  /** Onde o prêmio estava marcado para sair, em títulos. Nulo sem agendamento. */
+  programadoEmTitulos?: number | null;
+  /** Quantos títulos estavam vendidos quando esta caixa foi sorteada. */
+  vendidosNaSaida?: number | null;
   /** Quando abriu, ou quando foi criada se ainda está fechada. */
   abertaEm: string;
   premioId: string | null;
@@ -1204,6 +1208,7 @@ function CaixasModalBody({
         <TabelaDeCaixas
           caixas={initial.caixas}
           catalogo={initial.catalogo}
+          totalNumbers={initial.totalNumbers}
           disabled={isPending}
         />
       </div>
@@ -1489,10 +1494,13 @@ const ROTULO_DO_STATUS: Record<SurpriseBoxStatus, string> = {
 function TabelaDeCaixas({
   caixas,
   catalogo,
+  totalNumbers,
   disabled,
 }: {
   caixas: CaixaDistribuida[];
   catalogo: SkinDoCatalogoSimples[];
+  /** Para virar títulos em porcentagem, que é como a saída é lida. */
+  totalNumbers: number;
   disabled: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -1536,6 +1544,9 @@ function TabelaDeCaixas({
                 Prêmio
               </th>
               <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Saída
+              </th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Associado em
               </th>
               <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
@@ -1547,7 +1558,7 @@ function TabelaDeCaixas({
           <tbody className="divide-y">
             {caixas.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-12 text-center">
+                <td colSpan={8} className="px-3 py-12 text-center">
                   <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground">
                     <Gift className="h-5 w-5" />
                   </span>
@@ -1555,8 +1566,8 @@ function TabelaDeCaixas({
                     Nenhuma caixa premiada ainda
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    A lista mostra só as caixas que saíram com prêmio. As
-                    vazias não aparecem.
+                    A lista mostra só as caixas que saíram com prêmio. As vazias
+                    não aparecem.
                   </p>
                 </td>
               </tr>
@@ -1587,6 +1598,9 @@ function TabelaDeCaixas({
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}
+                </td>
+                <td className="px-3 py-2.5">
+                  <SaidaDaCaixa caixa={c} totalNumbers={totalNumbers} />
                 </td>
                 <td className="px-3 py-2.5 tabular-nums text-muted-foreground">
                   {new Date(c.abertaEm).toLocaleString("pt-BR")}
@@ -3613,4 +3627,62 @@ function Pagination({
       </Link>
     </div>
   );
+}
+
+/**
+ * Onde o prêmio devia sair e onde ele saiu.
+ *
+ * Os dois juntos, e nunca só um. O ponto agendado sozinho é promessa sem
+ * conferência; o ponto de saída sozinho é um número sem régua. Lado a lado
+ * eles respondem à pergunta que quem administra faz: a saída programada está
+ * sendo cumprida?
+ *
+ * Prêmio sem agendamento mostra só onde saiu, porque ali não havia promessa
+ * nenhuma a cumprir. E caixa sorteada antes desta coluna existir fica sem o
+ * número em vez de ganhar um inventado.
+ */
+function SaidaDaCaixa({
+  caixa,
+  totalNumbers,
+}: {
+  caixa: CaixaDistribuida;
+  totalNumbers: number;
+}) {
+  const programado = porcentagemDaSaida(
+    caixa.programadoEmTitulos ?? null,
+    totalNumbers,
+  );
+  const saiu = porcentagemDaSaida(caixa.vendidosNaSaida ?? null, totalNumbers);
+
+  if (programado == null && saiu == null) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {saiu != null && (
+        <Badge
+          variant="outline"
+          className="border-emerald-500/40 text-[10px] text-emerald-500 tabular-nums"
+          title="Quanto da campanha estava vendido quando este prêmio saiu"
+        >
+          saiu em {formatarPorcentagem(saiu)}
+        </Badge>
+      )}
+      {programado != null && (
+        <Badge
+          variant="outline"
+          className="text-[10px] text-muted-foreground tabular-nums"
+          title="Onde este prêmio estava programado para sair"
+        >
+          previsto {formatarPorcentagem(programado)}
+        </Badge>
+      )}
+    </span>
+  );
+}
+
+/** Uma casa decimal só abaixo de dez por cento, onde ela muda a leitura. */
+function formatarPorcentagem(pct: number): string {
+  return `${pct.toFixed(pct < 10 ? 1 : 0).replace(".", ",")}%`;
 }

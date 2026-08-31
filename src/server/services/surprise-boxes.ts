@@ -187,24 +187,34 @@ async function sortearUmaCaixa(
   caixasRestantes: number,
 ): Promise<void> {
   for (let tentativa = 0; tentativa < TENTATIVAS_DE_SORTEIO; tentativa++) {
-    const escolhido = await sortearPremio(raffleId, compra, caixasRestantes);
-    if (!escolhido) {
+    const { premioId, vendidos } = await sortearPremio(
+      raffleId,
+      compra,
+      caixasRestantes,
+    );
+    if (!premioId) {
       await prisma.surpriseBox.updateMany({
         where: { id: boxId, premioSorteadoEm: null },
-        data: { premioSorteadoEm: new Date() },
+        data: { premioSorteadoEm: new Date(), vendidosNaSaida: vendidos },
       });
       return;
     }
 
     const levou = await prisma.$transaction(async (tx) => {
       const claimed = await tx.surpriseBoxPrize.updateMany({
-        where: { id: escolhido, claimedAt: null, locked: false },
+        where: { id: premioId, claimedAt: null, locked: false },
         data: { claimedAt: new Date() },
       });
       if (claimed.count === 0) return false;
       await tx.surpriseBox.updateMany({
         where: { id: boxId, premioSorteadoEm: null },
-        data: { prizeId: escolhido, premioSorteadoEm: new Date() },
+        data: {
+          prizeId: premioId,
+          premioSorteadoEm: new Date(),
+          // A venda do instante, para o painel poder dizer em quantos por
+          // cento este prêmio saiu de verdade.
+          vendidosNaSaida: vendidos,
+        },
       });
       return true;
     });
@@ -230,7 +240,7 @@ async function sortearPremio(
   raffleId: string,
   compra: CompraQueAbre,
   caixasRestantes: number,
-): Promise<string | null> {
+): Promise<{ premioId: string | null; vendidos: number }> {
   const disponiveis = await prisma.surpriseBoxPrize.findMany({
     // `claimedByBox: null` além do `claimedAt`: são duas marcas da mesma
     // coisa, e elas podem discordar (uma correção no banco que zera uma e
@@ -251,11 +261,10 @@ async function sortearPremio(
       saidaDdds: true,
     },
   });
-  if (disponiveis.length === 0) return null;
-
   const vendidos = await prisma.ticket.count({
     where: { raffleId, status: "PAID" },
   });
+  if (disponiveis.length === 0) return { premioId: null, vendidos };
 
   const agendado = premioDaVez(
     disponiveis.map((p) => ({
@@ -300,19 +309,19 @@ async function sortearPremio(
     randomInt(0, 10_000) / 10_000,
   );
 
-  if (agendado && solta) return agendado;
+  if (agendado && solta) return { premioId: agendado, vendidos };
 
   const rolagem = randomInt(0, 10000) / 100;
   let acumulado = 0;
   for (const p of embaralhar(percent)) {
     acumulado += Number(p.odds);
-    if (rolagem < acumulado) return p.id;
+    if (rolagem < acumulado) return { premioId: p.id, vendidos };
   }
 
   if (random.length > 0 && solta) {
-    return random[randomInt(random.length)]!.id;
+    return { premioId: random[randomInt(random.length)]!.id, vendidos };
   }
-  return null;
+  return { premioId: null, vendidos };
 }
 
 /** Sem viés de ordem de cadastro entre prêmios de mesma chance. */

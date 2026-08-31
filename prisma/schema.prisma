@@ -1328,6 +1328,14 @@ model SurpriseBox {
   prizeId       String?           @unique
   openedAt      DateTime?
 
+  /// Quantos titulos a campanha tinha vendido quando esta caixa foi sorteada.
+  ///
+  /// Guardado no momento do sorteio, e nao recalculado depois: a venda anda,
+  /// e "saiu em 24%" precisa continuar dizendo 24% no mes seguinte. E o par do
+  /// ponto agendado do premio, que diz onde ele DEVIA sair; sem este, nao ha
+  /// como conferir se a promessa foi cumprida.
+  vendidosNaSaida Int?
+
   /// Quando o sorteio desta caixa foi feito.
   ///
   /// Separa "ainda nao sorteei" de "sorteei e nao deu premio", que sem isto
