@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { assertRaffleInActiveTenant } from "@/lib/tenant";
 import { registrarLog } from "@/server/services/activity-log";
+import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { agendarSaida } from "@/lib/saida";
 import type { ActionResult } from "@/server/actions/auth";
 
@@ -404,5 +405,144 @@ export async function salvarSaidaDaRaspadinhaAction(
   } catch (err) {
     console.error("[salvarSaidaDaRaspadinhaAction]", err);
     return { ok: false, error: "Erro ao salvar a saída" };
+  }
+}
+
+/** O que a conferência achou, para a tela poder explicar em vez de só somar. */
+export interface ConferenciaDeRaspadinhas {
+  /** Reservas pagas olhadas nesta passada. */
+  conferidas: number;
+  /** Bilhetes criados agora, que estavam faltando. */
+  criadas: number;
+  /** Compras que não alcançaram nenhum combo. Não é defeito, é regra. */
+  semCombo: number;
+  /** Ficou gente de fora do teto desta passada: rodar de novo continua. */
+  faltouOlhar: number;
+  /** Por que nada foi criado, quando nada foi criado. */
+  motivo: string | null;
+}
+
+/** Quantas passadas por vez, para a ação não estourar o tempo do servidor. */
+const TETO_DA_CONFERENCIA = 400;
+
+/**
+ * Confere as compras pagas e cria as raspadinhas que faltaram.
+ *
+ * EXISTE PORQUE JÁ FALTOU. A geração andava em três dos seis caminhos de
+ * confirmação de pagamento, e quem pagou por um dos outros três ficou sem
+ * bilhete nenhum. Corrigir o código conserta as compras seguintes e não
+ * devolve nada a quem já pagou: essas compras continuam paradas no banco, sem
+ * as raspadinhas a que tinham direito, e não há tela onde isso apareça.
+ *
+ * Idempotente do começo ao fim, porque reaproveita o mesmo serviço da
+ * confirmação de pagamento: quem já tem os bilhetes não ganha mais nenhum, e
+ * apertar duas vezes não dobra nada. Por isso pode ser apertado sem medo
+ * sempre que a suspeita aparecer.
+ *
+ * Não inventa combo nem prêmio: compra que não alcançou nenhum degrau continua
+ * sem raspadinha, e a resposta diz quantas foram assim, para o número zero
+ * poder ser explicado em vez de virar mistério.
+ */
+export async function conferirRaspadinhasAction(
+  raw: unknown,
+): Promise<ActionResult<ConferenciaDeRaspadinhas>> {
+  try {
+    const session = await getAdminOrThrow();
+    const parsed = z.object({ raffleId: z.string().min(1) }).safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+    const { raffleId } = parsed.data;
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
+
+    const rifa = await prisma.raffle.findUnique({
+      where: { id: raffleId },
+      select: { raspadinhaEnabled: true },
+    });
+    if (!rifa) return { ok: false, error: "Sorteio não encontrado" };
+
+    const vazio = { conferidas: 0, criadas: 0, semCombo: 0, faltouOlhar: 0 };
+    if (!rifa.raspadinhaEnabled) {
+      return {
+        ok: true,
+        data: {
+          ...vazio,
+          motivo: "A raspadinha está desligada nesta campanha.",
+        },
+      };
+    }
+
+    const combos = await prisma.raspadinhaCombo.findMany({
+      where: { raffleId },
+      select: { minimo: true, quantidade: true },
+    });
+    if (combos.length === 0) {
+      return {
+        ok: true,
+        data: {
+          ...vazio,
+          motivo:
+            "Nenhum combo cadastrado. Sem combo, nenhuma compra gera raspadinha.",
+        },
+      };
+    }
+    const menorDegrau = Math.min(...combos.map((c) => c.minimo));
+
+    // Só as pagas, e com a contagem do que cada uma tem e do que comprou: dá
+    // para decidir aqui quem precisa de conserto e chamar o serviço só nessas.
+    const pagas = await prisma.reservation.findMany({
+      where: { raffleId, status: "PAID" },
+      orderBy: { paidAt: "desc" },
+      take: TETO_DA_CONFERENCIA + 1,
+      select: {
+        id: true,
+        _count: {
+          select: {
+            raspadinhas: true,
+            tickets: { where: { status: { in: ["PAID", "AWARDED"] } } },
+          },
+        },
+      },
+    });
+    const faltouOlhar = Math.max(0, pagas.length - TETO_DA_CONFERENCIA);
+    const olhadas = pagas.slice(0, TETO_DA_CONFERENCIA);
+
+    let criadas = 0;
+    let semCombo = 0;
+    for (const reserva of olhadas) {
+      const titulos = reserva._count.tickets;
+      if (titulos < menorDegrau) {
+        semCombo++;
+        continue;
+      }
+      const alcancados = combos.filter((c) => titulos >= c.minimo);
+      const esperado = Math.max(...alcancados.map((c) => c.quantidade));
+      if (reserva._count.raspadinhas >= esperado) continue;
+      criadas += await gerarRaspadinhasParaReserva(reserva.id);
+    }
+
+    if (criadas > 0) {
+      await registrarLog({
+        acao: "sorteio.conteudo_alterado",
+        tenantId,
+        alvo: { tipo: "Raffle", id: raffleId },
+        detalhes: { o_que: "raspadinhas que faltavam", criadas },
+      });
+    }
+    recarregar(raffleId);
+    return {
+      ok: true,
+      data: {
+        conferidas: olhadas.length,
+        criadas,
+        semCombo,
+        faltouOlhar,
+        motivo:
+          criadas === 0 && olhadas.length > 0
+            ? "Todas as compras pagas já estão com as raspadinhas certas."
+            : null,
+      },
+    };
+  } catch (err) {
+    console.error("[conferirRaspadinhasAction]", err);
+    return { ok: false, error: "Erro ao conferir as raspadinhas" };
   }
 }

@@ -42,6 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { formatBRL } from "@/lib/format";
 import { porcentagemDaSaida, type TipoDeSaida } from "@/lib/saida";
 import {
+  conferirRaspadinhasAction,
   criarPremiosDaRaspadinhaAction,
   removerPremioDaRaspadinhaAction,
   salvarCombosDaRaspadinhaAction,
@@ -204,6 +205,8 @@ export function RaspadinhasModal({
             )}
 
             <Combos raffleId={raffleId} combos={initial.combos} />
+
+            <Conferencia raffleId={raffleId} />
 
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -864,5 +867,84 @@ function ConfigDeSaida({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * O conserto das compras que ficaram sem bilhete.
+ *
+ * A geração andava em três dos seis caminhos de confirmação de pagamento, e
+ * quem pagou por um dos outros três ficou sem raspadinha nenhuma. Corrigir o
+ * código conserta as compras seguintes e não devolve nada a quem já pagou:
+ * aquelas compras continuam paradas no banco, sem os bilhetes a que tinham
+ * direito, e não havia tela onde isso aparecesse.
+ *
+ * O botão pode ser apertado sem medo e quantas vezes quiser: quem já tem os
+ * bilhetes não ganha mais nenhum. E quando não cria nada, diz por quê, porque
+ * "zero" sem explicação vira desconfiança da ferramenta.
+ */
+function Conferencia({ raffleId }: { raffleId: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [resultado, setResultado] = useState<string | null>(null);
+
+  function conferir() {
+    startTransition(async () => {
+      const r = await conferirRaspadinhasAction({ raffleId });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const { conferidas, criadas, semCombo, faltouOlhar, motivo } = r.data;
+      if (criadas > 0) {
+        toast.success(`${criadas} raspadinha(s) entregue(s)`);
+      }
+      setResultado(
+        [
+          `${conferidas} compra(s) paga(s) conferida(s).`,
+          criadas > 0
+            ? `${criadas} bilhete(s) que faltavam foram criados.`
+            : motivo,
+          semCombo > 0
+            ? `${semCombo} não alcançaram nenhum combo, então seguem sem bilhete.`
+            : null,
+          faltouOlhar > 0
+            ? `Ficaram ${faltouOlhar} para trás nesta passada: aperte de novo para continuar.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.02] px-3.5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Compras sem raspadinha</p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Confere as compras já pagas e entrega os bilhetes que faltaram. Quem
+            já recebeu não recebe de novo.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="rounded-full"
+          onClick={conferir}
+          disabled={isPending}
+        >
+          {isPending ? "Conferindo..." : "Conferir e entregar"}
+        </Button>
+      </div>
+      {resultado && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          {resultado}
+        </p>
+      )}
+    </div>
   );
 }
