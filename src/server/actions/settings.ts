@@ -314,29 +314,33 @@ const MAX_LOGO_BYTES = 3 * 1024 * 1024; // 3 MB (Sorteamos usa 3.1 MB)
 const LOGO_EXT =
   /\.(png|jpe?g|webp|gif|avif|bmp|heic|heif|svg|tiff?|ico|jfif)$/i;
 
-// Os três espaços de imagem do site. Ficam separados porque têm formatos
+// Os espaços de imagem do site. Ficam separados porque têm formatos
 // incompatíveis: a logo é uma faixa larga com o nome escrito, o favicon é
-// lido a 16px num quadrado, e o fundo cobre uma tela inteira.
-export type SlotDeImagem = "logo" | "favicon" | "fundo";
+// lido a 16px num quadrado, o fundo cobre uma tela inteira e o troféu é um
+// selo de poucos pixels ao lado de um texto.
+export type SlotDeImagem = "logo" | "favicon" | "fundo" | "trofeu";
 
 const COLUNA_POR_SLOT: Record<
   SlotDeImagem,
-  "logoUrl" | "faviconUrl" | "authBackgroundUrl"
+  "logoUrl" | "faviconUrl" | "authBackgroundUrl" | "trofeuUrl"
 > = {
   logo: "logoUrl",
   favicon: "faviconUrl",
   fundo: "authBackgroundUrl",
+  trofeu: "trofeuUrl",
 };
 
 const COLUNAS_DE_IMAGEM = {
   logoUrl: true,
   faviconUrl: true,
   authBackgroundUrl: true,
+  trofeuUrl: true,
 } as const;
 
 function slotDoFormulario(valor: FormDataEntryValue | null): SlotDeImagem {
   if (valor === "favicon") return "favicon";
   if (valor === "fundo") return "fundo";
+  if (valor === "trofeu") return "trofeu";
   return "logo";
 }
 

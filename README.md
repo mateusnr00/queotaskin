@@ -706,14 +706,20 @@ quando o número pode aparecer e quando o nome pode aparecer, tudo em colunas
 | `src/app/api/sorteio/[publicId]/manifesto` | A lista de títulos que disputaram. Só números, nunca gente. |
 | `src/app/(admin)/admin/sorteios/[id]/sorteio` | O acompanhamento, só de leitura. |
 
-### Troféu da campanha
+### Troféu da tela de sorteio
 
-`Raffle.trofeuUrl` guarda uma imagem pequena, opcional, exibida ao lado do
-texto "Número sorteado" na transmissão (24 a 32px, `object-contain`, nunca
-esticada). É por campanha: cada sorteio tem o seu, e campanha sem troféu não
-desenha nada, nem placeholder nem imagem padrão. O upload fica no editor do
-sorteio, aba Imagens, e usa o mesmo caminho de armazenamento das outras
-imagens: no banco vai só a URL.
+Uma imagem pequena, opcional, exibida ao lado do texto "Número sorteado" na
+transmissão (24 a 32px, `object-contain`, nunca esticada).
+
+O troféu é do SITE, e não da campanha: `Tenant.trofeuUrl`, em Configurações →
+Geral. Quem assiste vê a mesma cena toda semana, e exigir upload por campanha
+era trabalho que só existia para ser esquecido no dia em que o sorteio ia ao
+ar. `Raffle.trofeuUrl` continua existindo e GANHA do padrão, para variar num
+sorteio específico (editor do sorteio, aba Imagens).
+
+Vazio nos dois lugares não desenha nada, nem placeholder nem imagem padrão. Os
+dois usam o mesmo caminho de armazenamento das outras imagens: no banco vai só
+a URL.
 
 ### Quando uma campanha encerra
 

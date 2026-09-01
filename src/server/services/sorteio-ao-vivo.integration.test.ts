@@ -306,6 +306,53 @@ suite("motor do sorteio ao vivo (integração)", () => {
     expect(rifa.winnerDrawnAt).not.toBeNull();
   });
 
+  it("o troféu do site vale para toda campanha, e o da campanha ganha dele", async () => {
+    const raffleId = await novaCampanha({ totalNumbers: 4, vendidos: 4 });
+    await agendarSorteiosPendentes(new Date());
+
+    // Só o do site: é o caso normal, com o troféu configurado uma vez.
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { trofeuUrl: "https://exemplo.test/trofeu-do-site.png" },
+    });
+    const comPadrao = await prisma.raffle.findUniqueOrThrow({
+      where: { id: raffleId },
+      select: SELECAO_DA_CAMPANHA,
+    });
+    const draw = await prisma.draw.findUniqueOrThrow({ where: { raffleId } });
+    expect(
+      estadoPublico(draw, comPadrao, new Date()).campanha.trofeu,
+    ).toBe("https://exemplo.test/trofeu-do-site.png");
+
+    // A campanha com o dela: o dela ganha, sem apagar o do site.
+    await prisma.raffle.update({
+      where: { id: raffleId },
+      data: { trofeuUrl: "https://exemplo.test/trofeu-da-campanha.png" },
+    });
+    const comProprio = await prisma.raffle.findUniqueOrThrow({
+      where: { id: raffleId },
+      select: SELECAO_DA_CAMPANHA,
+    });
+    expect(
+      estadoPublico(draw, comProprio, new Date()).campanha.trofeu,
+    ).toBe("https://exemplo.test/trofeu-da-campanha.png");
+
+    // Nenhum dos dois: a tela não desenha nada, e é isso que o null diz.
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { trofeuUrl: null },
+    });
+    await prisma.raffle.update({
+      where: { id: raffleId },
+      data: { trofeuUrl: null },
+    });
+    const semNenhum = await prisma.raffle.findUniqueOrThrow({
+      where: { id: raffleId },
+      select: SELECAO_DA_CAMPANHA,
+    });
+    expect(estadoPublico(draw, semNenhum, new Date()).campanha.trofeu).toBeNull();
+  });
+
   it("o estado público não entrega o número antes da hora", async () => {
     const raffleId = await novaCampanha({ totalNumbers: 4, vendidos: 4 });
     await agendarSorteiosPendentes(new Date());

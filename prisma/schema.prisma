@@ -337,6 +337,15 @@ model Tenant {
   // num arquivo do repositório porque é escolha de marca de cada site, e
   // trocar arte não pode depender de deploy.
   authBackgroundUrl String?
+
+  /// O TROFÉU PADRÃO DA TELA DE SORTEIO.
+  ///
+  /// Aparece ao lado de "Número sorteado" em TODA campanha, porque é elemento
+  /// de marca e não de campanha: quem assiste vê a mesma cena toda semana.
+  /// `Raffle.trofeuUrl` continua existindo e ganha de quem quiser variar numa
+  /// campanha específica; vazio nos dois lugares não desenha nada.
+  trofeuUrl         String?
+
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
   logoShape         LogoShape @default(RECTANGLE)

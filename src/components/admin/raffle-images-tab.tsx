@@ -429,8 +429,8 @@ function TrofeuDoSorteio({
 
   return (
     <SecaoDoFormulario
-      titulo="Troféu do sorteio"
-      descricao="Imagem pequena exibida ao lado de NÚMERO SORTEADO na tela do sorteio. Opcional: sem imagem, nada aparece."
+      titulo="Troféu desta campanha"
+      descricao="Só para variar o troféu num sorteio específico. O padrão do site fica em Configurações, e vale para todas as campanhas; o que você enviar aqui ganha dele nesta."
       icone={<Trophy className="h-4 w-4" />}
     >
       <input

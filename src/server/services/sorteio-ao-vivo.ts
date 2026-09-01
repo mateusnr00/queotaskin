@@ -781,6 +781,7 @@ interface RifaDoSorteio {
   prizes: { description: string; imageUrl: string | null }[];
   images: { url: string }[];
   trofeuUrl: string | null;
+  tenant: { trofeuUrl: string | null };
 }
 
 /**
@@ -821,7 +822,9 @@ export function estadoPublico(
       // é o item. Numa tela que fala do prêmio, é o item que tem que aparecer.
       premioImagem: rifa.prizes[0]?.imageUrl ?? null,
       imagem: rifa.images[0]?.url ?? null,
-      trofeu: rifa.trofeuUrl,
+      // A campanha ganha do site quando ela tem o seu; sem nenhum dos dois,
+      // a tela não desenha nada.
+      trofeu: rifa.trofeuUrl ?? rifa.tenant.trofeuUrl,
       totalNumbers: rifa.totalNumbers,
     },
 
@@ -881,6 +884,10 @@ export const SELECAO_DA_CAMPANHA = {
   },
   images: { select: { url: true }, orderBy: { order: "asc" }, take: 1 },
   trofeuUrl: true,
+  // O troféu do site vem junto, na mesma consulta: ele é o padrão de toda
+  // campanha, e buscá-lo à parte seria uma ida ao banco por espectador para
+  // ler uma coluna que já está a um join de distância.
+  tenant: { select: { trofeuUrl: true } },
 } satisfies Prisma.RaffleSelect;
 
 /**

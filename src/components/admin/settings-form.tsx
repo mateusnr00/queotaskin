@@ -65,6 +65,7 @@ interface Props {
     logoShape: "ROUND" | "RECTANGLE";
     faviconUrl: string | null;
     authBackgroundUrl: string | null;
+    trofeuUrl: string | null;
     companyName: string;
     siteDescription: string;
     supportPhone: string | null;
@@ -227,6 +228,9 @@ function GeralTab({ initial }: Props) {
   );
   const [enviandoFundo, setEnviandoFundo] = useState(false);
   const fundoRef = useRef<HTMLInputElement>(null);
+  const [trofeuUrl, setTrofeuUrl] = useState<string | null>(initial.trofeuUrl);
+  const [enviandoTrofeu, setEnviandoTrofeu] = useState(false);
+  const trofeuRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(original: File) {
     setIsUploading(true);
@@ -284,6 +288,48 @@ function GeralTab({ initial }: Props) {
       setEnviandoFavicon(false);
       if (faviconRef.current) faviconRef.current.value = "";
     }
+  }
+
+  async function handleTrofeu(original: File) {
+    setEnviandoTrofeu(true);
+    try {
+      const { file } = await normalizeImage(original);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("slot", "trofeu");
+
+      let result;
+      try {
+        result = await uploadLogoAction(fd);
+      } catch {
+        toast.error("Imagem grande demais para enviar");
+        return;
+      }
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setTrofeuUrl(result.data.url);
+      toast.success("Troféu atualizado");
+      router.refresh();
+    } finally {
+      setEnviandoTrofeu(false);
+      if (trofeuRef.current) trofeuRef.current.value = "";
+    }
+  }
+
+  async function removerTrofeu() {
+    if (!confirm("Remover o troféu atual?")) return;
+    startTransition(async () => {
+      const result = await removeLogoAction("trofeu");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setTrofeuUrl(null);
+      toast.success("Troféu removido");
+      router.refresh();
+    });
   }
 
   async function handleFundo(original: File) {
@@ -620,6 +666,76 @@ function GeralTab({ initial }: Props) {
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Remover ícone
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Troféu da tela de sorteio. Fica aqui, e não em cada campanha, porque
+          é elemento de marca: quem assiste vê a mesma cena toda semana, e
+          reenviar a mesma imagem a cada sorteio novo é trabalho que só
+          existe para ser esquecido no dia em que a campanha vai ao ar. */}
+      <div className="flex items-center gap-4 rounded-xl border bg-muted/30 p-4">
+        <input
+          ref={trofeuRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleTrofeu(file);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => trofeuRef.current?.click()}
+          disabled={enviandoTrofeu || isPending}
+          className={cn(
+            "group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-dashed transition-colors",
+            trofeuUrl
+              ? "border-transparent bg-background ring-1 ring-border"
+              : "border-border hover:border-primary",
+          )}
+          title="Enviar troféu"
+        >
+          {trofeuUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={trofeuUrl}
+              alt="Troféu da tela de sorteio"
+              className="h-full w-full object-contain p-1.5"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+              {enviandoTrofeu ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Trophy className="h-5 w-5" />
+              )}
+            </span>
+          )}
+        </button>
+
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-semibold">Troféu da tela de sorteio</p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Aparece ao lado de NÚMERO SORTEADO em todas as campanhas, pequeno:
+            24 pixels no celular, 32 no computador. PNG com fundo transparente
+            e proporção quadrada é o que fica melhor nesse tamanho. Uma
+            campanha pode ter o troféu dela, na aba Imagens, e aí o dela ganha.
+            {!trofeuUrl && " Vazio, nenhum troféu aparece."}
+          </p>
+          {trofeuUrl && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={removerTrofeu}
+              disabled={isPending}
+              className="h-7 px-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Remover troféu
             </Button>
           )}
         </div>
