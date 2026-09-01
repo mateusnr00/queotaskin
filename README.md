@@ -559,6 +559,7 @@ preço de cota.
 | `src/app/(public)/minha-conta/afiliados` | O painel de quem divulga |
 | `src/app/(admin)/admin/afiliados` | A gestão e a configuração de recompensa |
 | `scripts/censo-de-afiliados.mjs` | Contagem só-leitura, para antes de migrar |
+| `scripts/resetar-faturamento.mjs` | Zera o faturamento. Censo por padrão, apaga só com `--aplicar` |
 
 ### O que garante que a conta fecha
 
