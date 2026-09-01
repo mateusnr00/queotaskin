@@ -456,7 +456,7 @@ describe("recompensa progressiva", () => {
     expect(cupons.map((c) => c.bpsNaConcessao)).toEqual([200, 400, 600, 200]);
   });
 
-  it("modo progressivo: a auditoria por indicado bate com o que foi concedido", async () => {
+  it("a tela do afiliado mostra progresso, e NUNCA o quanto o indicado gastou", async () => {
     await definirConfigDeRecompensa({
       userId: afiliado.id,
       usaConfigPropria: true,
@@ -475,14 +475,22 @@ describe("recompensa progressiva", () => {
     );
 
     const [linha] = await indicadosDoAfiliado(afiliado.id);
-    expect(linha?.pagoEmCentavos).toBe(34_750);
-    expect(linha?.progressao).toEqual({
-      gastoEmCentavos: 34_750,
-      degraus: 3,
-      bps: 600,
-      proximoDegrauEmCentavos: 40_000,
-      faltaEmCentavos: 5_250,
+    // R$ 347,50 num ciclo de R$ 100: 47% do ciclo atual, e já rendeu antes.
+    // Quantos ciclos ela fechou NÃO sai daqui: "3 ciclos de R$ 100" é o valor
+    // gasto escrito de outro jeito.
+    expect(linha?.progresso).toEqual({
+      percentual: 47,
+      jaRendeu: true,
+      bpsAtual: 600,
     });
+    // O valor gasto não pode sair daqui de jeito nenhum: nem como campo, nem
+    // escondido dentro de outro. Esta linha é a trava contra alguém devolver
+    // o pagoEmCentavos por engano numa refatoração.
+    const cru = JSON.stringify(linha);
+    expect(cru).not.toContain("34750");
+    // Nem o total, nem a contagem de ciclos que o reconstrói.
+    expect(cru).not.toContain('"3"');
+    expect(cru).not.toMatch(/ciclos/i);
   });
 
   it("regra personalizada de 70% gera cupom de R$ 7,00", async () => {

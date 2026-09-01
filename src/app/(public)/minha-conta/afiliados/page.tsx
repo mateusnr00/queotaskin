@@ -303,9 +303,12 @@ export default async function PaginaDeAfiliados() {
           valor={String(painel.indicados)}
           icone={<Users2 aria-hidden className="h-3.5 w-3.5" />}
         />
+        {/* O que ELE ganhou, e não o que os outros gastaram. O total em
+            reais das compras dos indicados saiu daqui pelo mesmo motivo que
+            saiu da lista: com um indicado só, o total é o extrato dele. */}
         <Numero
-          rotulo="Compras dos indicados"
-          valor={formatBRL(emReais(painel.pagoPelosIndicadosEmCentavos))}
+          rotulo="Cupons conquistados"
+          valor={String(painel.conquistados)}
           icone={<TrendingUp aria-hidden className="h-3.5 w-3.5" />}
         />
         <Numero
@@ -320,7 +323,8 @@ export default async function PaginaDeAfiliados() {
         />
       </div>
 
-      {/* Os indicados, sem dado pessoal: nome mascarado e quanto já pagaram. */}
+      {/* Os indicados, sem dado pessoal e sem valor: nome mascarado e a
+          barra de quanto falta para fechar o próximo cupom. */}
       <Moldura>
         <section className="p-5 md:p-6">
           <h2 className="text-base font-bold">Seus indicados</h2>
@@ -342,27 +346,52 @@ export default async function PaginaDeAfiliados() {
                         {indice + 1}
                       </span>
                     )}
+                    {/* O quanto falta, e nunca o quanto a pessoa gastou. A
+                        barra responde "falta muito?" sem entregar a vida
+                        financeira de quem foi indicado, que não é de quem
+                        mandou o link. */}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{i.nome}</p>
-                      {/* No modo progressivo a conta é por indicado, então ela
-                          aparece do lado do indicado: em que degrau ele está,
-                          quanto rende hoje e quanto falta para o próximo. */}
-                      {i.progressao && (
-                        <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
-                          {porcentagemDosBps(i.progressao.bps).toLocaleString(
-                            "pt-BR",
-                          )}
-                          % agora
-                          <span aria-hidden> · </span>
-                          faltam{" "}
-                          {formatBRL(emReais(i.progressao.faltaEmCentavos))} para
-                          o próximo nível
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="truncate text-sm font-semibold">
+                          {i.nome}
                         </p>
-                      )}
+                        <p className="shrink-0 text-[11px] font-semibold text-muted-foreground tabular-nums">
+                          {i.progresso.percentual}%
+                          {i.progresso.bpsAtual != null && (
+                            <>
+                              <span aria-hidden> · </span>
+                              rende{" "}
+                              {porcentagemDosBps(
+                                i.progresso.bpsAtual,
+                              ).toLocaleString("pt-BR")}
+                              %
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuenow={i.progresso.percentual}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Progresso de ${i.nome} até o próximo Cupom de Entrada`}
+                        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"
+                      >
+                        <div
+                          className="h-full rounded-full bg-primary transition-[width] duration-500"
+                          style={{ width: `${i.progresso.percentual}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {/* Sem contar quantas vezes fechou: o número de ciclos
+                            é o valor gasto escrito de outro jeito. */}
+                        {i.progresso.jaRendeu
+                          ? "Já rendeu Cupom de Entrada para você"
+                          : i.progresso.percentual === 0
+                            ? "Ainda não comprou"
+                            : `A caminho dos ${formatBRL(emReais(painel.config.limiarEmCentavos))}`}
+                      </p>
                     </div>
-                    <p className="shrink-0 text-xs font-semibold text-muted-foreground tabular-nums">
-                      {formatBRL(emReais(i.pagoEmCentavos))}
-                    </p>
                   </li>
                 );
               })}

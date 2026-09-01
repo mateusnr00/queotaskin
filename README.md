@@ -517,6 +517,18 @@ Modo, limiar, porcentagem, valor do cupom, degrau e aumento por degrau ficam em
 Configuração de recompensa). Sem configuração própria, valem os padrões globais
 de `lib/afiliados.ts`.
 
+### O que o afiliado vê dos indicados
+
+Nome mascarado ("Marcos R."), desde quando, e uma BARRA de quanto falta para
+fechar o próximo cupom. O valor gasto por cada pessoa não aparece, e não sai
+do servidor nem escondido no HTML: quem mandou o link não vira dono da vida
+financeira de quem clicou. `indicadosDoAfiliado` devolve porcentagem do ciclo
+atual e um booleano de "já rendeu", e nunca centavos.
+
+O booleano é de propósito, e não uma contagem: "fechou 34 ciclos de R$ 10" é o
+valor gasto escrito de outro jeito, e teria desfeito no rodapé o que a barra
+protege.
+
 ### O link cai direto no cadastro
 
 O link que o painel gera é sempre a raiz com `?ref=CODIGO`, e é ele que o

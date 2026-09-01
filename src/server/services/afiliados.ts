@@ -36,7 +36,6 @@ import {
   valorDoCupom,
   type ConfigDeRecompensa,
   type ModoDeRecompensa,
-  type ProgressaoDoIndicado,
 } from "@/lib/afiliados";
 import { ValidationError } from "@/lib/errors";
 
@@ -775,8 +774,6 @@ export interface PainelDoAfiliado {
   conquistados: number;
   /** Pessoas vinculadas ao código. */
   indicados: number;
-  /** Quanto os indicados já pagaram, somado. */
-  pagoPelosIndicadosEmCentavos: number;
   /** O progresso rumo ao próximo cupom. Negativo é dívida de estorno. */
   progressoEmCentavos: number;
   config: ConfigDeRecompensa;
@@ -798,7 +795,7 @@ export async function painelDoAfiliado(
   });
   if (!afiliado) return null;
 
-  const [cupons, reservados, usados, conquistados, indicados, pago] =
+  const [cupons, reservados, usados, conquistados, indicados] =
     await Promise.all([
       prisma.entradaGratis.findMany({
         where: { affiliateId: afiliado.id, estado: "DISPONIVEL" },
@@ -819,10 +816,6 @@ export async function painelDoAfiliado(
         _sum: { entradas: true },
       }),
       prisma.user.count({ where: { referredByAffiliateId: afiliado.id } }),
-      prisma.qualificacaoDeIndicado.aggregate({
-        where: { affiliateId: afiliado.id },
-        _sum: { pagoEmCentavos: true },
-      }),
     ]);
 
   return {
@@ -833,7 +826,6 @@ export async function painelDoAfiliado(
     usados,
     conquistados: Math.max(0, conquistados._sum.entradas ?? 0),
     indicados,
-    pagoPelosIndicadosEmCentavos: Math.max(0, pago._sum.pagoEmCentavos ?? 0),
     progressoEmCentavos: afiliado.progressoEmCentavos,
     config: configDoAfiliado(afiliado),
   };
@@ -899,13 +891,31 @@ export async function historicoDoAfiliado(
 }
 
 /**
- * Os indicados, com o quanto cada um já pagou e sem dado pessoal nenhum.
+ * Os indicados, sem dado pessoal e SEM O QUANTO CADA UM GASTOU.
  *
  * O que sai daqui: primeiro nome com a inicial do sobrenome, desde quando, e
- * o total pago. Telefone, CPF e e-mail não saem: quem indicou não vira dono
- * dos dados de quem foi indicado, e a página do afiliado é o lugar mais fácil
- * de esquecer disso.
+ * o quanto a pessoa já andou no ciclo atual, em PORCENTAGEM. Telefone, CPF,
+ * e-mail e o valor gasto não saem.
+ *
+ * O valor não sai nem como número escondido no HTML. Quem indicou não vira
+ * dono da vida financeira de quem foi indicado: saber que um amigo gastou
+ * R$ 347,50 no site é informação dele, não de quem mandou o link. A barra
+ * responde a única pergunta que interessa a quem divulga ("falta muito?")
+ * sem entregar a resposta que não interessa ("quanto ele gastou?").
+ *
+ * `jaRendeu` diz apenas SE aquela pessoa já cruzou o limiar alguma vez, e de
+ * propósito não diz quantas: "fechou 34 ciclos" é o valor gasto escrito de
+ * outro jeito (34 x R$ 10), e teria desfeito no rodapé o que a barra protege.
  */
+export interface ProgressoDoIndicado {
+  /** De 0 a 100, quanto do ciclo atual já foi andado. */
+  percentual: number;
+  /** Se esta pessoa já cruzou o limiar ao menos uma vez. */
+  jaRendeu: boolean;
+  /** No modo progressivo, a porcentagem que ela rende hoje. Null no fixo. */
+  bpsAtual: number | null;
+}
+
 export async function indicadosDoAfiliado(
   userId: string,
   limite = 50,
@@ -914,10 +924,8 @@ export async function indicadosDoAfiliado(
     id: string;
     nome: string;
     desde: Date;
-    pagoEmCentavos: number;
     time: string | null;
-    /** A escada deste indicado, no modo progressivo. Null no modo fixo. */
-    progressao: ProgressaoDoIndicado | null;
+    progresso: ProgressoDoIndicado;
   }[]
 > {
   const afiliado = await prisma.affiliate.findUnique({
@@ -940,26 +948,32 @@ export async function indicadosDoAfiliado(
     },
   });
 
+  // O ciclo é o limiar da configuração que vale para este afiliado, e não um
+  // número fixo: quem tem configuração própria de R$ 20 vê a barra encher em
+  // R$ 20, igual ao que o cartão de cima promete.
+  const ciclo = Math.max(1, config.limiarEmCentavos);
+
   return indicados.map((i) => {
-    const pagoEmCentavos = Math.max(0, i.qualificacao?.pagoEmCentavos ?? 0);
+    const pago = Math.max(0, i.qualificacao?.pagoEmCentavos ?? 0);
     return {
       id: i.id,
       nome: nomeMascarado(i.name),
       desde: i.createdAt,
-      pagoEmCentavos,
       time: i.favoriteTeamId,
-      // A auditoria da regra progressiva: quanto a pessoa gastou, em que
-      // degrau isso a coloca, quanto rende hoje e quanto falta para o degrau
-      // seguinte. Tudo derivado do mesmo gasto que gerou os cupons, para o
-      // painel nunca contar uma história diferente da concessão.
-      progressao:
-        config.modo === "PERCENTUAL_PROGRESSIVO"
-          ? progressaoDoIndicado({
-              gastoEmCentavos: pagoEmCentavos,
-              degrauEmCentavos: config.degrauEmCentavos,
-              bpsPorDegrau: config.bpsPorDegrau,
-            })
-          : null,
+      progresso: {
+        // Arredonda para baixo: uma barra em 100% com o ciclo ainda aberto
+        // seria a tela prometendo um cupom que não saiu.
+        percentual: Math.min(100, Math.floor(((pago % ciclo) / ciclo) * 100)),
+        jaRendeu: pago >= ciclo,
+        bpsAtual:
+          config.modo === "PERCENTUAL_PROGRESSIVO"
+            ? progressaoDoIndicado({
+                gastoEmCentavos: pago,
+                degrauEmCentavos: config.degrauEmCentavos,
+                bpsPorDegrau: config.bpsPorDegrau,
+              }).bps
+            : null,
+      },
     };
   });
 }
