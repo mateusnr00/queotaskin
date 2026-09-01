@@ -213,14 +213,55 @@ Quem tinha 12 vendidos e compra 25 leva tanto o prêmio de 14 quanto o de 32.
 Prêmios travados (`locked`) nunca entram. `PERSONALIZADO` é resolvido aqui,
 não na abertura.
 
-### Cadeado e idempotência
+### Dois cadeados, e por que são dois
 
-Criação e alocação acontecem na mesma transação, sob
-`pg_advisory_xact_lock(hashtext('alocacao'), hashtext(reservationId))`, e o
-bolo de prêmios é lido com `FOR UPDATE SKIP LOCKED`. Duas confirmações do
-mesmo pagamento, ou dois webhooks simultâneos, produzem o mesmo resultado:
-`alocarPremiosDaReserva()` pode ser chamada N vezes: a segunda não acha
-unidade `PENDENTE` e não escreve nada. A alocação é imutável.
+| Cadeado | Chave | O que ele protege |
+| --- | --- | --- |
+| `alocacao` | `reservationId` | A mesma compra alocada duas vezes (webhook reentregue) |
+| `alocacao:campanha` | `raffleId` | Duas compras DIFERENTES disputando os mesmos pontos de saída |
+
+O primeiro sozinho não bastava: duas compras da mesma campanha têm chaves
+diferentes e rodavam ao mesmo tempo. Ver **Ordem comercial** abaixo. A ordem
+de aquisição é sempre reserva → campanha, em todos os caminhos; inverter num
+lugar só bastaria para dois processos travarem um no outro.
+
+O bolo é lido com `FOR UPDATE` (bloqueante), e não com `SKIP LOCKED`: com o
+cadeado por campanha não há sobreposição a evitar, e SKIP LOCKED tinha um
+preço silencioso, prêmio travado por outra transação sumia da consulta e a
+compra era gravada sem ele, para sempre. `claimedAt` continua sendo a segunda
+tranca.
+
+Idempotência: `alocarPremiosDaReserva()` pode ser chamada N vezes; a segunda
+não acha unidade `PENDENTE` e não escreve nada. A alocação é imutável.
+
+### Ordem comercial: cada ponto pertence a quem o atravessou
+
+O intervalo de uma compra sai da ORDEM DE CONFIRMAÇÃO, e não da venda no
+instante em que a alocação roda:
+
+```
+40 vendidos. A compra 15, B compra 15. Prêmios em 45, 52, 58, 67.
+A confirmou primeiro → atravessou 40→55 → leva 45 e 52
+B confirmou depois   → atravessou 55→70 → leva 58 e 67
+```
+
+`vendidosAntes` é a soma dos títulos pagos das compras confirmadas ANTES
+desta, ordenadas por `(paidAt, id)`; `vendidosNaSaida` é isso mais os títulos
+da própria compra. Dois pagamentos no mesmo milissegundo continuam tendo uma
+ordem objetiva e reproduzível.
+
+A varredura de órfão (prêmio de ponto já passado que ninguém levou volta ao
+bolo) fica suspensa enquanto existir, logo à frente na fila, uma compra paga
+há menos de dez minutos que ainda não alocou. Sem essa trava, a compra que
+rodasse primeiro levava também os pontos da que ainda estava em
+processamento.
+
+**Limite conhecido:** a ordem é a dos carimbos de pagamento, e o carimbo é
+gravado antes do commit. Se o commit de uma compra anterior demorar mais que
+o ciclo inteiro (confirmar + alocar) de uma posterior, a posterior não a
+enxerga e pode levar o ponto dela. Fechar isso exigiria alocar dentro da
+mesma transação que confirma o pagamento, o que faria uma falha de alocação
+derrubar a confirmação; o custo é maior que o risco.
 
 Revelar (`src/server/services/revelacao.ts`) é igualmente idempotente: o
 update é guardado por `where: { status: "UNOPENED" }` (ou `"DISPONIVEL"`),
@@ -398,6 +439,17 @@ linha mostra. A barra fica no perfil, onde significa algo.
 - **Pontos gastáveis.** O SKNRS separa `xp` (permanente, define o nível) de
   `balance` (gastável, resgatável). Aqui só existe o XP. O extrato já
   comporta a segunda moeda quando fizer sentido.
+
+## Dívida técnica conhecida
+
+Coisas que a tela oferece e o sistema não cumpre. Estão aqui porque decidir
+o que elas devem fazer é decisão de produto, não de código, e um interruptor
+que não faz nada é pior calado do que anotado.
+
+| Onde | O que acontece hoje |
+| --- | --- |
+| `Raffle.showOnHome` | O campo existe, o painel liga e desliga, e a home não usa. A listagem da home tem regra própria. Ou a home passa a respeitar o campo, ou o interruptor sai da tela. |
+| `Raffle.allowReceiptDownload` | Mesma coisa: gravado, editável, e nenhuma tela oferece download de comprovante. |
 
 ## Programa de afiliados
 

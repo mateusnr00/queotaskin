@@ -10,6 +10,7 @@ import { dobroAtivo } from "@/lib/promocao-em-dobro";
 import { FaixaDeDobro } from "@/components/public/faixa-de-dobro";
 import { FaixaDeGratuito } from "@/components/public/faixa-de-gratuito";
 import { situacaoDaEntrada } from "@/server/services/afiliados";
+import { camposObrigatoriosCoerentes } from "@/lib/validations/raffle";
 import { ReservationForm } from "@/components/public/reservation-form";
 import type { RequiredFields } from "@/components/public/reservation-form";
 import { SocialShare } from "@/components/public/social-share";
@@ -97,18 +98,6 @@ export async function generateMetadata({
   };
 }
 
-// Defaults pra rifas que não têm JSON salvo (criadas antes do toggle):
-// tudo OFF. Identidade vem da conta logada, e nenhum campo extra é pedido
-// até o admin marcar explicitamente.
-const DEFAULT_REQUIRED: RequiredFields = {
-  name: false,
-  phone: false,
-  cpf: false,
-  email: false,
-  socialName: false,
-  birthDate: false,
-};
-
 export default async function PublicRaffleDetailPage({
   params,
 }: {
@@ -143,10 +132,14 @@ export default async function PublicRaffleDetailPage({
           select: { minimo: true, quantidade: true },
         },
         raspadinhaPremios: {
-          // Prêmio travado fica de fora: ele existe no cadastro para ser
-          // preparado antes de soltar, e anunciá-lo como "Disponível" seria
-          // prometer o que ainda não pode ser ganho.
-          where: { travado: false },
+          // PRÊMIO TRAVADO FICA DE FORA, MAS SÓ ENQUANTO NINGUÉM O LEVOU.
+          //
+          // Travado é o prêmio que existe no cadastro para ser preparado antes
+          // de soltar: anunciá-lo como "Disponível" prometeria o que o motor de
+          // alocação nem olha (o bolo exclui travado). Já o que foi ganho e
+          // travado depois continua na lista, senão o ganhador sumiria da
+          // vitrine por causa de um interruptor administrativo.
+          where: { OR: [{ travado: false }, { claimedAt: { not: null } }] },
           orderBy: { createdAt: "asc" },
           select: {
             id: true,
@@ -170,6 +163,14 @@ export default async function PublicRaffleDetailPage({
           },
         },
         surpriseBoxPrizes: {
+          // A MESMA REGRA DA RASPADINHA, que faltava aqui.
+          //
+          // A caixa listava prêmio travado como "Disponível" enquanto o motor
+          // de alocação o ignorava (`locked = false` no bolo): a vitrine
+          // prometia um item que nenhuma caixa podia conter. Duas mecânicas
+          // irmãs, na mesma página, davam respostas diferentes para o mesmo
+          // estado.
+          where: { OR: [{ locked: false }, { claimedAt: { not: null } }] },
           orderBy: { createdAt: "asc" },
           select: {
             id: true,
@@ -296,16 +297,11 @@ export default async function PublicRaffleDetailPage({
     winnerTeamId = winnerTicket?.reservation?.user?.favoriteTeamId ?? null;
   }
 
-  // Backward-compat: lê requiredFields do JSON com defaults seguros.
-  const rawRF = raffle.requiredFields as Partial<RequiredFields>;
-  const requiredFields: RequiredFields = {
-    name: rawRF.name ?? DEFAULT_REQUIRED.name,
-    phone: rawRF.phone ?? DEFAULT_REQUIRED.phone,
-    cpf: rawRF.cpf ?? DEFAULT_REQUIRED.cpf,
-    email: rawRF.email ?? DEFAULT_REQUIRED.email,
-    socialName: rawRF.socialName ?? DEFAULT_REQUIRED.socialName,
-    birthDate: rawRF.birthDate ?? DEFAULT_REQUIRED.birthDate,
-  };
+  // A mesma leitura do painel e da gravação: nome, telefone e CPF sempre
+  // pedidos (a identidade vem da conta), o resto pelo que o admin ligou.
+  const requiredFields: RequiredFields = camposObrigatoriosCoerentes(
+    raffle.requiredFields as Partial<RequiredFields> | null,
+  );
 
   // A Entrada Grátis de quem está olhando, nesta campanha. Resolvida aqui, no
   // servidor: saldo e a regra de uma por sorteio nunca podem sair de um

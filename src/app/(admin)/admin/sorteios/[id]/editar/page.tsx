@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { prisma } from "@/lib/db";
+import { camposObrigatoriosCoerentes } from "@/lib/validations/raffle";
 import { RaffleForm } from "@/components/admin/raffle-form";
 import { RaffleStatusActions } from "@/components/admin/raffle-status-actions";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -126,17 +127,11 @@ export default async function EditRafflePage({
     nexuspag: Boolean(tenant.nexuspagApiKeyEnc),
   };
 
-  // Fallback pra campos faltantes no JSON: tudo OFF (identidade vem da
-  // conta logada, admin liga toggle por rifa quando quiser pedir extra).
-  const rawRF = raffle.requiredFields as Partial<RaffleFormRequiredFields>;
-  const requiredFields: RaffleFormRequiredFields = {
-    name: rawRF.name ?? false,
-    phone: rawRF.phone ?? false,
-    cpf: rawRF.cpf ?? false,
-    email: rawRF.email ?? false,
-    socialName: rawRF.socialName ?? false,
-    birthDate: rawRF.birthDate ?? false,
-  };
+  // Nome, telefone e CPF sempre ligados; o resto é escolha do admin. A mesma
+  // função roda na gravação, então o que a tela mostra é o que o banco guarda.
+  const requiredFields: RaffleFormRequiredFields = camposObrigatoriosCoerentes(
+    raffle.requiredFields as Partial<RaffleFormRequiredFields> | null,
+  );
 
   // Pra cada título premiado, descobre se o número ainda está à venda e, se
   // não estiver, quem ficou com ele.

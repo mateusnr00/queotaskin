@@ -23,16 +23,20 @@
 // mesma região crítica: quem chega depois espera, encontra tudo ALOCADA e sai
 // sem fazer nada.
 //
-// POR QUE `FOR UPDATE SKIP LOCKED` NO BOLO
+// POR QUE O BOLO É LIDO COM `FOR UPDATE` E NÃO COM `SKIP LOCKED`
 //
-// Duas compras confirmando no mesmo instante disputam os mesmos prêmios. Com
-// `UPDATE ... WHERE claimedAt IS NULL` cada uma esperaria a outra soltar a
-// linha, e duas compras grandes pegando prêmios em ordens diferentes podiam
-// travar uma na outra. Com SKIP LOCKED cada transação enxerga só o que ninguém
-// está segurando: sem espera, sem impasse, e a ordem de quem leva o quê é a
-// ordem real em que os pagamentos foram confirmados.
+// Era SKIP LOCKED, para duas compras grandes não travarem uma na outra pegando
+// prêmios em ordens diferentes. O preço era alto e silencioso: prêmio travado
+// por qualquer outra transação some da consulta, a compra é gravada sem ele, e
+// como a unidade deixa de estar PENDENTE ninguém volta lá. Um bolo
+// momentaneamente invisível virava compra sem prêmio, para sempre.
+//
+// Com o cadeado por campanha (abaixo), duas alocações da mesma campanha não
+// se sobrepõem, e alocações de campanhas diferentes tocam linhas diferentes.
+// Sem sobreposição não há impasse a evitar, e esperar é melhor que enxergar um
+// bolo vazio. `claimedAt` continua sendo a segunda tranca.
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { randomInt } from "node:crypto";
 
 import { prisma } from "@/lib/db";
@@ -54,6 +58,15 @@ export interface ResultadoDaAlocacao {
 }
 
 const NADA: ResultadoDaAlocacao = { unidades: 0, premiadas: 0 };
+
+/**
+ * Por quanto tempo uma compra paga segura o ponto dela contra a varredura.
+ *
+ * Dez minutos é folga enorme para o que a janela protege (o intervalo entre
+ * confirmar o pagamento e alocar, que é de milissegundos) e curto o bastante
+ * para não prender um prêmio órfão de verdade.
+ */
+const JANELA_DE_ORDEM_MS = 10 * 60 * 1000;
 
 /** Um prêmio do bolo, com as duas tabelas faladas na mesma língua. */
 interface PremioParaAlocar {
@@ -83,6 +96,8 @@ interface LinhaDePremio {
  * que difere é vocabulário do banco, e cabe aqui.
  */
 interface Fonte {
+  /** A tabela das unidades. Só para a consulta crua de ordem de confirmação. */
+  tabela: string;
   /** As unidades desta reserva que ainda esperam decisão, em ordem estável. */
   pendentes(
     tx: Prisma.TransactionClient,
@@ -105,6 +120,7 @@ interface Fonte {
 }
 
 const DA_CAIXA: Fonte = {
+  tabela: "SurpriseBox",
   pendentes: (tx, reservationId) =>
     tx.surpriseBox.findMany({
       where: { reservationId, alocacao: "PENDENTE" },
@@ -125,7 +141,7 @@ const DA_CAIXA: Fonte = {
          AND locked = false
          AND "claimedAt" IS NULL
        ORDER BY "saidaEmTitulos" ASC NULLS LAST, id ASC
-         FOR UPDATE SKIP LOCKED
+         FOR UPDATE
     `,
   reservar: async (tx, premioId) => {
     const r = await tx.surpriseBoxPrize.updateMany({
@@ -149,6 +165,7 @@ const DA_CAIXA: Fonte = {
 };
 
 const DA_RASPADINHA: Fonte = {
+  tabela: "Raspadinha",
   pendentes: (tx, reservationId) =>
     tx.raspadinha.findMany({
       where: { reservationId, alocacao: "PENDENTE" },
@@ -164,7 +181,7 @@ const DA_RASPADINHA: Fonte = {
          AND travado = false
          AND "claimedAt" IS NULL
        ORDER BY "saidaEmTitulos" ASC NULLS LAST, id ASC
-         FOR UPDATE SKIP LOCKED
+         FOR UPDATE
     `,
   reservar: async (tx, premioId) => {
     const r = await tx.raspadinhaPremio.updateMany({
@@ -225,33 +242,99 @@ export async function alocarNaTransacao(
   });
   if (!reserva) return NADA;
 
+  // O SEGUNDO CADEADO, POR CAMPANHA.
+  //
+  // O de reserva impede a mesma compra de ser alocada duas vezes; ele não
+  // encosta em duas compras DIFERENTES da mesma campanha, que é justamente
+  // quem disputa os mesmos pontos de saída. Este serializa a definição do
+  // intervalo e a tomada do bolo dentro de uma campanha: é curto (algumas
+  // consultas), não é global, e campanhas diferentes seguem em paralelo.
+  //
+  // A ORDEM DE AQUISIÇÃO É SEMPRE reserva → campanha. Quem chama já segurou o
+  // cadeado da reserva antes de entrar aqui, e inverter a ordem em um só lugar
+  // seria o suficiente para dois processos travarem um no outro.
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext('alocacao:campanha'), hashtext(${reserva.raffleId}))
+  `;
+
+  const carimbo = reserva.paidAt ?? reserva.createdAt;
+
   // O INTERVALO QUE ESTA COMPRA ATRAVESSOU.
   //
-  // `depois` é a venda com esta compra já dentro, e `antes` é ela menos os
-  // títulos da própria reserva. Os dois juntos dizem de onde até onde a venda
-  // andou por causa desta compra, e é assim que um prêmio marcado para o
-  // título 14 é capturado por quem comprou do 13 ao 37.
+  // Sai da ORDEM DE CONFIRMAÇÃO, e não da venda no instante em que a alocação
+  // roda. A diferença decide a divisão comercial:
   //
-  // A elegibilidade olha `depois`, e não o intervalo fechado, de propósito:
-  // prêmio de ponto já ultrapassado que ninguém levou (porque a compra que
-  // atravessou aquele ponto foi cancelada, por exemplo) continua devendo sair,
-  // e some do bolo na primeira compra seguinte em vez de ficar preso para
-  // sempre num intervalo que já passou.
-  const depois = await tx.ticket.count({
-    where: { raffleId: reserva.raffleId, status: "PAID" },
-  });
-  const antes = Math.max(0, depois - reserva._count.tickets);
+  //   40 vendidos, A compra 15, B compra 15, prêmios em 45, 52, 58 e 67.
+  //   A confirma primeiro, então A atravessou 40 → 55 e leva 45 e 52;
+  //   B atravessou 55 → 70 e leva 58 e 67.
+  //
+  // Com a conta antiga (venda atual menos os meus títulos), bastava os dois
+  // pagamentos entrarem antes de qualquer alocação para as duas compras
+  // calcularem o MESMO intervalo (55 → 70) e a primeira a rodar levar tudo. A
+  // outra ficava sem nada, e o "saiu em X%" do painel mostrava o intervalo
+  // errado. Medido: acontecia em todo webhook simultâneo.
+  //
+  // `antes` passa a ser quantos títulos já estavam pagos nas compras
+  // confirmadas ANTES desta, pelo carimbo de pagamento com o id desempatando.
+  // Dois pagamentos no mesmo milissegundo continuam tendo uma ordem objetiva,
+  // e ela é a mesma toda vez que a conta for refeita.
+  const anteriores = await tx.$queryRaw<{ n: bigint }[]>`
+    SELECT COUNT(*) AS n
+      FROM "Ticket" t
+      JOIN "Reservation" r ON r."id" = t."reservationId"
+     WHERE t."raffleId" = ${reserva.raffleId}
+       AND t."status" IN ('PAID', 'AWARDED')
+       AND (COALESCE(r."paidAt", r."createdAt"), r."id")
+           < (${carimbo}::timestamptz, ${reservationId})
+  `;
+  const antes = Number(anteriores[0]?.n ?? 0);
+  const depois = antes + reserva._count.tickets;
+
+  // ALGUÉM NA FRENTE AINDA NÃO ALOCOU?
+  //
+  // A varredura de órfão existe para o prêmio cujo ponto já passou e ninguém
+  // levou (a compra que atravessou aquele ponto foi cancelada, por exemplo):
+  // ele volta ao bolo e sai na próxima compra, em vez de ficar preso para
+  // sempre. Só que ela também é a porta pela qual uma compra posterior levava
+  // o ponto de uma anterior que ainda estava em processamento.
+  //
+  // Então a varredura fica suspensa enquanto existir, logo à frente na fila,
+  // uma compra paga há pouco que ainda não alocou. Passada a janela, o ponto é
+  // órfão de verdade e volta a ser varrido: um pagamento confirmado há dez
+  // minutos e sem unidade alocada não vai mais alocar sozinho.
+  const anteriorPendente = await tx.$queryRaw<{ existe: number }[]>`
+    SELECT 1 AS existe
+      FROM "Reservation" r
+     WHERE r."raffleId" = ${reserva.raffleId}
+       AND r."status" = 'PAID'
+       AND (COALESCE(r."paidAt", r."createdAt"), r."id")
+           < (${carimbo}::timestamptz, ${reservationId})
+       AND COALESCE(r."paidAt", r."createdAt")
+           > ${new Date(carimbo.getTime() - JANELA_DE_ORDEM_MS)}::timestamptz
+       AND NOT EXISTS (
+         SELECT 1 FROM "${Prisma.raw(fonte.tabela)}" u
+          WHERE u."reservationId" = r."id" AND u."alocacao" = 'ALOCADA'
+       )
+     LIMIT 1
+  `;
+  const varreOrfaos = anteriorPendente.length === 0;
 
   const compra: CompraQueAbre = {
     titulos: reserva._count.tickets,
-    quando: reserva.paidAt ?? reserva.createdAt,
+    quando: carimbo,
     ddd: dddDoTelefone(reserva.participantPhone),
   };
 
   const bolo = (await fonte.bolo(tx, reserva.raffleId)).map(paraPremio);
-  const liberados = bolo.filter((p) =>
-    podeSairAgora(p.saida, { vendidos: depois, compra }),
-  );
+  const liberados = bolo.filter((p) => {
+    if (!podeSairAgora(p.saida, { vendidos: depois, compra })) return false;
+    // Ponto abaixo do meu intervalo é de quem veio antes, e só é meu quando
+    // ninguém na frente ainda o deve. Prêmio sem ponto (chance, personalizado)
+    // não tem dono por intervalo e segue a regra de sempre.
+    const ponto = p.saida.tipo === "PROGRESSO" ? p.saida.emTitulos : null;
+    if (ponto == null) return true;
+    return ponto > antes || varreOrfaos;
+  });
 
   // Prêmio sem chance cadastrada é distribuição garantida: os elegíveis saem,
   // espalhados. Prêmio com chance é raridade, e continua rolando por unidade,

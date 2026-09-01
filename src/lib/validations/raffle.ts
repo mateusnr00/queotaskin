@@ -26,6 +26,38 @@ export const requiredFieldsSchema = z.object({
   birthDate: z.boolean().default(false),
 });
 
+export type CamposObrigatorios = z.infer<typeof requiredFieldsSchema>;
+
+/**
+ * NOME, TELEFONE E CPF SÃO SEMPRE PEDIDOS, e agora os três lugares concordam.
+ *
+ * O painel mostra os três interruptores ligados e travados ("vêm do cadastro,
+ * admin não desliga"), e era só isso que era verdade. A tela de edição lia o
+ * JSON com `?? false`, então campanha antiga abria com os três desligados
+ * embaixo de um interruptor travado em ligado; salvar gravava false; e a
+ * página pública lia esse false e deixava de mostrar "Comprando como" e de
+ * pedir o telefone que falta numa conta antiga. Três camadas, três respostas.
+ *
+ * Esta função é a resposta única. Roda na leitura e na gravação: campanha
+ * antiga passa a ser interpretada do jeito certo sem migração de dados, e o
+ * que o navegador mandar para esses três é ignorado.
+ */
+export function camposObrigatoriosCoerentes(
+  bruto: Partial<CamposObrigatorios> | null | undefined,
+): CamposObrigatorios {
+  const rf = bruto ?? {};
+  return {
+    // A identidade vem da conta logada, sempre. Não existe compra anônima.
+    name: true,
+    phone: true,
+    cpf: true,
+    // Estes o admin escolhe de verdade.
+    email: rf.email ?? false,
+    socialName: rf.socialName ?? false,
+    birthDate: rf.birthDate ?? false,
+  };
+}
+
 // Schema da rifa, combina os campos das abas Geral E Títulos do form admin.
 // O server action recebe tudo junto e particiona em raffle.create/update.
 export const raffleGeneralSchema = z.object({

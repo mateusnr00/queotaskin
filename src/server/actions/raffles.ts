@@ -15,7 +15,10 @@ import {
   copiarArquivoDoStorage,
   isStorageConfigured,
 } from "@/lib/storage";
-import { raffleGeneralSchema } from "@/lib/validations/raffle";
+import {
+  camposObrigatoriosCoerentes,
+  raffleGeneralSchema,
+} from "@/lib/validations/raffle";
 import { garantirSlugLivre } from "@/server/services/raffles";
 import { toSlug } from "@/lib/slug";
 import { registrarLog } from "@/server/services/activity-log";
@@ -124,6 +127,7 @@ export async function createRaffleAction(
         const criado = await tx.raffle.create({
           data: {
             ...rest,
+            requiredFields: camposObrigatoriosCoerentes(rest.requiredFields),
             slug,
             createdById: session.user.id,
             tenantId,
@@ -259,6 +263,7 @@ export async function updateRaffleAction(
     }
     const data: Prisma.RaffleUpdateInput = {
       ...rest,
+      requiredFields: camposObrigatoriosCoerentes(rest.requiredFields),
       ...(slug ? { slug } : {}),
     };
 

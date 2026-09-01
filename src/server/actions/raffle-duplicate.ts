@@ -13,9 +13,12 @@
 
 import { revalidatePath } from "next/cache";
 
-import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import {
+  camposObrigatoriosCoerentes,
+  type CamposObrigatorios,
+} from "@/lib/validations/raffle";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { generateUniqueSlug } from "@/server/services/raffles";
@@ -76,12 +79,12 @@ export async function duplicarSorteioAction(
       )
     ) as Omit<typeof campos, (typeof NAO_COPIAR)[number]>;
 
-    // requiredFields é Json: lido vem null, mas o create do Prisma exige o
-    // JsonNull explícito para gravar nulo.
-    const camposObrigatorios =
-      original.requiredFields === null
-        ? Prisma.JsonNull
-        : original.requiredFields;
+    // A cópia nasce com os campos obrigatórios coerentes, e não com o JSON
+    // cru do original: campanha antiga guardava nome/telefone/CPF em false,
+    // contra o que o painel mostra, e duplicar propagaria o engano.
+    const camposObrigatorios = camposObrigatoriosCoerentes(
+      original.requiredFields as Partial<CamposObrigatorios> | null,
+    );
 
     const titulo = `${original.title} (cópia)`;
     const slug = await generateUniqueSlug(titulo, tenantId);
