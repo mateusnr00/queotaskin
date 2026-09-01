@@ -282,6 +282,7 @@ export default async function EditRafflePage({
         mode={{ kind: "edit", id: raffle.id }}
         abaInicial={abaInicial}
         raffleTitle={raffle.title}
+        initialTrofeuUrl={raffle.trofeuUrl}
         initialImages={raffle.images.map((img) => ({
           id: img.id,
           url: img.url,

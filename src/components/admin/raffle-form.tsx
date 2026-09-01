@@ -122,6 +122,7 @@ interface RaffleFormProps {
   defaultValues?: Partial<RaffleGeneralInput>;
   // Dados de conteúdo das abas, só preenchidos no modo edit.
   initialImages?: RaffleImageItem[];
+  initialTrofeuUrl?: string | null;
   initialPrizes?: PrizeData[];
   initialPromotions?: PromotionData[];
   // Dados da aba "Pagamento", só populados no modo edit.
@@ -269,6 +270,7 @@ export function RaffleForm({
   catalogoDePremios = [],
   defaultValues,
   initialImages = [],
+  initialTrofeuUrl = null,
   initialPrizes = [],
   initialPromotions = [],
   initialPaymentProvider = null,
@@ -1491,6 +1493,7 @@ export function RaffleForm({
               <RaffleImagesTab
                 raffleId={raffleId}
                 initialImages={initialImages}
+                initialTrofeuUrl={initialTrofeuUrl}
               />
             ) : (
               <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />

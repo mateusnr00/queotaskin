@@ -6,6 +6,7 @@ import {
   ajustarEntradas,
   ativarAfiliado,
   definirConfigDeRecompensa,
+  indicadosDoAfiliado,
   liberarEntradaGratis,
   painelDoAfiliado,
   processarCompraDeIndicado,
@@ -356,10 +357,141 @@ describe("recompensa progressiva", () => {
     expect((await painelDoAfiliado(afiliado.id))?.progressoEmCentavos).toBe(0);
   });
 
+  it("modo progressivo: o percentual sai do gasto acumulado do indicado", async () => {
+    // Escada padrão: R$ 100 por degrau, +2% por degrau. Limiar de R$ 100 para
+    // o cupom sair a cada R$ 100 gastos, que é como a regra foi descrita.
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      modo: "PERCENTUAL_PROGRESSIVO",
+      limiarEmCentavos: 10_000,
+      recompensaEmBps: 5000,
+      valorDoCupomEmCentavos: 5000,
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
+      adminId: afiliado.id,
+    });
+
+    const campanha = await novaCampanha("1.00");
+    // Primeiros R$ 100: o indicado fecha o primeiro degrau nesta compra, então
+    // já leva 2% (R$ 2,00).
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "100.00", 100),
+    );
+    // Mais R$ 100: acumulado de R$ 200, segundo degrau, 4% (R$ 4,00).
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "100.00", 100),
+    );
+
+    const cupons = await cuponsDe(afiliado.id);
+    expect(cupons.map((c) => c.valorEmCentavos)).toEqual([200, 400]);
+    expect(cupons.map((c) => c.bpsNaConcessao)).toEqual([200, 400]);
+  });
+
+  it("modo progressivo: abaixo do primeiro degrau não concede, e não perde o progresso", async () => {
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      modo: "PERCENTUAL_PROGRESSIVO",
+      limiarEmCentavos: 10_000,
+      recompensaEmBps: 5000,
+      valorDoCupomEmCentavos: 5000,
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
+      adminId: afiliado.id,
+    });
+
+    const campanha = await novaCampanha("1.00");
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "99.99", 99),
+    );
+    expect(await entradasDisponiveis(afiliado.id)).toBe(0);
+    expect((await painelDoAfiliado(afiliado.id))?.progressoEmCentavos).toBe(9999);
+
+    // Um centavo fecha os R$ 100 do indicado: o progresso guardado converte
+    // agora, já valendo 2%.
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "0.01", 1),
+    );
+    const cupons = await cuponsDe(afiliado.id);
+    expect(cupons).toHaveLength(1);
+    expect(cupons[0]!.valorEmCentavos).toBe(200);
+  });
+
+  it("modo progressivo: cada indicado tem a sua própria escada", async () => {
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      modo: "PERCENTUAL_PROGRESSIVO",
+      limiarEmCentavos: 10_000,
+      recompensaEmBps: 5000,
+      valorDoCupomEmCentavos: 5000,
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
+      adminId: afiliado.id,
+    });
+
+    const campanha = await novaCampanha("1.00");
+    const codigo = (
+      await prisma.affiliate.findUniqueOrThrow({
+        where: { userId: afiliado.id },
+        select: { code: true },
+      })
+    ).code;
+    const segundo = await novaConta("Segundo indicado");
+    await vincularIndicacao(segundo.id, codigo);
+
+    // O primeiro chega a R$ 300 (6%); o segundo compra R$ 100 pela primeira
+    // vez e leva 2%, mesmo com o afiliado já bem pontuado.
+    for (let i = 0; i < 3; i++) {
+      await processarCompraDeIndicado(
+        await comprarPago(campanha.id, indicado.id, "100.00", 100),
+      );
+    }
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, segundo.id, "100.00", 100),
+    );
+
+    const cupons = await cuponsDe(afiliado.id);
+    expect(cupons.map((c) => c.bpsNaConcessao)).toEqual([200, 400, 600, 200]);
+  });
+
+  it("modo progressivo: a auditoria por indicado bate com o que foi concedido", async () => {
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      modo: "PERCENTUAL_PROGRESSIVO",
+      limiarEmCentavos: 10_000,
+      recompensaEmBps: 5000,
+      valorDoCupomEmCentavos: 5000,
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
+      adminId: afiliado.id,
+    });
+
+    const campanha = await novaCampanha("1.00");
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "347.50", 347),
+    );
+
+    const [linha] = await indicadosDoAfiliado(afiliado.id);
+    expect(linha?.pagoEmCentavos).toBe(34_750);
+    expect(linha?.progressao).toEqual({
+      gastoEmCentavos: 34_750,
+      degraus: 3,
+      bps: 600,
+      proximoDegrauEmCentavos: 40_000,
+      faltaEmCentavos: 5_250,
+    });
+  });
+
   it("regra personalizada de 70% gera cupom de R$ 7,00", async () => {
     await definirConfigDeRecompensa({
       userId: afiliado.id,
       usaConfigPropria: true,
+      modo: "VALOR_FIXO",
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
       limiarEmCentavos: 1000,
       recompensaEmBps: 7000,
       valorDoCupomEmCentavos: 700,
@@ -385,6 +517,9 @@ describe("recompensa progressiva", () => {
     await definirConfigDeRecompensa({
       userId: afiliado.id,
       usaConfigPropria: true,
+      modo: "VALOR_FIXO",
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
       limiarEmCentavos: 1000,
       recompensaEmBps: 7000,
       valorDoCupomEmCentavos: 700,
@@ -404,6 +539,9 @@ describe("recompensa progressiva", () => {
     await definirConfigDeRecompensa({
       userId: afiliado.id,
       usaConfigPropria: true,
+      modo: "VALOR_FIXO",
+      degrauEmCentavos: 10_000,
+      bpsPorDegrau: 200,
       limiarEmCentavos: 1000,
       recompensaEmBps: 7000,
       valorDoCupomEmCentavos: 700,
@@ -421,6 +559,9 @@ describe("recompensa progressiva", () => {
       definirConfigDeRecompensa({
         userId: afiliado.id,
         usaConfigPropria: true,
+        modo: "VALOR_FIXO",
+        degrauEmCentavos: 10_000,
+        bpsPorDegrau: 200,
         limiarEmCentavos: 1000,
         recompensaEmBps: 5000,
         valorDoCupomEmCentavos: 900,

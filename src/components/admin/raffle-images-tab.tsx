@@ -13,6 +13,7 @@ import {
   Loader2,
   Star,
   Trash2,
+  Trophy,
   Upload,
 } from "lucide-react";
 
@@ -20,6 +21,7 @@ import {
   addRaffleImageByUrlAction,
   deleteRaffleImageAction,
   setRaffleCoverAction,
+  setRaffleTrofeuAction,
   uploadRaffleImageAction,
 } from "@/server/actions/raffle-content";
 import { Button } from "@/components/ui/button";
@@ -40,9 +42,15 @@ export interface RaffleImageItem {
 interface Props {
   raffleId: string;
   initialImages: RaffleImageItem[];
+  /** O troféu que aparece ao lado de "Número sorteado". Null: não aparece. */
+  initialTrofeuUrl: string | null;
 }
 
-export function RaffleImagesTab({ raffleId, initialImages }: Props) {
+export function RaffleImagesTab({
+  raffleId,
+  initialImages,
+  initialTrofeuUrl,
+}: Props) {
   const [images, setImages] = useState<RaffleImageItem[]>(initialImages);
   const [isUploading, setIsUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -284,6 +292,9 @@ export function RaffleImagesTab({ raffleId, initialImages }: Props) {
             já gravam na hora. A barra fica assim mesmo para a pessoa não
             procurar um "Salvar" que não existe. */}
       </SecaoDoFormulario>
+
+      <TrofeuDoSorteio raffleId={raffleId} initialUrl={initialTrofeuUrl} />
+
       <StickySaveBar status="Enviar, definir capa e remover já gravam na hora: esta aba não tem botão de salvar." />
     </>
   );
@@ -340,5 +351,128 @@ function DropZone({
         Escolher arquivos
       </Button>
     </div>
+  );
+}
+
+/**
+ * O troféu da tela do sorteio.
+ *
+ * Uma imagem só, pequena, que aparece ao lado do texto "Número sorteado".
+ * Campanha sem troféu não desenha nada, então o vazio aqui é um estado
+ * legítimo, e não um campo esquecido: a tela do sorteio continua igual.
+ */
+function TrofeuDoSorteio({
+  raffleId,
+  initialUrl,
+}: {
+  raffleId: string;
+  initialUrl: string | null;
+}) {
+  const [url, setUrl] = useState<string | null>(initialUrl);
+  const [enviando, setEnviando] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function enviar(files: FileList | null) {
+    const original = files?.[0];
+    if (!original) return;
+    setEnviando(true);
+    try {
+      const { file } = await normalizeImage(original);
+      const fd = new FormData();
+      fd.append("raffleId", raffleId);
+      fd.append("file", file);
+      const r = await setRaffleTrofeuAction(fd);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setUrl(r.data.url);
+      toast.success("Troféu atualizado");
+    } catch {
+      toast.error("Não conseguimos enviar essa imagem");
+    } finally {
+      setEnviando(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function remover() {
+    if (!confirm("Remover o troféu deste sorteio?")) return;
+    setEnviando(true);
+    try {
+      const fd = new FormData();
+      fd.append("raffleId", raffleId);
+      fd.append("remover", "1");
+      const r = await setRaffleTrofeuAction(fd);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setUrl(null);
+      toast.success("Troféu removido");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <SecaoDoFormulario
+      titulo="Troféu do sorteio"
+      descricao="Imagem pequena exibida ao lado de NÚMERO SORTEADO na tela do sorteio. Opcional: sem imagem, nada aparece."
+      icone={<Trophy className="h-4 w-4" />}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => enviar(e.target.files)}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-border bg-background/60">
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={url}
+              alt="Troféu do sorteio"
+              className="h-12 w-12 object-contain"
+            />
+          ) : (
+            <Trophy
+              aria-hidden
+              className="h-5 w-5 text-muted-foreground/50"
+            />
+          )}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={enviando}
+            onClick={() => inputRef.current?.click()}
+          >
+            {enviando ? (
+              <Loader2 aria-hidden className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload aria-hidden className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {url ? "Trocar imagem" : "Enviar imagem"}
+          </Button>
+          {url && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={enviando}
+              onClick={remover}
+            >
+              <Trash2 aria-hidden className="mr-1.5 h-3.5 w-3.5" />
+              Remover
+            </Button>
+          )}
+        </div>
+      </div>
+    </SecaoDoFormulario>
   );
 }

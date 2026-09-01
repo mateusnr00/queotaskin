@@ -32,8 +32,11 @@ import {
   conferirConfig,
   emCentavos,
   normalizarCodigo,
+  progressaoDoIndicado,
   valorDoCupom,
   type ConfigDeRecompensa,
+  type ModoDeRecompensa,
+  type ProgressaoDoIndicado,
 } from "@/lib/afiliados";
 import { ValidationError } from "@/lib/errors";
 
@@ -142,16 +145,63 @@ export async function afiliadoPorCodigo(codigoBruto: string) {
  */
 export function configDoAfiliado(afiliado: {
   usaConfigPropria: boolean;
+  modoDeRecompensa: ModoDeRecompensa;
   limiarEmCentavos: number;
   recompensaEmBps: number;
   valorDoCupomEmCentavos: number;
+  degrauEmCentavos: number;
+  bpsPorDegrau: number;
 }): ConfigDeRecompensa {
   if (!afiliado.usaConfigPropria) return CONFIG_PADRAO;
   return {
+    modo: afiliado.modoDeRecompensa,
     limiarEmCentavos: afiliado.limiarEmCentavos,
     recompensaEmBps: afiliado.recompensaEmBps,
     valorDoCupomEmCentavos: afiliado.valorDoCupomEmCentavos,
+    degrauEmCentavos: afiliado.degrauEmCentavos,
+    bpsPorDegrau: afiliado.bpsPorDegrau,
   };
+}
+
+/** As colunas que `configDoAfiliado` precisa, num lugar só. */
+export const SELECAO_DA_CONFIG = {
+  usaConfigPropria: true,
+  modoDeRecompensa: true,
+  limiarEmCentavos: true,
+  recompensaEmBps: true,
+  valorDoCupomEmCentavos: true,
+  degrauEmCentavos: true,
+  bpsPorDegrau: true,
+} as const;
+
+/**
+ * A recompensa de UMA concessão, já sabendo em que modo o afiliado está.
+ *
+ * No modo de valor fixo o cupom vale sempre o mesmo: a porcentagem foi
+ * digitada uma vez e não depende de quem comprou. No modo progressivo ela sai
+ * da escada do indicado, e é por isso que esta função precisa do gasto
+ * acumulado DELE: o mesmo afiliado pode conceder 2% por um indicado e 10% por
+ * outro no mesmo dia.
+ */
+export function recompensaDaConcessao({
+  config,
+  gastoDoIndicadoEmCentavos,
+}: {
+  config: ConfigDeRecompensa;
+  gastoDoIndicadoEmCentavos: number;
+}): { bps: number; valorEmCentavos: number } {
+  if (config.modo !== "PERCENTUAL_PROGRESSIVO") {
+    return {
+      bps: config.recompensaEmBps,
+      valorEmCentavos: config.valorDoCupomEmCentavos,
+    };
+  }
+  const { bps } = progressaoDoIndicado({
+    gastoEmCentavos: gastoDoIndicadoEmCentavos,
+    degrauEmCentavos: config.degrauEmCentavos,
+    bpsPorDegrau: config.bpsPorDegrau,
+  });
+  return { bps, valorEmCentavos: valorDoCupom(config.limiarEmCentavos, bps) };
 }
 
 /**
@@ -217,13 +267,7 @@ export async function processarCompraDeIndicado(
 
       const estado = await tx.affiliate.findUnique({
         where: { id: afiliado.id },
-        select: {
-          progressoEmCentavos: true,
-          usaConfigPropria: true,
-          limiarEmCentavos: true,
-          recompensaEmBps: true,
-          valorDoCupomEmCentavos: true,
-        },
+        select: { progressoEmCentavos: true, ...SELECAO_DA_CONFIG },
       });
       if (!estado) return null;
 
@@ -249,9 +293,12 @@ export async function processarCompraDeIndicado(
         },
       });
 
-      // O total que aquela pessoa já pagou, para o painel mostrar sem
-      // recontar. Não é portão de nada: é estatística.
-      await tx.qualificacaoDeIndicado.upsert({
+      // O total que aquela pessoa já pagou. No modo de valor fixo é só o
+      // número que o painel mostra; no modo progressivo é a conta: é o gasto
+      // acumulado DELA que define a porcentagem desta concessão, e por isso
+      // este soma tem que acontecer ANTES de calcular o cupom (quem cruza os
+      // R$ 100 nesta compra já leva o degrau novo).
+      const qualificacao = await tx.qualificacaoDeIndicado.upsert({
         where: { indicadoId },
         update: { pagoEmCentavos: { increment: centavos } },
         create: {
@@ -259,7 +306,29 @@ export async function processarCompraDeIndicado(
           indicadoId,
           pagoEmCentavos: centavos,
         },
+        select: { pagoEmCentavos: true },
       });
+
+      const premio = recompensaDaConcessao({
+        config,
+        gastoDoIndicadoEmCentavos: qualificacao.pagoEmCentavos,
+      });
+
+      // Degrau zero: o indicado ainda não chegou no primeiro patamar, então
+      // o cupom valeria R$ 0. Em vez de conceder nada e queimar o progresso,
+      // o progresso fica guardado inteiro e converte quando a porcentagem
+      // deixar de ser zero. Nada de dinheiro real se perde no caminho.
+      const semDegrau = premio.valorEmCentavos <= 0;
+      if (semDegrau) {
+        await tx.affiliate.update({
+          where: { id: afiliado.id },
+          data: { progressoEmCentavos: estado.progressoEmCentavos + centavos },
+        });
+        console.info(
+          `[afiliados] compra ${reserva.id} somou ${centavos} centavos ao afiliado ${afiliado.id}, indicado ainda no degrau zero`,
+        );
+        return { cupons: 0, centavos };
+      }
 
       if (recompensa.cupons > 0) {
         // UM CUPOM POR RECOMPENSA, e não um cupom somado.
@@ -273,9 +342,9 @@ export async function processarCompraDeIndicado(
         await tx.entradaGratis.createMany({
           data: Array.from({ length: recompensa.cupons }, () => ({
             affiliateId: afiliado.id,
-            valorEmCentavos: config.valorDoCupomEmCentavos,
+            valorEmCentavos: premio.valorEmCentavos,
             limiarNaConcessao: config.limiarEmCentavos,
-            bpsNaConcessao: config.recompensaEmBps,
+            bpsNaConcessao: premio.bps,
           })),
         });
         await tx.movimentoDeAfiliado.create({
@@ -287,8 +356,8 @@ export async function processarCompraDeIndicado(
             raffleId: reserva.raffleId,
             descricao:
               recompensa.cupons === 1
-                ? `Cupom de Entrada liberado (${formatarCentavos(config.valorDoCupomEmCentavos)})`
-                : `${recompensa.cupons} Cupons de Entrada liberados (${formatarCentavos(config.valorDoCupomEmCentavos)} cada)`,
+                ? `Cupom de Entrada liberado (${formatarCentavos(premio.valorEmCentavos)})`
+                : `${recompensa.cupons} Cupons de Entrada liberados (${formatarCentavos(premio.valorEmCentavos)} cada)`,
           },
         });
       }
@@ -370,13 +439,7 @@ export async function reverterCompraDeIndicado(
 
       const estado = await tx.affiliate.findUnique({
         where: { id: original.affiliateId },
-        select: {
-          progressoEmCentavos: true,
-          usaConfigPropria: true,
-          limiarEmCentavos: true,
-          recompensaEmBps: true,
-          valorDoCupomEmCentavos: true,
-        },
+        select: { progressoEmCentavos: true, ...SELECAO_DA_CONFIG },
       });
       if (!estado) return null;
       const config = configDoAfiliado(estado);
@@ -730,10 +793,7 @@ export async function painelDoAfiliado(
       code: true,
       status: true,
       progressoEmCentavos: true,
-      usaConfigPropria: true,
-      limiarEmCentavos: true,
-      recompensaEmBps: true,
-      valorDoCupomEmCentavos: true,
+      ...SELECAO_DA_CONFIG,
     },
   });
   if (!afiliado) return null;
@@ -856,13 +916,16 @@ export async function indicadosDoAfiliado(
     desde: Date;
     pagoEmCentavos: number;
     time: string | null;
+    /** A escada deste indicado, no modo progressivo. Null no modo fixo. */
+    progressao: ProgressaoDoIndicado | null;
   }[]
 > {
   const afiliado = await prisma.affiliate.findUnique({
     where: { userId },
-    select: { id: true },
+    select: { id: true, ...SELECAO_DA_CONFIG },
   });
   if (!afiliado) return [];
+  const config = configDoAfiliado(afiliado);
 
   const indicados = await prisma.user.findMany({
     where: { referredByAffiliateId: afiliado.id },
@@ -877,13 +940,28 @@ export async function indicadosDoAfiliado(
     },
   });
 
-  return indicados.map((i) => ({
-    id: i.id,
-    nome: nomeMascarado(i.name),
-    desde: i.createdAt,
-    pagoEmCentavos: Math.max(0, i.qualificacao?.pagoEmCentavos ?? 0),
-    time: i.favoriteTeamId,
-  }));
+  return indicados.map((i) => {
+    const pagoEmCentavos = Math.max(0, i.qualificacao?.pagoEmCentavos ?? 0);
+    return {
+      id: i.id,
+      nome: nomeMascarado(i.name),
+      desde: i.createdAt,
+      pagoEmCentavos,
+      time: i.favoriteTeamId,
+      // A auditoria da regra progressiva: quanto a pessoa gastou, em que
+      // degrau isso a coloca, quanto rende hoje e quanto falta para o degrau
+      // seguinte. Tudo derivado do mesmo gasto que gerou os cupons, para o
+      // painel nunca contar uma história diferente da concessão.
+      progressao:
+        config.modo === "PERCENTUAL_PROGRESSIVO"
+          ? progressaoDoIndicado({
+              gastoEmCentavos: pagoEmCentavos,
+              degrauEmCentavos: config.degrauEmCentavos,
+              bpsPorDegrau: config.bpsPorDegrau,
+            })
+          : null,
+    };
+  });
 }
 
 /** "Mateus Nascimento Rodrigues" → "Mateus N." */
@@ -1092,10 +1170,7 @@ export async function listarAfiliados(termo?: string) {
       status: true,
       createdAt: true,
       progressoEmCentavos: true,
-      usaConfigPropria: true,
-      limiarEmCentavos: true,
-      recompensaEmBps: true,
-      valorDoCupomEmCentavos: true,
+      ...SELECAO_DA_CONFIG,
       user: { select: { id: true, name: true, phone: true } },
       _count: { select: { indicados: true, entradas: true } },
     },
@@ -1169,11 +1244,19 @@ async function travarAfiliado(
 export async function definirConfigDeRecompensa({
   userId,
   usaConfigPropria,
+  modo,
   limiarEmCentavos,
   recompensaEmBps,
   valorDoCupomEmCentavos,
+  degrauEmCentavos,
+  bpsPorDegrau,
   adminId,
 }: {
+  modo: ModoDeRecompensa;
+  /** De quanto em quanto o indicado sobe um degrau (modo progressivo). */
+  degrauEmCentavos: number;
+  /** Quanto cada degrau soma na porcentagem (modo progressivo). */
+  bpsPorDegrau: number;
   userId: string;
   usaConfigPropria: boolean;
   limiarEmCentavos: number;
@@ -1184,13 +1267,7 @@ export async function definirConfigDeRecompensa({
 }): Promise<ConfigDeRecompensa> {
   const afiliado = await prisma.affiliate.findUnique({
     where: { userId },
-    select: {
-      id: true,
-      usaConfigPropria: true,
-      limiarEmCentavos: true,
-      recompensaEmBps: true,
-      valorDoCupomEmCentavos: true,
-    },
+    select: { id: true, ...SELECAO_DA_CONFIG },
   });
   if (!afiliado) throw new ValidationError("Esse usuário não é afiliado");
 
@@ -1205,16 +1282,22 @@ export async function definirConfigDeRecompensa({
     return CONFIG_PADRAO;
   }
 
-  // O valor é DERIVADO, e o que veio da tela só é conferido.
+  // O valor é DERIVADO, e o que veio da tela só é conferido. No modo
+  // progressivo não existe um valor único a conferir: ele muda por indicado,
+  // então o que fica gravado nessas colunas é o teto da escada, e a
+  // conferência é a da escada.
   const derivado = valorDoCupom(limiarEmCentavos, recompensaEmBps);
   const nova: ConfigDeRecompensa = {
+    modo,
     limiarEmCentavos,
     recompensaEmBps,
     valorDoCupomEmCentavos: derivado,
+    degrauEmCentavos,
+    bpsPorDegrau,
   };
   const problema = conferirConfig(nova);
   if (problema) throw new ValidationError(problema.mensagem);
-  if (valorDoCupomEmCentavos !== derivado) {
+  if (modo === "VALOR_FIXO" && valorDoCupomEmCentavos !== derivado) {
     throw new ValidationError(
       "O valor do cupom não bate com a porcentagem. Recarregue a tela e tente de novo.",
     );
@@ -1224,9 +1307,12 @@ export async function definirConfigDeRecompensa({
     where: { id: afiliado.id },
     data: {
       usaConfigPropria: true,
+      modoDeRecompensa: nova.modo,
       limiarEmCentavos: nova.limiarEmCentavos,
       recompensaEmBps: nova.recompensaEmBps,
       valorDoCupomEmCentavos: nova.valorDoCupomEmCentavos,
+      degrauEmCentavos: nova.degrauEmCentavos,
+      bpsPorDegrau: nova.bpsPorDegrau,
     },
   });
   await registrarMudancaDeConfig(afiliado.id, anterior, nova, adminId);

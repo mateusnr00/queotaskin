@@ -342,9 +342,24 @@ export default async function PaginaDeAfiliados() {
                         {indice + 1}
                       </span>
                     )}
-                    <p className="min-w-0 flex-1 truncate text-sm font-semibold">
-                      {i.nome}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{i.nome}</p>
+                      {/* No modo progressivo a conta é por indicado, então ela
+                          aparece do lado do indicado: em que degrau ele está,
+                          quanto rende hoje e quanto falta para o próximo. */}
+                      {i.progressao && (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+                          {porcentagemDosBps(i.progressao.bps).toLocaleString(
+                            "pt-BR",
+                          )}
+                          % agora
+                          <span aria-hidden> · </span>
+                          faltam{" "}
+                          {formatBRL(emReais(i.progressao.faltaEmCentavos))} para
+                          o próximo nível
+                        </p>
+                      )}
+                    </div>
                     <p className="shrink-0 text-xs font-semibold text-muted-foreground tabular-nums">
                       {formatBRL(emReais(i.pagoEmCentavos))}
                     </p>

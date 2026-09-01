@@ -604,9 +604,24 @@ function Revelacao({
         style={BORDA_DE_AUTH}
       >
         <div className="relative overflow-hidden rounded-[1.375rem] bg-[#0e1013] p-6 text-center shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] sm:p-10">
-          <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
-            {numero == null ? "Sorteando..." : "Número sorteado"}
-          </p>
+          {/* O rótulo e o troféu da campanha, um grupo só, centralizado.
+              O troféu é pequeno de propósito: ele acompanha o texto, não
+              disputa com o número. Campanha sem troféu não desenha nada, nem
+              espaço reservado. */}
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-[11px] font-bold tracking-[0.2em] text-white/50 uppercase">
+              {numero == null ? "Sorteando..." : "Número sorteado"}
+            </p>
+            {estado.campanha.trofeu && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={estado.campanha.trofeu}
+                alt=""
+                aria-hidden
+                className="h-6 w-6 shrink-0 object-contain sm:h-8 sm:w-8"
+              />
+            )}
+          </div>
 
           {atrasado && (
             <p

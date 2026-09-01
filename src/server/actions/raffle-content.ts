@@ -1604,3 +1604,73 @@ export async function salvarSaidaDoPremioAction(
     return { ok: false, error: "Erro ao salvar a saída" };
   }
 }
+
+/**
+ * O troféu que aparece ao lado de "Número sorteado" na tela do sorteio.
+ *
+ * É por campanha: cada sorteio pode ter o seu, e sorteio sem troféu não
+ * desenha nada (nem espaço reservado, nem imagem padrão). Guarda só a URL,
+ * pelo mesmo caminho de upload das outras imagens; passar `null` remove.
+ */
+export async function setRaffleTrofeuAction(
+  formData: FormData,
+): Promise<ActionResult<{ url: string | null }>> {
+  try {
+    const session = await getAdminOrThrow();
+
+    const raffleId = formData.get("raffleId");
+    if (typeof raffleId !== "string" || !raffleId) {
+      return { ok: false, error: "raffleId obrigatório" };
+    }
+    const tenantId = await assertRaffleInActiveTenant(raffleId, session.user);
+
+    const file = formData.get("file");
+    const remover = formData.get("remover") === "1";
+
+    let url: string | null = null;
+    if (!remover) {
+      if (!isStorageConfigured()) {
+        return {
+          ok: false,
+          error:
+            "Supabase Storage não está configurado. Defina as variáveis NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e SUPABASE_STORAGE_BUCKET.",
+        };
+      }
+      if (!(file instanceof File)) {
+        return { ok: false, error: "Arquivo inválido" };
+      }
+      const pareceImagem =
+        file.type.startsWith("image/") || IMAGE_EXT.test(file.name);
+      if (!pareceImagem) {
+        return { ok: false, error: "O arquivo não parece ser uma imagem" };
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        return {
+          ok: false,
+          error: "Imagem grande demais para enviar. Tente uma menor",
+        };
+      }
+      url = (await uploadRaffleImage(raffleId, file)).url;
+    }
+
+    await prisma.raffle.update({
+      where: { id: raffleId },
+      data: { trofeuUrl: url },
+    });
+
+    await registrarLog({
+      acao: "sorteio.conteudo_alterado",
+      tenantId,
+      alvo: { tipo: "Raffle", id: raffleId },
+      detalhes: { o_que: url ? "troféu definido" : "troféu removido" },
+    });
+
+    revalidatePath(`/admin/sorteios/${raffleId}/editar`);
+    revalidatePath(`/admin/sorteios/${raffleId}/sorteio`);
+    return { ok: true, data: { url } };
+  } catch (err) {
+    console.error("[setRaffleTrofeuAction]", err);
+    const msg = err instanceof Error ? err.message : "Erro no upload";
+    return { ok: false, error: msg };
+  }
+}

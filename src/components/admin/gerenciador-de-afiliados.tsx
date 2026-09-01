@@ -38,7 +38,10 @@ import {
   conferirConfig,
   normalizarCodigo,
   porcentagemDosBps,
+  progressaoDoIndicado,
   valorDoCupom,
+  CONFIG_PADRAO,
+  type ModoDeRecompensa,
 } from "@/lib/afiliados";
 import { formatBRL } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
@@ -63,9 +66,12 @@ export interface AfiliadoNaLista {
   progressoEmCentavos: number;
   usaConfigPropria: boolean;
   config: {
+    modo: ModoDeRecompensa;
     limiarEmCentavos: number;
     recompensaEmBps: number;
     valorDoCupomEmCentavos: number;
+    degrauEmCentavos: number;
+    bpsPorDegrau: number;
   };
   desde: string;
 }
@@ -508,6 +514,13 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
   const [isPending, startTransition] = useTransition();
   const [aberto, setAberto] = useState(false);
   const [propria, setPropria] = useState(afiliado.usaConfigPropria);
+  const [modo, setModo] = useState<ModoDeRecompensa>(afiliado.config.modo);
+  const [degrau, setDegrau] = useState(
+    (afiliado.config.degrauEmCentavos / 100).toFixed(2).replace(".", ","),
+  );
+  const [pctDegrau, setPctDegrau] = useState(
+    porcentagemDosBps(afiliado.config.bpsPorDegrau).toFixed(2).replace(".", ","),
+  );
   const [limiar, setLimiar] = useState(
     (afiliado.config.limiarEmCentavos / 100).toFixed(2).replace(".", ","),
   );
@@ -529,10 +542,19 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
     Number.parseFloat(pct.replace(".", "").replace(",", ".")) || 0,
   );
   const valorCent = valorDoCupom(limiarCent, bps);
+  const degrauCent = emCent(degrau);
+  const bpsDegrau = bpsDaPorcentagem(
+    Number.parseFloat(pctDegrau.replace(".", "").replace(",", ".")) || 0,
+  );
+  const progressivo = modo === "PERCENTUAL_PROGRESSIVO";
   const problema = conferirConfig({
+    ...CONFIG_PADRAO,
+    modo,
     limiarEmCentavos: limiarCent,
     recompensaEmBps: bps,
     valorDoCupomEmCentavos: valorCent,
+    degrauEmCentavos: degrauCent,
+    bpsPorDegrau: bpsDegrau,
   });
 
   // Editar o valor em reais recalcula a porcentagem, e vice-versa.
@@ -558,7 +580,7 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
   // Progresso guardado que o novo limiar já cobre vira cupom na hora. É a
   // única consequência imediata de salvar, então ela é dita antes.
   const cuponsImediatos =
-    limiarCent > 0 && afiliado.progressoEmCentavos > 0
+    limiarCent > 0 && afiliado.progressoEmCentavos > 0 && !progressivo
       ? Math.floor(afiliado.progressoEmCentavos / limiarCent)
       : 0;
 
@@ -567,9 +589,11 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
       toast.error(problema.mensagem);
       return;
     }
-    const resumo = propria
-      ? `A cada ${formatBRL(limiarCent / 100)}, 1 cupom de ${formatBRL(valorCent / 100)} (${(bps / 100).toLocaleString("pt-BR")}%).`
-      : "Voltar para a configuração padrão do programa.";
+    const resumo = !propria
+      ? "Voltar para a configuração padrão do programa."
+      : progressivo
+        ? `A cada ${formatBRL(degrauCent / 100)} gastos por um indicado, +${(bpsDegrau / 100).toLocaleString("pt-BR")}% no cupom dele.`
+        : `A cada ${formatBRL(limiarCent / 100)}, 1 cupom de ${formatBRL(valorCent / 100)} (${(bps / 100).toLocaleString("pt-BR")}%).`;
     const aviso =
       cuponsImediatos > 0 && propria
         ? `\n\nEsta alteração gerará imediatamente ${cuponsImediatos} cupom(ns) a partir do progresso já acumulado.`
@@ -580,9 +604,12 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
       const r = await definirConfigDeRecompensaAction({
         userId: afiliado.userId,
         usaConfigPropria: propria,
+        modo,
         limiarEmCentavos: limiarCent,
         recompensaEmBps: bps,
         valorDoCupomEmCentavos: valorCent,
+        degrauEmCentavos: degrauCent,
+        bpsPorDegrau: bpsDegrau,
       });
       if (!r.ok) {
         toast.error(r.error);
@@ -608,8 +635,9 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
           Configuração de recompensa
         </Button>
         <span className="text-[11px] text-muted-foreground">
-          {formatBRL(afiliado.config.valorDoCupomEmCentavos / 100)} a cada{" "}
-          {formatBRL(afiliado.config.limiarEmCentavos / 100)}
+          {afiliado.config.modo === "PERCENTUAL_PROGRESSIVO"
+            ? `+${porcentagemDosBps(afiliado.config.bpsPorDegrau).toLocaleString("pt-BR")}% a cada ${formatBRL(afiliado.config.degrauEmCentavos / 100)} do indicado`
+            : `${formatBRL(afiliado.config.valorDoCupomEmCentavos / 100)} a cada ${formatBRL(afiliado.config.limiarEmCentavos / 100)}`}
           {afiliado.usaConfigPropria ? " (personalizada)" : " (padrão)"}
         </span>
       </div>
@@ -627,6 +655,34 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
         Usar configuração personalizada
       </label>
 
+      <div className={cn(!propria && "pointer-events-none opacity-50")}>
+        <span className="block text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+          Como a recompensa é calculada
+        </span>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {(
+            [
+              ["VALOR_FIXO", "Valor fixo por cupom"],
+              ["PERCENTUAL_PROGRESSIVO", "Percentual progressivo"],
+            ] as const
+          ).map(([valorDoModo, rotulo]) => (
+            <button
+              key={valorDoModo}
+              type="button"
+              onClick={() => setModo(valorDoModo)}
+              className={cn(
+                "rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors",
+                modo === valorDoModo
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div
         className={cn(
           "grid gap-2 sm:grid-cols-3",
@@ -643,18 +699,37 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
             setValor((valorDoCupom(novo, bps) / 100).toFixed(2).replace(".", ","));
           }}
         />
-        <Campo
-          rotulo="Percentual de recompensa"
-          sufixo="%"
-          valor={pct}
-          aoMudar={mudarPct}
-        />
-        <Campo
-          rotulo="Valor de cada cupom"
-          prefixo="R$"
-          valor={valor}
-          aoMudar={mudarValor}
-        />
+        {progressivo ? (
+          <>
+            <Campo
+              rotulo="Sobe um degrau a cada"
+              prefixo="R$"
+              valor={degrau}
+              aoMudar={setDegrau}
+            />
+            <Campo
+              rotulo="Aumento por degrau"
+              sufixo="%"
+              valor={pctDegrau}
+              aoMudar={setPctDegrau}
+            />
+          </>
+        ) : (
+          <>
+            <Campo
+              rotulo="Percentual de recompensa"
+              sufixo="%"
+              valor={pct}
+              aoMudar={mudarPct}
+            />
+            <Campo
+              rotulo="Valor de cada cupom"
+              prefixo="R$"
+              valor={valor}
+              aoMudar={mudarValor}
+            />
+          </>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-background/40 px-3 py-2 text-xs leading-relaxed">
@@ -662,6 +737,32 @@ function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
         {propria ? (
           problema ? (
             <p className="mt-1 text-red-400">{problema.mensagem}</p>
+          ) : progressivo ? (
+            <>
+              <p className="mt-1">
+                A porcentagem sobe com o quanto CADA indicado já gastou: a cada{" "}
+                {formatBRL(degrauCent / 100)} gastos por ele, mais{" "}
+                {(bpsDegrau / 100).toLocaleString("pt-BR")}%. O cupom sai desse
+                percentual sobre {formatBRL(limiarCent / 100)}.
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {[1, 2, 3, 5]
+                  .map((n) => {
+                    const gasto = n * degrauCent;
+                    const p = progressaoDoIndicado({
+                      gastoEmCentavos: gasto,
+                      degrauEmCentavos: degrauCent,
+                      bpsPorDegrau: bpsDegrau,
+                    });
+                    return `${formatBRL(gasto / 100)} = ${(p.bps / 100).toLocaleString("pt-BR")}%`;
+                  })
+                  .join("  ·  ")}
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                Quem gastou menos que {formatBRL(degrauCent / 100)} ainda não
+                rende nada, e o progresso fica guardado até render.
+              </p>
+            </>
           ) : (
             <>
               <p className="mt-1">

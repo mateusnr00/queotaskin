@@ -277,9 +277,12 @@ export async function definirConfigDeRecompensaAction(
     const parsed = alvoSchema
       .extend({
         usaConfigPropria: z.boolean(),
+        modo: z.enum(["VALOR_FIXO", "PERCENTUAL_PROGRESSIVO"]),
         limiarEmCentavos: z.coerce.number().int(),
         recompensaEmBps: z.coerce.number().int(),
         valorDoCupomEmCentavos: z.coerce.number().int(),
+        degrauEmCentavos: z.coerce.number().int(),
+        bpsPorDegrau: z.coerce.number().int(),
       })
       .safeParse(raw);
     if (!parsed.success) return { ok: false, error: "Dados inválidos" };
@@ -287,9 +290,12 @@ export async function definirConfigDeRecompensaAction(
     const config = await definirConfigDeRecompensa({
       userId: parsed.data.userId,
       usaConfigPropria: parsed.data.usaConfigPropria,
+      modo: parsed.data.modo,
       limiarEmCentavos: parsed.data.limiarEmCentavos,
       recompensaEmBps: parsed.data.recompensaEmBps,
       valorDoCupomEmCentavos: parsed.data.valorDoCupomEmCentavos,
+      degrauEmCentavos: parsed.data.degrauEmCentavos,
+      bpsPorDegrau: parsed.data.bpsPorDegrau,
       adminId: session.user.id,
     });
 
@@ -299,9 +305,12 @@ export async function definirConfigDeRecompensaAction(
       alvo: { tipo: "User", id: parsed.data.userId },
       detalhes: {
         personalizada: parsed.data.usaConfigPropria,
+        modo: config.modo,
         limiar: config.limiarEmCentavos,
         bps: config.recompensaEmBps,
         cupom: config.valorDoCupomEmCentavos,
+        degrau: config.degrauEmCentavos,
+        bpsPorDegrau: config.bpsPorDegrau,
       },
     });
 

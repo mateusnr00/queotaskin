@@ -12,6 +12,7 @@ import {
   linkDeIndicacao,
   normalizarCodigo,
   porcentagemDosBps,
+  progressaoDoIndicado,
   valorDoCupom,
   CONFIG_PADRAO,
 } from "@/lib/afiliados";
@@ -164,6 +165,73 @@ describe("valor do cupom e porcentagem", () => {
   });
 });
 
+describe("progressaoDoIndicado", () => {
+  // A tabela da regra, em reais: a porcentagem é do GASTO ACUMULADO do
+  // indicado, e sobe de degrau em degrau. Nada de arredondar para cima: quem
+  // parou em R$ 199,99 está no mesmo degrau de quem parou em R$ 100.
+  const pct = (reais: number) =>
+    porcentagemDosBps(progressaoDoIndicado({ gastoEmCentavos: reais * 100 }).bps);
+
+  it("R$ 0 a R$ 99,99 não rendem nada", () => {
+    expect(pct(0)).toBe(0);
+    expect(pct(50)).toBe(0);
+    expect(pct(99.99)).toBe(0);
+  });
+
+  it("R$ 100 abrem o primeiro degrau: 2%", () => {
+    expect(pct(100)).toBe(2);
+  });
+
+  it("R$ 199,99 continuam em 2%: o degrau não fecha antes da hora", () => {
+    expect(pct(199.99)).toBe(2);
+  });
+
+  it("R$ 200 são 4%, R$ 250 continuam 4%, R$ 300 são 6%", () => {
+    expect(pct(200)).toBe(4);
+    expect(pct(250)).toBe(4);
+    expect(pct(300)).toBe(6);
+  });
+
+  it("R$ 500 são 10%", () => {
+    expect(pct(500)).toBe(10);
+  });
+
+  it("a escada é configurável: R$ 50 por degrau a 1,5% dão 4,5% em R$ 150", () => {
+    const p = progressaoDoIndicado({
+      gastoEmCentavos: 15_000,
+      degrauEmCentavos: 5_000,
+      bpsPorDegrau: 150,
+    });
+    expect(p.degraus).toBe(3);
+    expect(p.bps).toBe(450);
+    expect(porcentagemDosBps(p.bps)).toBe(4.5);
+  });
+
+  it("entrega os números da auditoria: R$ 347,50 são 3 degraus, 6%, faltam R$ 52,50", () => {
+    expect(progressaoDoIndicado({ gastoEmCentavos: 34_750 })).toEqual({
+      gastoEmCentavos: 34_750,
+      degraus: 3,
+      bps: 600,
+      proximoDegrauEmCentavos: 40_000,
+      faltaEmCentavos: 5_250,
+    });
+  });
+
+  it("não passa de 100%, por mais que o indicado gaste", () => {
+    expect(progressaoDoIndicado({ gastoEmCentavos: 100_000_00 }).bps).toBe(10_000);
+  });
+
+  it("gasto negativo (estorno maior que o pago) é tratado como zero", () => {
+    expect(progressaoDoIndicado({ gastoEmCentavos: -500 }).bps).toBe(0);
+  });
+
+  it("recusa degrau zero em vez de dividir por ele", () => {
+    expect(() =>
+      progressaoDoIndicado({ gastoEmCentavos: 10_000, degrauEmCentavos: 0 }),
+    ).toThrow();
+  });
+});
+
 describe("conferirConfig", () => {
   it("aceita a configuração padrão", () => {
     expect(conferirConfig(CONFIG_PADRAO)).toBeNull();
@@ -172,6 +240,7 @@ describe("conferirConfig", () => {
   it("recusa limiar zero", () => {
     expect(
       conferirConfig({
+        ...CONFIG_PADRAO,
         limiarEmCentavos: 0,
         recompensaEmBps: 5000,
         valorDoCupomEmCentavos: 0,
@@ -182,6 +251,7 @@ describe("conferirConfig", () => {
   it("recusa valores negativos", () => {
     expect(
       conferirConfig({
+        ...CONFIG_PADRAO,
         limiarEmCentavos: -100,
         recompensaEmBps: 5000,
         valorDoCupomEmCentavos: 500,
@@ -189,6 +259,7 @@ describe("conferirConfig", () => {
     ).not.toBeNull();
     expect(
       conferirConfig({
+        ...CONFIG_PADRAO,
         limiarEmCentavos: 1000,
         recompensaEmBps: -1,
         valorDoCupomEmCentavos: 500,
@@ -199,6 +270,7 @@ describe("conferirConfig", () => {
   it("recusa cupom zerado", () => {
     expect(
       conferirConfig({
+        ...CONFIG_PADRAO,
         limiarEmCentavos: 1000,
         recompensaEmBps: 1,
         valorDoCupomEmCentavos: 0,
@@ -209,6 +281,7 @@ describe("conferirConfig", () => {
   it("recusa recompensa acima de 100%", () => {
     expect(
       conferirConfig({
+        ...CONFIG_PADRAO,
         limiarEmCentavos: 1000,
         recompensaEmBps: 12_000,
         valorDoCupomEmCentavos: 1200,
@@ -221,11 +294,46 @@ describe("conferirConfig", () => {
     // valendo diferente do que o painel prometeu.
     expect(
       conferirConfig({
+        ...CONFIG_PADRAO,
         limiarEmCentavos: 1000,
         recompensaEmBps: 5000,
         valorDoCupomEmCentavos: 700,
       })?.campo,
     ).toBe("valor");
+  });
+});
+
+describe("conferirConfig no modo progressivo", () => {
+  const progressivo = {
+    ...CONFIG_PADRAO,
+    modo: "PERCENTUAL_PROGRESSIVO" as const,
+  };
+
+  it("aceita a escada padrão", () => {
+    expect(conferirConfig(progressivo)).toBeNull();
+  });
+
+  it("não exige que o valor do cupom bata com a porcentagem", () => {
+    // No progressivo o valor sai na concessão, indicado por indicado, então
+    // não existe um valor único para conferir contra a porcentagem.
+    expect(
+      conferirConfig({ ...progressivo, valorDoCupomEmCentavos: 700 }),
+    ).toBeNull();
+  });
+
+  it("recusa degrau zero", () => {
+    expect(conferirConfig({ ...progressivo, degrauEmCentavos: 0 })?.campo).toBe(
+      "degrau",
+    );
+  });
+
+  it("recusa aumento por degrau zerado ou acima de 100%", () => {
+    expect(conferirConfig({ ...progressivo, bpsPorDegrau: 0 })?.campo).toBe(
+      "bpsPorDegrau",
+    );
+    expect(conferirConfig({ ...progressivo, bpsPorDegrau: 12_000 })?.campo).toBe(
+      "bpsPorDegrau",
+    );
   });
 });
 

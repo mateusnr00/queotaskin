@@ -464,11 +464,41 @@ Progressivo: R$ 27,50 dão dois cupons e deixam R$ 7,50 guardados; os R$ 2,50
 seguintes fecham o terceiro. **Todos os indicados do mesmo afiliado somam no
 mesmo progresso**, e o mesmo indicado contribui quantas vezes comprar.
 
+### Dois modos de recompensa
+
+`Affiliate.modoDeRecompensa` escolhe de onde sai a porcentagem:
+
+- **`VALOR_FIXO`** (padrão): a porcentagem é digitada uma vez e vale para todo
+  mundo. É a regra descrita acima.
+- **`PERCENTUAL_PROGRESSIVO`**: a porcentagem sai do **gasto acumulado de cada
+  indicado**, e sobe de degrau em degrau:
+
+```
+degraus    = floor(gastoAcumuladoDoIndicado / degrauEmCentavos)
+porcentagem = degraus × bpsPorDegrau
+
+R$ 0 a 99,99 → 0%   R$ 100 → 2%   R$ 199,99 → 2%
+R$ 200 → 4%         R$ 250 → 4%   R$ 300 → 6%     R$ 500 → 10%
+```
+
+Sem arredondamento para cima: R$ 199,99 está no mesmo degrau de R$ 100. Os dois
+parâmetros são configuráveis (`degrauEmCentavos`, `bpsPorDegrau`), então "a cada
+R$ 200 → +1%" é configuração, e não código novo. A conta é
+`progressaoDoIndicado` em `lib/afiliados.ts`, e ela devolve os números da
+auditoria de uma vez: gasto, degraus, porcentagem, próximo degrau e quanto
+falta. É a mesma função que a tela do afiliado usa por indicado, para o painel
+nunca contar uma história diferente da concessão.
+
+Indicado abaixo do primeiro degrau não gera cupom, **e o progresso não é
+consumido**: fica guardado inteiro e converte quando a porcentagem deixar de ser
+zero, para nenhum dinheiro real se perder no caminho.
+
 ### Configurável por afiliado
 
-Limiar, porcentagem e valor do cupom ficam em `Affiliate`, e cada afiliado pode
-ter os seus (painel → Afiliados → Configuração de recompensa). Sem configuração
-própria, valem os padrões globais de `lib/afiliados.ts`.
+Modo, limiar, porcentagem, valor do cupom, degrau e aumento por degrau ficam em
+`Affiliate`, e cada afiliado pode ter os seus (painel → Afiliados →
+Configuração de recompensa). Sem configuração própria, valem os padrões globais
+de `lib/afiliados.ts`.
 
 A porcentagem é guardada em **basis points** inteiros (5000 = 50%, 7000 = 70%),
 e nunca em float: porcentagem em ponto flutuante erra centavo. O valor do cupom
@@ -582,6 +612,15 @@ quando o número pode aparecer e quando o nome pode aparecer, tudo em colunas
 | `src/app/(public)/sorteio/[publicId]/verificar` | A conferência, feita no navegador de quem abre. |
 | `src/app/api/sorteio/[publicId]/manifesto` | A lista de títulos que disputaram. Só números, nunca gente. |
 | `src/app/(admin)/admin/sorteios/[id]/sorteio` | O acompanhamento, só de leitura. |
+
+### Troféu da campanha
+
+`Raffle.trofeuUrl` guarda uma imagem pequena, opcional, exibida ao lado do
+texto "Número sorteado" na transmissão (24 a 32px, `object-contain`, nunca
+esticada). É por campanha: cada sorteio tem o seu, e campanha sem troféu não
+desenha nada, nem placeholder nem imagem padrão. O upload fica no editor do
+sorteio, aba Imagens, e usa o mesmo caminho de armazenamento das outras
+imagens: no banco vai só a URL.
 
 ### Quando uma campanha encerra
 

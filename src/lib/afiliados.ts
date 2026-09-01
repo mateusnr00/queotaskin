@@ -30,17 +30,87 @@ export const VALOR_PADRAO_DO_CUPOM_EM_CENTAVOS = 500;
 /** Cem por cento, em basis points. O denominador de toda conta daqui. */
 const BPS_CHEIO = 10_000;
 
+/**
+ * A PROGRESSÃO POR GASTO DO INDICADO.
+ *
+ * A cada R$ 100 que UMA pessoa indicada gasta, o percentual do afiliado sobe
+ * dois pontos. Os dois números são configuráveis por afiliado, e não estão
+ * cravados na conta: amanhã pode ser "a cada R$ 200, mais 1%".
+ */
+export const DEGRAU_PADRAO_EM_CENTAVOS = 10_000;
+export const BPS_PADRAO_POR_DEGRAU = 200;
+
+export type ModoDeRecompensa = "VALOR_FIXO" | "PERCENTUAL_PROGRESSIVO";
+
 export interface ConfigDeRecompensa {
+  modo: ModoDeRecompensa;
   limiarEmCentavos: number;
   recompensaEmBps: number;
   valorDoCupomEmCentavos: number;
+  /** A cada quantos centavos gastos por um indicado o percentual sobe. */
+  degrauEmCentavos: number;
+  /** Quanto sobe por degrau, em basis points. */
+  bpsPorDegrau: number;
 }
 
 export const CONFIG_PADRAO: ConfigDeRecompensa = {
+  modo: "VALOR_FIXO",
   limiarEmCentavos: LIMIAR_PADRAO_EM_CENTAVOS,
   recompensaEmBps: RECOMPENSA_PADRAO_EM_BPS,
   valorDoCupomEmCentavos: VALOR_PADRAO_DO_CUPOM_EM_CENTAVOS,
+  degrauEmCentavos: DEGRAU_PADRAO_EM_CENTAVOS,
+  bpsPorDegrau: BPS_PADRAO_POR_DEGRAU,
 };
+
+export interface ProgressaoDoIndicado {
+  /** Quanto essa pessoa já gastou, em centavos. */
+  gastoEmCentavos: number;
+  /** Degraus fechados. R$ 199,99 com degrau de R$ 100 dá 1. */
+  degraus: number;
+  /** O percentual atual, em basis points. */
+  bps: number;
+  /** Em quanto de gasto acumulado o próximo degrau fecha, em centavos. */
+  proximoDegrauEmCentavos: number;
+  /** Quanto falta gastar para o próximo degrau, em centavos. */
+  faltaEmCentavos: number;
+}
+
+/**
+ * Onde uma pessoa indicada está na progressão.
+ *
+ * SEM ARREDONDAMENTO, e é isso que a regra pede: R$ 199,99 fecharam UM degrau,
+ * não dois. `Math.floor` sobre centavos inteiros faz isso sem chance de erro
+ * de ponto flutuante, que é o defeito clássico desta conta (1,99 * 100 dá
+ * 198.99999999999997 em float, e o degrau sumiria).
+ *
+ * O percentual tem teto de 100%: acima disso o cupom valeria mais do que o
+ * dinheiro que entrou, e o programa deixaria de se pagar.
+ */
+export function progressaoDoIndicado({
+  gastoEmCentavos,
+  degrauEmCentavos = DEGRAU_PADRAO_EM_CENTAVOS,
+  bpsPorDegrau = BPS_PADRAO_POR_DEGRAU,
+}: {
+  gastoEmCentavos: number;
+  degrauEmCentavos?: number;
+  bpsPorDegrau?: number;
+}): ProgressaoDoIndicado {
+  if (degrauEmCentavos <= 0) {
+    throw new Error("O degrau da progressão precisa ser maior que zero");
+  }
+  const gasto = Math.max(0, Math.floor(gastoEmCentavos));
+  const degraus = Math.floor(gasto / degrauEmCentavos);
+  const bps = Math.min(BPS_CHEIO, degraus * bpsPorDegrau);
+  const proximo = (degraus + 1) * degrauEmCentavos;
+
+  return {
+    gastoEmCentavos: gasto,
+    degraus,
+    bps,
+    proximoDegrauEmCentavos: proximo,
+    faltaEmCentavos: proximo - gasto,
+  };
+}
 
 /**
  * O valor do cupom que sai de um limiar e uma porcentagem.
@@ -81,7 +151,7 @@ export function bpsDaPorcentagem(porcentagem: number): number {
 }
 
 export interface ProblemaNaConfig {
-  campo: "limiar" | "bps" | "valor";
+  campo: "limiar" | "bps" | "valor" | "degrau" | "bpsPorDegrau";
   mensagem: string;
 }
 
@@ -96,6 +166,30 @@ export interface ProblemaNaConfig {
 export function conferirConfig(
   config: ConfigDeRecompensa,
 ): ProblemaNaConfig | null {
+  if (config.modo === "PERCENTUAL_PROGRESSIVO") {
+    // No modo progressivo o valor do cupom não é digitado: ele sai do gasto
+    // de cada indicado na hora da concessão. O que se configura é a escada.
+    if (!Number.isInteger(config.degrauEmCentavos) || config.degrauEmCentavos <= 0) {
+      return { campo: "degrau", mensagem: "O degrau precisa ser maior que zero" };
+    }
+    if (!Number.isInteger(config.bpsPorDegrau) || config.bpsPorDegrau <= 0) {
+      return {
+        campo: "bpsPorDegrau",
+        mensagem: "O aumento por degrau precisa ser maior que zero",
+      };
+    }
+    if (config.bpsPorDegrau > BPS_CHEIO) {
+      return {
+        campo: "bpsPorDegrau",
+        mensagem: "O aumento por degrau não pode passar de 100%",
+      };
+    }
+    if (!Number.isInteger(config.limiarEmCentavos) || config.limiarEmCentavos <= 0) {
+      return { campo: "limiar", mensagem: "O limiar precisa ser maior que zero" };
+    }
+    return null;
+  }
+
   if (!Number.isInteger(config.limiarEmCentavos) || config.limiarEmCentavos <= 0) {
     return { campo: "limiar", mensagem: "O limiar precisa ser maior que zero" };
   }
