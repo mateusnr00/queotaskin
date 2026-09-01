@@ -29,7 +29,12 @@ import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
 import { Input } from "@/components/ui/input";
 import { normalizeImage } from "@/lib/image-normalize";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
-import { MAX_IMAGES_PER_RAFFLE } from "@/lib/raffle-images";
+import {
+  CAPA_DO_DESTAQUE,
+  CORTE_LATERAL_NO_CELULAR,
+  MAX_IMAGES_PER_RAFFLE,
+  MOLDURA_DO_DESTAQUE,
+} from "@/lib/raffle-images";
 import { cn } from "@/lib/utils";
 
 export interface RaffleImageItem {
@@ -44,12 +49,15 @@ interface Props {
   initialImages: RaffleImageItem[];
   /** O troféu que aparece ao lado de "Número sorteado". Null: não aparece. */
   initialTrofeuUrl: string | null;
+  /** É a campanha do card grande no topo da vitrine. */
+  principal?: boolean;
 }
 
 export function RaffleImagesTab({
   raffleId,
   initialImages,
   initialTrofeuUrl,
+  principal = false,
 }: Props) {
   const [images, setImages] = useState<RaffleImageItem[]>(initialImages);
   const [isUploading, setIsUploading] = useState(false);
@@ -183,6 +191,10 @@ export function RaffleImagesTab({
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />
+
+        {principal && (
+          <MolduraDoDestaque capa={images.find((i) => i.isCover) ?? images[0]} />
+        )}
 
         <DropZone
           onPick={() => inputRef.current?.click()}
@@ -474,5 +486,85 @@ function TrofeuDoSorteio({
         </div>
       </div>
     </SecaoDoFormulario>
+  );
+}
+
+/**
+ * O aviso que só a campanha principal recebe, com o corte desenhado.
+ *
+ * Explicar em texto que "o card do topo é panorâmico" não resolve: a pessoa
+ * envia a arte, ela sai cortada no ar, e a descoberta acontece com o sorteio
+ * já publicado. Aqui a mesma moldura do site é desenhada em cima da capa
+ * atual, com as faixas do que o celular come, então o corte é visto ANTES.
+ */
+function MolduraDoDestaque({ capa }: { capa?: RaffleImageItem }) {
+  const { largura, altura } = CAPA_DO_DESTAQUE;
+  // Porcentagem para o CSS (ponto) e para ler (vírgula), que não são a
+  // mesma coisa: "5.5%" no meio de uma frase em português é typo.
+  const faixa = `${(CORTE_LATERAL_NO_CELULAR * 100).toFixed(1)}%`;
+  const faixaEscrita = faixa.replace(".", ",");
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-primary/40 bg-primary/[0.06] p-4">
+      <div className="flex items-start gap-3">
+        <Star aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="space-y-1">
+          <p className="text-sm font-bold">Esta é a campanha principal</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            A capa dela vira o card grande do topo, que é panorâmico:{" "}
+            <strong className="text-foreground">
+              {largura} × {altura}
+            </strong>{" "}
+            (2:1). Arte de skin costuma ser 4:3, e nessa moldura ela perde um
+            terço da altura, em cima e embaixo, que é onde o nome e o desgaste
+            normalmente ficam.
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            No celular a mesma capa é exibida em 16:9 e o corte vira das
+            laterais, cerca de {faixaEscrita} de cada lado. Deixe logo e texto
+            no miolo da imagem.
+          </p>
+        </div>
+      </div>
+
+      {capa ? (
+        <div>
+          <p className="mb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+            Como a capa atual fica no topo
+          </p>
+          <div
+            className={cn(
+              "relative w-full overflow-hidden rounded-xl border border-border",
+              MOLDURA_DO_DESTAQUE,
+            )}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={capa.url}
+              alt="Prévia da capa no card principal"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            {/* As faixas do corte do celular, uma de cada lado. */}
+            <div
+              aria-hidden
+              className="absolute inset-y-0 left-0 border-r border-dashed border-white/40 bg-black/45"
+              style={{ width: faixa }}
+            />
+            <div
+              aria-hidden
+              className="absolute inset-y-0 right-0 border-l border-dashed border-white/40 bg-black/45"
+              style={{ width: faixa }}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            As faixas escuras são o que some no celular.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Envie a capa para ver aqui como ela fica no topo da vitrine.
+        </p>
+      )}
+    </div>
   );
 }

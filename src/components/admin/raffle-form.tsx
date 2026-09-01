@@ -123,6 +123,8 @@ interface RaffleFormProps {
   // Dados de conteúdo das abas, só preenchidos no modo edit.
   initialImages?: RaffleImageItem[];
   initialTrofeuUrl?: string | null;
+  /** Campanha do card grande do topo: a capa dela tem outra moldura. */
+  initialPrincipal?: boolean;
   initialPrizes?: PrizeData[];
   initialPromotions?: PromotionData[];
   // Dados da aba "Pagamento", só populados no modo edit.
@@ -271,6 +273,7 @@ export function RaffleForm({
   defaultValues,
   initialImages = [],
   initialTrofeuUrl = null,
+  initialPrincipal = false,
   initialPrizes = [],
   initialPromotions = [],
   initialPaymentProvider = null,
@@ -1494,6 +1497,7 @@ export function RaffleForm({
                 raffleId={raffleId}
                 initialImages={initialImages}
                 initialTrofeuUrl={initialTrofeuUrl}
+                principal={initialPrincipal}
               />
             ) : (
               <SaveFirstHint label="Não foi possível criar o sorteio. Volte em Geral e confira os campos obrigatórios." />

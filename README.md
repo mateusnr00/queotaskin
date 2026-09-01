@@ -41,6 +41,22 @@ Cadastro em **Admin → Sorteios → Editar → Prêmios**. Ao digitar o float, 
 painel confere se o desgaste escolhido bate com as faixas oficiais e
 oferece a correção em um clique.
 
+### A capa da campanha principal é outra moldura
+
+A arte de skin é 4:3 (`QUADRO_DA_SKIN`, 1800 × 1350). O card grande do topo da
+vitrine é **panorâmico**: 16:9 no celular e 2:1 no desktop, com `object-cover`.
+Uma arte 4:3 ali perde um terço da altura, em cima e embaixo, que é justamente
+onde o nome e o desgaste costumam estar escritos.
+
+Para a principal, a capa deve ser **1800 × 900 (2:1)**. Como o celular exibe a
+mesma imagem em 16:9, que é mais alto, lá o corte vira das laterais: cerca de
+5,5% de cada lado. A regra prática é uma só: logo e texto no miolo.
+
+As classes da moldura moram em `MOLDURA_DO_DESTAQUE` (`lib/raffle-images.ts`) e
+são usadas pelo card público E pela prévia do painel, que desenha a capa atual
+dentro dela com as faixas do corte do celular marcadas. O aviso aparece só na
+campanha marcada como principal, na aba Imagens do editor.
+
 ### Importar uma pasta de artes de uma vez
 
 **Admin → Catálogo de skins → Importar artes.** O acervo de artes já nasce

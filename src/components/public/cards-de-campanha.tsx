@@ -16,6 +16,7 @@ import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { SeloDeExclusiva } from "@/components/rank/selo-de-exclusiva";
 import { formatBRL } from "@/lib/format";
+import { MOLDURA_DO_DESTAQUE } from "@/lib/raffle-images";
 import { cn } from "@/lib/utils";
 
 import type { SkinRarity } from "@prisma/client";
@@ -107,7 +108,7 @@ export function FeaturedRaffleCard({
           title={raffle.title}
           skinName={prize?.skinName}
           rarity={prize?.skinRarity}
-          className="aspect-16/9 w-full sm:aspect-2/1"
+          className={cn("w-full", MOLDURA_DO_DESTAQUE)}
           priority
         />
         <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5">
