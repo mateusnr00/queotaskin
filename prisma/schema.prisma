@@ -241,7 +241,8 @@ model User {
   /// afiliado, e a conta de quem indicou passaria a depender de quem mandou
   /// o último link.
   referredByAffiliateId String?
-  referredByAffiliate   Affiliate? @relation("IndicadosDoAfiliado", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  referredByAffiliate   Affiliate?              @relation("IndicadosDoAfiliado", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  qualificacao          QualificacaoDeIndicado?
 
   accounts       Account[]
   sessions       Session[]
@@ -1595,11 +1596,11 @@ model Reservation {
   user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   affiliate Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
 
-  tickets       Ticket[]
-  xpEntries     XpEntry[]
-  payment       Payment?
-  commission    AffiliateCommission?
-  surpriseBoxes SurpriseBox[]
+  tickets        Ticket[]
+  xpEntries      XpEntry[]
+  payment        Payment?
+  commission     AffiliateCommission?
+  surpriseBoxes  SurpriseBox[]
   entradasGratis EntradaGratis[]
 
   createdAt   DateTime     @default(now())
@@ -1698,12 +1699,15 @@ model Affiliate {
   code   String          @unique
   status AffiliateStatus @default(ACTIVE)
 
-  /// Quanto já entrou de compras dos indicados e ainda não completou uma
-  /// entrada, em CENTAVOS. Inteiro, nunca float: R$ 10,00 é 1000, e somar
-  /// 0.1 + 0.2 em ponto flutuante perde centavo no fim do mês.
+  /// LEGADO, e não é mais lido por nada.
   ///
-  /// É cache derivável do histórico; a fonte auditável é MovimentoDeAfiliado.
-  /// Toda escrita acontece dentro da mesma transação do movimento.
+  /// Era o progresso financeiro GERAL do afiliado, da regra antiga: a cada
+  /// R$ 10 somados de qualquer indicado saía um cupom, e o mesmo indicado
+  /// podia gerar dezenas. A regra agora é por pessoa (QualificacaoDeIndicado),
+  /// e o progresso mora lá, individual.
+  ///
+  /// A coluna fica porque apagar coluna não tem volta e ela é a única
+  /// testemunha de quanto cada afiliado tinha acumulado na virada.
   progressoEmCentavos Int @default(0)
 
   /// Herança do motor de rifas, sem uso: este programa não paga comissão.
@@ -1714,11 +1718,12 @@ model Affiliate {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  reservations Reservation[]
-  commissions  AffiliateCommission[]
-  indicados    User[]                @relation("IndicadosDoAfiliado")
-  entradas     EntradaGratis[]
-  movimentos   MovimentoDeAfiliado[]
+  reservations  Reservation[]
+  commissions   AffiliateCommission[]
+  indicados     User[]                   @relation("IndicadosDoAfiliado")
+  entradas      EntradaGratis[]
+  movimentos    MovimentoDeAfiliado[]
+  qualificacoes QualificacaoDeIndicado[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1744,21 +1749,30 @@ enum AffiliateStatus {
 /// DISPONIVEL, e a corrida entre duas abas é decidida pelo banco, com
 /// FOR UPDATE SKIP LOCKED na hora de pegar uma.
 model EntradaGratis {
-  id          String               @id @default(cuid())
+  id          String                @id @default(cuid())
   affiliateId String
   estado      EstadoDaEntradaGratis @default(DISPONIVEL)
+
+  /// O valor de face do cupom, em CENTAVOS.
+  ///
+  /// Guardado na linha, e não lido de uma constante, porque cupom é promessa:
+  /// mudar o valor do programa amanhã não pode reescrever o que já foi dado.
+  /// Ele cobre UMA cota até esse valor, é consumido por inteiro e não deixa
+  /// troco: cota de R$ 7 gasta o cupom de R$ 10 e os R$ 3 somem.
+  valorEmCentavos Int @default(1000)
 
   /// Em que campanha ela foi gasta. Nulo enquanto disponível.
   raffleId      String?
   /// Em que compra. Nulo enquanto disponível.
   reservationId String?
 
-  ganhaEm  DateTime  @default(now())
-  usadaEm  DateTime?
+  ganhaEm DateTime  @default(now())
+  usadaEm DateTime?
 
-  affiliate   Affiliate    @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  raffle      Raffle?      @relation(fields: [raffleId], references: [id], onDelete: SetNull)
-  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  affiliate    Affiliate               @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  raffle       Raffle?                 @relation(fields: [raffleId], references: [id], onDelete: SetNull)
+  reservation  Reservation?            @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  qualificacao QualificacaoDeIndicado?
 
   /// UMA POR SORTEIO, GARANTIDO PELO BANCO.
   ///
@@ -1770,6 +1784,50 @@ model EntradaGratis {
   @@unique([affiliateId, raffleId])
   @@index([affiliateId, estado])
   @@index([reservationId])
+}
+
+/// UM CUPOM POR PESSOA INDICADA, PARA A VIDA INTEIRA.
+///
+/// A regra antiga era progressiva e por afiliado: uma coluna de progresso
+/// somava o dinheiro de todos os indicados juntos e cuspia um cupom a cada
+/// R$ 10. Dois indicados gastando R$ 5 cada geravam cupom; um indicado
+/// gastando R$ 1.000 gerava cem. Nenhuma das duas coisas é o que se quer.
+///
+/// Agora o progresso é individual e mora aqui, uma linha por pessoa indicada.
+/// Ao alcançar R$ 10 em pagamentos confirmados, aquela pessoa libera UM cupom,
+/// e nunca mais outro, quanto gaste depois.
+///
+/// A trava não é um `if`: `indicadoId` é único, então não existem duas
+/// qualificações para a mesma pessoa, e `entradaId` é único, então o mesmo
+/// cupom não pode ser reclamado por duas qualificações. Webhook reentregue e
+/// pagamentos simultâneos esbarram nos dois.
+model QualificacaoDeIndicado {
+  id          String @id @default(cuid())
+  affiliateId String
+  /// A pessoa indicada. UMA qualificação por pessoa, garantido pelo banco.
+  indicadoId  String @unique
+
+  /// Quanto essa pessoa já pagou de verdade, em CENTAVOS, contando só o que
+  /// entrou depois do vínculo e descontando estorno. Recalculado a cada
+  /// pagamento; não é um acumulador cego.
+  pagoEmCentavos Int       @default(0)
+  /// Quando alcançou o limiar. Nulo enquanto não alcançou.
+  qualificadoEm  DateTime?
+  /// O cupom que essa qualificação gerou.
+  entradaId      String?   @unique
+  /// Preenchido quando um estorno derrubou o total DEPOIS do cupom ter sido
+  /// usado: o cupom não volta (a cota existiu), mas fica registrado, e esta
+  /// pessoa continua sem poder gerar outro.
+  revertidoEm    DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  affiliate Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  indicado  User           @relation(fields: [indicadoId], references: [id], onDelete: Cascade)
+  entrada   EntradaGratis? @relation(fields: [entradaId], references: [id], onDelete: SetNull)
+
+  @@index([affiliateId, qualificadoEm])
 }
 
 enum EstadoDaEntradaGratis {
@@ -1831,6 +1889,8 @@ enum TipoDeMovimentoDeAfiliado {
   ESTORNO_DE_COMPRA
   /// Ajuste manual do painel, sempre com motivo e responsável.
   AJUSTE
+  /// O cupom foi recolhido porque o estorno derrubou o total do indicado.
+  QUALIFICACAO_REVERTIDA
 }
 
 model AffiliateCommission {

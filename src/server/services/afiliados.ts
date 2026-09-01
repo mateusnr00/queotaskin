@@ -9,6 +9,9 @@
 //
 // AS QUATRO GARANTIAS
 //
+//   um por indicado    QualificacaoDeIndicado tem unique(indicadoId) e
+//                      unique(entradaId). Uma pessoa indicada libera UM cupom
+//                      na vida, e o mesmo cupom não é reclamado duas vezes.
 //   crédito único      MovimentoDeAfiliado tem unique(reservationId, tipo).
 //                      Webhook reentregue tenta gravar a mesma linha e o
 //                      banco recusa. Não é o código que decide.
@@ -27,8 +30,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
   LIMIAR_DA_ENTRADA_EM_CENTAVOS,
-  calcularRecompensa,
+  VALOR_DO_CUPOM_EM_CENTAVOS,
+  avaliarQualificacao,
   codigoSugerido,
+  descontoDoCupom,
   emCentavos,
   normalizarCodigo,
 } from "@/lib/afiliados";
@@ -99,7 +104,19 @@ export async function vincularIndicacao(
       where: { id: userId, referredByAffiliateId: null },
       data: { referredByAffiliateId: afiliado.id },
     });
-    return vinculou.count > 0 ? afiliado.code : null;
+    if (vinculou.count === 0) return null;
+
+    // A linha de qualificação nasce junto do vínculo, e o `criadoEm` dela é o
+    // marco: só conta o que a pessoa pagar A PARTIR DAQUI. Sem esse marco,
+    // quem já era cliente e aplicou um código depois levaria para o afiliado
+    // um dinheiro que ele não trouxe.
+    await prisma.qualificacaoDeIndicado.upsert({
+      where: { indicadoId: userId },
+      update: {},
+      create: { affiliateId: afiliado.id, indicadoId: userId },
+    });
+
+    return afiliado.code;
   } catch (err) {
     console.error("[afiliados] vincularIndicacao falhou:", err);
     return null;
@@ -119,19 +136,53 @@ export async function afiliadoPorCodigo(codigoBruto: string) {
 // ------------------------------------------------- compra paga → progresso
 
 /**
- * Transforma uma compra paga em progresso e, quando fecha R$ 10, em entradas.
+ * O total que ESTA pessoa indicada já pagou de verdade, em centavos.
+ *
+ * Recalculado, e não acumulado: um acumulador cego não sabe desfazer estorno,
+ * e um número que só sobe é o tipo de erro que ninguém percebe até alguém
+ * conferir à mão. Aqui a conta é refeita das reservas toda vez.
+ *
+ * O que entra: reserva PAGA, da própria pessoa, confirmada depois do vínculo,
+ * e cujo pagamento não foi estornado. `totalAmount` já nasce descontado do
+ * cupom aplicado na compra, então cupom não vira progresso para ninguém, e
+ * compra inteiramente grátis soma zero sozinha.
+ */
+async function totalPagoPeloIndicado(
+  tx: Prisma.TransactionClient,
+  indicadoId: string,
+  desde: Date,
+): Promise<number> {
+  const linhas = await tx.$queryRaw<{ total: string | null }[]>`
+    SELECT COALESCE(SUM(r."totalAmount"), 0)::text AS total
+      FROM "Reservation" r
+      LEFT JOIN "Payment" p ON p."reservationId" = r."id"
+     WHERE r."userId" = ${indicadoId}
+       AND r."status" = 'PAID'
+       AND COALESCE(r."paidAt", r."createdAt") >= ${desde}::timestamptz
+       AND (p."id" IS NULL OR p."status" <> 'REFUNDED')
+  `;
+  return emCentavos(Number(linhas[0]?.total ?? 0));
+}
+
+/**
+ * Um pagamento confirmado de um indicado: recalcula e, se for a hora, concede.
+ *
+ * A REGRA, INTEIRA: cada pessoa indicada libera UM cupom quando os pagamentos
+ * dela somarem R$ 10, e nunca mais outro. Não é progressivo. R$ 10 e R$ 1.000
+ * do mesmo indicado dão o mesmo resultado.
  *
  * Chamada nos MESMOS seis pontos em que o XP é creditado: os quatro webhooks
  * de pagamento, a consulta que confirma um Pix pendente e a aprovação manual
- * pelo painel. É lá que o sistema considera o dinheiro entrado, e ter dois
- * conceitos diferentes de "pago" seria a origem óbvia da próxima divergência.
+ * pelo painel.
  *
- * Idempotente por índice, não por leitura: a segunda entrega do webhook tenta
- * gravar o mesmo (reservationId, COMPRA_DE_INDICADO) e o banco recusa.
+ * A idempotência é por PESSOA, e não por compra: duas compras de R$ 5 do mesmo
+ * indicado confirmando ao mesmo tempo somam R$ 10 e liberam UM cupom, não
+ * dois. Quem garante é o cadeado por indicado mais a escrita condicional em
+ * `qualificadoEm`, com o unique(indicadoId) por baixo.
  */
 export async function processarCompraDeIndicado(
   reservationId: string,
-): Promise<{ entradas: number; centavos: number } | null> {
+): Promise<{ concedeu: boolean; pagoEmCentavos: number } | null> {
   try {
     const reserva = await prisma.reservation.findUnique({
       where: { id: reservationId },
@@ -144,7 +195,6 @@ export async function processarCompraDeIndicado(
         user: {
           select: {
             id: true,
-            referredByAffiliateId: true,
             referredByAffiliate: { select: { id: true, status: true } },
           },
         },
@@ -152,84 +202,114 @@ export async function processarCompraDeIndicado(
     });
 
     // Compra de convidado não tem quem indicou.
-    if (!reserva?.user?.referredByAffiliate) return null;
+    if (!reserva?.user?.referredByAffiliate || !reserva.userId) return null;
     if (reserva.status !== "PAID") return null;
 
     const afiliado = reserva.user.referredByAffiliate;
-    // Suspenso não acumula. As entradas que já ganhou continuam valendo:
-    // punir o passado é decisão do admin, com ajuste manual e motivo.
+    // Suspenso não acumula. O que já ganhou continua valendo: punir o passado
+    // é decisão do admin, com ajuste manual e motivo.
     if (afiliado.status !== "ACTIVE") return null;
 
-    // O QUE FOI EFETIVAMENTE PAGO.
-    //
-    // totalAmount já nasce descontado da Entrada Grátis aplicada na compra
-    // (createReservation subtrai uma cota do total). Então usar este campo é
-    // exatamente "só dinheiro que entrou": compra de R$ 20 com R$ 10 cobertos
-    // por entrada acumula R$ 10, e nunca R$ 20.
-    const centavos = emCentavos(Number(reserva.totalAmount));
-    if (centavos <= 0) return null;
+    const indicadoId = reserva.userId;
 
     return await prisma.$transaction(async (tx) => {
-      await travarAfiliado(tx, afiliado.id);
+      // O cadeado é por PESSOA INDICADA, que é a granularidade da regra: duas
+      // compras dela confirmando juntas precisam somar, e não competir.
+      await travarIndicado(tx, indicadoId);
 
-      const estado = await tx.affiliate.findUnique({
-        where: { id: afiliado.id },
-        select: { progressoEmCentavos: true },
-      });
-      if (!estado) return null;
-
-      const recompensa = calcularRecompensa({
-        progressoAnterior: estado.progressoEmCentavos,
-        valorEmCentavos: centavos,
+      const qualificacao = await tx.qualificacaoDeIndicado.upsert({
+        where: { indicadoId },
+        update: {},
+        create: { affiliateId: afiliado.id, indicadoId },
+        select: { id: true, criadoEm: true, qualificadoEm: true },
       });
 
-      // Esta linha é a trava. Se a compra já foi processada, o unique
-      // (reservationId, tipo) derruba a transação inteira, e nada do que vem
-      // abaixo acontece.
-      await tx.movimentoDeAfiliado.create({
-        data: {
-          affiliateId: afiliado.id,
-          tipo: "COMPRA_DE_INDICADO",
-          centavos,
-          reservationId: reserva.id,
-          indicadoId: reserva.userId,
-          raffleId: reserva.raffleId,
-          descricao: "Compra de indicado",
-        },
-      });
+      const pago = await totalPagoPeloIndicado(
+        tx,
+        indicadoId,
+        qualificacao.criadoEm,
+      );
 
-      if (recompensa.entradas > 0) {
-        await tx.entradaGratis.createMany({
-          data: Array.from({ length: recompensa.entradas }, () => ({
-            affiliateId: afiliado.id,
-          })),
-        });
+      // O movimento da compra entra sempre, para o histórico saber quais
+      // pagamentos formaram o total. O unique(reservationId, tipo) faz a
+      // reentrega do webhook parar aqui, antes de qualquer concessão.
+      const centavosDaCompra = emCentavos(Number(reserva.totalAmount));
+      if (centavosDaCompra > 0) {
         await tx.movimentoDeAfiliado.create({
           data: {
             affiliateId: afiliado.id,
-            tipo: "ENTRADA_LIBERADA",
-            entradas: recompensa.entradas,
-            indicadoId: reserva.userId,
+            tipo: "COMPRA_DE_INDICADO",
+            centavos: centavosDaCompra,
+            reservationId: reserva.id,
+            indicadoId,
             raffleId: reserva.raffleId,
-            descricao:
-              recompensa.entradas === 1
-                ? "Entrada Grátis desbloqueada"
-                : `${recompensa.entradas} Entradas Grátis desbloqueadas`,
+            descricao: "Compra de indicado",
           },
         });
       }
 
-      await tx.affiliate.update({
-        where: { id: afiliado.id },
-        data: { progressoEmCentavos: recompensa.progressoRestante },
+      const avaliacao = avaliarQualificacao({
+        pagoEmCentavos: pago,
+        jaQualificou: qualificacao.qualificadoEm != null,
+      });
+
+      if (!avaliacao.qualificou) {
+        await tx.qualificacaoDeIndicado.update({
+          where: { id: qualificacao.id },
+          data: { pagoEmCentavos: pago },
+        });
+        return { concedeu: false, pagoEmCentavos: pago };
+      }
+
+      // A CONCESSÃO, UMA VEZ SÓ.
+      //
+      // A escrita é condicional em `qualificadoEm: null`: se outra transação
+      // concedeu enquanto esta esperava o cadeado, esta não acha a linha e
+      // sai sem criar cupom nenhum.
+      const cupom = await tx.entradaGratis.create({
+        data: {
+          affiliateId: afiliado.id,
+          valorEmCentavos: VALOR_DO_CUPOM_EM_CENTAVOS,
+        },
+        select: { id: true },
+      });
+      const marcou = await tx.qualificacaoDeIndicado.updateMany({
+        where: { id: qualificacao.id, qualificadoEm: null },
+        data: {
+          pagoEmCentavos: pago,
+          qualificadoEm: new Date(),
+          entradaId: cupom.id,
+        },
+      });
+      if (marcou.count === 0) {
+        // Perdeu a corrida. O cupom recém-criado não tem dono e some junto
+        // com a transação, que é abortada de propósito.
+        throw new CupomJaConcedidoError();
+      }
+
+      await tx.movimentoDeAfiliado.create({
+        data: {
+          affiliateId: afiliado.id,
+          tipo: "ENTRADA_LIBERADA",
+          entradas: 1,
+          indicadoId,
+          raffleId: reserva.raffleId,
+          descricao: "Cupom de Entrada liberado por indicado qualificado",
+        },
       });
 
       console.info(
-        `[afiliados] compra ${reserva.id} creditou ${centavos} centavos e ${recompensa.entradas} entrada(s) ao afiliado ${afiliado.id}`,
+        `[afiliados] indicado ${indicadoId} qualificou com ${pago} centavos e liberou 1 cupom ao afiliado ${afiliado.id}`,
       );
-      return { entradas: recompensa.entradas, centavos };
+      return { concedeu: true, pagoEmCentavos: pago };
     });
   } catch (err) {
+    if (err instanceof CupomJaConcedidoError) {
+      console.info(
+        `[afiliados] concessão simultânea na reserva ${reservationId}, ignorada`,
+      );
+      return null;
+    }
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2002"
@@ -244,6 +324,9 @@ export async function processarCompraDeIndicado(
     return null;
   }
 }
+
+/** Interna: a corrida foi perdida e a transação precisa voltar atrás. */
+class CupomJaConcedidoError extends Error {}
 
 /**
  * Tudo o que o programa de afiliados faz quando um pagamento é confirmado.
@@ -264,89 +347,122 @@ export async function processarPagamentoConfirmado(
 }
 
 /**
- * Desfaz o progresso de uma compra estornada.
+ * Um pagamento foi estornado: recalcula o indicado e desfaz o que couber.
  *
- * O que volta é o progresso, nunca uma entrada já gasta: retirar da pessoa
- * uma cota que já está valendo num sorteio em andamento estragaria o sorteio
- * para consertar a contabilidade. Entrada ainda disponível é recolhida;
- * entrada já reservada ou usada fica, e o movimento registra a diferença
- * para o admin decidir.
+ * A ordem do estrago importa. Se o total cair abaixo do limiar:
+ *
+ *   cupom ainda DISPONIVEL   é recolhido, e a pessoa volta a poder qualificar
+ *                            se pagar de novo. Nada se perdeu.
+ *   cupom RESERVADO          a compra que o segura ainda não foi paga, então
+ *                            ele é solto dali e recolhido igual.
+ *   cupom já USADO           fica. A cota existiu, o sorteio já contou com
+ *                            ela, e apagar título por causa de contabilidade
+ *                            estraga mais do que conserta. A qualificação é
+ *                            marcada como revertida: o caso vai para análise e
+ *                            aquela pessoa continua sem poder gerar outro.
  */
 export async function reverterCompraDeIndicado(
   reservationId: string,
-): Promise<{ centavos: number; entradasRecolhidas: number } | null> {
+): Promise<{ recolheu: boolean; pagoEmCentavos: number } | null> {
   try {
     const original = await prisma.movimentoDeAfiliado.findFirst({
       where: { reservationId, tipo: "COMPRA_DE_INDICADO" },
       select: { affiliateId: true, centavos: true, indicadoId: true },
     });
-    if (!original) return null;
+    if (!original?.indicadoId) return null;
+    const indicadoId = original.indicadoId;
 
     return await prisma.$transaction(async (tx) => {
-      await travarAfiliado(tx, original.affiliateId);
+      await travarIndicado(tx, indicadoId);
 
-      const estado = await tx.affiliate.findUnique({
-        where: { id: original.affiliateId },
-        select: { progressoEmCentavos: true },
+      const qualificacao = await tx.qualificacaoDeIndicado.findUnique({
+        where: { indicadoId },
+        select: {
+          id: true,
+          criadoEm: true,
+          qualificadoEm: true,
+          entradaId: true,
+          entrada: { select: { id: true, estado: true } },
+        },
       });
-      if (!estado) return null;
+      if (!qualificacao) return null;
 
-      const depois = calcularRecompensa({
-        progressoAnterior: estado.progressoEmCentavos,
-        valorEmCentavos: -original.centavos,
-      });
-
-      // Quanto do estorno não coube no progresso vira entrada a recolher.
-      const faltando =
-        original.centavos - (estado.progressoEmCentavos - depois.progressoRestante);
-      const entradasParaRecolher = Math.max(
-        0,
-        Math.floor(faltando / LIMIAR_DA_ENTRADA_EM_CENTAVOS),
+      const pago = await totalPagoPeloIndicado(
+        tx,
+        indicadoId,
+        qualificacao.criadoEm,
       );
-
-      let recolhidas = 0;
-      if (entradasParaRecolher > 0) {
-        const disponiveis = await tx.entradaGratis.findMany({
-          where: { affiliateId: original.affiliateId, estado: "DISPONIVEL" },
-          select: { id: true },
-          orderBy: { ganhaEm: "desc" },
-          take: entradasParaRecolher,
-        });
-        if (disponiveis.length > 0) {
-          const apagadas = await tx.entradaGratis.deleteMany({
-            where: {
-              id: { in: disponiveis.map((e) => e.id) },
-              estado: "DISPONIVEL",
-            },
-          });
-          recolhidas = apagadas.count;
-        }
-      }
 
       await tx.movimentoDeAfiliado.create({
         data: {
           affiliateId: original.affiliateId,
           tipo: "ESTORNO_DE_COMPRA",
           centavos: -original.centavos,
-          entradas: -recolhidas,
           reservationId,
-          indicadoId: original.indicadoId,
-          descricao:
-            entradasParaRecolher > recolhidas
-              ? "Estorno de compra de indicado (entradas já gastas não foram recolhidas)"
-              : "Estorno de compra de indicado",
+          indicadoId,
+          descricao: "Estorno de compra de indicado",
         },
       });
 
-      await tx.affiliate.update({
-        where: { id: original.affiliateId },
-        data: { progressoEmCentavos: depois.progressoRestante },
-      });
+      const aindaQualifica = pago >= LIMIAR_DA_ENTRADA_EM_CENTAVOS;
+      if (aindaQualifica || !qualificacao.qualificadoEm) {
+        await tx.qualificacaoDeIndicado.update({
+          where: { id: qualificacao.id },
+          data: { pagoEmCentavos: pago },
+        });
+        return { recolheu: false, pagoEmCentavos: pago };
+      }
 
+      // Caiu abaixo do limiar com cupom concedido.
+      const cupom = qualificacao.entrada;
+      const podeRecolher =
+        cupom != null &&
+        (cupom.estado === "DISPONIVEL" || cupom.estado === "RESERVADA");
+
+      if (podeRecolher) {
+        await tx.entradaGratis.delete({ where: { id: cupom.id } });
+        await tx.qualificacaoDeIndicado.update({
+          where: { id: qualificacao.id },
+          data: {
+            pagoEmCentavos: pago,
+            qualificadoEm: null,
+            entradaId: null,
+          },
+        });
+        await tx.movimentoDeAfiliado.create({
+          data: {
+            affiliateId: original.affiliateId,
+            tipo: "QUALIFICACAO_REVERTIDA",
+            entradas: -1,
+            indicadoId,
+            descricao:
+              "Estorno derrubou o total do indicado: Cupom de Entrada recolhido",
+          },
+        });
+        console.warn(
+          `[afiliados] estorno recolheu o cupom do indicado ${indicadoId} (total agora ${pago} centavos)`,
+        );
+        return { recolheu: true, pagoEmCentavos: pago };
+      }
+
+      // Cupom já usado: fica de pé, e o caso vira registro.
+      await tx.qualificacaoDeIndicado.update({
+        where: { id: qualificacao.id },
+        data: { pagoEmCentavos: pago, revertidoEm: new Date() },
+      });
+      await tx.movimentoDeAfiliado.create({
+        data: {
+          affiliateId: original.affiliateId,
+          tipo: "QUALIFICACAO_REVERTIDA",
+          indicadoId,
+          descricao:
+            "Estorno derrubou o total do indicado, mas o cupom já tinha sido usado: revisar",
+        },
+      });
       console.warn(
-        `[afiliados] estorno da compra ${reservationId}: -${original.centavos} centavos, ${recolhidas} entrada(s) recolhida(s)`,
+        `[afiliados] estorno do indicado ${indicadoId} com cupom JÁ USADO: revisar manualmente`,
       );
-      return { centavos: original.centavos, entradasRecolhidas: recolhidas };
+      return { recolheu: false, pagoEmCentavos: pago };
     });
   } catch (err) {
     if (
@@ -369,6 +485,10 @@ export interface SituacaoDaEntrada {
   disponiveis: number;
   /** Já gastou (ou reservou) a entrada desta campanha. */
   jaUsouNesteSorteio: boolean;
+  /** A cota desta campanha custa mais que o valor de face do cupom. */
+  cotaAcimaDoCupom: boolean;
+  /** O valor de face do cupom, em centavos. Para a tela explicar o limite. */
+  valorDoCupomEmCentavos: number;
   /** Dá para aplicar uma entrada nesta compra agora. */
   podeUsar: boolean;
 }
@@ -388,6 +508,8 @@ export async function situacaoDaEntrada(
     ehAfiliado: false,
     disponiveis: 0,
     jaUsouNesteSorteio: false,
+    cotaAcimaDoCupom: false,
+    valorDoCupomEmCentavos: VALOR_DO_CUPOM_EM_CENTAVOS,
     podeUsar: false,
   };
   if (!userId) return vazio;
@@ -398,7 +520,7 @@ export async function situacaoDaEntrada(
   });
   if (!afiliado || afiliado.status === "INACTIVE") return vazio;
 
-  const [disponiveis, nesteSorteio] = await Promise.all([
+  const [disponiveis, nesteSorteio, campanha] = await Promise.all([
     prisma.entradaGratis.count({
       where: { affiliateId: afiliado.id, estado: "DISPONIVEL" },
     }),
@@ -406,14 +528,31 @@ export async function situacaoDaEntrada(
       where: { affiliateId: afiliado.id, raffleId },
       select: { id: true },
     }),
+    prisma.raffle.findUnique({
+      where: { id: raffleId },
+      select: { pricePerNumber: true, isFree: true },
+    }),
   ]);
+
+  // O TETO DO CUPOM.
+  //
+  // Ele vale R$ 10 e cobre UMA cota até esse valor. Numa campanha de cota mais
+  // cara ele é recusado inteiro, porque não existe pagar a diferença: metade
+  // de uma cota não é uma cota.
+  const precoDaCota = campanha?.isFree ? 0 : Number(campanha?.pricePerNumber ?? 0);
+  const { aceita } = descontoDoCupom({
+    precoDaCotaEmCentavos: emCentavos(precoDaCota),
+  });
+  const cotaAcimaDoCupom = precoDaCota > 0 && !aceita;
 
   const jaUsouNesteSorteio = nesteSorteio != null;
   return {
     ehAfiliado: true,
     disponiveis,
     jaUsouNesteSorteio,
-    podeUsar: disponiveis > 0 && !jaUsouNesteSorteio,
+    cotaAcimaDoCupom,
+    valorDoCupomEmCentavos: VALOR_DO_CUPOM_EM_CENTAVOS,
+    podeUsar: disponiveis > 0 && !jaUsouNesteSorteio && !cotaAcimaDoCupom,
   };
 }
 
@@ -564,18 +703,21 @@ export async function liberarEntradaGratis(
 export interface PainelDoAfiliado {
   codigo: string;
   status: "INACTIVE" | "ACTIVE" | "SUSPENDED";
-  /** Entradas prontas para usar. */
+  /** Cupons prontos para usar. */
   disponiveis: number;
-  /** Presas a compras com Pix pendente. */
+  /** Presos a compras com Pix pendente. */
   reservadas: number;
   /** Tudo o que já ganhou, desde sempre. */
   conquistadas: number;
   usadas: number;
-  progressoEmCentavos: number;
-  limiarEmCentavos: number;
+  /** Pessoas vinculadas ao código. */
   indicados: number;
-  /** Indicados que já pagaram pelo menos uma compra. */
-  indicadosAtivos: number;
+  /** Indicados que já liberaram o cupom deles. */
+  indicadosQualificados: number;
+  /** Indicados que ainda não chegaram no limiar. */
+  indicadosEmProgresso: number;
+  limiarEmCentavos: number;
+  valorDoCupomEmCentavos: number;
 }
 
 /** Tudo o que a página "Programa de Afiliados" mostra, num lugar só. */
@@ -584,11 +726,11 @@ export async function painelDoAfiliado(
 ): Promise<PainelDoAfiliado | null> {
   const afiliado = await prisma.affiliate.findUnique({
     where: { userId },
-    select: { id: true, code: true, status: true, progressoEmCentavos: true },
+    select: { id: true, code: true, status: true },
   });
   if (!afiliado) return null;
 
-  const [disponiveis, reservadas, usadas, conquistadas, indicados, ativos] =
+  const [disponiveis, reservadas, usadas, conquistadas, indicados, qualificados] =
     await Promise.all([
       prisma.entradaGratis.count({
         where: { affiliateId: afiliado.id, estado: "DISPONIVEL" },
@@ -607,13 +749,9 @@ export async function painelDoAfiliado(
         _sum: { entradas: true },
       }),
       prisma.user.count({ where: { referredByAffiliateId: afiliado.id } }),
-      prisma.movimentoDeAfiliado
-        .findMany({
-          where: { affiliateId: afiliado.id, tipo: "COMPRA_DE_INDICADO" },
-          select: { indicadoId: true },
-          distinct: ["indicadoId"],
-        })
-        .then((linhas) => linhas.filter((l) => l.indicadoId).length),
+      prisma.qualificacaoDeIndicado.count({
+        where: { affiliateId: afiliado.id, qualificadoEm: { not: null } },
+      }),
     ]);
 
   return {
@@ -623,10 +761,14 @@ export async function painelDoAfiliado(
     reservadas,
     usadas,
     conquistadas: Math.max(0, conquistadas._sum.entradas ?? 0),
-    progressoEmCentavos: afiliado.progressoEmCentavos,
-    limiarEmCentavos: LIMIAR_DA_ENTRADA_EM_CENTAVOS,
     indicados,
-    indicadosAtivos: ativos,
+    indicadosQualificados: qualificados,
+    // Em progresso é o resto: quem entrou pelo link e ainda não fechou os
+    // R$ 10. Não existe "progresso do afiliado" para somar; cada pessoa tem
+    // o seu, e é assim que a regra funciona.
+    indicadosEmProgresso: Math.max(0, indicados - qualificados),
+    limiarEmCentavos: LIMIAR_DA_ENTRADA_EM_CENTAVOS,
+    valorDoCupomEmCentavos: VALOR_DO_CUPOM_EM_CENTAVOS,
   };
 }
 
@@ -690,17 +832,26 @@ export async function historicoDoAfiliado(
 }
 
 /**
- * Os indicados, sem dado pessoal.
+ * Os indicados, com o progresso de cada um e sem dado pessoal nenhum.
  *
- * Nome curto e data de entrada bastam para o afiliado reconhecer quem trouxe.
- * Telefone, CPF e e-mail não saem daqui: quem indicou não vira dono dos dados
- * de quem foi indicado.
+ * O que sai daqui: primeiro nome com a inicial do sobrenome, desde quando, e
+ * quanto falta para aquela pessoa liberar o cupom. Telefone, CPF e e-mail não
+ * saem: quem indicou não vira dono dos dados de quem foi indicado, e a página
+ * do afiliado é o lugar mais fácil de esquecer disso.
  */
 export async function indicadosDoAfiliado(
   userId: string,
   limite = 50,
 ): Promise<
-  { id: string; nome: string; desde: Date; comprou: boolean; time: string | null }[]
+  {
+    id: string;
+    nome: string;
+    desde: Date;
+    qualificado: boolean;
+    pagoEmCentavos: number;
+    limiarEmCentavos: number;
+    time: string | null;
+  }[]
 > {
   const afiliado = await prisma.affiliate.findUnique({
     where: { userId },
@@ -712,33 +863,47 @@ export async function indicadosDoAfiliado(
     where: { referredByAffiliateId: afiliado.id },
     orderBy: { createdAt: "desc" },
     take: limite,
-    select: { id: true, name: true, createdAt: true, favoriteTeamId: true },
-  });
-  if (indicados.length === 0) return [];
-
-  const compradores = await prisma.movimentoDeAfiliado.findMany({
-    where: {
-      affiliateId: afiliado.id,
-      tipo: "COMPRA_DE_INDICADO",
-      indicadoId: { in: indicados.map((i) => i.id) },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      favoriteTeamId: true,
+      qualificacao: {
+        select: { pagoEmCentavos: true, qualificadoEm: true },
+      },
     },
-    select: { indicadoId: true },
-    distinct: ["indicadoId"],
   });
-  const jaComprou = new Set(compradores.map((c) => c.indicadoId));
 
   return indicados.map((i) => ({
     id: i.id,
-    nome: i.name,
+    nome: nomeMascarado(i.name),
     desde: i.createdAt,
-    comprou: jaComprou.has(i.id),
+    qualificado: i.qualificacao?.qualificadoEm != null,
+    pagoEmCentavos: Math.min(
+      LIMIAR_DA_ENTRADA_EM_CENTAVOS,
+      i.qualificacao?.pagoEmCentavos ?? 0,
+    ),
+    limiarEmCentavos: LIMIAR_DA_ENTRADA_EM_CENTAVOS,
     time: i.favoriteTeamId,
   }));
 }
 
+/** "Mateus Nascimento Rodrigues" → "Mateus N." */
+function nomeMascarado(nome: string): string {
+  const partes = nome.trim().split(/\s+/);
+  const primeiro = partes[0] ?? "";
+  return partes.length > 1 ? `${primeiro} ${partes[1]!.slice(0, 1)}.` : primeiro;
+}
+
 // ----------------------------------------------------------------- painel admin
 
-/** Vira afiliado, ou reativa quem já foi. Devolve o código. */
+/**
+ * Vira afiliado, ou reativa quem já foi. Devolve o código.
+ *
+ * Serve aos dois caminhos: o admin ativando alguém e a própria pessoa
+ * clicando em "quero ser afiliado". Não concede cupom nenhum na ativação;
+ * cupom só nasce de indicado que pagou.
+ */
 export async function ativarAfiliado(
   userId: string,
   codigoDesejado?: string,
@@ -927,10 +1092,15 @@ export async function listarAfiliados(termo?: string) {
       id: true,
       code: true,
       status: true,
-      progressoEmCentavos: true,
       createdAt: true,
       user: { select: { id: true, name: true, phone: true } },
-      _count: { select: { indicados: true, entradas: true } },
+      _count: {
+        select: {
+          indicados: true,
+          entradas: true,
+          qualificacoes: { where: { qualificadoEm: { not: null } } },
+        },
+      },
     },
   });
   if (afiliados.length === 0) return [];
@@ -956,8 +1126,8 @@ export async function listarAfiliados(termo?: string) {
       telefone: a.user.phone,
       codigo: a.code,
       status: a.status,
-      progressoEmCentavos: a.progressoEmCentavos,
       indicados: a._count.indicados,
+      qualificados: a._count.qualificacoes,
       disponiveis: contagem.DISPONIVEL ?? 0,
       reservadas: contagem.RESERVADA ?? 0,
       usadas: contagem.USADA ?? 0,
@@ -976,6 +1146,23 @@ export async function listarAfiliados(termo?: string) {
  * delas. O cadeado é o mesmo mecanismo que a alocação de prêmios usa, e vale
  * até o fim da transação.
  */
+/**
+ * Serializa quem mexe na qualificação da MESMA pessoa indicada.
+ *
+ * É esta a granularidade da regra nova: duas compras de R$ 5 do mesmo
+ * indicado confirmando no mesmo instante precisam somar R$ 10 e liberar UM
+ * cupom. Sem o cadeado, as duas leriam R$ 5 e nenhuma concederia; ou as duas
+ * leriam R$ 10 e concederiam duas vezes.
+ */
+async function travarIndicado(
+  tx: Prisma.TransactionClient,
+  indicadoId: string,
+): Promise<void> {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext('afiliado:indicado'), hashtext(${indicadoId}))
+  `;
+}
+
 async function travarAfiliado(
   tx: Prisma.TransactionClient,
   affiliateId: string,

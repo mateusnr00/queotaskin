@@ -353,7 +353,7 @@ export function ReservationForm({
               </span>
             </div>
             <div className="flex items-center justify-between gap-3 font-semibold text-emerald-500">
-              <span>Entrada Grátis</span>
+              <span>Cupom de Entrada</span>
               <span className="tabular-nums">-{formatBRL(desconto)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-1 font-bold">

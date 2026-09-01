@@ -73,6 +73,46 @@ export async function aplicarCodigoDeIndicacaoAction(
   return { ok: true, data: { codigo } };
 }
 
+/**
+ * "Quero ser afiliado": ativação na hora, sem aprovação.
+ *
+ * Qualquer conta autenticada entra. O programa não dá dinheiro nem acesso a
+ * dado de ninguém: dá cupom quando alguém que a pessoa trouxe paga de verdade.
+ * Fila de aprovação para isso só serviria para perder quem estava disposto a
+ * divulgar no minuto em que se interessou.
+ *
+ * Não concede cupom nenhum aqui. Cupom nasce de indicado que pagou R$ 10.
+ */
+export async function quereSerAfiliadoAction(): Promise<
+  ActionResult<{ codigo: string }>
+> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { ok: false, error: "Entre na sua conta para participar." };
+    }
+
+    const existente = await prisma.affiliate.findUnique({
+      where: { userId: session.user.id },
+      select: { code: true, status: true },
+    });
+    if (existente?.status === "SUSPENDED") {
+      return {
+        ok: false,
+        error: "Seu programa está suspenso. Fale com o suporte.",
+      };
+    }
+
+    const { code } = await ativarAfiliado(session.user.id);
+    revalidatePath("/minha-conta/afiliados");
+    return { ok: true, data: { codigo: code } };
+  } catch (err) {
+    if (err instanceof DomainError) return { ok: false, error: err.message };
+    console.error("[quereSerAfiliadoAction]", err);
+    return { ok: false, error: "Erro ao ativar o programa" };
+  }
+}
+
 // ------------------------------------------------------------------- painel
 
 const alvoSchema = z.object({ userId: z.string().cuid() });

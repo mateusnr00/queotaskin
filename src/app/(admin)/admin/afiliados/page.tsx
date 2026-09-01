@@ -14,7 +14,6 @@ import {
   AFILIADOS_POR_PAGINA,
   listarAfiliados,
 } from "@/server/services/afiliados";
-import { LIMIAR_DA_ENTRADA_EM_CENTAVOS } from "@/lib/afiliados";
 import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import { GerenciadorDeAfiliados } from "@/components/admin/gerenciador-de-afiliados";
 
@@ -72,7 +71,6 @@ export default async function AdminAfiliadosPage({
         busca={busca}
         total={totalDeAfiliados}
         porPagina={AFILIADOS_POR_PAGINA}
-        limiarEmCentavos={LIMIAR_DA_ENTRADA_EM_CENTAVOS}
         tenantId={tenantId}
       />
     </div>

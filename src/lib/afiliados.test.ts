@@ -1,92 +1,103 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  calcularRecompensa,
+  avaliarQualificacao,
   codigoSugerido,
   codigoValido,
+  descontoDoCupom,
   emCentavos,
-  faltaParaProximaEntrada,
   linkDeIndicacao,
   normalizarCodigo,
   LIMIAR_DA_ENTRADA_EM_CENTAVOS,
+  VALOR_DO_CUPOM_EM_CENTAVOS,
 } from "@/lib/afiliados";
 
-describe("calcularRecompensa", () => {
-  it("R$ 9,99 não gera entrada, e o centavo fica guardado", () => {
+describe("avaliarQualificacao", () => {
+  it("R$ 9,99 não qualifica", () => {
     expect(
-      calcularRecompensa({ progressoAnterior: 0, valorEmCentavos: 999 }),
-    ).toEqual({ entradas: 0, progressoRestante: 999 });
+      avaliarQualificacao({ pagoEmCentavos: 999, jaQualificou: false }),
+    ).toEqual({ qualificou: false, faltaEmCentavos: 1 });
   });
 
-  it("R$ 10,00 gera exatamente uma entrada e zera o progresso", () => {
+  it("R$ 10,00 qualifica", () => {
     expect(
-      calcularRecompensa({ progressoAnterior: 0, valorEmCentavos: 1000 }),
-    ).toEqual({ entradas: 1, progressoRestante: 0 });
+      avaliarQualificacao({ pagoEmCentavos: 1000, jaQualificou: false }),
+    ).toEqual({ qualificou: true, faltaEmCentavos: 0 });
   });
 
-  it("R$ 27,50 gera duas e deixa R$ 7,50", () => {
-    expect(
-      calcularRecompensa({ progressoAnterior: 0, valorEmCentavos: 2750 }),
-    ).toEqual({ entradas: 2, progressoRestante: 750 });
-  });
-
-  it("progresso anterior soma: R$ 7,50 + R$ 4,00 libera a terceira", () => {
-    expect(
-      calcularRecompensa({ progressoAnterior: 750, valorEmCentavos: 400 }),
-    ).toEqual({ entradas: 1, progressoRestante: 150 });
-  });
-
-  it("o critério de aceitação, compra a compra", () => {
-    // R$ 27,50 e depois R$ 2,50: três entradas no total, progresso zerado.
-    const primeira = calcularRecompensa({
-      progressoAnterior: 0,
-      valorEmCentavos: 2750,
-    });
-    const segunda = calcularRecompensa({
-      progressoAnterior: primeira.progressoRestante,
-      valorEmCentavos: 250,
-    });
-    expect(primeira.entradas + segunda.entradas).toBe(3);
-    expect(segunda.progressoRestante).toBe(0);
-  });
-
-  it("não perde centavo em cem compras de R$ 0,01", () => {
-    // O teste que só falha com float: 100 somas de um centavo têm que fechar
-    // exatamente um real de progresso, sem sobra nem falta.
-    let progresso = 0;
-    let entradas = 0;
-    for (let i = 0; i < 100; i++) {
-      const r = calcularRecompensa({
-        progressoAnterior: progresso,
-        valorEmCentavos: 1,
-      });
-      progresso = r.progressoRestante;
-      entradas += r.entradas;
+  it("NÃO É PROGRESSIVO: R$ 20, R$ 100 e R$ 1.000 dão o mesmo resultado", () => {
+    // A conta antiga era floor(total / 1000) e devolvia 2, 10 e 100 cupons.
+    for (const pago of [2000, 10_000, 100_000]) {
+      expect(avaliarQualificacao({ pagoEmCentavos: pago, jaQualificou: false })).toEqual(
+        { qualificou: true, faltaEmCentavos: 0 },
+      );
     }
-    expect(entradas).toBe(0);
-    expect(progresso).toBe(100);
   });
 
-  it("valor negativo desfaz o progresso, sem passar de zero", () => {
+  it("quem já qualificou nunca qualifica de novo, gaste o que gastar", () => {
     expect(
-      calcularRecompensa({ progressoAnterior: 750, valorEmCentavos: -2750 }),
-    ).toEqual({ entradas: 0, progressoRestante: 0 });
+      avaliarQualificacao({ pagoEmCentavos: 100_000, jaQualificou: true }),
+    ).toEqual({ qualificou: false, faltaEmCentavos: 0 });
   });
 
-  it("uma compra grande libera várias entradas de uma vez", () => {
+  it("acumula até o limiar, e diz quanto falta", () => {
+    // R$ 6,00 na primeira compra da mesma pessoa.
     expect(
-      calcularRecompensa({ progressoAnterior: 0, valorEmCentavos: 100_000 }),
-    ).toEqual({ entradas: 100, progressoRestante: 0 });
+      avaliarQualificacao({ pagoEmCentavos: 600, jaQualificou: false }),
+    ).toEqual({ qualificou: false, faltaEmCentavos: 400 });
+    // Mais R$ 4,00 fecham os R$ 10.
+    expect(
+      avaliarQualificacao({ pagoEmCentavos: 1000, jaQualificou: false }),
+    ).toEqual({ qualificou: true, faltaEmCentavos: 0 });
+  });
+
+  it("total negativo (estorno maior que o pago) não vira crédito", () => {
+    expect(
+      avaliarQualificacao({ pagoEmCentavos: -500, jaQualificou: false }),
+    ).toEqual({ qualificou: false, faltaEmCentavos: LIMIAR_DA_ENTRADA_EM_CENTAVOS });
   });
 
   it("recusa limiar zero em vez de dividir por ele", () => {
     expect(() =>
-      calcularRecompensa({
-        progressoAnterior: 0,
-        valorEmCentavos: 1000,
-        limiar: 0,
-      }),
+      avaliarQualificacao({ pagoEmCentavos: 1000, jaQualificou: false, limiar: 0 }),
     ).toThrow();
+  });
+});
+
+describe("descontoDoCupom", () => {
+  it("cota de R$ 7 consome o cupom inteiro e os R$ 3 se perdem", () => {
+    expect(descontoDoCupom({ precoDaCotaEmCentavos: 700 })).toEqual({
+      aceita: true,
+      descontoEmCentavos: 700,
+    });
+  });
+
+  it("cota de R$ 10 é coberta exatamente", () => {
+    expect(descontoDoCupom({ precoDaCotaEmCentavos: 1000 })).toEqual({
+      aceita: true,
+      descontoEmCentavos: 1000,
+    });
+  });
+
+  it("cota de R$ 12 recusa o cupom, sem pagamento complementar", () => {
+    // Não existe abater R$ 10 e cobrar R$ 2: cupom que cobre parte da cota é
+    // outro produto.
+    expect(descontoDoCupom({ precoDaCotaEmCentavos: 1200 })).toEqual({
+      aceita: false,
+      descontoEmCentavos: 0,
+    });
+  });
+
+  it("o desconto nunca passa do preço da cota, então não sobra saldo", () => {
+    const { descontoEmCentavos } = descontoDoCupom({
+      precoDaCotaEmCentavos: 100,
+    });
+    expect(descontoEmCentavos).toBe(100);
+    expect(descontoEmCentavos).toBeLessThan(VALOR_DO_CUPOM_EM_CENTAVOS);
+  });
+
+  it("campanha sem preço não aceita cupom", () => {
+    expect(descontoDoCupom({ precoDaCotaEmCentavos: 0 }).aceita).toBe(false);
   });
 });
 
@@ -113,24 +124,12 @@ describe("normalizarCodigo", () => {
 
 describe("codigoSugerido", () => {
   it("usa o primeiro nome mais um sufixo, para dois xarás não colidirem", () => {
-    expect(codigoSugerido("Mateus Nascimento Rodrigues", "7k")).toBe(
-      "MATEUS7K",
-    );
+    expect(codigoSugerido("Mateus Nascimento Rodrigues", "7k")).toBe("MATEUS7K");
     expect(codigoSugerido("Lucas Silva", "a1b2")).toBe("LUCASA1B2");
   });
 
   it("nome que não sobra nada ainda devolve algo utilizável", () => {
     expect(codigoSugerido("!!!", "9z")).toBe("AFILIADO9Z");
-  });
-});
-
-describe("faltaParaProximaEntrada", () => {
-  it("R$ 7,40 de progresso: faltam R$ 2,60", () => {
-    expect(faltaParaProximaEntrada(740)).toBe(260);
-  });
-
-  it("progresso zerado: falta o limiar inteiro", () => {
-    expect(faltaParaProximaEntrada(0)).toBe(LIMIAR_DA_ENTRADA_EM_CENTAVOS);
   });
 });
 

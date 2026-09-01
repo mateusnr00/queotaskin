@@ -133,6 +133,14 @@ export async function SiteHeader() {
               >
                 Minha conta
               </Link>
+              {/* Logo depois de "Minha conta", igual ao menu do celular: o
+                  programa não se vende sozinho se não tiver porta na barra. */}
+              <Link
+                href="/minha-conta/afiliados"
+                className="px-3 py-1.5 rounded-md hover:bg-muted"
+              >
+                Afiliados
+              </Link>
               {showAdminLink && (
                 <Link
                   href={adminLinkHref}

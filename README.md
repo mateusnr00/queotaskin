@@ -453,72 +453,91 @@ que não faz nada é pior calado do que anotado.
 
 ## Programa de afiliados
 
-Quem indica ganha **Entrada Grátis**, e não dinheiro. A cada R$ 10
-efetivamente pagos pelos indicados, o afiliado ganha uma entrada, e cada
-entrada vale UMA cota em qualquer campanha, seja ela de R$ 1 ou de R$ 50.
-Não existe saldo em reais, saque nem conversão: o benefício é promocional.
+Quem indica ganha **Cupom de Entrada**, e não dinheiro. **Cada pessoa indicada
+pode liberar UM cupom, uma vez na vida**, quando ela acumular R$ 10 em
+pagamentos confirmados. Não existe saldo em reais, saque nem conversão.
 
 ```
-/?ref=CODIGO → cookie (30 dias) → cadastro vincula → indicado compra →
-Pix pago → webhook → progresso em centavos → fecha R$ 10 → Entrada Grátis →
-checkout desconta uma cota → sorteio
+/?ref=CODIGO → cookie (30 dias) → cadastro vincula → o indicado paga →
+o total DELE chega a R$ 10 → 1 Cupom de Entrada de R$ 10 →
+e essa pessoa nunca mais gera outro, gaste o que gastar
 ```
+
+### O que NÃO é
+
+Não é progressivo. R$ 10, R$ 20, R$ 100 ou R$ 1.000 do mesmo indicado dão o
+mesmo resultado: um cupom. E o progresso é **individual**: dois indicados
+gastando R$ 5 cada não liberam nada, porque os valores de pessoas diferentes
+não se somam.
+
+A regra anterior era o contrário nas duas pontas, e as duas doíam: um contador
+por afiliado somava todo mundo e cuspia um cupom a cada R$ 10, então um único
+cliente grande virava dezenas de cupons.
 
 ### As peças
 
 | Onde | O quê |
 | --- | --- |
-| `src/lib/afiliados.ts` | Regra pura: recompensa, progresso, código, limiar |
-| `src/server/services/afiliados.ts` | O motor: vínculo, crédito, entradas, painel, admin |
-| `src/server/actions/afiliados.ts` | As portas: aplicar código, ativar, suspender, ajustar |
+| `src/lib/afiliados.ts` | Regra pura: qualificação, desconto do cupom, código |
+| `src/server/services/afiliados.ts` | O motor: vínculo, qualificação, cupons, painel, admin |
+| `src/server/actions/afiliados.ts` | As portas, incluindo "quero ser afiliado" |
 | `src/proxy.ts` | Guarda o `?ref=` num cookie próprio de 30 dias |
 | `src/app/(public)/minha-conta/afiliados` | O painel de quem divulga |
 | `src/app/(admin)/admin/afiliados` | A gestão do programa |
+| `scripts/censo-de-afiliados.mjs` | Contagem só-leitura, para antes de migrar |
 
 ### O que garante que a conta fecha
 
-Quatro coisas, e nenhuma delas é um `if` no meio do código:
+- **Um cupom por pessoa.** `QualificacaoDeIndicado` tem `unique(indicadoId)` e
+  `unique(entradaId)`: não existem duas qualificações para a mesma pessoa, nem
+  o mesmo cupom reclamado por duas. A idempotência é por PESSOA, não por
+  compra.
+- **Pagamentos simultâneos somam.** Duas compras de R$ 5 do mesmo indicado
+  confirmando juntas passam por um cadeado por indicado
+  (`pg_advisory_xact_lock('afiliado:indicado', indicadoId)`), somam R$ 10 e
+  liberam UM cupom. A concessão é escrita condicional em `qualificadoEm: null`.
+- **Só dinheiro real.** O total é RECALCULADO das reservas a cada pagamento:
+  só PAGA, só da própria pessoa, só depois do vínculo, e só com pagamento não
+  estornado. `totalAmount` já nasce descontado do cupom aplicado, então cupom
+  não vira progresso para ninguém.
+- **Crédito único por compra.** `MovimentoDeAfiliado` mantém
+  `unique(reservationId, tipo)` para o webhook reentregue.
 
-- **Crédito único.** `MovimentoDeAfiliado` tem `unique(reservationId, tipo)`.
-  Webhook reentregue tenta gravar a mesma linha e o banco recusa. A SigiloPay
-  já entregou o mesmo evento quatro vezes em dois segundos.
-- **Uma entrada por sorteio.** `EntradaGratis` tem
-  `unique(affiliateId, raffleId)`, e entrada disponível guarda `raffleId`
-  nulo. O Postgres aceita vários nulos numa coluna unique, então a restrição
-  só passa a valer quando a entrada é reservada. A regra do produto virou
-  índice.
-- **Uma entrada de cada vez.** A entrada é reivindicada com
-  `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1)`. Duas
-  abas simultâneas: uma leva, a outra recebe "Entrada grátis não está mais
-  disponível".
-- **Só dinheiro pago.** O progresso vem de `reservation.totalAmount`, que já
-  nasce descontado da entrada usada. Compra de R$ 20 com R$ 10 cobertos por
-  entrada credita R$ 10, e nunca R$ 20: entrada não gera entrada para
-  ninguém.
+### O cupom
 
-### Estados da entrada
+Valor de face de **R$ 10**, gravado na linha (`EntradaGratis.valorEmCentavos`).
+Cobre UMA cota até esse valor, é consumido por inteiro e não deixa troco:
 
-`DISPONIVEL` → `RESERVADA` (Pix pendente) → `USADA` (pago). Pix expirado
-devolve a entrada para `DISPONIVEL` com `raffleId` nulo, e aí ela volta a
-valer inclusive naquele mesmo sorteio. Compra que zera o total (uma cota
-coberta inteira) nasce paga e a entrada já sai como `USADA`, sem gerar Pix
-de R$ 0.
+| Cota | O que acontece |
+| --- | --- |
+| R$ 7 | cupom cobre R$ 7, os R$ 3 se perdem, e ele acaba |
+| R$ 10 | cobre exatamente |
+| R$ 12 | **recusado**, e não existe pagar a diferença |
 
-### Onde o benefício é processado
+Continua valendo um cupom por sorteio, garantido por
+`unique(affiliateId, raffleId)` na entrada. Estados: `DISPONIVEL` →
+`RESERVADA` (Pix pendente) → `USADA`; Pix expirado devolve ao saldo.
 
-Nos mesmos seis pontos em que o XP é creditado: os quatro webhooks de
-pagamento, a consulta que confirma um Pix pendente e a aprovação manual pelo
-painel. Todos chamam `processarPagamentoConfirmado()`, uma função só, porque
-seis chamadas montadas à mão divergem no primeiro ajuste.
+### Estorno
 
-### Suspensão e estorno
+O total do indicado é refeito. Se cair abaixo de R$ 10, o cupom ainda
+`DISPONIVEL` ou `RESERVADA` é recolhido e a pessoa volta a poder qualificar.
+Se ele já foi **usado**, fica: a cota existiu, e apagar título por causa de
+contabilidade estraga mais do que conserta. A qualificação é marcada como
+revertida, vira `QUALIFICACAO_REVERTIDA` no histórico, e aquela pessoa
+continua sem poder gerar outro por reprocessamento.
 
-Afiliado `SUSPENDED` para de receber indicados novos e de acumular
-progresso; o que ele já ganhou continua valendo. Estorno desfaz o progresso
-daquela compra e recolhe entrada que ainda esteja parada no saldo; entrada
-já gasta num sorteio em andamento fica de pé, e o movimento registra a
-diferença. Só o webhook da SigiloPay entrega evento de estorno hoje; os
-outros três gateways não expõem isso, então lá o caso é manual.
+### Ativação
+
+Qualquer conta autenticada entra num clique, em Minha conta → Programa de
+afiliados. Sem fila e sem aprovação: o programa não dá dinheiro nem acesso a
+dado de ninguém. A ativação **não** concede cupom.
+
+### Privacidade
+
+O afiliado vê o primeiro nome com a inicial do sobrenome ("Mateus N."), desde
+quando, e o progresso individual. Telefone, CPF e e-mail não saem do servidor:
+quem indica não vira dono dos dados de quem foi indicado.
 
 ## Sorteio ao vivo
 

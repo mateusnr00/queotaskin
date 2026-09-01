@@ -33,6 +33,7 @@ import {
   liberarEntradaGratis,
   reservarEntradaGratis,
 } from "@/server/services/afiliados";
+import { descontoDoCupom, emCentavos, emReais } from "@/lib/afiliados";
 
 // Expira reservas PENDING da rifa específica que já passaram do expiresAt.
 // Chamada antes de cada createReservation pra liberar números rapidamente
@@ -218,8 +219,22 @@ export async function createReservation(
   // continuar certo sozinho: o Pix cobra o que ficou, e o programa de
   // afiliados, que lê totalAmount, credita só o dinheiro que entrou de
   // verdade. Entrada Grátis não gera Entrada Grátis para ninguém.
-  const usaEntrada = Boolean(input.usarEntradaDe) && pricePerNumber > 0;
-  const desconto = usaEntrada ? pricePerNumber : 0;
+  //
+  // E o cupom tem TETO: ele vale R$ 10 e cobre uma cota até esse valor. Cota
+  // mais cara recusa o cupom inteiro, sem pagamento complementar; cota mais
+  // barata consome o cupom do mesmo jeito, e o que sobra do valor de face se
+  // perde. Aqui a conta é a mesma nos dois casos, porque o desconto é o preço
+  // da cota, nunca o valor do cupom.
+  const { aceita, descontoEmCentavos } = descontoDoCupom({
+    precoDaCotaEmCentavos: emCentavos(pricePerNumber),
+  });
+  if (input.usarEntradaDe && pricePerNumber > 0 && !aceita) {
+    throw new ValidationError(
+      "O Cupom de Entrada vale até R$ 10,00 e não cobre uma cota mais cara que isso.",
+    );
+  }
+  const usaEntrada = Boolean(input.usarEntradaDe) && pricePerNumber > 0 && aceita;
+  const desconto = usaEntrada ? emReais(descontoEmCentavos) : 0;
   const totalAmount = Math.max(0, bruto - desconto);
   const isFreeReservation = totalAmount <= 0;
   const now = new Date();

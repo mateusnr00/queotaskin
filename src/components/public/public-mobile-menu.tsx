@@ -17,6 +17,7 @@ import {
   UserCog,
   UserPlus,
   X,
+  Link2,
 } from "lucide-react";
 
 import { logoutAction } from "@/server/actions/auth";
@@ -31,6 +32,10 @@ const NAV = [
 const NAV_LOGGED_IN = [
   { href: "/meus-titulos", label: "Meus títulos", icon: TicketCheck },
   { href: "/minha-conta", label: "Minha conta", icon: UserCog },
+  // Logo abaixo de "Minha conta", e para todo mundo que está logado: quem já
+  // é afiliado vem buscar o link, e quem não é descobre que o programa existe.
+  // A página decide o que mostrar para cada um.
+  { href: "/minha-conta/afiliados", label: "Programa de afiliados", icon: Link2 },
 ] as const;
 
 export function PublicMobileMenu({

@@ -1,6 +1,6 @@
 "use client";
 
-// A Entrada Grátis dentro do checkout.
+// O Cupom de Entrada dentro do checkout.
 //
 // Fica abaixo do resumo e acima do botão, que é onde a decisão acontece: mais
 // para cima competiria com a escolha da quantidade, e mais para baixo a
@@ -8,7 +8,10 @@
 //
 // Os três estados aparecem, e nenhum deles é escondido:
 //
-//   tem entrada        interruptor ligado por padrão. Quem tem benefício
+//   cota cara demais   o cupom vale R$ 10 e cobre uma cota de até R$ 10. Numa
+//                      campanha mais cara ele é recusado inteiro, e a tela diz
+//                      isso: não existe pagar a diferença.
+//   tem cupom          interruptor ligado por padrão. Quem tem benefício
 //                      esperando quase sempre quer usar, e deixar desligado
 //                      transforma um presente em pegadinha de quem não viu.
 //   já usou aqui       aparece desabilitado, dizendo que as outras entradas
@@ -31,6 +34,9 @@ export interface EntradaNoCheckout {
   ehAfiliado: boolean;
   disponiveis: number;
   jaUsouNesteSorteio: boolean;
+  /** A cota desta campanha passa do valor de face do cupom. */
+  cotaAcimaDoCupom: boolean;
+  valorDoCupomEmCentavos: number;
   podeUsar: boolean;
 }
 
@@ -53,19 +59,42 @@ export function CartaoDeEntradaGratis({
   // atrapalha quem está pagando.
   if (!situacao.ehAfiliado) return null;
 
+  const valorDoCupom = formatBRL(situacao.valorDoCupomEmCentavos / 100);
+
+  // A cota é mais cara que o cupom: ele não cobre pela metade, e não existe
+  // completar a diferença no Pix. Dizer isso é melhor que sumir com o cartão e
+  // deixar a pessoa procurando onde foi parar o cupom dela.
+  if (situacao.cotaAcimaDoCupom && situacao.disponiveis > 0) {
+    return (
+      <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+        <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+          <Ticket aria-hidden className="h-4 w-4 shrink-0" />
+          Cupom de Entrada não vale nesta campanha
+        </p>
+        <p className="mt-1 pl-6 text-[11px] leading-relaxed text-muted-foreground">
+          O cupom vale {valorDoCupom} e cobre uma cota de até {valorDoCupom}.
+          Aqui a cota custa mais que isso.{" "}
+          {situacao.disponiveis === 1
+            ? `Seu cupom continua valendo em campanhas de cota até ${valorDoCupom}.`
+            : `Seus ${situacao.disponiveis} cupons continuam valendo em campanhas de cota até ${valorDoCupom}.`}
+        </p>
+      </div>
+    );
+  }
+
   if (situacao.jaUsouNesteSorteio) {
     return (
       <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
         <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Check aria-hidden className="h-4 w-4 shrink-0 text-emerald-500" />
-          Entrada Grátis já utilizada neste sorteio
+          Cupom de Entrada já utilizado neste sorteio
         </p>
         <p className="mt-1 pl-6 text-[11px] leading-relaxed text-muted-foreground">
           {situacao.disponiveis > 0
             ? `Você ainda tem ${situacao.disponiveis} ${
-                situacao.disponiveis === 1 ? "entrada" : "entradas"
+                situacao.disponiveis === 1 ? "cupom" : "cupons"
               } para usar em outras campanhas.`
-            : "Suas próximas entradas valem em outras campanhas."}
+            : "Seus próximos cupons valem em outras campanhas."}
         </p>
       </div>
     );
@@ -76,11 +105,11 @@ export function CartaoDeEntradaGratis({
       <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
         <p className="flex items-center gap-2 text-sm font-semibold">
           <Ticket aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-          Você ainda não tem Entradas Grátis
+          Você ainda não tem Cupons de Entrada
         </p>
         <p className="mt-1 pl-6 text-[11px] leading-relaxed text-muted-foreground">
-          Indique amigos e ganhe uma a cada R$ 10 em compras dos seus
-          indicados.
+          Cada pessoa que você indicar pode liberar um cupom de {valorDoCupom},
+          quando ela acumular {valorDoCupom} em pagamentos confirmados.
         </p>
       </div>
     );
@@ -104,7 +133,7 @@ export function CartaoDeEntradaGratis({
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold">
           <Ticket aria-hidden className="h-4 w-4 shrink-0 text-emerald-500" />
-          Usar 1 Entrada Grátis
+          Usar 1 Cupom de Entrada
           {usar && (
             <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-500 tabular-nums">
               -{formatBRL(precoDaCota)}
@@ -117,10 +146,10 @@ export function CartaoDeEntradaGratis({
             {situacao.disponiveis}
           </b>{" "}
           {situacao.disponiveis === 1
-            ? "entrada disponível"
-            : "entradas disponíveis"}
-          . Uma cota desta compra sai de graça, e cada campanha aceita uma
-          entrada.
+            ? "cupom disponível"
+            : "cupons disponíveis"}
+          . Uma cota desta compra sai de graça, o cupom é consumido por inteiro
+          e cada campanha aceita um.
         </span>
       </span>
     </label>

@@ -23,7 +23,6 @@ import {
   definirStatusDoAfiliadoAction,
 } from "@/server/actions/afiliados";
 import { normalizarCodigo } from "@/lib/afiliados";
-import { formatBRL } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,8 +36,8 @@ export interface AfiliadoNaLista {
   telefone: string | null;
   codigo: string;
   status: "INACTIVE" | "ACTIVE" | "SUSPENDED";
-  progressoEmCentavos: number;
   indicados: number;
+  qualificados: number;
   disponiveis: number;
   reservadas: number;
   usadas: number;
@@ -57,7 +56,6 @@ export function GerenciadorDeAfiliados({
   busca,
   total,
   porPagina,
-  limiarEmCentavos,
 }: {
   afiliados: AfiliadoNaLista[];
   candidatos: { id: string; name: string; phone: string | null }[];
@@ -65,7 +63,6 @@ export function GerenciadorDeAfiliados({
   /** Quantos afiliados existem no total, para o aviso de lista cortada. */
   total: number;
   porPagina: number;
-  limiarEmCentavos: number;
   /** Só para deixar claro de qual tenant é a tela; a action confere de novo. */
   tenantId?: string;
 }) {
@@ -170,11 +167,7 @@ export function GerenciadorDeAfiliados({
             </p>
           )}
           {afiliados.map((a) => (
-            <CartaoDoAfiliado
-              key={a.id}
-              afiliado={a}
-              limiarEmCentavos={limiarEmCentavos}
-            />
+            <CartaoDoAfiliado key={a.id} afiliado={a} />
           ))}
         </div>
       )}
@@ -182,13 +175,7 @@ export function GerenciadorDeAfiliados({
   );
 }
 
-function CartaoDoAfiliado({
-  afiliado,
-  limiarEmCentavos,
-}: {
-  afiliado: AfiliadoNaLista;
-  limiarEmCentavos: number;
-}) {
+function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [codigo, setCodigo] = useState(afiliado.codigo);
@@ -361,18 +348,16 @@ function CartaoDoAfiliado({
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Metrica rotulo="Indicados" valor={String(afiliado.indicados)} />
           <Metrica
+            rotulo="Qualificados"
+            valor={String(afiliado.qualificados)}
+          />
+          <Metrica
             rotulo="Disponíveis"
             valor={String(afiliado.disponiveis)}
             destaque
           />
           <Metrica rotulo="Reservadas" valor={String(afiliado.reservadas)} />
           <Metrica rotulo="Usadas" valor={String(afiliado.usadas)} />
-          <Metrica
-            rotulo="Progresso"
-            valor={`${formatBRL(afiliado.progressoEmCentavos / 100)} / ${formatBRL(
-              limiarEmCentavos / 100,
-            )}`}
-          />
         </dl>
 
         {ajustando ? (

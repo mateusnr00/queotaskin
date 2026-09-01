@@ -13,8 +13,22 @@
 // entrada a mais ou a menos no fim do mês. O banco guarda Int pela mesma
 // razão.
 
-/** Quanto os indicados precisam pagar para o afiliado ganhar uma entrada. */
+/**
+ * Quanto UMA pessoa indicada precisa pagar para liberar o cupom dela.
+ *
+ * Por pessoa, e não por afiliado: dois indicados gastando R$ 5 cada não
+ * liberam nada, e o mesmo indicado gastando R$ 1.000 libera um só.
+ */
 export const LIMIAR_DA_ENTRADA_EM_CENTAVOS = 1000;
+
+/**
+ * O valor de face do Cupom de Entrada.
+ *
+ * Ele cobre UMA cota até esse valor, é consumido por inteiro e não deixa
+ * troco: cota de R$ 7 gasta o cupom e os R$ 3 somem; cota de R$ 12 recusa o
+ * cupom, porque não existe pagamento complementar.
+ */
+export const VALOR_DO_CUPOM_EM_CENTAVOS = 1000;
 
 /** Quanto tempo o código de quem indicou sobrevive até o cadastro. */
 export const DIAS_DO_COOKIE_DE_INDICACAO = 30;
@@ -65,47 +79,70 @@ export function codigoSugerido(nome: string, sufixo: string): string {
   return junto.slice(0, TAMANHO_MAXIMO_DO_CODIGO);
 }
 
-export interface Recompensa {
-  /** Quantas entradas esta compra liberou. */
-  entradas: number;
-  /** O que sobra para a próxima, em centavos. */
-  progressoRestante: number;
+export interface Qualificacao {
+  /** A pessoa alcançou o limiar e o cupom pode ser concedido agora. */
+  qualificou: boolean;
+  /** Quanto ainda falta, em centavos. Zero quando já alcançou. */
+  faltaEmCentavos: number;
 }
 
 /**
- * Quantas entradas uma compra libera, e o que sobra para a próxima.
+ * Esta pessoa indicada já libera o cupom dela?
  *
- * O progresso é acumulativo e não perde centavo: R$ 27,50 de compras dão duas
- * entradas e deixam R$ 7,50 guardados; a compra seguinte de R$ 4,00 leva o
- * acumulado a R$ 11,50, libera a terceira entrada e deixa R$ 1,50.
+ * NÃO É PROGRESSIVO, e essa é a regra inteira. A conta não é "quantos blocos
+ * de R$ 10 cabem no que ela gastou": é um sim ou não, uma vez na vida.
+ * R$ 10, R$ 20, R$ 100 ou R$ 1.000 do mesmo indicado dão o mesmo resultado,
+ * um cupom, e depois dele nada mais.
  *
- * Valor negativo é aceito de propósito: é assim que o estorno desfaz o que a
- * compra tinha somado. O progresso nunca fica abaixo de zero, e entradas já
- * concedidas não são retiradas aqui (quem decide isso é o serviço, que sabe
- * se a entrada já foi gasta).
+ * `jaQualificou` entra porque quem já recebeu não recebe de novo nem quando o
+ * total continua subindo. Quem decide isso no banco é a linha de qualificação,
+ * única por pessoa; aqui é só a aritmética.
  */
-export function calcularRecompensa({
-  progressoAnterior,
-  valorEmCentavos,
+export function avaliarQualificacao({
+  pagoEmCentavos,
+  jaQualificou,
   limiar = LIMIAR_DA_ENTRADA_EM_CENTAVOS,
 }: {
-  progressoAnterior: number;
-  valorEmCentavos: number;
+  pagoEmCentavos: number;
+  jaQualificou: boolean;
   limiar?: number;
-}): Recompensa {
+}): Qualificacao {
   if (limiar <= 0) {
-    throw new Error("O limiar da entrada precisa ser maior que zero");
+    throw new Error("O limiar da qualificação precisa ser maior que zero");
   }
+  if (jaQualificou) return { qualificou: false, faltaEmCentavos: 0 };
 
-  const total = progressoAnterior + valorEmCentavos;
-  if (total <= 0) {
-    return { entradas: 0, progressoRestante: 0 };
-  }
-
+  const pago = Math.max(0, pagoEmCentavos);
   return {
-    entradas: Math.floor(total / limiar),
-    progressoRestante: total % limiar,
+    qualificou: pago >= limiar,
+    faltaEmCentavos: Math.max(0, limiar - pago),
   };
+}
+
+/**
+ * Quanto o cupom abate desta compra, e se ele pode ser usado.
+ *
+ * O cupom cobre UMA cota, até o valor de face. Acima disso ele é recusado
+ * inteiro: não existe usar R$ 10 do cupom e completar R$ 2 no Pix, porque
+ * "cupom que cobre parte da cota" é outro produto, com outra conversa na hora
+ * de explicar o que a pessoa ganhou.
+ */
+export function descontoDoCupom({
+  precoDaCotaEmCentavos,
+  valorDoCupomEmCentavos = VALOR_DO_CUPOM_EM_CENTAVOS,
+}: {
+  precoDaCotaEmCentavos: number;
+  valorDoCupomEmCentavos?: number;
+}): { aceita: boolean; descontoEmCentavos: number } {
+  if (precoDaCotaEmCentavos <= 0) {
+    return { aceita: false, descontoEmCentavos: 0 };
+  }
+  if (precoDaCotaEmCentavos > valorDoCupomEmCentavos) {
+    return { aceita: false, descontoEmCentavos: 0 };
+  }
+  // Cobre a cota inteira e o que sobrar do cupom se perde: sem troco, sem
+  // saldo, sem segunda cota.
+  return { aceita: true, descontoEmCentavos: precoDaCotaEmCentavos };
 }
 
 /** Reais (o que o banco guarda como Decimal) para centavos inteiros. */
@@ -116,15 +153,6 @@ export function emCentavos(valorEmReais: number): number {
 /** Centavos para reais, para formatar na tela. */
 export function emReais(centavos: number): number {
   return centavos / 100;
-}
-
-/** Quanto falta para a próxima entrada, em centavos. */
-export function faltaParaProximaEntrada(
-  progressoEmCentavos: number,
-  limiar = LIMIAR_DA_ENTRADA_EM_CENTAVOS,
-): number {
-  const dentro = ((progressoEmCentavos % limiar) + limiar) % limiar;
-  return limiar - dentro;
 }
 
 /** O link que o afiliado compartilha. */
