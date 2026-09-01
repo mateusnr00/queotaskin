@@ -86,20 +86,53 @@ function ehCaminhoDoPainel(path: string): boolean {
  * cadastro. Nunca sobrescreve por conta própria um vínculo já existente, e
  * isso é decidido no cadastro, onde o banco sabe quem já tem afiliado.
  */
-function guardarIndicacao(req: { nextUrl: URL }, resposta: NextResponse) {
+function guardarIndicacao(
+  req: { nextUrl: URL; headers: Headers; auth?: unknown },
+  resposta: NextResponse,
+) {
   const bruto = req.nextUrl.searchParams.get("ref");
   if (!bruto) return resposta;
   const codigo = normalizarCodigo(bruto);
   if (!codigo) return resposta;
 
-  resposta.cookies.set(COOKIE_DE_INDICACAO, codigo, {
-    maxAge: DIAS_DO_COOKIE_DE_INDICACAO * 24 * 60 * 60,
-    sameSite: "lax",
-    httpOnly: true,
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-  });
-  return resposta;
+  const guardar = (r: NextResponse) => {
+    r.cookies.set(COOKIE_DE_INDICACAO, codigo, {
+      maxAge: DIAS_DO_COOKIE_DE_INDICACAO * 24 * 60 * 60,
+      sameSite: "lax",
+      httpOnly: true,
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+    });
+    return r;
+  };
+
+  // O LINK DE AFILIADO CAI DIRETO NO CADASTRO.
+  //
+  // O painel do afiliado gera sempre a raiz com ?ref=, e é esse link que ele
+  // manda no grupo. Quem clica ainda não tem conta na esmagadora maioria das
+  // vezes, e a home não pede cadastro em lugar nenhum: a pessoa olhava as
+  // campanhas e ia embora sem virar conta, que é o único jeito de o vínculo
+  // com quem indicou existir.
+  //
+  // Só a RAIZ desvia. Link de campanha com ?ref (montado à mão por alguém)
+  // continua abrindo a campanha: ali a pessoa escolheu ver aquele item, e
+  // atravessar isso com um cadastro seria tirá-la de onde ela quis chegar.
+  // O código vai junto na URL além do cookie, para o campo aparecer
+  // preenchido mesmo em navegador que recusa cookie.
+  const semConta = !(req as { auth?: unknown }).auth;
+  if (req.nextUrl.pathname === "/" && semConta) {
+    // urlDaRequisicao, e não `new URL(req.nextUrl)`: em produção o nextUrl
+    // carrega a origem do AUTH_URL, e um redirect montado a partir dele
+    // mandaria quem clicou no link do afiliado para OUTRO endereço (o do
+    // painel, no caso deste projeto). O helper refaz host e protocolo a
+    // partir dos cabeçalhos da requisição, que é onde mora o endereço que a
+    // pessoa realmente abriu.
+    const destino = urlDaRequisicao(req, "/registro");
+    destino.searchParams.set("ref", codigo);
+    return guardar(NextResponse.redirect(destino));
+  }
+
+  return guardar(resposta);
 }
 
 export default auth((req) => {

@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { IdCard, Link2, User } from "lucide-react";
+import { IdCard, Link2, Lock, User } from "lucide-react";
 
 import { loginAction, registerAction } from "@/server/actions/auth";
 import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
@@ -43,8 +43,16 @@ const CAMPO = "h-12 pl-11";
  */
 export function RegisterForm({
   aoConcluir,
+  codigoTravado = null,
 }: {
   aoConcluir?: () => void;
+  /**
+   * O código de quem indicou, resolvido no servidor (URL ou cookie). Quando
+   * vem, o campo aparece preenchido e TRAVADO: o vínculo já foi decidido no
+   * clique do link, e deixar editável só abriria caminho para a pessoa apagar
+   * sem querer o crédito de quem a trouxe.
+   */
+  codigoTravado?: string | null;
 } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -52,10 +60,12 @@ export function RegisterForm({
   // próprias telas mandam ?redirect=. Aceita os dois.
   const redirectTo =
     searchParams.get("redirect") ?? searchParams.get("callbackUrl") ?? "/";
-  // Quem chegou por /registro?ref=CODIGO vê o campo já preenchido. Quem
-  // chegou por /?ref=CODIGO tem o código no cookie, e o servidor o usa mesmo
-  // com este campo vazio: o cookie é a fonte, o campo é a conveniência.
-  const codigoDaUrl = normalizarCodigo(searchParams.get("ref") ?? "");
+  // O código travado vem pronto do servidor, que já olhou a URL e o cookie.
+  // Aqui a URL ainda é lida como reserva, para o formulário dentro do diálogo
+  // de reserva (que não passa pela página de cadastro) continuar preenchendo.
+  const codigoDaUrl =
+    codigoTravado ?? normalizarCodigo(searchParams.get("ref") ?? "");
+  const travado = Boolean(codigoTravado);
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -182,17 +192,32 @@ export function RegisterForm({
               <FormLabel className={ROTULO}>
                 Código de indicação{" "}
                 <span className="font-normal text-muted-foreground normal-case">
-                  (opcional)
+                  {travado ? "(aplicado pelo link)" : "(opcional)"}
                 </span>
               </FormLabel>
               <FormControl>
                 <div className="relative">
-                  <Link2 className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  {travado ? (
+                    <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-emerald-500" />
+                  ) : (
+                    <Link2 className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  )}
                   <Input
                     autoComplete="off"
                     placeholder="Ex.: MATEUS7K"
-                    className={cn(CAMPO, "font-mono tracking-widest uppercase")}
+                    className={cn(
+                      CAMPO,
+                      "font-mono tracking-widest uppercase",
+                      // Travado é para ser lido, não editado: some o cursor de
+                      // texto e o campo assume a cor do vínculo, que é a mesma
+                      // do aviso logo abaixo.
+                      travado &&
+                        "cursor-default border-emerald-500/40 bg-emerald-500/5 text-emerald-400 focus-visible:ring-0",
+                    )}
                     maxLength={20}
+                    readOnly={travado}
+                    aria-readonly={travado || undefined}
+                    tabIndex={travado ? -1 : undefined}
                     value={field.value ?? ""}
                     onChange={(e) =>
                       field.onChange(normalizarCodigo(e.target.value))
@@ -205,7 +230,9 @@ export function RegisterForm({
               </FormControl>
               {codigoDaUrl && (
                 <p className="text-[11px] font-medium text-emerald-500">
-                  Você foi indicado por {codigoDaUrl}
+                  {travado
+                    ? `Indicação de ${codigoDaUrl} aplicada. Crie sua conta por aqui e ela fica valendo.`
+                    : `Você foi indicado por ${codigoDaUrl}`}
                 </p>
               )}
               <FormMessage />

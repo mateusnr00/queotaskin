@@ -517,6 +517,23 @@ Modo, limiar, porcentagem, valor do cupom, degrau e aumento por degrau ficam em
 Configuração de recompensa). Sem configuração própria, valem os padrões globais
 de `lib/afiliados.ts`.
 
+### O link cai direto no cadastro
+
+O link que o painel gera é sempre a raiz com `?ref=CODIGO`, e é ele que o
+afiliado manda no grupo. Quem clica quase nunca tem conta, e a home não pede
+cadastro em lugar nenhum: a pessoa olhava as campanhas e ia embora sem virar
+conta, que é o único jeito de o vínculo existir.
+
+Agora o proxy desvia esse clique para `/registro?ref=CODIGO`, e o campo de
+código chega **preenchido e travado**: o vínculo foi decidido no clique, e
+deixá-lo editável só abriria caminho para apagar sem querer o crédito de quem
+trouxe a pessoa. O código vai na URL e no cookie, então navegador que recusa
+cookie continua funcionando, e quem clicou hoje e só voltou para criar conta
+semana que vem também encontra o campo preenchido.
+
+Só a RAIZ desvia. Link de campanha com `?ref` montado à mão continua abrindo a
+campanha, e quem já tem sessão aberta não é empurrado para lugar nenhum.
+
 A porcentagem é guardada em **basis points** inteiros (5000 = 50%, 7000 = 70%),
 e nunca em float: porcentagem em ponto flutuante erra centavo. O valor do cupom
 é DERIVADO no servidor (`floor(limiar × bps / 10000)`), e o que a tela mandou é

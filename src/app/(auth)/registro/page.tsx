@@ -1,20 +1,35 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import type { Metadata } from "next";
 
 import { RegisterForm } from "@/components/forms/register-form";
 import { CartaoDeAuth } from "@/components/auth/cartao-de-auth";
+import { COOKIE_DE_INDICACAO, normalizarCodigo } from "@/lib/afiliados";
 
 export const metadata: Metadata = { title: "Criar conta" };
 
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string }>;
+  searchParams: Promise<{ redirect?: string; ref?: string }>;
 }) {
   const sp = await searchParams;
   const redirectQS = sp.redirect
     ? `?redirect=${encodeURIComponent(sp.redirect)}`
     : "";
+
+  // O CÓDIGO DE QUEM INDICOU, DECIDIDO NO SERVIDOR.
+  //
+  // A URL primeiro, porque é o clique de agora. O cookie depois, porque é o
+  // clique de dias atrás: quem entrou pelo link, olhou as campanhas e só
+  // voltou para criar conta na semana seguinte tem o vínculo aqui, e sem
+  // isto o campo apareceria vazio para ela. Os dois passam pela mesma
+  // normalização, então o que a tela mostra é exatamente o que o cadastro
+  // vai usar.
+  const codigoTravado =
+    normalizarCodigo(sp.ref ?? "") ||
+    normalizarCodigo((await cookies()).get(COOKIE_DE_INDICACAO)?.value ?? "") ||
+    null;
 
   return (
     <CartaoDeAuth>
@@ -32,7 +47,7 @@ export default async function RegisterPage({
           </p>
         </div>
 
-        <RegisterForm />
+        <RegisterForm codigoTravado={codigoTravado} />
 
         {/* Separador com rótulo no meio. As duas barras são irmãs do texto
             num flex, e não um pseudo-elemento por cima: assim o "ou" fica

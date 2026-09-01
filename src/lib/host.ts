@@ -59,7 +59,14 @@ export function urlDaRequisicao(
   url.pathname = pathname;
   url.search = "";
   const host = request.headers.get("host");
-  if (host) url.host = host;
+  if (host) {
+    url.host = host;
+    // Trocar só o host NÃO limpa a porta: pela regra da WHATWG URL, o setter
+    // de `host` sem porta deixa a anterior de pé. Como a porta anterior vem do
+    // nextUrl (que carrega a origem do AUTH_URL), um cabeçalho sem porta
+    // produzia https://dominio:3000/..., um endereço que não existe.
+    if (!host.includes(":")) url.port = "";
+  }
   const proto = request.headers.get("x-forwarded-proto");
   if (proto) url.protocol = `${proto.split(",")[0]!.trim()}:`;
   return url;
