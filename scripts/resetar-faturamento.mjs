@@ -114,8 +114,8 @@ async function main() {
 
   const [
     reservas,
-    pagas,
-    somaPagas,
+    peloGateway,
+    aprovadasNoPainel,
     titulos,
     pagamentos,
     caixas,
@@ -132,9 +132,14 @@ async function main() {
     visitasDiarias,
   ] = await Promise.all([
     prisma.reservation.count({ where: ondeReserva }),
-    prisma.reservation.count({ where: { ...ondeReserva, status: "PAID" } }),
     prisma.reservation.aggregate({
-      where: { ...ondeReserva, status: "PAID" },
+      where: { ...ondeReserva, status: "PAID", aprovadaNoPainel: false },
+      _count: { _all: true },
+      _sum: { totalAmount: true },
+    }),
+    prisma.reservation.aggregate({
+      where: { ...ondeReserva, status: "PAID", aprovadaNoPainel: true },
+      _count: { _all: true },
       _sum: { totalAmount: true },
     }),
     prisma.ticket.count({ where: { raffleId: { in: raffleIds } } }),
@@ -162,9 +167,15 @@ async function main() {
   console.log("O QUE VAI SER APAGADO");
   console.log("  Compras (sempre)");
   console.log(`    reservas ............... ${reservas}`);
-  console.log(`      delas, pagas ......... ${pagas}`);
+  // As duas linhas separadas porque a tela de Relatórios separa: compra
+  // aprovada à mão pelo painel não passou por gateway e fica FORA do
+  // faturamento de lá. Somadas aqui, o censo mostraria um número maior que o
+  // do painel e pareceria estar mirando na coisa errada.
   console.log(
-    `      faturamento .......... ${brl(somaPagas._sum.totalAmount ?? 0)}`,
+    `      pagas pelo gateway ... ${peloGateway._count._all}  ${brl(peloGateway._sum.totalAmount ?? 0)}   (o faturamento do painel)`,
+  );
+  console.log(
+    `      aprovadas no painel .. ${aprovadasNoPainel._count._all}  ${brl(aprovadasNoPainel._sum.totalAmount ?? 0)}   (fora do faturamento, mas some junto)`,
   );
   console.log(`    títulos vendidos ....... ${titulos}`);
   console.log(`    pagamentos ............. ${pagamentos}`);
