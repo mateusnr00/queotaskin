@@ -28,13 +28,17 @@ import {
   Coins,
   Copy,
   ExternalLink,
+  Loader2,
   RefreshCw,
   Info,
   PackageCheck,
+  RotateCcw,
   Search,
   Truck,
+  X,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -84,6 +88,7 @@ import {
 import { fullSkinName, RARITY_TEXT_VAR, WEAR_SHORT } from "@/lib/cs2";
 import { ESTADOS_DA_ENTREGA, estadoDaEntrega, pendente } from "@/lib/entrega";
 import {
+  arquivarEntregaAction,
   buscarCotacaoAction,
   marcarEntregaAction,
   salvarCustoDaEntregaAction,
@@ -96,19 +101,25 @@ import type { Delivery } from "@/server/services/deliveries";
 /** Filtro da lista. "PENDENTES" agrupa tudo que ainda dá trabalho. */
 const TODOS = "TODOS";
 const PENDENTES = "PENDENTES";
+/** As que foram tiradas da fila. Vivem fora da lista normal. */
+const REMOVIDAS = "REMOVIDAS";
 
 /** Como o filtro escolhido aparece no botão fechado. */
 function rotuloDoFiltro(filtro: string): string {
   if (filtro === TODOS) return "Todos os status";
   if (filtro === PENDENTES) return "Pendentes";
+  if (filtro === REMOVIDAS) return "Removidas da fila";
   return estadoDaEntrega(filtro as DeliveryStatus).rotulo;
 }
 
 export function TabelaDeEntregas({
   entregas,
+  arquivadas = [],
   taxas,
 }: {
   entregas: Delivery[];
+  /** As que saíram da fila. Só aparecem no filtro "Removidas da fila". */
+  arquivadas?: Delivery[];
   taxas: Taxas;
 }) {
   // Abre em TODOS.
@@ -174,9 +185,17 @@ export function TabelaDeEntregas({
 
   const visiveis = useMemo(() => {
     const alvo = semAcento(busca);
-    return entregas.filter((e) => {
+    // "Removidas" troca a LISTA, e não filtra a de sempre: elas vivem fora da
+    // fila justamente para não disputar espaço com o trabalho de hoje.
+    const base = filtro === REMOVIDAS ? arquivadas : entregas;
+    return base.filter((e) => {
       if (filtro === PENDENTES && !pendente(e.status)) return false;
-      if (filtro !== PENDENTES && filtro !== TODOS && e.status !== filtro) {
+      if (
+        filtro !== PENDENTES &&
+        filtro !== TODOS &&
+        filtro !== REMOVIDAS &&
+        e.status !== filtro
+      ) {
         return false;
       }
       if (alvo === "") return true;
@@ -190,7 +209,7 @@ export function TabelaDeEntregas({
       ];
       return campos.some((c) => semAcento(c).includes(alvo));
     });
-  }, [entregas, filtro, busca]);
+  }, [entregas, arquivadas, filtro, busca]);
 
   // Quantas estouraram o prazo. É o número que decide o que fazer primeiro, e
   // ele não existia em lugar nenhum da tela: dava para ter cinco atrasadas e a
@@ -279,6 +298,11 @@ export function TabelaDeEntregas({
             <SelectContent>
               <SelectItem value={PENDENTES}>Pendentes</SelectItem>
               <SelectItem value={TODOS}>Todos os status</SelectItem>
+              {arquivadas.length > 0 && (
+                <SelectItem value={REMOVIDAS}>
+                  Removidas da fila ({arquivadas.length})
+                </SelectItem>
+              )}
               {ESTADOS_DA_ENTREGA.map((e) => (
                 <SelectItem key={e.chave} value={e.chave}>
                   <Ponto cor={e.cor} />
@@ -356,7 +380,7 @@ export function TabelaDeEntregas({
                   </TableHead>
                   <TableHead className="min-w-[150px]">Sorteado</TableHead>
                   <TableHead className="min-w-[170px]">Enviado</TableHead>
-                  <TableHead className="sticky right-0 min-w-[190px] bg-[#0e1013] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.8)]">
+                  <TableHead className="sticky right-0 min-w-[230px] bg-[#0e1013] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.8)]">
                     Status
                   </TableHead>
                 </TableRow>
@@ -538,7 +562,10 @@ function Linha({
       </TableCell>
 
       <TableCell className="sticky right-0 bg-[#0e1013] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.8)]">
-        <SeletorDeStatus entrega={entrega} />
+        <div className="flex items-center gap-1.5">
+          <SeletorDeStatus entrega={entrega} />
+          <BotaoDeArquivar entrega={entrega} />
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -615,8 +642,11 @@ function Cartao({
           </div>
         </div>
 
-        <div className="border-t border-white/[0.08] pt-2.5">
-          <SeletorDeStatus entrega={entrega} />
+        <div className="flex items-center gap-1.5 border-t border-white/[0.08] pt-2.5">
+          <div className="min-w-0 flex-1">
+            <SeletorDeStatus entrega={entrega} />
+          </div>
+          <BotaoDeArquivar entrega={entrega} />
         </div>
       </article>
     </Moldura>
@@ -1283,5 +1313,70 @@ function DialogDeTaxas({ taxas }: { taxas: Taxas }) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Tira a entrega da fila, ou traz de volta.
+ *
+ * Um X discreto ao lado do status, e não um botão vermelho de lixeira: o
+ * gesto não apaga nada, e um ícone de destruição prometeria o contrário. A
+ * confirmação existe mesmo assim, porque a linha some da tela na hora e
+ * quem clicou sem querer precisaria descobrir sozinho o filtro "Removidas".
+ */
+function BotaoDeArquivar({ entrega }: { entrega: Delivery }) {
+  const router = useRouter();
+  const [salvando, setSalvando] = useState(false);
+  const arquivada = entrega.arquivadaEm != null;
+
+  async function alternar() {
+    if (
+      !arquivada &&
+      !confirm(
+        `Remover "${entrega.raffleTitle}" da fila de entregas?\n\nO sorteio, o ganhador e o comprovante continuam de pé. A linha volta pelo filtro "Removidas da fila".`,
+      )
+    ) {
+      return;
+    }
+    setSalvando(true);
+    try {
+      const r = await arquivarEntregaAction({
+        raffleId: entrega.raffleId,
+        arquivar: !arquivada,
+      });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(arquivada ? "Devolvida à fila" : "Removida da fila");
+      router.refresh();
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+      disabled={salvando}
+      onClick={alternar}
+      title={arquivada ? "Devolver à fila" : "Remover da fila"}
+      aria-label={
+        arquivada
+          ? `Devolver ${entrega.raffleTitle} à fila`
+          : `Remover ${entrega.raffleTitle} da fila`
+      }
+    >
+      {salvando ? (
+        <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
+      ) : arquivada ? (
+        <RotateCcw aria-hidden className="h-3.5 w-3.5" />
+      ) : (
+        <X aria-hidden className="h-3.5 w-3.5" />
+      )}
+    </Button>
   );
 }

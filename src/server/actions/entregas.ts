@@ -345,3 +345,62 @@ export async function buscarCotacaoAction(): Promise<
     return { ok: false, error: "Não foi possível buscar a cotação agora." };
   }
 }
+
+/**
+ * Tira uma entrega da fila, ou traz de volta.
+ *
+ * Arquivar não apaga nada: o sorteio, o ganhador, o número e o comprovante
+ * continuam de pé, e a linha volta pelo filtro "Removidas". Existe porque
+ * fila com linha que ninguém vai tocar (sorteio de teste, entrega resolvida
+ * por fora) esconde o que de fato falta fazer.
+ */
+export async function arquivarEntregaAction(
+  raw: unknown,
+): Promise<ActionResult<{ arquivada: boolean }>> {
+  const parsed = z
+    .object({ raffleId: z.string().cuid(), arquivar: z.boolean() })
+    .safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+  try {
+    const session = await getAdminOrThrow();
+    // O id vem do cliente: sem esta checagem, o id de uma campanha de outro
+    // painel sairia da fila daqui.
+    const tenantId = await assertRaffleInActiveTenant(
+      parsed.data.raffleId,
+      session.user,
+    );
+
+    const rifa = await prisma.raffle.findUnique({
+      where: { id: parsed.data.raffleId },
+      select: { title: true, winnerTicketNumber: true },
+    });
+    if (!rifa) return { ok: false, error: "Campanha não encontrada." };
+    if (rifa.winnerTicketNumber == null) {
+      return { ok: false, error: "Esta campanha ainda não tem ganhador." };
+    }
+
+    await prisma.raffle.update({
+      where: { id: parsed.data.raffleId },
+      data: {
+        entregaArquivadaEm: parsed.data.arquivar ? new Date() : null,
+      },
+    });
+
+    await registrarLog({
+      acao: "entrega.marcada",
+      tenantId,
+      alvo: { tipo: "Raffle", id: parsed.data.raffleId, rotulo: rifa.title },
+      detalhes: {
+        o_que: parsed.data.arquivar
+          ? "entrega removida da fila"
+          : "entrega devolvida à fila",
+      },
+    });
+
+    revalidatePath("/admin/entregas");
+    return { ok: true, data: { arquivada: parsed.data.arquivar } };
+  } catch {
+    return { ok: false, error: "Não foi possível remover da fila." };
+  }
+}

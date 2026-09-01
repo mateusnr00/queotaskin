@@ -27,6 +27,8 @@ export interface Delivery {
   deliveryFxSource: string | null;
   /** Nome de quem marcou, quando a conta ainda existe. */
   deliveredBy: string | null;
+  /** Fora da fila desde quando. Nulo é entrega ativa. */
+  arquivadaEm: Date | null;
   /** Comprador do número sorteado. Nulo se o título não foi vendido. */
   winner: {
     reservationId: string;
@@ -47,10 +49,24 @@ export interface Delivery {
  * O ganhador é resolvido pelo caminho winnerTicketNumber → Ticket → Reservation
  * → User. O link de troca vem do User quando a reserva tem conta associada,
  * reservas de convidado não têm para onde enviar, e a tela sinaliza isso.
+ *
+ * Quando esse caminho não fecha, o SORTEIO responde. `Draw` guarda o
+ * ganhador na hora em que ele saiu (nome e id de usuário), e é a fonte
+ * canônica do resultado: título apagado, reserva estornada ou banco limpo
+ * deixavam a entrega órfã, exibindo "sem link de troca" para quem tinha o
+ * link cadastrado. A fila é a lista de skins que alguém precisa enviar, e
+ * ela não pode perder o destinatário porque uma linha auxiliar sumiu.
  */
-export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
+export async function listDeliveries(
+  tenantId: string,
+  { arquivadas = false }: { arquivadas?: boolean } = {},
+): Promise<Delivery[]> {
   const raffles = await prisma.raffle.findMany({
-    where: { tenantId, winnerTicketNumber: { not: null } },
+    where: {
+      tenantId,
+      winnerTicketNumber: { not: null },
+      entregaArquivadaEm: arquivadas ? { not: null } : null,
+    },
     // Pendente primeiro, e dentro de cada grupo o mais recente no topo.
     // A fila existe para dizer o que falta fazer; o que já saiu é histórico e
     // não pode empurrar o trabalho de hoje para o fim da página.
@@ -92,6 +108,36 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
 
   const ticketByRaffle = new Map(winningTickets.map((t) => [t.raffleId, t]));
 
+  // O SOCORRO: para quem não achou título, o ganhador vem do sorteio.
+  const semTitulo = raffles.filter((r) => !ticketByRaffle.has(r.id));
+  const sorteios = semTitulo.length
+    ? await prisma.draw.findMany({
+        where: { raffleId: { in: semTitulo.map((r) => r.id) } },
+        select: { raffleId: true, winnerName: true, winnerUserId: true },
+      })
+    : [];
+  const idsDeGanhador = [
+    ...new Set(sorteios.map((d) => d.winnerUserId).filter((v): v is string => !!v)),
+  ];
+  const contaDoGanhador = new Map(
+    idsDeGanhador.length
+      ? (
+          await prisma.user.findMany({
+            where: { id: { in: idsDeGanhador } },
+            select: {
+              id: true,
+              name: true,
+              steamTradeUrl: true,
+              steamId: true,
+              email: true,
+              phone: true,
+            },
+          })
+        ).map((u) => [u.id, u])
+      : [],
+  );
+  const sorteioPorRifa = new Map(sorteios.map((d) => [d.raffleId, d]));
+
   // Os nomes de quem marcou entrega, numa query só. `deliveredById` não tem
   // relação declarada de propósito (ver o schema), então a busca é manual e
   // um id órfão simplesmente não vira nome, em vez de quebrar a tela.
@@ -114,6 +160,10 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
   return raffles.map((raffle) => {
     const ticket = ticketByRaffle.get(raffle.id);
     const reservation = ticket?.reservation ?? null;
+    const sorteio = reservation ? null : sorteioPorRifa.get(raffle.id);
+    const conta = sorteio?.winnerUserId
+      ? (contaDoGanhador.get(sorteio.winnerUserId) ?? null)
+      : null;
 
     return {
       raffleId: raffle.id,
@@ -137,6 +187,7 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
       deliveredBy: raffle.deliveredById
         ? (nomePorId.get(raffle.deliveredById) ?? null)
         : null,
+      arquivadaEm: raffle.entregaArquivadaEm,
       winner: reservation
         ? {
             reservationId: reservation.id,
@@ -149,7 +200,32 @@ export async function listDeliveries(tenantId: string): Promise<Delivery[]> {
             steamTradeUrl: reservation.user?.steamTradeUrl ?? null,
             steamId: reservation.user?.steamId ?? null,
           }
-        : null,
+        : conta
+          ? {
+              // Sem reserva não há comprovante para abrir, e o campo é a
+              // chave dele. Vazio aqui vira "sem comprovante" na tela, que
+              // é a verdade: a compra não está mais lá.
+              reservationId: "",
+              name: conta.name,
+              phone: conta.phone,
+              email: conta.email,
+              userId: conta.id,
+              steamTradeUrl: conta.steamTradeUrl,
+              steamId: conta.steamId,
+            }
+          : sorteio?.winnerName
+            ? {
+                // Ganhador sem conta vinculada: o nome do sorteio é tudo o
+                // que existe, e ainda assim é melhor que uma linha vazia.
+                reservationId: "",
+                name: sorteio.winnerName,
+                phone: null,
+                email: null,
+                userId: null,
+                steamTradeUrl: null,
+                steamId: null,
+              }
+            : null,
       prizes: raffle.prizes.map(toSkinPrize),
     };
   });

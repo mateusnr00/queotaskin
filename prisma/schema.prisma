@@ -676,6 +676,19 @@ model Raffle {
   /// Em que pé está a entrega. Ver o enum para o significado de cada estado.
   deliveryStatus DeliveryStatus @default(AGUARDANDO)
 
+  /// QUANDO ESTA ENTREGA FOI TIRADA DA FILA.
+  ///
+  /// Some da tela de Entregas, e não do banco: sorteio de teste, campanha
+  /// cancelada e entrega resolvida por fora enchem a fila de linha que
+  /// ninguém vai tocar, e uma fila cheia de ruído esconde o que falta fazer.
+  /// Nulo é entrega na fila, que é o estado de toda campanha sorteada.
+  ///
+  /// Arquivar não apaga nem mexe no sorteio: o ganhador, o número e o
+  /// comprovante continuam de pé, e o filtro "Removidas" traz a linha de
+  /// volta. Apagar a campanha para limpar a fila levaria junto o resultado
+  /// público de um sorteio que aconteceu.
+  entregaArquivadaEm DateTime?
+
   /// Quando a skin de fato saiu. Preenchido ao entrar em ENVIADO e limpo ao
   /// sair dele: é a data da entrega, e não a data da última mexida no status.
   deliveredAt   DateTime?

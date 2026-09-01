@@ -73,7 +73,18 @@ para descobrir. Do link é derivado o **SteamID64**, útil para conferir que
 o ganhador não trocou de conta entre a compra e o sorteio.
 
 Depois do sorteio, **Admin → Entregas** lista cada campanha sorteada com o
-ganhador, contato, link de troca copiável e os prêmios a enviar. A tela
+ganhador, contato, link de troca copiável e os prêmios a enviar.
+
+O ganhador é resolvido por `winnerTicketNumber → Ticket → Reservation → User`,
+e quando esse caminho não fecha o **sorteio responde**: `Draw` guarda o
+ganhador no instante em que ele saiu, e é a fonte canônica do resultado.
+Título apagado ou reserva estornada deixavam a entrega órfã, exibindo "sem
+link de troca" para quem tinha o link cadastrado.
+
+Cada linha tem um **X para sair da fila** (`Raffle.entregaArquivadaEm`). Não
+apaga nada: o sorteio, o ganhador e o comprovante continuam de pé, e a linha
+volta pelo filtro "Removidas da fila". Existe porque fila com linha que
+ninguém vai tocar esconde o que de fato falta fazer. A tela
 sinaliza quem ainda não cadastrou o link e alerta quando o número
 declarado não consta como vendido.
 

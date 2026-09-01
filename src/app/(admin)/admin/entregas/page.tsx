@@ -14,8 +14,11 @@ export const metadata: Metadata = { title: "Entregas" };
 export default async function AdminDeliveriesPage() {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
-  const [entregas, tenant] = await Promise.all([
+  const [entregas, arquivadas, tenant] = await Promise.all([
     listDeliveries(tenantId),
+    // As removidas vêm junto, e não numa navegação à parte: são poucas, e
+    // trazê-las aqui deixa o filtro "Removidas" instantâneo.
+    listDeliveries(tenantId, { arquivadas: true }),
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { cnyToBrl: true, usdToBrl: true },
@@ -25,6 +28,7 @@ export default async function AdminDeliveriesPage() {
   return (
     <TabelaDeEntregas
       entregas={entregas}
+      arquivadas={arquivadas}
       // Decimal do Prisma não atravessa a fronteira servidor/cliente.
       taxas={{
         cnyToBrl: tenant?.cnyToBrl != null ? Number(tenant.cnyToBrl) : null,
