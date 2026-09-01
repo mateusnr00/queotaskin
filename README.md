@@ -41,6 +41,23 @@ Cadastro em **Admin → Sorteios → Editar → Prêmios**. Ao digitar o float, 
 painel confere se o desgaste escolhido bate com as faixas oficiais e
 oferece a correção em um clique.
 
+### Importar uma pasta de artes de uma vez
+
+**Admin → Catálogo de skins → Importar artes.** O acervo de artes já nasce
+com o nome escrito no arquivo ("AK-47 | Redline (Field-Tested).png"), e é
+esse nome que o importador lê: `lerArquivoDeSkin` separa a skin do desgaste,
+e `procurar` (o mesmo casador de `scripts/adicionar-skins.ts`) acha a linha
+do catálogo. Aceita como a Steam escreve e como se digita de cabeça
+("awp asiimov ft.png"), ignora a estrela das facas, o StatTrak™, a numeração
+da frente ("01 - ") e o "(1)" que o download em massa gruda no fim.
+
+A tela mostra o que vai gravar ANTES de gravar: cada arquivo com a skin
+encontrada, o desgaste lido e um aviso quando já existe arte para aquele
+desgaste. O que não casou não vira cadastro em silêncio: fica numa linha
+para escolher a skin na mão, cadastrar uma nova com aquele nome, ou pular.
+O envio é um arquivo por vez, de propósito, para uma falha não levar as
+outras junto e para dar para ver qual falhou.
+
 ### Destaque automático
 
 `headlineSkin()` elege o prêmio de **maior raridade** como o destaque da

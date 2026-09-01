@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Camera,
+  FolderUp,
   Loader2,
   Pencil,
   Plus,
@@ -28,6 +29,7 @@ import {
 } from "@/server/actions/skin-templates";
 import { normalizeImage } from "@/lib/image-normalize";
 import { ArtesDaSkin, type ArteDaSkin } from "@/components/admin/artes-da-skin";
+import { ImportadorDeArtes } from "@/components/admin/importador-de-artes";
 import {
   PROPORCAO_DA_SKIN,
   QUADRO_DA_SKIN,
@@ -98,6 +100,7 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
   const [editando, setEditando] = useState<SkinDoCatalogo | "nova" | null>(
     null,
   );
+  const [importando, setImportando] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [busca, setBusca] = useState("");
   // Quantas linhas desenhar de uma vez. Com o catálogo cheio, mandar todas
@@ -136,6 +139,20 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
       toast.success("Skin removida");
       router.refresh();
     });
+  }
+
+  if (importando) {
+    return (
+      <ImportadorDeArtes
+        skins={skins.map((s) => ({
+          id: s.id,
+          name: s.name,
+          artes: s.artes,
+        }))}
+        aoFechar={() => setImportando(false)}
+        aoConcluir={() => router.refresh()}
+      />
+    );
   }
 
   if (editando) {
@@ -178,6 +195,15 @@ export function SkinCatalogo({ skins }: { skins: SkinDoCatalogo[] }) {
             />
           </div>
         )}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setImportando(true)}
+          className="sm:w-auto"
+        >
+          <FolderUp className="mr-1.5 h-4 w-4" />
+          Importar artes
+        </Button>
         <Button
           type="button"
           onClick={() => setEditando("nova")}
