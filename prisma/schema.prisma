@@ -1834,6 +1834,17 @@ model EntradaGratis {
   ganhaEm DateTime  @default(now())
   usadaEm DateTime?
 
+  /// ATÉ QUANDO ESTE CUPOM VALE.
+  ///
+  /// Setenta e duas horas depois da concessão. Nulo é cupom SEM validade, e
+  /// não cupom vencido: é assim que ficam os concedidos antes desta regra e
+  /// os ajustes manuais do painel, que não deviam morrer sozinhos.
+  ///
+  /// O vencimento é decidido comparando esta coluna com o relógio, e não por
+  /// um estado que alguém precisa vir marcar: sem job que rode, um cupom
+  /// vencido continuaria DISPONIVEL e gastável até o job passar.
+  expiraEm DateTime?
+
   affiliate    Affiliate               @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
   raffle       Raffle?                 @relation(fields: [raffleId], references: [id], onDelete: SetNull)
   reservation  Reservation?            @relation(fields: [reservationId], references: [id], onDelete: SetNull)
@@ -1848,6 +1859,7 @@ model EntradaGratis {
   /// guardar (usuário, sorteio).
   @@unique([affiliateId, raffleId])
   @@index([affiliateId, estado])
+  @@index([affiliateId, estado, expiraEm])
   @@index([reservationId])
 }
 

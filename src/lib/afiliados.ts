@@ -297,6 +297,56 @@ export function descontoDoCupom({
 }
 
 /** Quanto tempo o código de quem indicou sobrevive até o cadastro. */
+/**
+ * QUANTO TEMPO O CUPOM DURA DEPOIS DE CAIR NA MÃO.
+ *
+ * Setenta e duas horas contadas da concessão. O prazo existe para o cupom
+ * virar movimento: cupom sem validade vira um crédito parado que a pessoa
+ * lembra de gastar seis meses depois, e quem divulgou não vê o indicado
+ * jogando. Três dias é curto para pressionar e longo para caber num fim de
+ * semana inteiro, que é quando o público está no jogo.
+ *
+ * Cupom com prazo NULO não expira. É o caso dos concedidos antes desta regra
+ * e dos ajustes manuais do painel: quem dá um cupom na mão está resolvendo
+ * uma situação específica, e um prazo silencioso ali só criaria reclamação.
+ */
+export const HORAS_PARA_USAR_O_CUPOM = 72;
+
+/** Quando um cupom concedido agora deixa de valer. */
+export function expiracaoDoCupom(ganhaEm: Date): Date {
+  return new Date(ganhaEm.getTime() + HORAS_PARA_USAR_O_CUPOM * 60 * 60 * 1000);
+}
+
+/** Já passou da hora? Prazo nulo é cupom sem validade, e nunca expira. */
+export function cupomExpirado(
+  expiraEm: Date | null | undefined,
+  agora: Date = new Date(),
+): boolean {
+  if (!expiraEm) return false;
+  return expiraEm.getTime() <= agora.getTime();
+}
+
+/**
+ * O que falta, quebrado em horas, minutos e segundos, para a contagem.
+ *
+ * Devolve zeros depois do prazo, e nunca número negativo: a tela que recebe
+ * "-3h" desenha "-3h", e ninguém quer ler isso.
+ */
+export function tempoRestante(
+  expiraEm: Date,
+  agora: Date = new Date(),
+): { horas: number; minutos: number; segundos: number; acabou: boolean } {
+  const ms = expiraEm.getTime() - agora.getTime();
+  if (ms <= 0) return { horas: 0, minutos: 0, segundos: 0, acabou: true };
+  const total = Math.floor(ms / 1000);
+  return {
+    horas: Math.floor(total / 3600),
+    minutos: Math.floor((total % 3600) / 60),
+    segundos: total % 60,
+    acabou: false,
+  };
+}
+
 export const DIAS_DO_COOKIE_DE_INDICACAO = 30;
 
 /** O cookie que carrega o código entre a chegada pelo link e o cadastro. */

@@ -30,6 +30,7 @@ import {
   emReais,
   linkDeIndicacao,
   porcentagemDosBps,
+  HORAS_PARA_USAR_O_CUPOM,
 } from "@/lib/afiliados";
 import {
   historicoDoAfiliado,
@@ -37,11 +38,13 @@ import {
   painelDoAfiliado,
 } from "@/server/services/afiliados";
 import { BotaoDeCopiar } from "@/components/afiliados/painel";
+import { ContagemDoCupom } from "@/components/afiliados/contagem-do-cupom";
 import { BotaoDeAtivacao } from "@/components/afiliados/botao-de-ativacao";
 import { FormularioDeCodigo } from "@/components/afiliados/formulario-de-codigo";
 import { Etiqueta, Moldura } from "@/components/ui/moldura";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
 import { listarTimesAtivos } from "@/server/services/times";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Programa de Afiliados" };
 
@@ -226,9 +229,17 @@ export default async function PaginaDeAfiliados() {
                   {painel.cupons.map((c) => (
                     <li
                       key={c.id}
-                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] px-3 py-2 text-sm font-black text-emerald-400 tabular-nums"
+                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] px-3 py-2"
                     >
-                      {formatBRL(emReais(c.valorEmCentavos))}
+                      <span className="block text-sm font-black text-emerald-400 tabular-nums">
+                        {formatBRL(emReais(c.valorEmCentavos))}
+                      </span>
+                      {/* A contagem embaixo do valor, e não ao lado: é a
+                          segunda informação do cartão, não a primeira. */}
+                      <ContagemDoCupom
+                        expiraEm={c.expiraEm ? c.expiraEm.toISOString() : null}
+                        className="mt-0.5"
+                      />
                     </li>
                   ))}
                 </ul>
@@ -236,6 +247,10 @@ export default async function PaginaDeAfiliados() {
 
               {/* A EXPLICAÇÃO OBRIGATÓRIA. Nada aqui é surpresa depois. */}
               <div className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="font-semibold text-foreground/80">
+                  O cupom vale {HORAS_PARA_USAR_O_CUPOM} horas depois de
+                  liberado. Passou do prazo, ele some.
+                </p>
                 <p>
                   O cupom é utilizado por completo em uma única cota e não deixa
                   saldo ou troco. Se você usar um cupom de {valorDoCupom} numa
@@ -355,8 +370,15 @@ export default async function PaginaDeAfiliados() {
                         <p className="truncate text-sm font-semibold">
                           {i.nome}
                         </p>
-                        <p className="shrink-0 text-[11px] font-semibold text-muted-foreground tabular-nums">
-                          {i.progresso.percentual}%
+                        <p
+                          className={cn(
+                            "shrink-0 text-[11px] font-semibold tabular-nums",
+                            i.progresso.jaRendeu
+                              ? "text-emerald-400"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {i.progresso.jaRendeu ? 100 : i.progresso.percentual}%
                           {i.progresso.bpsAtual != null && (
                             <>
                               <span aria-hidden> · </span>
@@ -369,17 +391,27 @@ export default async function PaginaDeAfiliados() {
                           )}
                         </p>
                       </div>
+                      {/* Quem já rendeu fica com a barra CHEIA e VERDE, e não
+                          volta a zero. A barra conta a história daquela
+                          indicação ("deu certo"), e não o ciclo de compras
+                          dela: zerar de novo pareceria que a pessoa desandou
+                          justamente quando ela deu o que tinha para dar. */}
                       <div
                         role="progressbar"
-                        aria-valuenow={i.progresso.percentual}
+                        aria-valuenow={i.progresso.jaRendeu ? 100 : i.progresso.percentual}
                         aria-valuemin={0}
                         aria-valuemax={100}
-                        aria-label={`Progresso de ${i.nome} até o próximo Cupom de Entrada`}
+                        aria-label={`Progresso de ${i.nome} até o Cupom de Entrada`}
                         className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"
                       >
                         <div
-                          className="h-full rounded-full bg-primary transition-[width] duration-500"
-                          style={{ width: `${i.progresso.percentual}%` }}
+                          className={cn(
+                            "h-full rounded-full transition-[width] duration-500",
+                            i.progresso.jaRendeu ? "bg-emerald-500" : "bg-primary",
+                          )}
+                          style={{
+                            width: `${i.progresso.jaRendeu ? 100 : i.progresso.percentual}%`,
+                          }}
                         />
                       </div>
                       <p className="mt-1 text-[11px] text-muted-foreground">
@@ -405,8 +437,8 @@ export default async function PaginaDeAfiliados() {
           <h2 className="text-base font-bold">Atividade</h2>
           {historico.length === 0 ? (
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Nada por aqui ainda. Cada compra dos seus indicados, cada cupom
-              liberado e cada cupom usado aparece nesta lista.
+              Nada por aqui ainda. Cada Cupom de Entrada liberado por um
+              indicado que fechou {limiar} aparece nesta lista.
             </p>
           ) : (
             <ul className="mt-3 divide-y divide-white/[0.06]">
@@ -422,7 +454,6 @@ export default async function PaginaDeAfiliados() {
                         month: "2-digit",
                         year: "numeric",
                       })}
-                      {m.campanha ? ` · ${m.campanha}` : ""}
                     </p>
                   </div>
                   <p

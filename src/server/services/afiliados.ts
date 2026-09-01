@@ -31,6 +31,7 @@ import {
   codigoSugerido,
   conferirConfig,
   emCentavos,
+  expiracaoDoCupom,
   normalizarCodigo,
   progressaoDoIndicado,
   valorDoCupom,
@@ -338,12 +339,18 @@ export async function processarCompraDeIndicado(
         //
         // Cada um carrega a configuração do momento: mudar a recompensa
         // amanhã não reescreve o que já foi dado.
+        // O prazo nasce junto com o cupom, e é calculado aqui e não no banco:
+        // a regra das 72 horas mora em lib/afiliados, num lugar só, testada
+        // sem banco. O `agora` é o mesmo para todos os cupons desta concessão.
+        const agora = new Date();
         await tx.entradaGratis.createMany({
           data: Array.from({ length: recompensa.cupons }, () => ({
             affiliateId: afiliado.id,
             valorEmCentavos: premio.valorEmCentavos,
             limiarNaConcessao: config.limiarEmCentavos,
             bpsNaConcessao: premio.bps,
+            ganhaEm: agora,
+            expiraEm: expiracaoDoCupom(agora),
           })),
         });
         await tx.movimentoDeAfiliado.create({
@@ -523,6 +530,22 @@ export async function reverterCompraDeIndicado(
 export interface CupomNaMao {
   id: string;
   valorEmCentavos: number;
+  /** Quando ele vence. Nulo é cupom sem validade. */
+  expiraEm: Date | null;
+}
+
+/**
+ * A condição de "cupom que dá para usar agora", escrita uma vez.
+ *
+ * Disponível E dentro do prazo. Vive aqui e não repetida em cada consulta
+ * porque esquecer o prazo em UMA delas é entregar cupom vencido no checkout,
+ * e esse é o tipo de esquecimento que só aparece na reclamação.
+ */
+export function cupomUsavel(agora: Date = new Date()) {
+  return {
+    estado: "DISPONIVEL" as const,
+    OR: [{ expiraEm: null }, { expiraEm: { gt: agora } }],
+  };
 }
 
 export interface SituacaoDaEntrada {
@@ -570,11 +593,12 @@ export async function situacaoDaEntrada(
 
   const [cupons, nesteSorteio, campanha] = await Promise.all([
     prisma.entradaGratis.findMany({
-      where: { affiliateId: afiliado.id, estado: "DISPONIVEL" },
-      select: { id: true, valorEmCentavos: true },
-      // Do mais barato para o mais caro: a lista começa pelo que a pessoa
-      // provavelmente quer gastar antes numa cota pequena.
-      orderBy: [{ valorEmCentavos: "asc" }, { ganhaEm: "asc" }],
+      where: { affiliateId: afiliado.id, ...cupomUsavel() },
+      select: { id: true, valorEmCentavos: true, expiraEm: true },
+      // Do mais barato para o mais caro, e entre iguais o que vence antes:
+      // a lista começa pelo que a pessoa provavelmente quer gastar numa cota
+      // pequena, e não deixa o que está para vencer no fim da fila.
+      orderBy: [{ valorEmCentavos: "asc" }, { expiraEm: "asc" }, { ganhaEm: "asc" }],
     }),
     prisma.entradaGratis.findFirst({
       where: {
@@ -631,10 +655,14 @@ export async function reivindicarCupomDaCompra(
      WHERE "id" = ${cupomId}
        AND "affiliateId" = ${affiliateId}
        AND "estado" = 'DISPONIVEL'
+       AND ("expiraEm" IS NULL OR "expiraEm" > now())
      FOR UPDATE
   `;
   const cupom = linhas[0];
-  // Não achou: ou não é dele, ou já foi gasto entre a tela e o clique.
+  // Não achou: ou não é dele, ou já foi gasto entre a tela e o clique, ou
+  // venceu enquanto a aba ficava aberta. O prazo entra aqui dentro do
+  // FOR UPDATE de propósito: conferir a validade antes, fora da trava,
+  // deixaria a janela de gastar um cupom que venceu no meio do caminho.
   if (!cupom) throw new EntradaIndisponivelError();
   return cupom;
 }
@@ -766,8 +794,8 @@ export async function liberarEntradaGratis(
 export interface PainelDoAfiliado {
   codigo: string;
   status: "INACTIVE" | "ACTIVE" | "SUSPENDED";
-  /** Os cupons prontos para usar, um a um, com o valor de cada. */
-  cupons: { id: string; valorEmCentavos: number }[];
+  /** Os cupons prontos para usar, um a um, com valor e prazo de cada. */
+  cupons: CupomNaMao[];
   reservados: number;
   usados: number;
   /** Tudo o que já ganhou, desde sempre. */
@@ -798,9 +826,11 @@ export async function painelDoAfiliado(
   const [cupons, reservados, usados, conquistados, indicados] =
     await Promise.all([
       prisma.entradaGratis.findMany({
-        where: { affiliateId: afiliado.id, estado: "DISPONIVEL" },
-        select: { id: true, valorEmCentavos: true },
-        orderBy: [{ valorEmCentavos: "desc" }, { ganhaEm: "asc" }],
+        where: { affiliateId: afiliado.id, ...cupomUsavel() },
+        select: { id: true, valorEmCentavos: true, expiraEm: true },
+        // O que vence antes aparece primeiro: é o que a pessoa precisa gastar
+        // antes, e a contagem regressiva ao lado dele só faz sentido no topo.
+        orderBy: [{ expiraEm: "asc" }, { valorEmCentavos: "desc" }, { ganhaEm: "asc" }],
       }),
       prisma.entradaGratis.count({
         where: { affiliateId: afiliado.id, estado: "RESERVADA" },
@@ -852,8 +882,14 @@ export async function historicoDoAfiliado(
   });
   if (!afiliado) return [];
 
+  // SÓ AS LIBERAÇÕES DE CUPOM.
+  //
+  // A lista mostrava também "Compra de indicado +R$ 12,93", que é o extrato
+  // de quem clicou no link escrito de outro jeito: com um indicado só, aquela
+  // linha entrega exatamente quanto a pessoa gastou. O que interessa a quem
+  // divulga é o que ele ganhou, e é isso que sobra aqui.
   const movimentos = await prisma.movimentoDeAfiliado.findMany({
-    where: { affiliateId: afiliado.id },
+    where: { affiliateId: afiliado.id, tipo: "ENTRADA_LIBERADA" },
     orderBy: { criadoEm: "desc" },
     take: limite,
     select: {
@@ -862,22 +898,9 @@ export async function historicoDoAfiliado(
       centavos: true,
       entradas: true,
       descricao: true,
-      raffleId: true,
       criadoEm: true,
     },
   });
-
-  // O nome da campanha vem numa consulta só, e não numa por linha.
-  const idsDeCampanha = [
-    ...new Set(movimentos.map((m) => m.raffleId).filter(Boolean) as string[]),
-  ];
-  const campanhas = idsDeCampanha.length
-    ? await prisma.raffle.findMany({
-        where: { id: { in: idsDeCampanha } },
-        select: { id: true, title: true },
-      })
-    : [];
-  const titulo = new Map(campanhas.map((c) => [c.id, c.title]));
 
   return movimentos.map((m) => ({
     id: m.id,
@@ -885,7 +908,9 @@ export async function historicoDoAfiliado(
     centavos: m.centavos,
     entradas: m.entradas,
     descricao: m.descricao,
-    campanha: m.raffleId ? (titulo.get(m.raffleId) ?? null) : null,
+    // A campanha sai junto: qual sorteio o indicado comprou é a rotina dele,
+    // e a linha aqui é sobre o cupom que caiu na mão de quem indicou.
+    campanha: null,
     quando: m.criadoEm,
   }));
 }

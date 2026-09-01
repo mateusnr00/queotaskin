@@ -7,7 +7,11 @@ import {
   codigoSugerido,
   codigoValido,
   conferirConfig,
+  cupomExpirado,
   descontoDoCupom,
+  expiracaoDoCupom,
+  tempoRestante,
+  HORAS_PARA_USAR_O_CUPOM,
   emCentavos,
   linkDeIndicacao,
   normalizarCodigo,
@@ -446,5 +450,50 @@ describe("linkDeIndicacao", () => {
     expect(linkDeIndicacao("https://queotaskin.com/", "MATEUS7K")).toBe(
       "https://queotaskin.com/?ref=MATEUS7K",
     );
+  });
+});
+
+describe("validade do Cupom de Entrada", () => {
+  const nascimento = new Date("2026-09-01T10:00:00.000Z");
+
+  it("o cupom dura 72 horas a partir da concessão", () => {
+    expect(HORAS_PARA_USAR_O_CUPOM).toBe(72);
+    expect(expiracaoDoCupom(nascimento).toISOString()).toBe(
+      "2026-09-04T10:00:00.000Z",
+    );
+  });
+
+  it("vale até o último segundo, e morre na hora exata", () => {
+    const prazo = expiracaoDoCupom(nascimento);
+    expect(cupomExpirado(prazo, new Date("2026-09-04T09:59:59.000Z"))).toBe(
+      false,
+    );
+    expect(cupomExpirado(prazo, new Date("2026-09-04T10:00:00.000Z"))).toBe(
+      true,
+    );
+  });
+
+  it("prazo nulo é cupom sem validade, e nunca expira", () => {
+    // É o caso dos cupons concedidos antes da regra e dos ajustes manuais.
+    expect(cupomExpirado(null)).toBe(false);
+    expect(cupomExpirado(undefined, new Date("2099-01-01"))).toBe(false);
+  });
+
+  it("a contagem quebra o que falta em horas, minutos e segundos", () => {
+    expect(
+      tempoRestante(
+        new Date("2026-09-04T10:00:00.000Z"),
+        new Date("2026-09-02T08:30:15.000Z"),
+      ),
+    ).toEqual({ horas: 49, minutos: 29, segundos: 45, acabou: false });
+  });
+
+  it("depois do prazo a contagem zera, e não vira número negativo", () => {
+    expect(
+      tempoRestante(
+        new Date("2026-09-01T10:00:00.000Z"),
+        new Date("2026-09-05T10:00:00.000Z"),
+      ),
+    ).toEqual({ horas: 0, minutos: 0, segundos: 0, acabou: true });
   });
 });

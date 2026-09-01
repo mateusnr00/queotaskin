@@ -271,6 +271,23 @@ describe("recompensa progressiva", () => {
     expect(cupons.map((c) => c.valorEmCentavos)).toEqual([500, 500]);
   });
 
+  it("o cupom nasce com 72 horas de prazo para ser usado", async () => {
+    const campanha = await novaCampanha("1.00");
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "10.00", 10),
+    );
+    const [cupom] = await prisma.entradaGratis.findMany({
+      where: { affiliateId: await idDoAfiliado(afiliado.id) },
+      orderBy: { ganhaEm: "desc" },
+      take: 1,
+      select: { ganhaEm: true, expiraEm: true },
+    });
+    expect(cupom?.expiraEm).not.toBeNull();
+    expect(cupom!.expiraEm!.getTime() - cupom!.ganhaEm.getTime()).toBe(
+      72 * 60 * 60 * 1000,
+    );
+  });
+
   it("R$ 27,50 dá dois cupons e deixa R$ 7,50; mais R$ 2,50 dão o terceiro", async () => {
     const campanha = await novaCampanha("1.00");
     await processarCompraDeIndicado(
@@ -806,6 +823,41 @@ describe("Cupom de Entrada no checkout", () => {
     const situacao = await situacaoDaEntrada(afiliado.id, campanha.id);
     expect(situacao.campanhaAceita).toBe(false);
     expect(situacao.podeUsar).toBe(false);
+  });
+
+  it("cupom vencido não aparece no checkout nem pode ser gasto", async () => {
+    const campanha = await novaCampanha("5.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const de = await idDoAfiliado(afiliado.id);
+
+    // Empurra o prazo de UM cupom para o passado, que é o que o relógio faz
+    // sozinho depois de 72 horas.
+    await prisma.entradaGratis.update({
+      where: { id: cupons[0]!.id },
+      data: { expiraEm: new Date(Date.now() - 60_000) },
+    });
+
+    const situacao = await situacaoDaEntrada(afiliado.id, campanha.id);
+    expect(situacao.cupons.map((c) => c.id)).not.toContain(cupons[0]!.id);
+
+    await expect(
+      createReservation(
+        compraBase({
+          raffleId: campanha.id,
+          numbers: [1],
+          usarEntradaDe: de,
+          cupomId: cupons[0]!.id,
+        }),
+      ),
+    ).rejects.toThrow();
+
+    // E o vencido não some do banco: ele fica DISPONIVEL, só que fora do
+    // prazo. Apagar seria perder o rastro de um cupom que existiu.
+    const ainda = await prisma.entradaGratis.findUniqueOrThrow({
+      where: { id: cupons[0]!.id },
+      select: { estado: true },
+    });
+    expect(ainda.estado).toBe("DISPONIVEL");
   });
 
   it("um cupom por sorteio: a segunda compra na mesma campanha recusa", async () => {

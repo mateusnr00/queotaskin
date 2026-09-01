@@ -517,10 +517,29 @@ Modo, limiar, porcentagem, valor do cupom, degrau e aumento por degrau ficam em
 Configuração de recompensa). Sem configuração própria, valem os padrões globais
 de `lib/afiliados.ts`.
 
+### O cupom vale 72 horas
+
+`EntradaGratis.expiraEm` nasce em `ganhaEm + 72h`, e a tela mostra a contagem
+regressiva ao lado do valor (vermelha nas últimas 12 horas). O prazo existe
+para o cupom virar movimento: cupom sem validade vira crédito parado que a
+pessoa lembra seis meses depois.
+
+O vencimento é decidido comparando a coluna com o relógio, e não por um estado
+que alguém precisa vir marcar: sem job que rode, um cupom vencido continuaria
+DISPONIVEL e gastável. A condição mora em `cupomUsavel()`, usada no painel e
+no checkout, e o `FOR UPDATE` da compra confere o prazo DENTRO da trava, senão
+sobra a janela de gastar um cupom que venceu entre a tela e o clique.
+
+Prazo **nulo** é cupom sem validade, e não cupom vencido: é assim que ficam os
+concedidos antes desta regra e os ajustes manuais do painel, que não deviam
+morrer sozinhos. Cupom vencido não é apagado, fica no banco fora do prazo.
+
 ### O que o afiliado vê dos indicados
 
 Nome mascarado ("Marcos R."), desde quando, e uma BARRA de quanto falta para
-fechar o próximo cupom. O valor gasto por cada pessoa não aparece, e não sai
+fechar o cupom. Quem já fechou fica com a barra cheia e verde, e ela não volta
+a zero: a barra conta a história daquela indicação ("deu certo"), e não o
+ciclo de compras dela. O valor gasto por cada pessoa não aparece, e não sai
 do servidor nem escondido no HTML: quem mandou o link não vira dono da vida
 financeira de quem clicou. `indicadosDoAfiliado` devolve porcentagem do ciclo
 atual e um booleano de "já rendeu", e nunca centavos.
