@@ -453,91 +453,101 @@ que não faz nada é pior calado do que anotado.
 
 ## Programa de afiliados
 
-Quem indica ganha **Cupom de Entrada**, e não dinheiro. **Cada pessoa indicada
-pode liberar UM cupom, uma vez na vida**, quando ela acumular R$ 10 em
-pagamentos confirmados. Não existe saldo em reais, saque nem conversão.
+Quem indica ganha **Cupom de Entrada**, e não dinheiro. Por padrão:
 
 ```
-/?ref=CODIGO → cookie (30 dias) → cadastro vincula → o indicado paga →
-o total DELE chega a R$ 10 → 1 Cupom de Entrada de R$ 10 →
-e essa pessoa nunca mais gera outro, gaste o que gastar
+A cada R$ 10,00 pagos pelos indicados → 1 Cupom de Entrada de R$ 5,00
+                                        (50% de recompensa)
 ```
 
-### O que NÃO é
+Progressivo: R$ 27,50 dão dois cupons e deixam R$ 7,50 guardados; os R$ 2,50
+seguintes fecham o terceiro. **Todos os indicados do mesmo afiliado somam no
+mesmo progresso**, e o mesmo indicado contribui quantas vezes comprar.
 
-Não é progressivo. R$ 10, R$ 20, R$ 100 ou R$ 1.000 do mesmo indicado dão o
-mesmo resultado: um cupom. E o progresso é **individual**: dois indicados
-gastando R$ 5 cada não liberam nada, porque os valores de pessoas diferentes
-não se somam.
+### Configurável por afiliado
 
-A regra anterior era o contrário nas duas pontas, e as duas doíam: um contador
-por afiliado somava todo mundo e cuspia um cupom a cada R$ 10, então um único
-cliente grande virava dezenas de cupons.
+Limiar, porcentagem e valor do cupom ficam em `Affiliate`, e cada afiliado pode
+ter os seus (painel → Afiliados → Configuração de recompensa). Sem configuração
+própria, valem os padrões globais de `lib/afiliados.ts`.
+
+A porcentagem é guardada em **basis points** inteiros (5000 = 50%, 7000 = 70%),
+e nunca em float: porcentagem em ponto flutuante erra centavo. O valor do cupom
+é DERIVADO no servidor (`floor(limiar × bps / 10000)`), e o que a tela mandou é
+só conferido: divergir significa recusar, porque cupom valendo diferente do que
+o painel prometeu é o tipo de erro que só aparece na reclamação.
+
+**Mudar a configuração não reescreve o passado.** Cada cupom guarda o próprio
+valor de face e a configuração que o originou (`valorEmCentavos`,
+`limiarNaConcessao`, `bpsNaConcessao`). Trocar a recompensa para R$ 7 hoje deixa
+os cupons de R$ 5 valendo R$ 5. O de-para fica no histórico, com o admin
+responsável.
+
+### Como o cupom é usado
+
+Abate **até o valor de face**, em UMA cota:
+
+| Cota | Cupom | Abate | Paga | Sobra |
+| --- | --- | --- | --- | --- |
+| R$ 2 | R$ 5 | R$ 2 | R$ 0 | **perde R$ 3** |
+| R$ 5 | R$ 5 | R$ 5 | R$ 0 | — |
+| R$ 12 | R$ 5 | R$ 5 | R$ 7 | — |
+
+Sem troco, sem saldo, sem dividir entre cotas, sem somar dois cupons. Quatro
+cotas de R$ 2 recebem R$ 2 de desconto, e não R$ 8. A tela avisa a perda antes
+de confirmar, e quem tem cupons de valores diferentes **escolhe qual usar**: a
+tela não escolhe o de maior valor sozinha.
+
+Vale **um cupom por sorteio**, garantido por `unique(affiliateId, raffleId)`.
+Campanha decide se aceita, em `Raffle.aceitaCupomDeAfiliado`; não existe teto de
+preço de cota.
 
 ### As peças
 
 | Onde | O quê |
 | --- | --- |
-| `src/lib/afiliados.ts` | Regra pura: qualificação, desconto do cupom, código |
-| `src/server/services/afiliados.ts` | O motor: vínculo, qualificação, cupons, painel, admin |
+| `src/lib/afiliados.ts` | Regra pura: recompensa, valor do cupom, bps, desconto |
+| `src/server/services/afiliados.ts` | O motor: vínculo, progresso, cupons, painel, config |
 | `src/server/actions/afiliados.ts` | As portas, incluindo "quero ser afiliado" |
 | `src/proxy.ts` | Guarda o `?ref=` num cookie próprio de 30 dias |
 | `src/app/(public)/minha-conta/afiliados` | O painel de quem divulga |
-| `src/app/(admin)/admin/afiliados` | A gestão do programa |
+| `src/app/(admin)/admin/afiliados` | A gestão e a configuração de recompensa |
 | `scripts/censo-de-afiliados.mjs` | Contagem só-leitura, para antes de migrar |
 
 ### O que garante que a conta fecha
 
-- **Um cupom por pessoa.** `QualificacaoDeIndicado` tem `unique(indicadoId)` e
-  `unique(entradaId)`: não existem duas qualificações para a mesma pessoa, nem
-  o mesmo cupom reclamado por duas. A idempotência é por PESSOA, não por
-  compra.
-- **Pagamentos simultâneos somam.** Duas compras de R$ 5 do mesmo indicado
-  confirmando juntas passam por um cadeado por indicado
-  (`pg_advisory_xact_lock('afiliado:indicado', indicadoId)`), somam R$ 10 e
-  liberam UM cupom. A concessão é escrita condicional em `qualificadoEm: null`.
-- **Só dinheiro real.** O total é RECALCULADO das reservas a cada pagamento:
-  só PAGA, só da própria pessoa, só depois do vínculo, e só com pagamento não
-  estornado. `totalAmount` já nasce descontado do cupom aplicado, então cupom
-  não vira progresso para ninguém.
-- **Crédito único por compra.** `MovimentoDeAfiliado` mantém
-  `unique(reservationId, tipo)` para o webhook reentregue.
+- **Idempotência por pagamento.** `MovimentoDeAfiliado` tem
+  `unique(reservationId, tipo)`: webhook reentregue esbarra no índice e o mesmo
+  dinheiro não entra duas vezes no progresso.
+- **Progresso serializado.** Cada crédito roda sob
+  `pg_advisory_xact_lock('afiliado', affiliateId)`, então pagamentos
+  simultâneos somam em vez de competir.
+- **Só dinheiro real.** O progresso vem de `totalAmount`, que já nasce
+  descontado do cupom aplicado: compra de R$ 12 com cupom de R$ 5 soma R$ 7, e
+  compra inteiramente coberta soma zero.
+- **Cupom pertence a quem usa.** O id vem da tela, mas a reivindicação exige
+  `affiliateId` + `estado = DISPONIVEL` + `FOR UPDATE`: id de outra conta não
+  encontra linha.
 
-### O cupom
+### Estados do cupom
 
-Valor de face de **R$ 10**, gravado na linha (`EntradaGratis.valorEmCentavos`).
-Cobre UMA cota até esse valor, é consumido por inteiro e não deixa troco:
-
-| Cota | O que acontece |
-| --- | --- |
-| R$ 7 | cupom cobre R$ 7, os R$ 3 se perdem, e ele acaba |
-| R$ 10 | cobre exatamente |
-| R$ 12 | **recusado**, e não existe pagar a diferença |
-
-Continua valendo um cupom por sorteio, garantido por
-`unique(affiliateId, raffleId)` na entrada. Estados: `DISPONIVEL` →
-`RESERVADA` (Pix pendente) → `USADA`; Pix expirado devolve ao saldo.
+`DISPONIVEL` → `RESERVADA` (Pix pendente) → `USADA`. Pix expirado devolve ao
+saldo. `CANCELADA` é o recolhido por estorno.
 
 ### Estorno
 
-O total do indicado é refeito. Se cair abaixo de R$ 10, o cupom ainda
-`DISPONIVEL` ou `RESERVADA` é recolhido e a pessoa volta a poder qualificar.
-Se ele já foi **usado**, fica: a cota existiu, e apagar título por causa de
-contabilidade estraga mais do que conserta. A qualificação é marcada como
-revertida, vira `QUALIFICACAO_REVERTIDA` no histórico, e aquela pessoa
-continua sem poder gerar outro por reprocessamento.
+O valor sai do progresso. Se ficar negativo, cupons ainda disponíveis são
+cancelados para cobrir, um por limiar. O que sobrar de dívida fica como
+**progresso negativo**, de propósito: cupom já usado não é apagado (a cota
+existiu), e fingir que a conta fechou seria perdoar o estorno em silêncio. O
+número negativo aparece só no painel administrativo, e o próximo dinheiro real
+quita a dívida antes de gerar cupom novo.
 
-### Ativação
+### Ativação e privacidade
 
-Qualquer conta autenticada entra num clique, em Minha conta → Programa de
-afiliados. Sem fila e sem aprovação: o programa não dá dinheiro nem acesso a
-dado de ninguém. A ativação **não** concede cupom.
-
-### Privacidade
-
-O afiliado vê o primeiro nome com a inicial do sobrenome ("Mateus N."), desde
-quando, e o progresso individual. Telefone, CPF e e-mail não saem do servidor:
-quem indica não vira dono dos dados de quem foi indicado.
+Qualquer conta autenticada entra num clique, sem aprovação, e a ativação não
+concede cupom. O afiliado vê o primeiro nome com a inicial do sobrenome
+("Mateus N.") e quanto cada indicado pagou; telefone, CPF e e-mail não saem do
+servidor.
 
 ## Sorteio ao vivo
 

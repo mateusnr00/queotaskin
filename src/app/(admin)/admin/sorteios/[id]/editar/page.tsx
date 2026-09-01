@@ -343,6 +343,7 @@ export default async function EditRafflePage({
           autoCloseOnDraw: raffle.autoCloseOnDraw,
           showDrawDate: raffle.showDrawDate,
           allowReceiptDownload: raffle.allowReceiptDownload,
+          aceitaCupomDeAfiliado: raffle.aceitaCupomDeAfiliado,
           showParticipantName: raffle.showParticipantName,
           modality: raffle.modality,
           reservationModel: raffle.reservationModel,

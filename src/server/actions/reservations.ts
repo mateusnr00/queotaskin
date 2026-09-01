@@ -81,6 +81,8 @@ const optionalExtras = {
    * navegador manda aqui é "quero usar", não "tenho direito".
    */
   usarEntradaGratis: z.coerce.boolean().optional(),
+  /** Qual cupom a pessoa escolheu. O servidor confere se é dela e se vale. */
+  cupomId: z.string().cuid().optional().nullable(),
 };
 
 // União discriminada: ou {quantity} (sistema sorteia/pega sequencial),
@@ -207,17 +209,34 @@ export async function createReservationAction(
   const pediuEntrada =
     "usarEntradaGratis" in input && input.usarEntradaGratis === true;
   let usarEntradaDe: string | null = null;
+  let cupomId: string | null = null;
   if (pediuEntrada) {
     const situacao = await situacaoDaEntrada(user.id, raffle.id);
     if (situacao.jaUsouNesteSorteio) {
-      return { ok: false, error: "Entrada grátis já utilizada neste sorteio." };
-    }
-    if (!situacao.podeUsar) {
       return {
         ok: false,
-        error: "Entrada grátis não está mais disponível.",
+        error: "Cupom de Entrada já utilizado neste sorteio.",
       };
     }
+    if (!situacao.campanhaAceita) {
+      return {
+        ok: false,
+        error: "Esta campanha não aceita Cupom de Entrada.",
+      };
+    }
+    if (!situacao.podeUsar) {
+      return { ok: false, error: "Cupom de Entrada não está mais disponível." };
+    }
+    // O cupom escolhido tem que ser um dos DELA. Sem esta conferência,
+    // bastaria mandar o id do cupom de outra pessoa no corpo da requisição.
+    const pedido = "cupomId" in input ? (input.cupomId ?? null) : null;
+    const escolhido = pedido
+      ? situacao.cupons.find((c) => c.id === pedido)
+      : situacao.cupons[0];
+    if (!escolhido) {
+      return { ok: false, error: "Cupom de Entrada não está mais disponível." };
+    }
+    cupomId = escolhido.id;
     const afiliado = await prisma.affiliate.findUnique({
       where: { userId: user.id },
       select: { id: true },
@@ -271,6 +290,7 @@ export async function createReservationAction(
         numbers: input.numbers,
         ...participantData,
         usarEntradaDe,
+        cupomId,
       });
       await prisma.reservation.update({
         where: { id: reservation.id },
@@ -341,6 +361,7 @@ export async function createReservationAction(
         numbers,
         ...participantData,
         usarEntradaDe,
+        cupomId,
       });
 
       await prisma.reservation.update({

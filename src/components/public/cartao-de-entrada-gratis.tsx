@@ -6,52 +6,50 @@
 // para cima competiria com a escolha da quantidade, e mais para baixo a
 // pessoa já teria clicado em pagar.
 //
-// Os três estados aparecem, e nenhum deles é escondido:
+// O CUPOM É ESCOLHIDO, E NÃO SORTEADO PELA TELA.
 //
-//   cota cara demais   o cupom vale R$ 10 e cobre uma cota de até R$ 10. Numa
-//                      campanha mais cara ele é recusado inteiro, e a tela diz
-//                      isso: não existe pagar a diferença.
-//   tem cupom          interruptor ligado por padrão. Quem tem benefício
-//                      esperando quase sempre quer usar, e deixar desligado
-//                      transforma um presente em pegadinha de quem não viu.
-//   já usou aqui       aparece desabilitado, dizendo que as outras entradas
-//                      continuam valendo em outras campanhas. Sumir com o
-//                      cartão faria parecer que o saldo evaporou.
-//   sem entrada        uma linha explicando como se ganha uma. Só para quem
-//                      já é afiliado: para o resto seria propaganda no meio
-//                      do pagamento.
+// Alterações administrativas fazem cupons antigos e novos valerem valores
+// diferentes, então quem tem mais de um escolhe qual gastar. Escolher sozinho
+// o de maior valor gastaria o melhor cupom numa cota barata sem ninguém pedir.
 //
-// O desconto mostrado aqui é o preço de UMA cota, calculado no servidor e
-// repetido aqui só para leitura. Quem decide o valor cobrado é a action.
+// E o desperdício é dito na cara antes de confirmar: cupom de R$ 5 numa cota
+// de R$ 2 abate R$ 2 e os R$ 3 se perdem. Esconder isso é o tipo de coisa que
+// vira reclamação com razão.
 
-import { Check, Ticket } from "lucide-react";
+import { AlertTriangle, Check, Ticket } from "lucide-react";
 
+import { descontoDoCupom } from "@/lib/afiliados";
 import { formatBRL } from "@/lib/format";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
+export interface CupomNoCheckout {
+  id: string;
+  valorEmCentavos: number;
+}
+
 export interface EntradaNoCheckout {
   ehAfiliado: boolean;
-  disponiveis: number;
+  cupons: CupomNoCheckout[];
   jaUsouNesteSorteio: boolean;
-  /** A cota desta campanha passa do valor de face do cupom. */
-  cotaAcimaDoCupom: boolean;
-  valorDoCupomEmCentavos: number;
+  campanhaAceita: boolean;
+  precoDaCotaEmCentavos: number;
   podeUsar: boolean;
 }
 
 export function CartaoDeEntradaGratis({
   situacao,
-  precoDaCota,
   usar,
   aoMudar,
+  cupomEscolhido,
+  aoEscolher,
   desabilitado,
 }: {
   situacao: EntradaNoCheckout;
-  /** Quanto uma cota custa nesta campanha: é esse o desconto. */
-  precoDaCota: number;
   usar: boolean;
   aoMudar: (v: boolean) => void;
+  cupomEscolhido: string | null;
+  aoEscolher: (id: string) => void;
   desabilitado?: boolean;
 }) {
   // Quem não é afiliado não vê nada: o checkout já é a tela mais cheia do
@@ -59,99 +57,165 @@ export function CartaoDeEntradaGratis({
   // atrapalha quem está pagando.
   if (!situacao.ehAfiliado) return null;
 
-  const valorDoCupom = formatBRL(situacao.valorDoCupomEmCentavos / 100);
-
-  // A cota é mais cara que o cupom: ele não cobre pela metade, e não existe
-  // completar a diferença no Pix. Dizer isso é melhor que sumir com o cartão e
-  // deixar a pessoa procurando onde foi parar o cupom dela.
-  if (situacao.cotaAcimaDoCupom && situacao.disponiveis > 0) {
-    return (
-      <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-        <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <Ticket aria-hidden className="h-4 w-4 shrink-0" />
-          Cupom de Entrada não vale nesta campanha
-        </p>
-        <p className="mt-1 pl-6 text-[11px] leading-relaxed text-muted-foreground">
-          O cupom vale {valorDoCupom} e cobre uma cota de até {valorDoCupom}.
-          Aqui a cota custa mais que isso.{" "}
-          {situacao.disponiveis === 1
-            ? `Seu cupom continua valendo em campanhas de cota até ${valorDoCupom}.`
-            : `Seus ${situacao.disponiveis} cupons continuam valendo em campanhas de cota até ${valorDoCupom}.`}
-        </p>
-      </div>
-    );
-  }
-
   if (situacao.jaUsouNesteSorteio) {
     return (
-      <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-        <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <Check aria-hidden className="h-4 w-4 shrink-0 text-emerald-500" />
+      <Aviso icone={<Check className="h-4 w-4 shrink-0 text-emerald-500" />}>
+        <b className="font-semibold">
           Cupom de Entrada já utilizado neste sorteio
-        </p>
-        <p className="mt-1 pl-6 text-[11px] leading-relaxed text-muted-foreground">
-          {situacao.disponiveis > 0
-            ? `Você ainda tem ${situacao.disponiveis} ${
-                situacao.disponiveis === 1 ? "cupom" : "cupons"
+        </b>
+        <span className="mt-1 block text-[11px] leading-relaxed">
+          {situacao.cupons.length > 0
+            ? `Você ainda tem ${situacao.cupons.length} ${
+                situacao.cupons.length === 1 ? "cupom" : "cupons"
               } para usar em outras campanhas.`
             : "Seus próximos cupons valem em outras campanhas."}
-        </p>
-      </div>
+        </span>
+      </Aviso>
     );
   }
 
-  if (situacao.disponiveis === 0) {
+  if (!situacao.campanhaAceita && situacao.cupons.length > 0) {
     return (
-      <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-        <p className="flex items-center gap-2 text-sm font-semibold">
-          <Ticket aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-          Você ainda não tem Cupons de Entrada
-        </p>
-        <p className="mt-1 pl-6 text-[11px] leading-relaxed text-muted-foreground">
-          Cada pessoa que você indicar pode liberar um cupom de {valorDoCupom},
-          quando ela acumular {valorDoCupom} em pagamentos confirmados.
-        </p>
-      </div>
+      <Aviso icone={<Ticket className="h-4 w-4 shrink-0" />}>
+        <b className="font-semibold">Esta campanha não aceita Cupom de Entrada</b>
+        <span className="mt-1 block text-[11px] leading-relaxed">
+          Seus cupons continuam valendo nas campanhas participantes.
+        </span>
+      </Aviso>
     );
   }
+
+  if (situacao.cupons.length === 0) {
+    return (
+      <Aviso icone={<Ticket className="h-4 w-4 shrink-0" />}>
+        <b className="font-semibold">Você ainda não tem Cupons de Entrada</b>
+        <span className="mt-1 block text-[11px] leading-relaxed">
+          A cada R$ 10,00 pagos pelas pessoas que você indicar, você ganha um
+          Cupom de Entrada.
+        </span>
+      </Aviso>
+    );
+  }
+
+  const escolhido =
+    situacao.cupons.find((c) => c.id === cupomEscolhido) ?? situacao.cupons[0]!;
+  const { descontoEmCentavos, desperdicioEmCentavos } = descontoDoCupom({
+    precoDaCotaEmCentavos: situacao.precoDaCotaEmCentavos,
+    valorDoCupomEmCentavos: escolhido.valorEmCentavos,
+  });
 
   return (
-    <label
+    <div
       className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors",
+        "space-y-3 rounded-xl border px-4 py-3 transition-colors",
         usar
           ? "border-emerald-500/40 bg-emerald-500/[0.08]"
-          : "border-border bg-muted/30 hover:bg-muted/50",
+          : "border-border bg-muted/30",
       )}
     >
-      <Switch
-        checked={usar}
-        disabled={desabilitado}
-        onCheckedChange={aoMudar}
-        className="mt-0.5"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold">
-          <Ticket aria-hidden className="h-4 w-4 shrink-0 text-emerald-500" />
-          Usar 1 Cupom de Entrada
-          {usar && (
-            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-500 tabular-nums">
-              -{formatBRL(precoDaCota)}
-            </span>
-          )}
+      <label className="flex cursor-pointer items-start gap-3">
+        <Switch
+          checked={usar}
+          disabled={desabilitado}
+          onCheckedChange={aoMudar}
+          className="mt-0.5"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold">
+            <Ticket aria-hidden className="h-4 w-4 shrink-0 text-emerald-500" />
+            Usar 1 Cupom de Entrada
+            {usar && (
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-500 tabular-nums">
+                -{formatBRL(descontoEmCentavos / 100)}
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+            Você tem{" "}
+            <b className="font-semibold text-foreground">
+              {situacao.cupons.length}
+            </b>{" "}
+            {situacao.cupons.length === 1 ? "cupom" : "cupons"}. Ele abate até o
+            valor de face em UMA cota, é consumido por inteiro e cada campanha
+            aceita um.
+          </span>
         </span>
-        <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-          Você tem{" "}
-          <b className="font-semibold text-foreground">
-            {situacao.disponiveis}
-          </b>{" "}
-          {situacao.disponiveis === 1
-            ? "cupom disponível"
-            : "cupons disponíveis"}
-          . Uma cota desta compra sai de graça, o cupom é consumido por inteiro
-          e cada campanha aceita um.
-        </span>
-      </span>
-    </label>
+      </label>
+
+      {/* A escolha só aparece com mais de um cupom, e só quando vai ser usado:
+          com um cupom só não há o que decidir. */}
+      {usar && situacao.cupons.length > 1 && (
+        <div className="space-y-1.5 pl-11">
+          <p className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+            Qual cupom usar
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {situacao.cupons.map((c) => {
+              const marcado = c.id === escolhido.id;
+              const conta = descontoDoCupom({
+                precoDaCotaEmCentavos: situacao.precoDaCotaEmCentavos,
+                valorDoCupomEmCentavos: c.valorEmCentavos,
+              });
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  disabled={desabilitado}
+                  onClick={() => aoEscolher(c.id)}
+                  aria-pressed={marcado}
+                  className={cn(
+                    "rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-bold transition-colors",
+                    marcado
+                      ? "border-emerald-500 bg-emerald-500/15 text-emerald-500"
+                      : "border-border bg-muted/40 text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {formatBRL(c.valorEmCentavos / 100)}
+                  <span className="mt-0.5 block font-medium opacity-80">
+                    abate {formatBRL(conta.descontoEmCentavos / 100)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* O AVISO DA PERDA. Parte do cupom vai embora, e a pessoa confirma
+          sabendo disso. */}
+      {usar && desperdicioEmCentavos > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+          <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            O cupom será consumido por completo. Desconto aplicado:{" "}
+            <b className="font-bold">
+              {formatBRL(descontoEmCentavos / 100)}
+            </b>
+            . Valor não aproveitado:{" "}
+            <b className="font-bold">
+              {formatBRL(desperdicioEmCentavos / 100)}
+            </b>
+            , que não vira saldo nem troco.
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Aviso({
+  icone,
+  children,
+}: {
+  icone: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
+        {icone}
+        <span className="min-w-0 flex-1">{children}</span>
+      </p>
+    </div>
   );
 }

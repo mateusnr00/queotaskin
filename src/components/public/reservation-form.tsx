@@ -172,23 +172,36 @@ export function ReservationForm({
     },
   });
 
-  // Ligada por padrão quando existe benefício para usar: quem tem entrada
-  // esperando quase sempre quer usá-la, e deixar desligado transforma o
+  // Ligada por padrão quando existe benefício para usar: quem tem cupom
+  // esperando quase sempre quer usá-lo, e deixar desligado transforma o
   // presente em pegadinha de quem não reparou no interruptor.
   const [usarEntrada, setUsarEntrada] = useState(
     entradaGratis?.podeUsar ?? false,
   );
+  // Qual cupom. Começa no primeiro da lista, que vem do servidor ordenado do
+  // mais barato para o mais caro: gastar o menor primeiro é o que a maioria
+  // quer, e quem discorda troca em um clique.
+  const [cupomEscolhido, setCupomEscolhido] = useState<string | null>(
+    entradaGratis?.cupons[0]?.id ?? null,
+  );
 
   const effectiveQty = isManualMode ? selectedNumbers.length : quantity;
 
-  // O desconto é o preço de UMA cota, e vale só enquanto houver o que
-  // descontar. O servidor recalcula tudo isto de novo na hora de gravar.
+  // O cupom abate ATÉ o valor de face, em uma cota. O servidor recalcula tudo
+  // isto de novo na hora de gravar; aqui é só o que a tela mostra.
+  const cupom =
+    entradaGratis?.cupons.find((c) => c.id === cupomEscolhido) ??
+    entradaGratis?.cupons[0] ??
+    null;
   const entradaAplicada =
     Boolean(entradaGratis?.podeUsar) &&
     usarEntrada &&
     !gratuita &&
-    effectiveQty > 0;
-  const desconto = entradaAplicada ? pricePerNumber : 0;
+    effectiveQty > 0 &&
+    cupom != null;
+  const desconto = entradaAplicada
+    ? Math.min(cupom!.valorEmCentavos / 100, pricePerNumber)
+    : 0;
   const totalACobrar = Math.max(0, effectiveQty * pricePerNumber - desconto);
 
   function clampQty(v: number) {
@@ -255,6 +268,7 @@ export function ReservationForm({
         participantSocialName: values.participantSocialName || "",
         participantBirthDate: values.participantBirthDate || undefined,
         usarEntradaGratis: entradaAplicada,
+        cupomId: entradaAplicada ? (cupom?.id ?? null) : null,
       };
 
       const result = await createReservationAction(payload);
@@ -334,9 +348,10 @@ export function ReservationForm({
         {entradaGratis && !gratuita && (
           <CartaoDeEntradaGratis
             situacao={entradaGratis}
-            precoDaCota={pricePerNumber}
             usar={usarEntrada}
             aoMudar={setUsarEntrada}
+            cupomEscolhido={cupom?.id ?? null}
+            aoEscolher={setCupomEscolhido}
             desabilitado={isPending}
           />
         )}

@@ -14,21 +14,193 @@
 // razão.
 
 /**
- * Quanto UMA pessoa indicada precisa pagar para liberar o cupom dela.
+ * A CONFIGURAÇÃO PADRÃO DO PROGRAMA.
  *
- * Por pessoa, e não por afiliado: dois indicados gastando R$ 5 cada não
- * liberam nada, e o mesmo indicado gastando R$ 1.000 libera um só.
+ * A cada R$ 10 pagos pelos indicados, um cupom de R$ 5. Cinquenta por cento,
+ * dito em basis points para não existir float em nenhuma conta de dinheiro:
+ * 5000 bps é 50%, 7000 é 70%, 10000 é 100%.
+ *
+ * Cada afiliado pode ter a sua própria configuração no painel; estes são os
+ * valores de quem não foi configurado.
  */
-export const LIMIAR_DA_ENTRADA_EM_CENTAVOS = 1000;
+export const LIMIAR_PADRAO_EM_CENTAVOS = 1000;
+export const RECOMPENSA_PADRAO_EM_BPS = 5000;
+export const VALOR_PADRAO_DO_CUPOM_EM_CENTAVOS = 500;
+
+/** Cem por cento, em basis points. O denominador de toda conta daqui. */
+const BPS_CHEIO = 10_000;
+
+export interface ConfigDeRecompensa {
+  limiarEmCentavos: number;
+  recompensaEmBps: number;
+  valorDoCupomEmCentavos: number;
+}
+
+export const CONFIG_PADRAO: ConfigDeRecompensa = {
+  limiarEmCentavos: LIMIAR_PADRAO_EM_CENTAVOS,
+  recompensaEmBps: RECOMPENSA_PADRAO_EM_BPS,
+  valorDoCupomEmCentavos: VALOR_PADRAO_DO_CUPOM_EM_CENTAVOS,
+};
 
 /**
- * O valor de face do Cupom de Entrada.
+ * O valor do cupom que sai de um limiar e uma porcentagem.
  *
- * Ele cobre UMA cota até esse valor, é consumido por inteiro e não deixa
- * troco: cota de R$ 7 gasta o cupom e os R$ 3 somem; cota de R$ 12 recusa o
- * cupom, porque não existe pagamento complementar.
+ * Arredonda para baixo de propósito: 33% de R$ 10 dá R$ 3,33 e não R$ 3,34.
+ * Pagar um centavo a mais por cupom, multiplicado por milhares, é dinheiro que
+ * ninguém autorizou.
  */
-export const VALOR_DO_CUPOM_EM_CENTAVOS = 1000;
+export function valorDoCupom(
+  limiarEmCentavos: number,
+  recompensaEmBps: number,
+): number {
+  return Math.floor((limiarEmCentavos * recompensaEmBps) / BPS_CHEIO);
+}
+
+/**
+ * O caminho inverso: que porcentagem um valor de cupom representa.
+ *
+ * O painel deixa editar os dois campos, e um recalcula o outro. Quem manda é
+ * sempre o backend: a tela mostra a conta, ela não é a conta.
+ */
+export function bpsDoValorDoCupom(
+  limiarEmCentavos: number,
+  valorDoCupomEmCentavos: number,
+): number {
+  if (limiarEmCentavos <= 0) return 0;
+  return Math.round((valorDoCupomEmCentavos * BPS_CHEIO) / limiarEmCentavos);
+}
+
+/** Basis points para porcentagem legível. 5000 → 50. */
+export function porcentagemDosBps(bps: number): number {
+  return bps / 100;
+}
+
+/** Porcentagem digitada para basis points. 50 → 5000; 7,5 → 750. */
+export function bpsDaPorcentagem(porcentagem: number): number {
+  return Math.round(porcentagem * 100);
+}
+
+export interface ProblemaNaConfig {
+  campo: "limiar" | "bps" | "valor";
+  mensagem: string;
+}
+
+/**
+ * A configuração faz sentido?
+ *
+ * Roda no servidor antes de gravar, e o painel usa a mesma função para avisar
+ * enquanto se digita. Limiar zero dividiria por zero na hora de contar cupons;
+ * cupom zero seria uma recompensa que não recompensa; e valor acima do limiar
+ * é recompensa maior que 100%, que é dar mais do que entrou.
+ */
+export function conferirConfig(
+  config: ConfigDeRecompensa,
+): ProblemaNaConfig | null {
+  if (!Number.isInteger(config.limiarEmCentavos) || config.limiarEmCentavos <= 0) {
+    return { campo: "limiar", mensagem: "O limiar precisa ser maior que zero" };
+  }
+  if (!Number.isInteger(config.recompensaEmBps) || config.recompensaEmBps <= 0) {
+    return { campo: "bps", mensagem: "A recompensa precisa ser maior que zero" };
+  }
+  if (config.recompensaEmBps > BPS_CHEIO) {
+    return {
+      campo: "bps",
+      mensagem: "A recompensa não pode passar de 100%",
+    };
+  }
+  if (
+    !Number.isInteger(config.valorDoCupomEmCentavos) ||
+    config.valorDoCupomEmCentavos <= 0
+  ) {
+    return { campo: "valor", mensagem: "O cupom precisa valer mais que zero" };
+  }
+  // O valor gravado tem que ser o que a porcentagem produz. Salvar os dois
+  // sem conferir deixaria a tela dizendo 50% e o cupom saindo por outro valor.
+  const esperado = valorDoCupom(config.limiarEmCentavos, config.recompensaEmBps);
+  if (config.valorDoCupomEmCentavos !== esperado) {
+    return {
+      campo: "valor",
+      mensagem: "O valor do cupom não bate com a porcentagem",
+    };
+  }
+  return null;
+}
+
+export interface Recompensa {
+  /** Quantos cupons esta entrada de dinheiro liberou. */
+  cupons: number;
+  /** O que sobra guardado para o próximo, em centavos. */
+  progressoRestante: number;
+}
+
+/**
+ * Quantos cupons este dinheiro libera, e o que sobra para o próximo.
+ *
+ * PROGRESSIVO: cada limiar alcançado vale um cupom, e o resto fica acumulado
+ * sem perder centavo. R$ 27,50 com limiar de R$ 10 dão dois cupons e deixam
+ * R$ 7,50; os R$ 2,50 seguintes fecham o terceiro.
+ *
+ * Todos os indicados do mesmo afiliado somam no mesmo progresso: um pagou
+ * R$ 4, outro pagou R$ 6, e o cupom sai.
+ *
+ * Valor negativo é aceito de propósito, e é assim que o estorno desfaz o que
+ * uma compra somou. O resultado pode ser progresso NEGATIVO: é dívida, ela
+ * fica registrada, e quem chama decide o que fazer com os cupons que já saíram.
+ */
+export function calcularRecompensa({
+  progressoAnterior,
+  valorEmCentavos,
+  limiarEmCentavos = LIMIAR_PADRAO_EM_CENTAVOS,
+}: {
+  progressoAnterior: number;
+  valorEmCentavos: number;
+  limiarEmCentavos?: number;
+}): Recompensa {
+  if (limiarEmCentavos <= 0) {
+    throw new Error("O limiar da recompensa precisa ser maior que zero");
+  }
+
+  const total = progressoAnterior + valorEmCentavos;
+  if (total < 0) {
+    // Dívida: nenhum cupom, e o negativo continua visível para quem cobra.
+    return { cupons: 0, progressoRestante: total };
+  }
+
+  return {
+    cupons: Math.floor(total / limiarEmCentavos),
+    progressoRestante: total % limiarEmCentavos,
+  };
+}
+
+/**
+ * Quanto o cupom abate desta cota.
+ *
+ * Abate ATÉ o valor de face, em UMA cota só:
+ *
+ *   cota de R$ 2 com cupom de R$ 5   abate R$ 2, e os R$ 3 se perdem
+ *   cota de R$ 5 com cupom de R$ 5   abate R$ 5, e a cota fica zerada
+ *   cota de R$ 12 com cupom de R$ 5  abate R$ 5, e a pessoa paga R$ 7
+ *
+ * Não existe troco, saldo, divisão entre cotas nem soma de dois cupons. O que
+ * sobra do valor de face simplesmente não é aproveitado, e a tela avisa isso
+ * antes de a pessoa confirmar.
+ */
+export function descontoDoCupom({
+  precoDaCotaEmCentavos,
+  valorDoCupomEmCentavos,
+}: {
+  precoDaCotaEmCentavos: number;
+  valorDoCupomEmCentavos: number;
+}): { descontoEmCentavos: number; desperdicioEmCentavos: number } {
+  if (precoDaCotaEmCentavos <= 0 || valorDoCupomEmCentavos <= 0) {
+    return { descontoEmCentavos: 0, desperdicioEmCentavos: 0 };
+  }
+  const desconto = Math.min(valorDoCupomEmCentavos, precoDaCotaEmCentavos);
+  return {
+    descontoEmCentavos: desconto,
+    desperdicioEmCentavos: valorDoCupomEmCentavos - desconto,
+  };
+}
 
 /** Quanto tempo o código de quem indicou sobrevive até o cadastro. */
 export const DIAS_DO_COOKIE_DE_INDICACAO = 30;
@@ -77,72 +249,6 @@ export function codigoSugerido(nome: string, sufixo: string): string {
   const limpo = normalizarCodigo(sufixo).slice(0, 4);
   const junto = `${base || "AFILIADO"}${limpo}`;
   return junto.slice(0, TAMANHO_MAXIMO_DO_CODIGO);
-}
-
-export interface Qualificacao {
-  /** A pessoa alcançou o limiar e o cupom pode ser concedido agora. */
-  qualificou: boolean;
-  /** Quanto ainda falta, em centavos. Zero quando já alcançou. */
-  faltaEmCentavos: number;
-}
-
-/**
- * Esta pessoa indicada já libera o cupom dela?
- *
- * NÃO É PROGRESSIVO, e essa é a regra inteira. A conta não é "quantos blocos
- * de R$ 10 cabem no que ela gastou": é um sim ou não, uma vez na vida.
- * R$ 10, R$ 20, R$ 100 ou R$ 1.000 do mesmo indicado dão o mesmo resultado,
- * um cupom, e depois dele nada mais.
- *
- * `jaQualificou` entra porque quem já recebeu não recebe de novo nem quando o
- * total continua subindo. Quem decide isso no banco é a linha de qualificação,
- * única por pessoa; aqui é só a aritmética.
- */
-export function avaliarQualificacao({
-  pagoEmCentavos,
-  jaQualificou,
-  limiar = LIMIAR_DA_ENTRADA_EM_CENTAVOS,
-}: {
-  pagoEmCentavos: number;
-  jaQualificou: boolean;
-  limiar?: number;
-}): Qualificacao {
-  if (limiar <= 0) {
-    throw new Error("O limiar da qualificação precisa ser maior que zero");
-  }
-  if (jaQualificou) return { qualificou: false, faltaEmCentavos: 0 };
-
-  const pago = Math.max(0, pagoEmCentavos);
-  return {
-    qualificou: pago >= limiar,
-    faltaEmCentavos: Math.max(0, limiar - pago),
-  };
-}
-
-/**
- * Quanto o cupom abate desta compra, e se ele pode ser usado.
- *
- * O cupom cobre UMA cota, até o valor de face. Acima disso ele é recusado
- * inteiro: não existe usar R$ 10 do cupom e completar R$ 2 no Pix, porque
- * "cupom que cobre parte da cota" é outro produto, com outra conversa na hora
- * de explicar o que a pessoa ganhou.
- */
-export function descontoDoCupom({
-  precoDaCotaEmCentavos,
-  valorDoCupomEmCentavos = VALOR_DO_CUPOM_EM_CENTAVOS,
-}: {
-  precoDaCotaEmCentavos: number;
-  valorDoCupomEmCentavos?: number;
-}): { aceita: boolean; descontoEmCentavos: number } {
-  if (precoDaCotaEmCentavos <= 0) {
-    return { aceita: false, descontoEmCentavos: 0 };
-  }
-  if (precoDaCotaEmCentavos > valorDoCupomEmCentavos) {
-    return { aceita: false, descontoEmCentavos: 0 };
-  }
-  // Cobre a cota inteira e o que sobrar do cupom se perde: sem troco, sem
-  // saldo, sem segunda cota.
-  return { aceita: true, descontoEmCentavos: precoDaCotaEmCentavos };
 }
 
 /** Reais (o que o banco guarda como Decimal) para centavos inteiros. */

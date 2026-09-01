@@ -63,6 +63,7 @@ export const ACOES = {
   "afiliado.suspenso": "suspendeu o afiliado",
   "afiliado.codigo_alterado": "alterou o código do afiliado",
   "afiliado.entradas_ajustadas": "ajustou as entradas grátis de",
+  "afiliado.recompensa_alterada": "alterou a recompensa do afiliado",
   "afiliado.indicacao_vinculada": "foi indicado por um afiliado",
 } as const;
 

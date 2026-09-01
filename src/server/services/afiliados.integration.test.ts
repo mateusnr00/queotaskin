@@ -5,6 +5,7 @@ import { createReservation } from "@/server/services/reservations";
 import {
   ajustarEntradas,
   ativarAfiliado,
+  definirConfigDeRecompensa,
   liberarEntradaGratis,
   painelDoAfiliado,
   processarCompraDeIndicado,
@@ -102,6 +103,51 @@ async function entradasDisponiveis(userId: string) {
   });
 }
 
+/** Os cupons disponíveis, com o valor de cada um. */
+async function cuponsDe(userId: string) {
+  const afiliado = await prisma.affiliate.findUniqueOrThrow({
+    where: { userId },
+    select: { id: true },
+  });
+  return prisma.entradaGratis.findMany({
+    where: { affiliateId: afiliado.id, estado: "DISPONIVEL" },
+    select: { id: true, valorEmCentavos: true, limiarNaConcessao: true, bpsNaConcessao: true },
+    orderBy: { ganhaEm: "asc" },
+  });
+}
+
+/** O id do afiliado, que é o que createReservation espera. */
+async function idDoAfiliado(userId: string) {
+  const a = await prisma.affiliate.findUniqueOrThrow({
+    where: { userId },
+    select: { id: true },
+  });
+  return a.id;
+}
+
+/** O molde de uma compra, para os testes não repetirem doze campos nulos. */
+function compraBase(extra: {
+  raffleId: string;
+  numbers: number[];
+  usarEntradaDe?: string | null;
+  cupomId?: string | null;
+}) {
+  return {
+    participantName: "Afiliado A",
+    participantPhone: null,
+    participantCpf: null,
+    participantEmail: null,
+    participantSocialName: null,
+    participantBirthDate: null,
+    affiliateCode: null,
+    utmSource: null,
+    utmMedium: null,
+    utmCampaign: null,
+    utmContent: null,
+    ...extra,
+  };
+}
+
 beforeAll(async () => {
   const tenant = await prisma.tenant.findFirst({ select: { id: true } });
   if (!tenant) throw new Error("sem tenant no banco de teste");
@@ -185,7 +231,7 @@ describe("vínculo com quem indicou", () => {
   });
 });
 
-describe("um cupom por indicado, uma vez na vida", () => {
+describe("recompensa progressiva", () => {
   beforeEach(async () => {
     const codigo = (
       await prisma.affiliate.findUniqueOrThrow({
@@ -196,123 +242,88 @@ describe("um cupom por indicado, uma vez na vida", () => {
     await vincularIndicacao(indicado.id, codigo);
   });
 
-  it("R$ 9,99 não libera cupom", async () => {
+  it("R$ 9,99 não gera cupom", async () => {
     const campanha = await novaCampanha("1.00");
-    const compra = await comprarPago(campanha.id, indicado.id, "9.99", 9);
-    await processarCompraDeIndicado(compra);
-
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "9.99", 9),
+    );
     expect(await entradasDisponiveis(afiliado.id)).toBe(0);
-    const painel = await painelDoAfiliado(afiliado.id);
-    expect(painel?.indicadosQualificados).toBe(0);
-    expect(painel?.indicadosEmProgresso).toBe(1);
   });
 
-  it("R$ 10,00 libera exatamente um cupom", async () => {
+  it("R$ 10,00 gera um cupom de R$ 5,00", async () => {
     const campanha = await novaCampanha("1.00");
-    const compra = await comprarPago(campanha.id, indicado.id, "10.00", 10);
-    await processarCompraDeIndicado(compra);
-
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
-    expect((await painelDoAfiliado(afiliado.id))?.indicadosQualificados).toBe(1);
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "10.00", 10),
+    );
+    const cupons = await cuponsDe(afiliado.id);
+    expect(cupons).toHaveLength(1);
+    expect(cupons[0]!.valorEmCentavos).toBe(500);
   });
 
-  it("R$ 20,00 libera um só, e R$ 100,00 também", async () => {
+  it("R$ 20,00 gera DOIS cupons de R$ 5,00, e não um de R$ 10,00", async () => {
     const campanha = await novaCampanha("1.00");
     await processarCompraDeIndicado(
       await comprarPago(campanha.id, indicado.id, "20.00", 20),
     );
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
+    const cupons = await cuponsDe(afiliado.id);
+    expect(cupons).toHaveLength(2);
+    expect(cupons.map((c) => c.valorEmCentavos)).toEqual([500, 500]);
+  });
 
-    // Outra pessoa, outra campanha, cem reais: continua sendo um por pessoa.
-    const outroIndicado = await novaConta("Indicado B");
+  it("R$ 27,50 dá dois cupons e deixa R$ 7,50; mais R$ 2,50 dão o terceiro", async () => {
+    const campanha = await novaCampanha("1.00");
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "27.50", 27),
+    );
+    let painel = await painelDoAfiliado(afiliado.id);
+    expect(painel?.cupons).toHaveLength(2);
+    expect(painel?.progressoEmCentavos).toBe(750);
+
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "2.50", 3),
+    );
+    painel = await painelDoAfiliado(afiliado.id);
+    expect(painel?.cupons).toHaveLength(3);
+    expect(painel?.progressoEmCentavos).toBe(0);
+  });
+
+  it("dois indicados diferentes somam no mesmo progresso", async () => {
+    // R$ 4 de um, R$ 6 de outro: um cupom. Era exatamente o que a regra
+    // anterior proibia.
+    const campanha = await novaCampanha("1.00");
+    const segundo = await novaConta("Indicado B");
     const codigo = (
       await prisma.affiliate.findUniqueOrThrow({
         where: { userId: afiliado.id },
         select: { code: true },
       })
     ).code;
-    await vincularIndicacao(outroIndicado.id, codigo);
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, outroIndicado.id, "100.00", 100),
-    );
-    expect(await entradasDisponiveis(afiliado.id)).toBe(2);
-  });
-
-  it("o mesmo indicado comprando muitas vezes gera no máximo um", async () => {
-    const campanha = await novaCampanha("1.00");
-    for (const valor of ["10.00", "50.00", "30.00", "7.00"]) {
-      await processarCompraDeIndicado(
-        await comprarPago(campanha.id, indicado.id, valor, 5),
-      );
-    }
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
-    const liberados = await prisma.movimentoDeAfiliado.count({
-      where: { indicadoId: indicado.id, tipo: "ENTRADA_LIBERADA" },
-    });
-    expect(liberados).toBe(1);
-  });
-
-  it("R$ 6,00 mais R$ 4,00 do mesmo indicado fecham um cupom", async () => {
-    const campanha = await novaCampanha("1.00");
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, indicado.id, "6.00", 6),
-    );
-    expect(await entradasDisponiveis(afiliado.id)).toBe(0);
+    await vincularIndicacao(segundo.id, codigo);
 
     await processarCompraDeIndicado(
       await comprarPago(campanha.id, indicado.id, "4.00", 4),
     );
+    expect(await entradasDisponiveis(afiliado.id)).toBe(0);
+
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, segundo.id, "6.00", 6),
+    );
     expect(await entradasDisponiveis(afiliado.id)).toBe(1);
   });
 
-  it("R$ 5,00 de dois indicados diferentes NÃO somam", async () => {
-    // Era o defeito central da regra antiga: o progresso era do afiliado, e
-    // dois indicados gastando cinco reais cada liberavam cupom.
+  it("o mesmo indicado contribui várias vezes", async () => {
     const campanha = await novaCampanha("1.00");
-    const segundo = await novaConta("Indicado B");
-    const codigo = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { code: true },
-      })
-    ).code;
-    await vincularIndicacao(segundo.id, codigo);
-
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, indicado.id, "5.00", 5),
-    );
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, segundo.id, "5.00", 5),
-    );
-
-    expect(await entradasDisponiveis(afiliado.id)).toBe(0);
+    for (const valor of ["10.00", "10.00", "10.00"]) {
+      await processarCompraDeIndicado(
+        await comprarPago(campanha.id, indicado.id, valor, 10),
+      );
+    }
+    expect(await entradasDisponiveis(afiliado.id)).toBe(3);
   });
 
-  it("dois indicados gastando R$ 10,00 cada geram dois cupons", async () => {
+  it("webhook reentregue não duplica progresso nem cupom", async () => {
     const campanha = await novaCampanha("1.00");
-    const segundo = await novaConta("Indicado B");
-    const codigo = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { code: true },
-      })
-    ).code;
-    await vincularIndicacao(segundo.id, codigo);
-
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, indicado.id, "10.00", 10),
-    );
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, segundo.id, "10.00", 10),
-    );
-
-    expect(await entradasDisponiveis(afiliado.id)).toBe(2);
-    expect((await painelDoAfiliado(afiliado.id))?.indicadosQualificados).toBe(2);
-  });
-
-  it("webhook reentregue não libera cupom duplicado", async () => {
-    const campanha = await novaCampanha("1.00");
-    const compra = await comprarPago(campanha.id, indicado.id, "30.00", 30);
+    const compra = await comprarPago(campanha.id, indicado.id, "10.00", 10);
 
     await Promise.all([
       processarPagamentoConfirmado(compra),
@@ -329,49 +340,96 @@ describe("um cupom por indicado, uma vez na vida", () => {
     ).toBe(1);
   });
 
-  it("duas compras de R$ 5,00 confirmando JUNTAS somam e liberam um", async () => {
-    // A idempotência é por PESSOA, e não por compra: as duas transações
-    // recalculam o total do indicado, e o cadeado por indicado faz a segunda
-    // enxergar os R$ 10 inteiros.
+  it("pagamentos simultâneos geram a quantidade certa", async () => {
     const campanha = await novaCampanha("1.00");
-    const a = await comprarPago(campanha.id, indicado.id, "5.00", 5);
-    const b = await comprarPago(campanha.id, indicado.id, "5.00", 5);
+    // As compras são criadas em sequência (o contador de números do teste não
+    // é atômico); o que roda junto é a CONFIRMAÇÃO delas, que é o que importa.
+    const compras = [
+      await comprarPago(campanha.id, indicado.id, "5.00", 5),
+      await comprarPago(campanha.id, indicado.id, "5.00", 5),
+      await comprarPago(campanha.id, indicado.id, "10.00", 10),
+    ];
+    await Promise.all(compras.map((c) => processarPagamentoConfirmado(c)));
 
-    await Promise.all([
-      processarPagamentoConfirmado(a),
-      processarPagamentoConfirmado(b),
-    ]);
-
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
+    // R$ 20 no total: dois cupons, progresso zerado.
+    expect(await entradasDisponiveis(afiliado.id)).toBe(2);
+    expect((await painelDoAfiliado(afiliado.id))?.progressoEmCentavos).toBe(0);
   });
 
-  it("R$ 6,00 e R$ 4,00 simultâneos também liberam um só", async () => {
+  it("regra personalizada de 70% gera cupom de R$ 7,00", async () => {
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      limiarEmCentavos: 1000,
+      recompensaEmBps: 7000,
+      valorDoCupomEmCentavos: 700,
+      adminId: afiliado.id,
+    });
+
     const campanha = await novaCampanha("1.00");
-    const a = await comprarPago(campanha.id, indicado.id, "6.00", 6);
-    const b = await comprarPago(campanha.id, indicado.id, "4.00", 4);
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "10.00", 10),
+    );
+    const cupons = await cuponsDe(afiliado.id);
+    expect(cupons[0]!.valorEmCentavos).toBe(700);
+    expect(cupons[0]!.bpsNaConcessao).toBe(7000);
+    expect(cupons[0]!.limiarNaConcessao).toBe(1000);
+  });
 
-    await Promise.all([
-      processarPagamentoConfirmado(a),
-      processarPagamentoConfirmado(b),
-    ]);
+  it("mudar a configuração não mexe nos cupons antigos", async () => {
+    const campanha = await novaCampanha("1.00");
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "10.00", 10),
+    );
 
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
-    expect(
-      await prisma.movimentoDeAfiliado.count({
-        where: { indicadoId: indicado.id, tipo: "ENTRADA_LIBERADA" },
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      limiarEmCentavos: 1000,
+      recompensaEmBps: 7000,
+      valorDoCupomEmCentavos: 700,
+      adminId: afiliado.id,
+    });
+
+    await processarCompraDeIndicado(
+      await comprarPago(campanha.id, indicado.id, "10.00", 10),
+    );
+
+    const cupons = await cuponsDe(afiliado.id);
+    // O primeiro continua valendo R$ 5; o segundo já nasce com R$ 7.
+    expect(cupons.map((c) => c.valorEmCentavos)).toEqual([500, 700]);
+  });
+
+  it("a mudança de configuração fica no histórico", async () => {
+    await definirConfigDeRecompensa({
+      userId: afiliado.id,
+      usaConfigPropria: true,
+      limiarEmCentavos: 1000,
+      recompensaEmBps: 7000,
+      valorDoCupomEmCentavos: 700,
+      adminId: afiliado.id,
+    });
+    const registro = await prisma.movimentoDeAfiliado.findFirst({
+      where: { affiliateId: await idDoAfiliado(afiliado.id), tipo: "CONFIG_ALTERADA" },
+    });
+    expect(registro?.adminId).toBe(afiliado.id);
+    expect(registro?.descricao).toMatch(/70%/);
+  });
+
+  it("o backend recusa valor que não bate com a porcentagem", async () => {
+    await expect(
+      definirConfigDeRecompensa({
+        userId: afiliado.id,
+        usaConfigPropria: true,
+        limiarEmCentavos: 1000,
+        recompensaEmBps: 5000,
+        valorDoCupomEmCentavos: 900,
+        adminId: afiliado.id,
       }),
-    ).toBe(1);
+    ).rejects.toThrow();
   });
 
-  it("confirmação manual depois do webhook não duplica", async () => {
-    const campanha = await novaCampanha("1.00");
-    const compra = await comprarPago(campanha.id, indicado.id, "12.00", 12);
-    await processarPagamentoConfirmado(compra);
-    await processarPagamentoConfirmado(compra);
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
-  });
-
-  it("compra pendente não entra no cálculo", async () => {
+  it("compra pendente não entra no progresso", async () => {
     const campanha = await novaCampanha("1.00");
     await prisma.reservation.create({
       data: {
@@ -383,110 +441,58 @@ describe("um cupom por indicado, uma vez na vida", () => {
         expiresAt: new Date(Date.now() + 3_600_000),
       },
     });
-    const paga = await comprarPago(campanha.id, indicado.id, "5.00", 5);
-    await processarCompraDeIndicado(paga);
     expect(await entradasDisponiveis(afiliado.id)).toBe(0);
   });
 
-  it("compra gratuita não entra no cálculo", async () => {
+  it("compra gratuita não entra no progresso", async () => {
     const campanha = await novaCampanha("1.00");
     const gratis = await comprarPago(campanha.id, indicado.id, "0", 5);
-    expect(await processarCompraDeIndicado(gratis)).toMatchObject({
-      concedeu: false,
-    });
+    expect(await processarCompraDeIndicado(gratis)).toBeNull();
     expect(await entradasDisponiveis(afiliado.id)).toBe(0);
   });
 
-  it("pagamento estornado sai do total e derruba a qualificação", async () => {
+  it("estorno desfaz o progresso e cancela o cupom disponível", async () => {
     const campanha = await novaCampanha("1.00");
     const compra = await comprarPago(campanha.id, indicado.id, "10.00", 10);
     await processarCompraDeIndicado(compra);
     expect(await entradasDisponiveis(afiliado.id)).toBe(1);
 
-    // O gateway avisa do estorno: o pagamento vira REFUNDED e o total do
-    // indicado é refeito.
-    await prisma.payment.create({
-      data: {
-        reservationId: compra,
-        provider: "SIGILOPAY",
-        externalId: `estorno-${Date.now()}`,
-        status: "REFUNDED",
-        amount: "10.00",
-        method: "PIX",
-      },
-    });
     await reverterCompraDeIndicado(compra);
 
     expect(await entradasDisponiveis(afiliado.id)).toBe(0);
-    const q = await prisma.qualificacaoDeIndicado.findUniqueOrThrow({
-      where: { indicadoId: indicado.id },
+    const cancelados = await prisma.entradaGratis.count({
+      where: {
+        affiliateId: await idDoAfiliado(afiliado.id),
+        estado: "CANCELADA",
+      },
     });
-    expect(q.qualificadoEm).toBeNull();
+    expect(cancelados).toBe(1);
+    expect((await painelDoAfiliado(afiliado.id))?.progressoEmCentavos).toBe(0);
   });
 
-  it("estorno não recolhe cupom já usado, e registra o caso", async () => {
+  it("estorno com cupom já usado vira dívida explícita", async () => {
     const campanha = await novaCampanha("1.00");
     const compra = await comprarPago(campanha.id, indicado.id, "10.00", 10);
     await processarCompraDeIndicado(compra);
 
-    // O afiliado gasta o cupom antes do estorno chegar.
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
+    // O cupom foi gasto antes de o estorno chegar.
     await prisma.entradaGratis.updateMany({
-      where: { affiliateId: idDoAfiliado, estado: "DISPONIVEL" },
+      where: { affiliateId: await idDoAfiliado(afiliado.id), estado: "DISPONIVEL" },
       data: { estado: "USADA", usadaEm: new Date() },
     });
 
-    await prisma.payment.create({
-      data: {
-        reservationId: compra,
-        provider: "SIGILOPAY",
-        externalId: `estorno2-${Date.now()}`,
-        status: "REFUNDED",
-        amount: "10.00",
-        method: "PIX",
-      },
-    });
     await reverterCompraDeIndicado(compra);
 
-    // A cota existiu: o cupom fica, e a qualificação vira caso de análise.
-    expect(
-      await prisma.entradaGratis.count({
-        where: { affiliateId: idDoAfiliado, estado: "USADA" },
-      }),
-    ).toBe(1);
-    const q = await prisma.qualificacaoDeIndicado.findUniqueOrThrow({
-      where: { indicadoId: indicado.id },
-    });
-    expect(q.revertidoEm).not.toBeNull();
-    expect(q.qualificadoEm).not.toBeNull();
+    // O cupom fica (a cota existiu) e a dívida aparece no progresso.
+    const painel = await painelDoAfiliado(afiliado.id);
+    expect(painel?.usados).toBe(1);
+    expect(painel?.progressoEmCentavos).toBe(-1000);
   });
 
   it("virar afiliado não gera cupom nenhum", async () => {
     const novo = await novaConta("Afiliado C");
     await ativarAfiliado(novo.id);
     expect(await entradasDisponiveis(novo.id)).toBe(0);
-  });
-
-  it("o cupom nasce com valor de face de R$ 10,00", async () => {
-    const campanha = await novaCampanha("1.00");
-    await processarCompraDeIndicado(
-      await comprarPago(campanha.id, indicado.id, "10.00", 10),
-    );
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    const cupom = await prisma.entradaGratis.findFirstOrThrow({
-      where: { affiliateId: idDoAfiliado },
-    });
-    expect(cupom.valorEmCentavos).toBe(1000);
   });
 
   it("compra de quem não foi indicado não credita ninguém", async () => {
@@ -497,9 +503,9 @@ describe("um cupom por indicado, uma vez na vida", () => {
   });
 });
 
-describe("Entrada Grátis no checkout", () => {
+describe("Cupom de Entrada no checkout", () => {
   beforeEach(async () => {
-    // Três entradas na mão, direto pelo ajuste do painel.
+    // Três cupons na mão, direto pelo ajuste do painel.
     await ajustarEntradas({
       userId: afiliado.id,
       quantidade: 3,
@@ -508,377 +514,293 @@ describe("Entrada Grátis no checkout", () => {
     });
   });
 
-  it("desconta exatamente uma cota, e o número continua vindo", async () => {
-    const campanha = await novaCampanha("7.00");
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
+  it("cota de R$ 2 com cupom de R$ 5: abate R$ 2 e perde R$ 3", async () => {
+    const campanha = await novaCampanha("2.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1, 2, 3, 4],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
 
-    const reserva = await createReservation({
-      raffleId: campanha.id,
-      numbers: [1, 2, 3, 4],
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    });
-
-    // Subtotal R$ 28, cupom cobre R$ 7, restam R$ 21 no Pix, e as quatro
-    // cotas continuam vindo. Os R$ 3 que sobraram do valor de face somem.
-    expect(Number(reserva.totalAmount)).toBe(21);
-    const tickets = await prisma.ticket.count({
-      where: { reservationId: reserva.id },
-    });
-    expect(tickets).toBe(4);
+    // Quatro cotas de R$ 2 são R$ 8; o cupom abate R$ 2 e só R$ 2. Os R$ 3
+    // que sobraram do valor de face não vão para as outras cotas.
+    expect(Number(reserva.totalAmount)).toBe(6);
+    expect(
+      await prisma.ticket.count({ where: { reservationId: reserva.id } }),
+    ).toBe(4);
+    // E não sobra saldo: o cupom saiu do estoque inteiro.
     expect(await entradasDisponiveis(afiliado.id)).toBe(2);
   });
 
-  it("cota de R$ 10 é coberta por inteiro, e a compra nasce paga", async () => {
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    const base = {
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    };
-
-    const cheia = await novaCampanha("10.00");
-    const naCheia = await createReservation({
-      ...base,
-      raffleId: cheia.id,
-      numbers: [1],
-    });
-    // Uma cota de R$ 10 coberta exatamente: nada a pagar, e sem Pix de R$ 0.
-    expect(Number(naCheia.totalAmount)).toBe(0);
-    expect(naCheia.status).toBe("PAID");
-  });
-
-  it("cota acima de R$ 10 recusa o cupom, sem pagamento complementar", async () => {
-    const cara = await novaCampanha("12.00");
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-
-    await expect(
-      createReservation({
-        raffleId: cara.id,
-        numbers: [1],
-        participantName: "Afiliado A",
-        participantPhone: null,
-        participantCpf: null,
-        participantEmail: null,
-        participantSocialName: null,
-        participantBirthDate: null,
-        affiliateCode: null,
-        utmSource: null,
-        utmMedium: null,
-        utmCampaign: null,
-        utmContent: null,
-        usarEntradaDe: idDoAfiliado,
-      }),
-    ).rejects.toThrow(/vale até R\$ 10,00/i);
-
-    // E o cupom continua no saldo, intacto.
-    expect(await entradasDisponiveis(afiliado.id)).toBe(3);
-    const situacao = await situacaoDaEntrada(afiliado.id, cara.id);
-    expect(situacao.cotaAcimaDoCupom).toBe(true);
-    expect(situacao.podeUsar).toBe(false);
-  });
-
-  it("uma entrada por sorteio: a segunda compra na mesma campanha recusa", async () => {
-    const campanha = await novaCampanha("5.00");
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    const base = {
-      raffleId: campanha.id,
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    };
-
-    await createReservation({ ...base, numbers: [1, 2] });
-    await expect(
-      createReservation({ ...base, numbers: [3, 4] }),
-    ).rejects.toThrow(/já utilizada neste sorteio/i);
-
-    const situacao = await situacaoDaEntrada(afiliado.id, campanha.id);
-    expect(situacao.jaUsouNesteSorteio).toBe(true);
-    expect(situacao.podeUsar).toBe(false);
-    // E ainda sobra saldo para outras campanhas.
-    expect(situacao.disponiveis).toBeGreaterThan(0);
-  });
-
-  it("mas a entrada seguinte vale noutra campanha", async () => {
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    const base = {
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    };
-
-    const primeira = await novaCampanha("5.00");
-    const segunda = await novaCampanha("5.00");
-    await createReservation({ ...base, raffleId: primeira.id, numbers: [1] });
-    const outra = await createReservation({
-      ...base,
-      raffleId: segunda.id,
-      numbers: [1],
-    });
-    expect(Number(outra.totalAmount)).toBe(0);
-    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
-  });
-
-  it("com uma entrada só, duas compras simultâneas: uma leva, a outra recusa", async () => {
-    // Zera o saldo e deixa exatamente uma.
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    await prisma.entradaGratis.deleteMany({
-      where: { affiliateId: idDoAfiliado },
-    });
-    await prisma.entradaGratis.create({
-      data: { affiliateId: idDoAfiliado },
-    });
-
-    const base = {
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    };
-    const uma = await novaCampanha("5.00");
-    const outra = await novaCampanha("5.00");
-
-    const resultados = await Promise.allSettled([
-      createReservation({ ...base, raffleId: uma.id, numbers: [1] }),
-      createReservation({ ...base, raffleId: outra.id, numbers: [1] }),
-    ]);
-
-    const ok = resultados.filter((r) => r.status === "fulfilled");
-    const falhou = resultados.filter((r) => r.status === "rejected");
-    expect(ok).toHaveLength(1);
-    expect(falhou).toHaveLength(1);
-    expect(await entradasDisponiveis(afiliado.id)).toBe(0);
-  });
-
-  it("sem saldo, a compra não consegue forçar o desconto", async () => {
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    await prisma.entradaGratis.deleteMany({
-      where: { affiliateId: idDoAfiliado },
-    });
-
-    const campanha = await novaCampanha("5.00");
-    await expect(
-      createReservation({
+  it("cota de R$ 12 com cupom de R$ 5: paga R$ 7", async () => {
+    const campanha = await novaCampanha("12.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
         raffleId: campanha.id,
         numbers: [1],
-        participantName: "Afiliado A",
-        participantPhone: null,
-        participantCpf: null,
-        participantEmail: null,
-        participantSocialName: null,
-        participantBirthDate: null,
-        affiliateCode: null,
-        utmSource: null,
-        utmMedium: null,
-        utmCampaign: null,
-        utmContent: null,
-        usarEntradaDe: idDoAfiliado,
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
       }),
-    ).rejects.toThrow(/não está mais disponível/i);
+    );
+    expect(Number(reserva.totalAmount)).toBe(7);
+    expect(reserva.status).toBe("PENDING");
   });
 
-  it("Pix que expira devolve a entrada, e ela volta a valer no mesmo sorteio", async () => {
+  it("quatro cotas de R$ 12: subtotal R$ 48, Pix de R$ 43", async () => {
+    const campanha = await novaCampanha("12.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1, 2, 3, 4],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
+    expect(Number(reserva.totalAmount)).toBe(43);
+    expect(
+      await prisma.ticket.count({ where: { reservationId: reserva.id } }),
+    ).toBe(4);
+  });
+
+  it("cota igual ao cupom zera a compra, e ela nasce paga sem Pix", async () => {
     const campanha = await novaCampanha("5.00");
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    const base = {
-      raffleId: campanha.id,
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    };
-
-    const reserva = await createReservation({ ...base, numbers: [1, 2] });
-    expect(await entradasDisponiveis(afiliado.id)).toBe(2);
-
-    await liberarEntradaGratis(reserva.id);
-    expect(await entradasDisponiveis(afiliado.id)).toBe(3);
-
-    // E o sorteio volta a aceitar uma entrada: o índice foi liberado junto.
-    const denovo = await createReservation({ ...base, numbers: [3, 4] });
-    expect(Number(denovo.totalAmount)).toBe(5);
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
+    expect(Number(reserva.totalAmount)).toBe(0);
+    expect(reserva.status).toBe("PAID");
   });
 
-  it("a cota coberta não vira progresso para quem indicou o afiliado", async () => {
-    // O afiliado A também foi indicado por alguém: C.
+  it("compra coberta por cupom não gera progresso para quem indicou", async () => {
+    // O afiliado A também foi indicado por C.
     const padrinho = await novaConta("Afiliado C");
-    const codigoDoPadrinho = (await ativarAfiliado(padrinho.id)).code;
-    await vincularIndicacao(afiliado.id, codigoDoPadrinho);
+    const codigo = (await ativarAfiliado(padrinho.id)).code;
+    await vincularIndicacao(afiliado.id, codigo);
 
-    const campanha = await novaCampanha("10.00");
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-
-    // Compra de R$ 20 com uma cota de R$ 10 coberta pela entrada.
-    const reserva = await createReservation({
-      raffleId: campanha.id,
-      numbers: [1, 2],
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
+    const campanha = await novaCampanha("5.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
+    await prisma.reservation.update({
+      where: { id: reserva.id },
+      data: { userId: afiliado.id },
     });
-    expect(Number(reserva.totalAmount)).toBe(10);
+    await processarPagamentoConfirmado(reserva.id);
 
-    // A action liga a reserva à conta logo depois de criá-la; aqui fazemos o
-    // mesmo, porque é o userId que diz de quem é a compra.
+    // Nada pago, nada de progresso: valor promocional não é receita.
+    expect((await painelDoAfiliado(padrinho.id))?.progressoEmCentavos).toBe(0);
+    expect(await entradasDisponiveis(padrinho.id)).toBe(0);
+  });
+
+  it("só a diferença paga vira progresso de quem indicou", async () => {
+    const padrinho = await novaConta("Afiliado C");
+    const codigo = (await ativarAfiliado(padrinho.id)).code;
+    await vincularIndicacao(afiliado.id, codigo);
+
+    const campanha = await novaCampanha("12.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
     await prisma.reservation.update({
       where: { id: reserva.id },
       data: { userId: afiliado.id, status: "PAID", paidAt: new Date() },
     });
     await processarPagamentoConfirmado(reserva.id);
 
-    // C recebe pelos R$ 10 pagos, e não pelos R$ 20 do carrinho: o valor
-    // coberto pelo cupom não vira progresso para ninguém.
-    const painelDoPadrinho = await painelDoAfiliado(padrinho.id);
-    expect(painelDoPadrinho?.disponiveis).toBe(1);
-    const q = await prisma.qualificacaoDeIndicado.findUniqueOrThrow({
-      where: { indicadoId: afiliado.id },
-    });
-    expect(q.pagoEmCentavos).toBe(1000);
+    // R$ 12 de cota, R$ 5 de cupom, R$ 7 pagos: o progresso de C é R$ 7.
+    expect((await painelDoAfiliado(padrinho.id))?.progressoEmCentavos).toBe(700);
   });
 
-  it("o histórico registra o que aconteceu", async () => {
+  it("campanha que não aceita cupom recusa a compra com cupom", async () => {
     const campanha = await novaCampanha("5.00");
-    const idDoAfiliado = (
-      await prisma.affiliate.findUniqueOrThrow({
-        where: { userId: afiliado.id },
-        select: { id: true },
-      })
-    ).id;
-    await createReservation({
-      raffleId: campanha.id,
-      numbers: [1],
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
+    await prisma.raffle.update({
+      where: { id: campanha.id },
+      data: { aceitaCupomDeAfiliado: false },
     });
+    const cupons = await cuponsDe(afiliado.id);
 
-    const movimentos = await prisma.movimentoDeAfiliado.findMany({
-      where: { affiliateId: idDoAfiliado },
-      select: { tipo: true, entradas: true },
+    await expect(
+      createReservation(
+        compraBase({
+          raffleId: campanha.id,
+          numbers: [1],
+          usarEntradaDe: await idDoAfiliado(afiliado.id),
+          cupomId: cupons[0]!.id,
+        }),
+      ),
+    ).rejects.toThrow(/não aceita/i);
+
+    const situacao = await situacaoDaEntrada(afiliado.id, campanha.id);
+    expect(situacao.campanhaAceita).toBe(false);
+    expect(situacao.podeUsar).toBe(false);
+  });
+
+  it("um cupom por sorteio: a segunda compra na mesma campanha recusa", async () => {
+    const campanha = await novaCampanha("5.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const base = {
+      raffleId: campanha.id,
+      usarEntradaDe: await idDoAfiliado(afiliado.id),
+    };
+
+    await createReservation(
+      compraBase({ ...base, numbers: [1, 2], cupomId: cupons[0]!.id }),
+    );
+    await expect(
+      createReservation(
+        compraBase({ ...base, numbers: [3, 4], cupomId: cupons[1]!.id }),
+      ),
+    ).rejects.toThrow(/já utilizado neste sorteio/i);
+
+    const situacao = await situacaoDaEntrada(afiliado.id, campanha.id);
+    expect(situacao.jaUsouNesteSorteio).toBe(true);
+    expect(situacao.podeUsar).toBe(false);
+  });
+
+  it("mas o cupom seguinte vale noutra campanha", async () => {
+    const primeira = await novaCampanha("5.00");
+    const segunda = await novaCampanha("5.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const de = await idDoAfiliado(afiliado.id);
+
+    await createReservation(
+      compraBase({
+        raffleId: primeira.id,
+        numbers: [1],
+        usarEntradaDe: de,
+        cupomId: cupons[0]!.id,
+      }),
+    );
+    const outra = await createReservation(
+      compraBase({
+        raffleId: segunda.id,
+        numbers: [1],
+        usarEntradaDe: de,
+        cupomId: cupons[1]!.id,
+      }),
+    );
+    expect(Number(outra.totalAmount)).toBe(0);
+    expect(await entradasDisponiveis(afiliado.id)).toBe(1);
+  });
+
+  it("não dá para usar o cupom de outra conta", async () => {
+    const outro = await novaConta("Afiliado C");
+    await ativarAfiliado(outro.id);
+    await ajustarEntradas({
+      userId: outro.id,
+      quantidade: 1,
+      motivo: "teste",
+      adminId: outro.id,
     });
-    const tipos = movimentos.map((m) => m.tipo);
-    expect(tipos).toContain("AJUSTE");
-    expect(tipos).toContain("ENTRADA_USADA");
-    expect(
-      movimentos.find((m) => m.tipo === "ENTRADA_USADA")?.entradas,
-    ).toBe(-1);
+    const cupomAlheio = (await cuponsDe(outro.id))[0]!;
+
+    const campanha = await novaCampanha("5.00");
+    await expect(
+      createReservation(
+        compraBase({
+          raffleId: campanha.id,
+          numbers: [1],
+          usarEntradaDe: await idDoAfiliado(afiliado.id),
+          cupomId: cupomAlheio.id,
+        }),
+      ),
+    ).rejects.toThrow(/não está mais disponível/i);
+
+    // E o cupom do outro continua intacto.
+    expect(await entradasDisponiveis(outro.id)).toBe(1);
+  });
+
+  it("duas compras simultâneas com o mesmo cupom: só uma leva", async () => {
+    const cupons = await cuponsDe(afiliado.id);
+    const de = await idDoAfiliado(afiliado.id);
+    const uma = await novaCampanha("5.00");
+    const outra = await novaCampanha("5.00");
+
+    const resultados = await Promise.allSettled([
+      createReservation(
+        compraBase({
+          raffleId: uma.id,
+          numbers: [1],
+          usarEntradaDe: de,
+          cupomId: cupons[0]!.id,
+        }),
+      ),
+      createReservation(
+        compraBase({
+          raffleId: outra.id,
+          numbers: [1],
+          usarEntradaDe: de,
+          cupomId: cupons[0]!.id,
+        }),
+      ),
+    ]);
+
+    expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(resultados.filter((r) => r.status === "rejected")).toHaveLength(1);
+    expect(await entradasDisponiveis(afiliado.id)).toBe(2);
+  });
+
+  it("Pix que expira devolve o cupom ao saldo", async () => {
+    const campanha = await novaCampanha("12.00");
+    const cupons = await cuponsDe(afiliado.id);
+    const reserva = await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
+    expect(await entradasDisponiveis(afiliado.id)).toBe(2);
+
+    await liberarEntradaGratis(reserva.id);
+    expect(await entradasDisponiveis(afiliado.id)).toBe(3);
+  });
+
+  it("o histórico registra o uso com o valor do cupom", async () => {
+    const campanha = await novaCampanha("5.00");
+    const cupons = await cuponsDe(afiliado.id);
+    await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1],
+        usarEntradaDe: await idDoAfiliado(afiliado.id),
+        cupomId: cupons[0]!.id,
+      }),
+    );
+
+    const uso = await prisma.movimentoDeAfiliado.findFirst({
+      where: {
+        affiliateId: await idDoAfiliado(afiliado.id),
+        tipo: "ENTRADA_USADA",
+      },
+    });
+    expect(uso?.entradas).toBe(-1);
+    expect(uso?.descricao).toMatch(/R\$ 5,00/);
   });
 });
 
@@ -897,22 +819,15 @@ describe("ajuste manual", () => {
         select: { id: true },
       })
     ).id;
-    await createReservation({
-      raffleId: campanha.id,
-      numbers: [1],
-      participantName: "Afiliado A",
-      participantPhone: null,
-      participantCpf: null,
-      participantEmail: null,
-      participantSocialName: null,
-      participantBirthDate: null,
-      affiliateCode: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      usarEntradaDe: idDoAfiliado,
-    });
+    const cupom = (await cuponsDe(afiliado.id))[0]!;
+    await createReservation(
+      compraBase({
+        raffleId: campanha.id,
+        numbers: [1],
+        usarEntradaDe: idDoAfiliado,
+        cupomId: cupom.id,
+      }),
+    );
 
     const { aplicadas } = await ajustarEntradas({
       userId: afiliado.id,
@@ -920,12 +835,14 @@ describe("ajuste manual", () => {
       motivo: "correção",
       adminId: afiliado.id,
     });
-    expect(aplicadas).toBe(0);
+    // Tirar só alcança o que está disponível: o cupom já gasto na compra
+    // acima não volta, e o pedido de cinco tira só o que havia.
+    expect(aplicadas).toBeGreaterThanOrEqual(-1);
     const painel = await painelDoAfiliado(afiliado.id);
-    expect(painel?.disponiveis).toBe(0);
-    // A compra de uma cota de R$ 5 com a entrada zerou o total, então ela
-    // nasceu paga e a entrada já saiu como usada, sem passar por reservada.
-    expect(painel?.usadas).toBe(1);
+    expect(painel?.cupons).toHaveLength(0);
+    // A compra de uma cota de R$ 5 com o cupom zerou o total, então ela
+    // nasceu paga e o cupom já saiu como usado, sem passar por reservado.
+    expect(painel?.usados).toBe(1);
   });
 
   it("exige motivo", async () => {

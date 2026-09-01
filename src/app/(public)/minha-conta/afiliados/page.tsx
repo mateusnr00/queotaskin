@@ -1,27 +1,36 @@
 // Minha conta → Programa de Afiliados.
 //
-// A regra é uma frase: cada pessoa que você indicar pode liberar UM Cupom de
-// Entrada de R$ 10, quando ela acumular R$ 10 em pagamentos confirmados. Não
-// é progressivo, e a página não pode sugerir que seja.
+// A regra é uma frase, e a página inteira serve para ela ser entendida sem
+// perguntar: a cada R$ 10 pagos pelas pessoas que você indicar, você recebe 1
+// Cupom de Entrada de R$ 5.
 //
-// Por isso não existe mais uma barra de "progresso do afiliado". Aquele número
-// somava o dinheiro de todo mundo e prometia a próxima entrada logo ali;
-// agora o progresso é de cada indicado, e aparece na lista deles, discreto.
-// Em cima ficam as três contagens que respondem "como estou indo": indicados,
-// em progresso, qualificados.
+// Três coisas precisam ficar impossíveis de não ver:
+//
+//   quanto falta       a barra do próximo cupom, com o valor que falta em
+//                      reais. É ela que faz a pessoa mandar o link de novo.
+//   quanto vale        os cupons aparecem UM A UM, com o valor de cada. Uma
+//                      alteração administrativa faz cupom antigo e novo
+//                      valerem diferente, e "saldo de R$ 17" seria mentira:
+//                      não existe saldo, existem três cupons.
+//   o que se perde     cupom de R$ 5 numa cota de R$ 2 abate R$ 2 e os R$ 3
+//                      somem. Dito antes, não na hora da surpresa.
 //
 // Quem ainda não é afiliado vê o convite e entra na hora, num clique.
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowRight, Gift, Link2, Ticket, Users2 } from "lucide-react";
+import { ArrowRight, Gift, Link2, Ticket, TrendingUp, Users2 } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getCurrentTenant } from "@/lib/tenant";
 import { formatBRL } from "@/lib/format";
-import { emReais, linkDeIndicacao } from "@/lib/afiliados";
+import {
+  emReais,
+  linkDeIndicacao,
+  porcentagemDosBps,
+} from "@/lib/afiliados";
 import {
   historicoDoAfiliado,
   indicadosDoAfiliado,
@@ -39,6 +48,7 @@ export const metadata: Metadata = { title: "Programa de Afiliados" };
 const TEXTO_DO_MOVIMENTO: Record<string, string> = {
   COMPRA_DE_INDICADO: "Compra de indicado",
   ENTRADA_LIBERADA: "Cupom de Entrada liberado",
+  CONFIG_ALTERADA: "Recompensa alterada pelo suporte",
   ENTRADA_USADA: "Cupom de Entrada utilizado",
   ENTRADA_DEVOLVIDA: "Cupom de Entrada devolvido",
   ESTORNO_DE_COMPRA: "Compra estornada",
@@ -78,10 +88,11 @@ export default async function PaginaDeAfiliados() {
               Indique amigos e ganhe Cupons de Entrada
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Quando uma pessoa indicada acumular{" "}
-              <b className="font-semibold text-foreground">R$ 10,00</b> em
-              pagamentos confirmados, você recebe 1 Cupom de Entrada de R$
-              10,00. Cada pessoa indicada pode liberar somente um cupom.
+              A cada{" "}
+              <b className="font-semibold text-foreground">R$ 10,00</b> pagos
+              pelas pessoas que você indicar, você recebe 1 Cupom de Entrada de{" "}
+              <b className="font-semibold text-foreground">R$ 5,00</b>. Todas as
+              suas indicações somam no mesmo progresso.
             </p>
             <BotaoDeAtivacao />
           </section>
@@ -118,8 +129,18 @@ export default async function PaginaDeAfiliados() {
   const origem = `https://${tenant.host}`;
   const link = linkDeIndicacao(origem, painel.codigo);
   const timePorId = new Map(times.map((t) => [t.id, t]));
-  const valorDoCupom = formatBRL(emReais(painel.valorDoCupomEmCentavos));
-  const limiar = formatBRL(emReais(painel.limiarEmCentavos));
+
+  const valorDoCupom = formatBRL(emReais(painel.config.valorDoCupomEmCentavos));
+  const limiar = formatBRL(emReais(painel.config.limiarEmCentavos));
+  const porcentagem = porcentagemDosBps(painel.config.recompensaEmBps);
+  // Dívida de estorno não vira barra negativa na tela de quem divulga: o
+  // progresso mostrado é zero, e o número real fica no painel administrativo.
+  const progresso = Math.max(0, painel.progressoEmCentavos);
+  const falta = Math.max(0, painel.config.limiarEmCentavos - progresso);
+  const porcento = Math.min(
+    100,
+    Math.round((progresso / painel.config.limiarEmCentavos) * 100),
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 md:py-8">
@@ -137,8 +158,24 @@ export default async function PaginaDeAfiliados() {
         </div>
       )}
 
-      {/* O LINK PRIMEIRO. É o que a pessoa veio buscar; tudo o mais é
-          consequência dele. */}
+      {/* A REGRA, ANTES DE QUALQUER NÚMERO. */}
+      <Moldura>
+        <section className="space-y-1.5 p-5 md:p-6">
+          <h2 className="text-base font-bold">Seu programa de indicação</h2>
+          <p className="text-sm leading-relaxed">
+            A cada <b className="font-semibold">{limiar}</b> pagos pelas pessoas
+            que você indicar, você recebe{" "}
+            <b className="font-semibold">1 Cupom de Entrada de {valorDoCupom}</b>
+            .
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Isso equivale a {porcentagem.toLocaleString("pt-BR")}% de
+            recompensa.
+          </p>
+        </section>
+      </Moldura>
+
+      {/* O LINK. É o que a pessoa veio buscar. */}
       <Moldura>
         <section className="space-y-4 p-5 md:p-6">
           <div>
@@ -168,26 +205,51 @@ export default async function PaginaDeAfiliados() {
       </Moldura>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* OS CUPONS, UM A UM. */}
         <Moldura>
           <section className="flex h-full flex-col justify-between gap-4 p-5 md:p-6">
             <div>
               <p className="flex items-center gap-2 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 <Ticket aria-hidden className="h-3.5 w-3.5" />
-                Cupons de Entrada disponíveis
+                {painel.cupons.length === 1
+                  ? "Você tem 1 Cupom de Entrada disponível"
+                  : `Você tem ${painel.cupons.length} Cupons de Entrada disponíveis`}
               </p>
-              <p className="mt-2 text-5xl font-black tracking-tight text-emerald-400 tabular-nums">
-                {painel.disponiveis}
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Cada cupom vale {valorDoCupom} e cobre uma cota de até{" "}
-                {valorDoCupom}, em qualquer campanha. É consumido por inteiro e
-                não deixa troco. Cada campanha aceita um.
-                {painel.reservadas > 0 &&
-                  ` ${painel.reservadas} ${
-                    painel.reservadas === 1 ? "está preso" : "estão presos"
-                  } a compras aguardando pagamento.`}
-              </p>
+
+              {painel.cupons.length === 0 ? (
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Assim que as compras dos seus indicados somarem {limiar}, o
+                  primeiro cupom aparece aqui.
+                </p>
+              ) : (
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {painel.cupons.map((c) => (
+                    <li
+                      key={c.id}
+                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] px-3 py-2 text-sm font-black text-emerald-400 tabular-nums"
+                    >
+                      {formatBRL(emReais(c.valorEmCentavos))}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* A EXPLICAÇÃO OBRIGATÓRIA. Nada aqui é surpresa depois. */}
+              <div className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p>
+                  O cupom é utilizado por completo em uma única cota e não deixa
+                  saldo ou troco. Se você usar um cupom de {valorDoCupom} numa
+                  cota de R$ 2,00, a cota fica de graça, mas o restante é
+                  perdido.
+                </p>
+                <p>
+                  Se a cota custar mais que o cupom, você paga só a diferença:
+                  numa cota de R$ 12,00 com cupom de R$ 5,00, você paga R$ 7,00.
+                </p>
+                <p>Vale um cupom por sorteio.</p>
+              </div>
             </div>
+
             <Link
               href="/sorteios"
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-95"
@@ -198,33 +260,38 @@ export default async function PaginaDeAfiliados() {
           </section>
         </Moldura>
 
-        {/* O RESUMO DAS INDICAÇÕES, no lugar da antiga barra de progresso.
-            Duas contagens, e a explicação da regra embaixo: é o que responde
-            "de onde vem o próximo cupom" sem inventar um progresso somado. */}
+        {/* O PRÓXIMO CUPOM. */}
         <Moldura>
           <section className="flex h-full flex-col justify-center gap-3 p-5 md:p-6">
             <p className="flex items-center gap-2 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
-              <Users2 aria-hidden className="h-3.5 w-3.5" />
-              Suas indicações
+              <TrendingUp aria-hidden className="h-3.5 w-3.5" />
+              Próximo Cupom de Entrada
             </p>
-            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-              <p className="text-2xl font-black tracking-tight tabular-nums">
-                {painel.indicadosEmProgresso}
-                <span className="ml-1.5 text-xs font-semibold text-muted-foreground">
-                  em progresso
-                </span>
-              </p>
-              <p className="text-2xl font-black tracking-tight text-emerald-400 tabular-nums">
-                {painel.indicadosQualificados}
-                <span className="ml-1.5 text-xs font-semibold text-muted-foreground">
-                  qualificados
-                </span>
-              </p>
+            <p className="text-2xl font-black tracking-tight tabular-nums">
+              {formatBRL(emReais(progresso))}
+              <span className="text-base font-bold text-muted-foreground">
+                {" "}
+                de {limiar} acumulados
+              </span>
+            </p>
+            <div
+              className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]"
+              role="progressbar"
+              aria-valuenow={porcento}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-[width] duration-500"
+                style={{ width: `${porcento}%` }}
+              />
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Quando uma pessoa indicada acumular {limiar} em pagamentos
-              confirmados, você recebe um Cupom de Entrada de {valorDoCupom}.
-              Cada pessoa indicada pode liberar somente um cupom.
+              Faltam{" "}
+              <b className="font-semibold text-foreground">
+                {formatBRL(emReais(falta))}
+              </b>{" "}
+              em compras confirmadas dos seus indicados.
             </p>
           </section>
         </Moldura>
@@ -233,28 +300,27 @@ export default async function PaginaDeAfiliados() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Numero
           rotulo="Indicados"
-          valor={painel.indicados}
+          valor={String(painel.indicados)}
           icone={<Users2 aria-hidden className="h-3.5 w-3.5" />}
         />
         <Numero
-          rotulo="Cupons conquistados"
-          valor={painel.conquistadas}
+          rotulo="Compras dos indicados"
+          valor={formatBRL(emReais(painel.pagoPelosIndicadosEmCentavos))}
+          icone={<TrendingUp aria-hidden className="h-3.5 w-3.5" />}
+        />
+        <Numero
+          rotulo="Cupons reservados"
+          valor={String(painel.reservados)}
+          icone={<Ticket aria-hidden className="h-3.5 w-3.5" />}
+        />
+        <Numero
+          rotulo="Cupons utilizados"
+          valor={String(painel.usados)}
           icone={<Gift aria-hidden className="h-3.5 w-3.5" />}
-        />
-        <Numero
-          rotulo="Reservados"
-          valor={painel.reservadas}
-          icone={<Ticket aria-hidden className="h-3.5 w-3.5" />}
-        />
-        <Numero
-          rotulo="Utilizados"
-          valor={painel.usadas}
-          icone={<Ticket aria-hidden className="h-3.5 w-3.5" />}
         />
       </div>
 
-      {/* Os indicados, com o progresso de cada um. Nome mascarado e nada mais:
-          quem indica não vira dono dos dados de quem foi indicado. */}
+      {/* Os indicados, sem dado pessoal: nome mascarado e quanto já pagaram. */}
       <Moldura>
         <section className="p-5 md:p-6">
           <h2 className="text-base font-bold">Seus indicados</h2>
@@ -267,10 +333,6 @@ export default async function PaginaDeAfiliados() {
             <ul className="mt-3 divide-y divide-white/[0.06]">
               {indicados.map((i, indice) => {
                 const time = i.time ? timePorId.get(i.time) : null;
-                const porcento = Math.min(
-                  100,
-                  Math.round((i.pagoEmCentavos / i.limiarEmCentavos) * 100),
-                );
                 return (
                   <li key={i.id} className="flex items-center gap-3 py-2.5">
                     {time ? (
@@ -280,38 +342,12 @@ export default async function PaginaDeAfiliados() {
                         {indice + 1}
                       </span>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{i.nome}</p>
-                      {!i.qualificado && (
-                        <div className="mt-1 flex items-center gap-2">
-                          <span
-                            className="h-1.5 w-20 overflow-hidden rounded-full bg-white/[0.08]"
-                            role="progressbar"
-                            aria-valuenow={porcento}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          >
-                            <span
-                              className="block h-full rounded-full bg-emerald-500/70"
-                              style={{ width: `${porcento}%` }}
-                            />
-                          </span>
-                          <span className="text-[11px] text-muted-foreground tabular-nums">
-                            {formatBRL(emReais(i.pagoEmCentavos))} de{" "}
-                            {formatBRL(emReais(i.limiarEmCentavos))}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <span
-                      className={
-                        i.qualificado
-                          ? "shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-emerald-400 uppercase"
-                          : "shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground uppercase"
-                      }
-                    >
-                      {i.qualificado ? "Qualificado" : "Em progresso"}
-                    </span>
+                    <p className="min-w-0 flex-1 truncate text-sm font-semibold">
+                      {i.nome}
+                    </p>
+                    <p className="shrink-0 text-xs font-semibold text-muted-foreground tabular-nums">
+                      {formatBRL(emReais(i.pagoEmCentavos))}
+                    </p>
                   </li>
                 );
               })}
@@ -351,16 +387,20 @@ export default async function PaginaDeAfiliados() {
                         ? m.entradas > 0
                           ? "shrink-0 text-sm font-bold text-emerald-400 tabular-nums"
                           : "shrink-0 text-sm font-bold text-muted-foreground tabular-nums"
-                        : m.centavos >= 0
+                        : m.centavos > 0
                           ? "shrink-0 text-sm font-bold tabular-nums"
-                          : "shrink-0 text-sm font-bold text-red-400 tabular-nums"
+                          : m.centavos < 0
+                            ? "shrink-0 text-sm font-bold text-red-400 tabular-nums"
+                            : "shrink-0"
                     }
                   >
                     {m.entradas !== 0
                       ? `${m.entradas > 0 ? "+" : ""}${m.entradas} 🎟️`
-                      : `${m.centavos >= 0 ? "+" : "-"}${formatBRL(
-                          Math.abs(emReais(m.centavos)),
-                        )}`}
+                      : m.centavos !== 0
+                        ? `${m.centavos >= 0 ? "+" : "-"}${formatBRL(
+                            Math.abs(emReais(m.centavos)),
+                          )}`
+                        : ""}
                   </p>
                 </li>
               ))}
@@ -381,9 +421,12 @@ function Cabecalho() {
       <h1 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
         Indique. Eles jogam. Você ganha.
       </h1>
+      {/* Sem números aqui: a configuração é por afiliado, e o cartão logo
+          abaixo diz a dele. Repetir o padrão neste ponto faria a página se
+          contradizer para quem tem recompensa personalizada. */}
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-        Cada pessoa que você indicar pode liberar 1 Cupom de Entrada de R$
-        10,00.
+        Cada compra confirmada de quem você indicar vira progresso, e o
+        progresso vira Cupom de Entrada.
       </p>
     </header>
   );
@@ -395,7 +438,7 @@ function Numero({
   icone,
 }: {
   rotulo: string;
-  valor: number;
+  valor: string;
   icone: React.ReactNode;
 }) {
   return (

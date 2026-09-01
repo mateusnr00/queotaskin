@@ -196,6 +196,7 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   autoCloseOnDraw: false,
   showDrawDate: false,
   allowReceiptDownload: false,
+  aceitaCupomDeAfiliado: true,
   showParticipantName: false,
   modality: "OWN_DRAW",
   // Números aleatórios, e não escolha manual: é o padrão pedido, e é o que
@@ -1024,6 +1025,12 @@ export function RaffleForm({
                     label="Permite download do comprovante"
                     aviso="sem efeito"
                     description="A tela do comprovante ainda não tem botão de baixar, então esta chave fica só guardada."
+                  />
+                  <SwitchField
+                    control={form.control}
+                    name="aceitaCupomDeAfiliado"
+                    label="Aceita Cupom de Entrada do programa de afiliados"
+                    description="Desligado, quem tem cupom não consegue usá-lo nesta campanha. O cupom abate até o valor de face dele numa cota, e a diferença é cobrada normalmente."
                   />
                 </div>
               </SecaoDoFormulario>

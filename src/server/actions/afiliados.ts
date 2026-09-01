@@ -20,6 +20,7 @@ import {
   ajustarEntradas,
   alterarCodigo,
   ativarAfiliado,
+  definirConfigDeRecompensa,
   definirStatusDoAfiliado,
   vincularIndicacao,
 } from "@/server/services/afiliados";
@@ -256,5 +257,62 @@ export async function ajustarEntradasAction(
     if (err instanceof DomainError) return { ok: false, error: err.message };
     console.error("[ajustarEntradasAction]", err);
     return { ok: false, error: "Erro ao ajustar as entradas" };
+  }
+}
+
+/**
+ * Salva a configuração de recompensa de um afiliado.
+ *
+ * O backend é a fonte canônica: ele deriva o valor do cupom do limiar e da
+ * porcentagem, e recusa se o que a tela mandou não bater. Não mexe em cupom
+ * já concedido nem no progresso; a mudança vale daqui para a frente, e o
+ * de-para fica no histórico com o nome de quem mudou.
+ */
+export async function definirConfigDeRecompensaAction(
+  raw: unknown,
+): Promise<ActionResult<{ valorDoCupomEmCentavos: number }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+    const parsed = alvoSchema
+      .extend({
+        usaConfigPropria: z.boolean(),
+        limiarEmCentavos: z.coerce.number().int(),
+        recompensaEmBps: z.coerce.number().int(),
+        valorDoCupomEmCentavos: z.coerce.number().int(),
+      })
+      .safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    const config = await definirConfigDeRecompensa({
+      userId: parsed.data.userId,
+      usaConfigPropria: parsed.data.usaConfigPropria,
+      limiarEmCentavos: parsed.data.limiarEmCentavos,
+      recompensaEmBps: parsed.data.recompensaEmBps,
+      valorDoCupomEmCentavos: parsed.data.valorDoCupomEmCentavos,
+      adminId: session.user.id,
+    });
+
+    await registrarLog({
+      acao: "afiliado.recompensa_alterada",
+      tenantId,
+      alvo: { tipo: "User", id: parsed.data.userId },
+      detalhes: {
+        personalizada: parsed.data.usaConfigPropria,
+        limiar: config.limiarEmCentavos,
+        bps: config.recompensaEmBps,
+        cupom: config.valorDoCupomEmCentavos,
+      },
+    });
+
+    revalidatePath("/admin/afiliados");
+    return {
+      ok: true,
+      data: { valorDoCupomEmCentavos: config.valorDoCupomEmCentavos },
+    };
+  } catch (err) {
+    if (err instanceof DomainError) return { ok: false, error: err.message };
+    console.error("[definirConfigDeRecompensaAction]", err);
+    return { ok: false, error: "Erro ao salvar a configuração" };
   }
 }

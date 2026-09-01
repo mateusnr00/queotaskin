@@ -631,6 +631,13 @@ model Raffle {
   // por reserva PAID) será implementada em iteração futura, por ora só os
   // toggles + tiers de combo. "Acumulativos" = somar todos os tiers atingidos
   // (ex: 100 cotas → 1+3+10+15 caixas); off = só o maior tier ganha.
+  /// A campanha aceita Cupom de Entrada do programa de afiliados.
+  ///
+  /// Ligada, qualquer cupom vale aqui, seja qual for o preço da cota: o cupom
+  /// abate até o valor de face e a pessoa paga a diferença. Não existe teto de
+  /// preço de cota.
+  aceitaCupomDeAfiliado Boolean @default(true)
+
   surpriseBoxEnabled            Boolean                 @default(false)
   surpriseBoxCombosAccumulative Boolean                 @default(false)
   // Toggles secundários do modal Caixas Surpresas (só fazem sentido com
@@ -1699,16 +1706,33 @@ model Affiliate {
   code   String          @unique
   status AffiliateStatus @default(ACTIVE)
 
-  /// LEGADO, e não é mais lido por nada.
+  /// O progresso do afiliado rumo ao próximo cupom, em CENTAVOS.
   ///
-  /// Era o progresso financeiro GERAL do afiliado, da regra antiga: a cada
-  /// R$ 10 somados de qualquer indicado saía um cupom, e o mesmo indicado
-  /// podia gerar dezenas. A regra agora é por pessoa (QualificacaoDeIndicado),
-  /// e o progresso mora lá, individual.
+  /// Soma o que TODOS os indicados dele pagaram: dois indicados com R$ 4 e
+  /// R$ 6 fecham os R$ 10 e liberam um cupom. A cada limiar alcançado sai um
+  /// cupom e o resto fica guardado, sem perder centavo.
   ///
-  /// A coluna fica porque apagar coluna não tem volta e ela é a única
-  /// testemunha de quanto cada afiliado tinha acumulado na virada.
+  /// Pode ficar NEGATIVO depois de um estorno grande: é dívida de progresso,
+  /// explícita de propósito, e só o painel administrativo enxerga. Progresso
+  /// negativo escondido seria a mesma coisa que perdoar o estorno em silêncio.
   progressoEmCentavos Int @default(0)
+
+  /// A CONFIGURAÇÃO DE RECOMPENSA DESTE AFILIADO.
+  ///
+  /// Desligada, valem os padrões globais (lib/afiliados.ts). Ligada, valem
+  /// estas três colunas, e elas viajam junto de cada cupom concedido: mudar a
+  /// configuração amanhã não pode reescrever o valor de um cupom que já
+  /// está na mão de alguém.
+  usaConfigPropria       Boolean @default(false)
+  /// A cada quantos centavos pagos sai um cupom.
+  limiarEmCentavos       Int     @default(1000)
+  /// A recompensa em basis points. 5000 = 50%, 7000 = 70%, 10000 = 100%.
+  /// Inteiro, nunca float: porcentagem em ponto flutuante erra centavo.
+  recompensaEmBps        Int     @default(5000)
+  /// O valor de face de cada cupom, em centavos. É derivável do limiar e do
+  /// bps, e fica gravado mesmo assim: é ele que o cupom copia, e uma conta
+  /// refeita depois de uma migração de arredondamento mudaria o passado.
+  valorDoCupomEmCentavos Int     @default(500)
 
   /// Herança do motor de rifas, sem uso: este programa não paga comissão.
   /// Ficam para não reescrever histórico de instalações antigas.
@@ -1756,10 +1780,19 @@ model EntradaGratis {
   /// O valor de face do cupom, em CENTAVOS.
   ///
   /// Guardado na linha, e não lido de uma constante, porque cupom é promessa:
-  /// mudar o valor do programa amanhã não pode reescrever o que já foi dado.
-  /// Ele cobre UMA cota até esse valor, é consumido por inteiro e não deixa
-  /// troco: cota de R$ 7 gasta o cupom de R$ 10 e os R$ 3 somem.
-  valorEmCentavos Int @default(1000)
+  /// mudar a configuração do afiliado amanhã não pode reescrever o valor de um
+  /// cupom que já está na mão de alguém.
+  ///
+  /// Ele abate ATÉ esse valor em UMA cota. Cota mais barata: cobre tudo e o
+  /// que sobra se perde, sem troco e sem saldo. Cota mais cara: abate o valor
+  /// de face e a pessoa paga a diferença.
+  valorEmCentavos Int @default(500)
+
+  /// A configuração que originou este cupom, copiada na concessão. Serve para
+  /// auditar por que ele vale o que vale, sem depender do que o afiliado tem
+  /// configurado hoje.
+  limiarNaConcessao Int @default(1000)
+  bpsNaConcessao    Int @default(5000)
 
   /// Em que campanha ela foi gasta. Nulo enquanto disponível.
   raffleId      String?
@@ -1786,21 +1819,16 @@ model EntradaGratis {
   @@index([reservationId])
 }
 
-/// UM CUPOM POR PESSOA INDICADA, PARA A VIDA INTEIRA.
+/// QUANTO CADA PESSOA INDICADA JÁ PAGOU.
 ///
-/// A regra antiga era progressiva e por afiliado: uma coluna de progresso
-/// somava o dinheiro de todos os indicados juntos e cuspia um cupom a cada
-/// R$ 10. Dois indicados gastando R$ 5 cada geravam cupom; um indicado
-/// gastando R$ 1.000 gerava cem. Nenhuma das duas coisas é o que se quer.
+/// Uma linha por indicado, com o total líquido dele e a data do vínculo. É o
+/// que o painel mostra como "compras confirmadas dos seus indicados", e o que
+/// diz a partir de quando o dinheiro daquela pessoa conta.
 ///
-/// Agora o progresso é individual e mora aqui, uma linha por pessoa indicada.
-/// Ao alcançar R$ 10 em pagamentos confirmados, aquela pessoa libera UM cupom,
-/// e nunca mais outro, quanto gaste depois.
-///
-/// A trava não é um `if`: `indicadoId` é único, então não existem duas
-/// qualificações para a mesma pessoa, e `entradaId` é único, então o mesmo
-/// cupom não pode ser reclamado por duas qualificações. Webhook reentregue e
-/// pagamentos simultâneos esbarram nos dois.
+/// NÃO É MAIS UM PORTÃO. A regra de "um cupom por pessoa na vida" saiu: a
+/// recompensa voltou a ser progressiva e por afiliado, e o mesmo indicado
+/// contribui quantas vezes comprar. `qualificadoEm` e `entradaId` ficam como
+/// registro daquela época e não são lidos por nenhuma decisão.
 model QualificacaoDeIndicado {
   id          String @id @default(cuid())
   affiliateId String
@@ -1811,9 +1839,9 @@ model QualificacaoDeIndicado {
   /// entrou depois do vínculo e descontando estorno. Recalculado a cada
   /// pagamento; não é um acumulador cego.
   pagoEmCentavos Int       @default(0)
-  /// Quando alcançou o limiar. Nulo enquanto não alcançou.
+  /// LEGADO da regra de um cupom por indicado.
   qualificadoEm  DateTime?
-  /// O cupom que essa qualificação gerou.
+  /// LEGADO da regra de um cupom por indicado.
   entradaId      String?   @unique
   /// Preenchido quando um estorno derrubou o total DEPOIS do cupom ter sido
   /// usado: o cupom não volta (a cota existiu), mas fica registrado, e esta
@@ -1835,6 +1863,9 @@ enum EstadoDaEntradaGratis {
   /// Presa a uma compra com Pix pendente. Volta a DISPONIVEL se expirar.
   RESERVADA
   USADA
+  /// Recolhido por estorno ou por decisão administrativa. Não volta ao saldo,
+  /// e fica na tabela: cupom cancelado que some é cupom que ninguém explica.
+  CANCELADA
 }
 
 /// O histórico do programa, e a fonte da verdade.
@@ -1889,8 +1920,11 @@ enum TipoDeMovimentoDeAfiliado {
   ESTORNO_DE_COMPRA
   /// Ajuste manual do painel, sempre com motivo e responsável.
   AJUSTE
-  /// O cupom foi recolhido porque o estorno derrubou o total do indicado.
+  /// LEGADO: o cupom foi recolhido porque o estorno derrubou o total do
+  /// indicado, na regra de um cupom por pessoa.
   QUALIFICACAO_REVERTIDA
+  /// Um admin mudou a configuração de recompensa do afiliado.
+  CONFIG_ALTERADA
 }
 
 model AffiliateCommission {

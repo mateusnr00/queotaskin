@@ -88,6 +88,13 @@ export const raffleGeneralSchema = z.object({
   autoCloseOnDraw: z.coerce.boolean().default(true),
   showDrawDate: z.coerce.boolean().default(true),
   allowReceiptDownload: z.coerce.boolean().default(true),
+  /**
+   * A campanha aceita Cupom de Entrada do programa de afiliados.
+   *
+   * Ligada por padrão. O cupom abate até o valor de face dele em uma cota, e a
+   * pessoa paga a diferença quando a cota custa mais: não existe teto de preço.
+   */
+  aceitaCupomDeAfiliado: z.coerce.boolean().default(true),
   showParticipantName: z.coerce.boolean().default(false),
   // Continua aceito para não quebrar payload antigo, mas não alimenta mais
   // o selo: a faixa inicial virou automática e o texto dela mora em

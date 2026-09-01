@@ -14,19 +14,38 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Minus, Plus, Search, Ticket, UserPlus, X } from "lucide-react";
+import {
+  Check,
+  Minus,
+  Percent,
+  Plus,
+  Search,
+  Ticket,
+  UserPlus,
+  X,
+} from "lucide-react";
 
 import {
   ajustarEntradasAction,
   alterarCodigoDoAfiliadoAction,
   ativarAfiliadoAction,
+  definirConfigDeRecompensaAction,
   definirStatusDoAfiliadoAction,
 } from "@/server/actions/afiliados";
-import { normalizarCodigo } from "@/lib/afiliados";
+import {
+  bpsDaPorcentagem,
+  bpsDoValorDoCupom,
+  conferirConfig,
+  normalizarCodigo,
+  porcentagemDosBps,
+  valorDoCupom,
+} from "@/lib/afiliados";
+import { formatBRL } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Moldura } from "@/components/ui/moldura";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 export interface AfiliadoNaLista {
@@ -37,10 +56,17 @@ export interface AfiliadoNaLista {
   codigo: string;
   status: "INACTIVE" | "ACTIVE" | "SUSPENDED";
   indicados: number;
-  qualificados: number;
   disponiveis: number;
   reservadas: number;
   usadas: number;
+  /** Progresso rumo ao próximo cupom. Negativo é dívida de estorno. */
+  progressoEmCentavos: number;
+  usaConfigPropria: boolean;
+  config: {
+    limiarEmCentavos: number;
+    recompensaEmBps: number;
+    valorDoCupomEmCentavos: number;
+  };
   desde: string;
 }
 
@@ -348,8 +374,11 @@ function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Metrica rotulo="Indicados" valor={String(afiliado.indicados)} />
           <Metrica
-            rotulo="Qualificados"
-            valor={String(afiliado.qualificados)}
+            rotulo="Progresso"
+            valor={`${formatBRL(afiliado.progressoEmCentavos / 100)} / ${formatBRL(
+              afiliado.config.limiarEmCentavos / 100,
+            )}`}
+            alerta={afiliado.progressoEmCentavos < 0}
           />
           <Metrica
             rotulo="Disponíveis"
@@ -359,6 +388,8 @@ function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
           <Metrica rotulo="Reservadas" valor={String(afiliado.reservadas)} />
           <Metrica rotulo="Usadas" valor={String(afiliado.usadas)} />
         </dl>
+
+        <ConfigDeRecompensa afiliado={afiliado} />
 
         {ajustando ? (
           <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
@@ -434,10 +465,13 @@ function Metrica({
   rotulo,
   valor,
   destaque,
+  alerta,
 }: {
   rotulo: string;
   valor: string;
   destaque?: boolean;
+  /** Dívida de progresso: número que precisa ser visto, não escondido. */
+  alerta?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
@@ -448,10 +482,273 @@ function Metrica({
         className={cn(
           "mt-0.5 text-sm font-bold tabular-nums",
           destaque && "text-emerald-400",
+          alerta && "text-red-400",
         )}
       >
         {valor}
       </dd>
     </div>
+  );
+}
+
+
+/**
+ * A configuração de recompensa de um afiliado.
+ *
+ * Os dois campos de recompensa (porcentagem e valor do cupom) são a mesma
+ * coisa em formatos diferentes, e editar um recalcula o outro na hora. Quem
+ * manda é o backend: ele deriva o valor do limiar e da porcentagem, e recusa
+ * se o que a tela mandou não bater. A tela mostra a conta, ela não é a conta.
+ *
+ * A prévia em texto existe porque "5000 bps" não é como ninguém pensa: quem
+ * está configurando quer ler a frase que o afiliado vai ler.
+ */
+function ConfigDeRecompensa({ afiliado }: { afiliado: AfiliadoNaLista }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [aberto, setAberto] = useState(false);
+  const [propria, setPropria] = useState(afiliado.usaConfigPropria);
+  const [limiar, setLimiar] = useState(
+    (afiliado.config.limiarEmCentavos / 100).toFixed(2).replace(".", ","),
+  );
+  const [pct, setPct] = useState(
+    porcentagemDosBps(afiliado.config.recompensaEmBps)
+      .toFixed(2)
+      .replace(".", ","),
+  );
+  const [valor, setValor] = useState(
+    (afiliado.config.valorDoCupomEmCentavos / 100).toFixed(2).replace(".", ","),
+  );
+
+  const emCent = (texto: string) => {
+    const n = Number.parseFloat(texto.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  };
+  const limiarCent = emCent(limiar);
+  const bps = bpsDaPorcentagem(
+    Number.parseFloat(pct.replace(".", "").replace(",", ".")) || 0,
+  );
+  const valorCent = valorDoCupom(limiarCent, bps);
+  const problema = conferirConfig({
+    limiarEmCentavos: limiarCent,
+    recompensaEmBps: bps,
+    valorDoCupomEmCentavos: valorCent,
+  });
+
+  // Editar o valor em reais recalcula a porcentagem, e vice-versa.
+  function mudarValor(texto: string) {
+    setValor(texto);
+    const novo = emCent(texto);
+    if (limiarCent > 0 && novo > 0) {
+      setPct(
+        (bpsDoValorDoCupom(limiarCent, novo) / 100).toFixed(2).replace(".", ","),
+      );
+    }
+  }
+  function mudarPct(texto: string) {
+    setPct(texto);
+    const novoBps = bpsDaPorcentagem(
+      Number.parseFloat(texto.replace(".", "").replace(",", ".")) || 0,
+    );
+    setValor(
+      (valorDoCupom(limiarCent, novoBps) / 100).toFixed(2).replace(".", ","),
+    );
+  }
+
+  // Progresso guardado que o novo limiar já cobre vira cupom na hora. É a
+  // única consequência imediata de salvar, então ela é dita antes.
+  const cuponsImediatos =
+    limiarCent > 0 && afiliado.progressoEmCentavos > 0
+      ? Math.floor(afiliado.progressoEmCentavos / limiarCent)
+      : 0;
+
+  function salvar() {
+    if (propria && problema) {
+      toast.error(problema.mensagem);
+      return;
+    }
+    const resumo = propria
+      ? `A cada ${formatBRL(limiarCent / 100)}, 1 cupom de ${formatBRL(valorCent / 100)} (${(bps / 100).toLocaleString("pt-BR")}%).`
+      : "Voltar para a configuração padrão do programa.";
+    const aviso =
+      cuponsImediatos > 0 && propria
+        ? `\n\nEsta alteração gerará imediatamente ${cuponsImediatos} cupom(ns) a partir do progresso já acumulado.`
+        : "";
+    if (!window.confirm(`${resumo}${aviso}\n\nConfirmar?`)) return;
+
+    startTransition(async () => {
+      const r = await definirConfigDeRecompensaAction({
+        userId: afiliado.userId,
+        usaConfigPropria: propria,
+        limiarEmCentavos: limiarCent,
+        recompensaEmBps: bps,
+        valorDoCupomEmCentavos: valorCent,
+      });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Configuração de recompensa salva");
+      setAberto(false);
+      router.refresh();
+    });
+  }
+
+  if (!aberto) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8"
+          onClick={() => setAberto(true)}
+        >
+          <Percent aria-hidden className="mr-1.5 h-3.5 w-3.5" />
+          Configuração de recompensa
+        </Button>
+        <span className="text-[11px] text-muted-foreground">
+          {formatBRL(afiliado.config.valorDoCupomEmCentavos / 100)} a cada{" "}
+          {formatBRL(afiliado.config.limiarEmCentavos / 100)}
+          {afiliado.usaConfigPropria ? " (personalizada)" : " (padrão)"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+      <p className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+        Configuração de recompensa
+      </p>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <Switch checked={propria} onCheckedChange={setPropria} />
+        Usar configuração personalizada
+      </label>
+
+      <div
+        className={cn(
+          "grid gap-2 sm:grid-cols-3",
+          !propria && "pointer-events-none opacity-50",
+        )}
+      >
+        <Campo
+          rotulo="Gerar um cupom a cada"
+          prefixo="R$"
+          valor={limiar}
+          aoMudar={(v) => {
+            setLimiar(v);
+            const novo = emCent(v);
+            setValor((valorDoCupom(novo, bps) / 100).toFixed(2).replace(".", ","));
+          }}
+        />
+        <Campo
+          rotulo="Percentual de recompensa"
+          sufixo="%"
+          valor={pct}
+          aoMudar={mudarPct}
+        />
+        <Campo
+          rotulo="Valor de cada cupom"
+          prefixo="R$"
+          valor={valor}
+          aoMudar={mudarValor}
+        />
+      </div>
+
+      <div className="rounded-lg border border-border bg-background/40 px-3 py-2 text-xs leading-relaxed">
+        <p className="font-semibold">Com esta configuração:</p>
+        {propria ? (
+          problema ? (
+            <p className="mt-1 text-red-400">{problema.mensagem}</p>
+          ) : (
+            <>
+              <p className="mt-1">
+                A cada {formatBRL(limiarCent / 100)} pagos pelos indicados,{" "}
+                {afiliado.nome.split(" ")[0]} receberá 1 cupom de{" "}
+                {formatBRL(valorCent / 100)}.
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                Equivalente a {(bps / 100).toLocaleString("pt-BR")}% de
+                recompensa.
+              </p>
+            </>
+          )
+        ) : (
+          <p className="mt-1 text-muted-foreground">
+            Valem os valores padrão do programa.
+          </p>
+        )}
+        {propria && cuponsImediatos > 0 && (
+          <p className="mt-1.5 font-semibold text-amber-500">
+            Esta alteração gerará imediatamente {cuponsImediatos} cupom(ns) a
+            partir do progresso já acumulado.
+          </p>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          className="h-8"
+          disabled={isPending || (propria && problema != null)}
+          onClick={salvar}
+        >
+          Salvar
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8"
+          onClick={() => setAberto(false)}
+        >
+          Cancelar
+        </Button>
+      </div>
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        A mudança vale para os próximos cupons. Os que já foram concedidos
+        mantêm o valor com que nasceram.
+      </p>
+    </div>
+  );
+}
+
+function Campo({
+  rotulo,
+  valor,
+  aoMudar,
+  prefixo,
+  sufixo,
+}: {
+  rotulo: string;
+  valor: string;
+  aoMudar: (v: string) => void;
+  prefixo?: string;
+  sufixo?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+        {rotulo}
+      </span>
+      <span className="mt-1 flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5">
+        {prefixo && (
+          <span className="text-xs text-muted-foreground">{prefixo}</span>
+        )}
+        <input
+          value={valor}
+          onChange={(e) => aoMudar(e.target.value)}
+          inputMode="decimal"
+          className="h-9 w-full min-w-0 bg-transparent font-mono text-sm outline-none"
+        />
+        {sufixo && (
+          <span className="text-xs text-muted-foreground">{sufixo}</span>
+        )}
+      </span>
+    </label>
   );
 }

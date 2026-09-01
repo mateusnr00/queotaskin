@@ -30,8 +30,9 @@ import type { CreateReservationInput } from "@/lib/validations/raffle";
 import { pickAvailableNumbers } from "@/server/services/raffles";
 import { bilhetesDe, dobroAtivo } from "@/lib/promocao-em-dobro";
 import {
+  amarrarCupomNaCompra,
   liberarEntradaGratis,
-  reservarEntradaGratis,
+  reivindicarCupomDaCompra,
 } from "@/server/services/afiliados";
 import { descontoDoCupom, emCentavos, emReais } from "@/lib/afiliados";
 
@@ -162,7 +163,11 @@ export async function computeTicketsToRecreate(
  * decide desconto.
  */
 export async function createReservation(
-  input: CreateReservationInput & { usarEntradaDe?: string | null },
+  input: CreateReservationInput & {
+    usarEntradaDe?: string | null;
+    /** Qual cupom, escolhido pela pessoa. Cupons podem ter valores diferentes. */
+    cupomId?: string | null;
+  },
 ) {
   // 0. ANTES de tudo: libera números de reservas que já expiraram nessa rifa.
   // Custo: 1 query indexada. Se nada expirou, retorna imediatamente.
@@ -220,23 +225,21 @@ export async function createReservation(
   // afiliados, que lê totalAmount, credita só o dinheiro que entrou de
   // verdade. Entrada Grátis não gera Entrada Grátis para ninguém.
   //
-  // E o cupom tem TETO: ele vale R$ 10 e cobre uma cota até esse valor. Cota
-  // mais cara recusa o cupom inteiro, sem pagamento complementar; cota mais
-  // barata consome o cupom do mesmo jeito, e o que sobra do valor de face se
-  // perde. Aqui a conta é a mesma nos dois casos, porque o desconto é o preço
-  // da cota, nunca o valor do cupom.
-  const { aceita, descontoEmCentavos } = descontoDoCupom({
-    precoDaCotaEmCentavos: emCentavos(pricePerNumber),
-  });
-  if (input.usarEntradaDe && pricePerNumber > 0 && !aceita) {
+  // O cupom abate ATÉ o valor de face dele, em UMA cota:
+  //
+  //   cota de R$ 2 com cupom de R$ 5   abate R$ 2, e os R$ 3 se perdem
+  //   cota de R$ 12 com cupom de R$ 5  abate R$ 5, e a pessoa paga R$ 7
+  //
+  // Não existe troco, saldo, divisão entre cotas nem soma de cupons. E não
+  // existe teto de preço de cota: campanha cara aceita cupom do mesmo jeito,
+  // cobrando a diferença.
+  const usaCupom = Boolean(input.usarEntradaDe && input.cupomId) && pricePerNumber > 0;
+  if (usaCupom && !raffle.aceitaCupomDeAfiliado) {
     throw new ValidationError(
-      "O Cupom de Entrada vale até R$ 10,00 e não cobre uma cota mais cara que isso.",
+      "Esta campanha não aceita Cupom de Entrada.",
     );
   }
-  const usaEntrada = Boolean(input.usarEntradaDe) && pricePerNumber > 0 && aceita;
-  const desconto = usaEntrada ? emReais(descontoEmCentavos) : 0;
-  const totalAmount = Math.max(0, bruto - desconto);
-  const isFreeReservation = totalAmount <= 0;
+  const totalAmountSemCupom = bruto;
   const now = new Date();
 
   // 4b. Promoção em dobro: sorteia os números extras agora, antes da
@@ -288,6 +291,33 @@ export async function createReservation(
   //    comemorativa, sem código extra.
   try {
     return await prisma.$transaction(async (tx) => {
+      // O CUPOM É REIVINDICADO ANTES DA COMPRA EXISTIR.
+      //
+      // É ele que decide quanto a compra vai custar: sem saber o valor de face
+      // do cupom que a pessoa escolheu, o total sairia errado. Reivindicar
+      // primeiro, dentro da mesma transação, garante que ou as duas coisas
+      // acontecem, ou nenhuma. Se o cupom não for dela, ou já tiver sido gasto
+      // entre a tela e o clique, a compra inteira volta atrás.
+      let cupom: { id: string; valorEmCentavos: number } | null = null;
+      if (usaCupom && input.usarEntradaDe && input.cupomId) {
+        cupom = await reivindicarCupomDaCompra(
+          tx,
+          input.usarEntradaDe,
+          input.cupomId,
+        );
+      }
+
+      const desconto = cupom
+        ? emReais(
+            descontoDoCupom({
+              precoDaCotaEmCentavos: emCentavos(pricePerNumber),
+              valorDoCupomEmCentavos: cupom.valorEmCentavos,
+            }).descontoEmCentavos,
+          )
+        : 0;
+      const totalAmount = Math.max(0, totalAmountSemCupom - desconto);
+      const isFreeReservation = totalAmount <= 0;
+
       const reservation = await tx.reservation.create({
         data: {
           raffleId: raffle.id,
@@ -335,16 +365,14 @@ export async function createReservation(
         });
       }
 
-      // A entrada é reivindicada DENTRO da transação da compra. Fora dela,
-      // uma falha na criação dos tickets deixaria a entrada gasta numa compra
-      // que não existe. Aqui, ou as duas coisas acontecem, ou nenhuma.
-      //
-      // Compra que já nasce paga (total zerado) gasta a entrada na hora; a que
-      // espera Pix apenas reserva, e a reserva volta ao saldo se expirar.
-      if (usaEntrada && input.usarEntradaDe) {
-        await reservarEntradaGratis(
+      // Agora que a compra existe, o cupom é amarrado a ela. Compra que já
+      // nasce paga (total zerado) gasta o cupom na hora; a que espera Pix
+      // apenas reserva, e a reserva volta ao saldo se expirar.
+      if (cupom && input.usarEntradaDe) {
+        await amarrarCupomNaCompra(
           tx,
           input.usarEntradaDe,
+          cupom,
           raffle.id,
           reservation.id,
           isFreeReservation,
