@@ -43,6 +43,7 @@ import { prisma } from "@/lib/db";
 import { fullSkinName } from "@/lib/cs2";
 import { nomeCurto } from "@/lib/nome-curto";
 import type { TimeDeCS2 } from "@/lib/times-cs2";
+import { rankFromXp, type Rank } from "@/lib/rank";
 import { registrarLog } from "@/server/services/activity-log";
 import { VENDIDO } from "@/server/services/vendidos";
 import {
@@ -755,6 +756,17 @@ export interface EstadoPublicoDoSorteio {
      * seriam duas pistas de quem ganhou, e o time estreita muito o palpite.
      */
     time: TimeDeCS2 | null;
+    /**
+     * O rank do ganhador, para o selo aparecer à esquerda do nome.
+     *
+     * Vai RESOLVIDO do servidor, e com o `xp` zerado de propósito: o selo só
+     * precisa de nível, patente e cor, e XP é dado da conta de alguém. Sai
+     * pela mesma chave do nome, então antes da revelação não existe.
+     *
+     * Nulo também quando o rank está desligado no tenant, ou quando a compra
+     * foi feita sem conta: nos dois casos não há patente para mostrar.
+     */
+    rank: Rank | null;
   } | null;
 
   erro: string | null;
@@ -786,6 +798,7 @@ export function estadoPublico(
   amostraDeTitulos: number[] = [],
   /** Já resolvido por quem carregou: esta função é pura sobre o que recebe. */
   timeDoGanhador: TimeDeCS2 | null = null,
+  rankDoGanhador: Rank | null = null,
 ): EstadoPublicoDoSorteio {
   const situacao = situacaoDe(draw);
   const mostrarNumero = podeMostrarNumero(situacao, agora);
@@ -843,6 +856,7 @@ export function estadoPublico(
             numero: draw.winningNumber,
             ganhador: mostrarGanhador ? draw.winnerName : null,
             time: mostrarGanhador ? timeDoGanhador : null,
+            rank: mostrarGanhador ? rankDoGanhador : null,
           }
         : null,
 
@@ -952,9 +966,12 @@ export async function carregarEstadoPublico(
   // O time de quem ganhou, para o emblema aparecer ao lado do nome na
   // revelação. Só é buscado quando existe conta ligada: compra feita sem login
   // não tem time, e aí a consulta seria em vão.
-  const timeDoGanhador = atualizado.winnerUserId
-    ? await timeDoUsuario(atualizado.winnerUserId)
-    : null;
+  const [timeDoGanhador, rankDoGanhador] = atualizado.winnerUserId
+    ? await Promise.all([
+        timeDoUsuario(atualizado.winnerUserId),
+        rankDoUsuario(atualizado.winnerUserId, atualizado.raffleId),
+      ])
+    : [null, null];
 
   return estadoPublico(
     atualizado,
@@ -963,7 +980,45 @@ export async function carregarEstadoPublico(
     semente,
     amostra,
     timeDoGanhador,
+    rankDoGanhador,
   );
+}
+
+/**
+ * O rank de uma conta, pronto para o selo.
+ *
+ * Lê a MESMA fonte que a página "Minha conta" e o ranking usam, `UserProgress`,
+ * e chama a MESMA função, `rankFromXp`: o selo do ganhador não pode discordar
+ * do selo que a própria pessoa vê na conta dela. `totalSpent` entra porque o
+ * GOAT é a única patente que também exige gasto, e sem ele o topo apareceria
+ * como PRO.
+ *
+ * O que volta tem `xp` zerado. O selo precisa de nível, patente e cor; XP e
+ * gasto são dados da conta de alguém e não têm por que atravessar a rede numa
+ * página que o site inteiro assiste.
+ *
+ * Nulo quando o rank está desligado no tenant, ou quando não há progresso
+ * gravado: quem não tem linha ainda cai no nível inicial, e mostrar o selo
+ * zero para uma conta sem histórico não diz nada.
+ */
+async function rankDoUsuario(
+  userId: string,
+  raffleId: string,
+): Promise<Rank | null> {
+  const rifa = await prisma.raffle.findUnique({
+    where: { id: raffleId },
+    select: { tenantId: true, tenant: { select: { rankEnabled: true } } },
+  });
+  if (!rifa?.tenant.rankEnabled) return null;
+
+  const progresso = await prisma.userProgress.findUnique({
+    where: { userId_tenantId: { userId, tenantId: rifa.tenantId } },
+    select: { xp: true, totalSpent: true },
+  });
+  if (!progresso) return null;
+
+  const rank = rankFromXp(progresso.xp, Number(progresso.totalSpent));
+  return { ...rank, xp: 0 };
 }
 
 /**

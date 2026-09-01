@@ -50,6 +50,7 @@ import {
   type SonsDoSorteio,
 } from "@/components/sorteio/usar-som";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
+import { RankBadge } from "@/components/rank/rank-badge";
 import { BotaoReivindicar } from "@/components/public/botao-reivindicar";
 
 /** Os últimos segundos, quando a contagem troca de cara. */
@@ -685,16 +686,34 @@ function Revelacao({
                   <p className="text-[11px] font-bold tracking-[0.2em] text-red-400 uppercase">
                     Temos um ganhador
                   </p>
-                  {/* O nome e, ao lado, o emblema do time para quem essa
-                      pessoa torce. Era o lugar que faltava: o emblema estava
-                      ligado nas listas de prêmios e não aqui, que é onde todo
-                      mundo olha quando o sorteio acaba. */}
-                  <p className="flex flex-wrap items-center justify-center gap-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                    {ganhador}
+                  {/* SELO DO RANK, NOME, EMBLEMA DO TIME: um grupo só.
+                      É a identificação de quem ganhou, e ela vale mais junta:
+                      a patente diz o quanto a pessoa jogou, o time diz por
+                      quem ela torce, e os dois emolduram o nome.
+
+                      O selo é o MESMO componente do rank em todo o resto do
+                      site (RankBadge), com o rank já resolvido no servidor.
+                      Nível, MVP, PRO e GOAT saem do mesmo desenho de sempre;
+                      esta tela não conhece regra de XP nenhuma.
+
+                      Selo e emblema não encolhem; o nome é quem cede. Com
+                      "João Pedro de Oliveira Nascimento" o texto quebra em
+                      duas linhas e os dois continuam do lado dele, em vez de
+                      um deles ser espremido ou cair sozinho numa linha. */}
+                  <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-3xl font-black tracking-tight text-white sm:text-4xl">
+                    {estado.resultado?.rank && (
+                      <RankBadge
+                        rank={estado.resultado.rank}
+                        size="md"
+                        className="shrink-0"
+                      />
+                    )}
+                    <span className="min-w-0 break-words">{ganhador}</span>
                     {estado.resultado?.time && (
                       <EmblemaDoTime
                         time={estado.resultado.time}
                         tamanho="lg"
+                        className="shrink-0"
                       />
                     )}
                   </p>
