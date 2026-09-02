@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { processarSorteios } from "@/server/services/sorteio-ao-vivo";
+import { varrerCronogramas } from "@/server/services/cronograma";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +42,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const resultado = await processarSorteios();
+    // A fila do cronograma vem DEPOIS, e na mesma passada: o sorteio que
+    // acabou de terminar aqui em cima já pode liberar o próximo logo abaixo.
+    // Ela cobre o que o gancho do motor não alcança: o intervalo configurado
+    // entre sorteios, a campanha encerrada na mão e a nova tentativa depois de
+    // uma ativação que falhou.
+    const cronograma = await varrerCronogramas();
     return NextResponse.json(
-      { ok: true, ...resultado },
+      { ok: true, ...resultado, cronograma },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {

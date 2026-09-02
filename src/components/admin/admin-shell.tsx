@@ -21,6 +21,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  CalendarClock,
   TicketCheck,
   Trophy,
   UserCog,
@@ -39,6 +40,10 @@ import type { Marca } from "@/lib/brand";
 const NAV_GERAL = [
   { href: "/admin", label: "Início", icon: LayoutDashboard },
   { href: "/admin/sorteios", label: "Sorteios", icon: TicketCheck },
+  // A fila do dia. Vive ao lado de Sorteios porque é a mesma matéria vista de
+  // outro ângulo: lá se prepara a campanha, aqui se decide a ordem em que elas
+  // entram no ar.
+  { href: "/admin/sorteios/cronograma", label: "Cronograma", icon: CalendarClock },
   { href: "/admin/skins", label: "Catálogo de skins", icon: Boxes },
   // "Reservas" saiu daqui. Era uma lista global de todas as reservas de
   // todas as campanhas, e cada campanha ja tem a propria em Sorteios >

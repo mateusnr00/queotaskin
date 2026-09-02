@@ -5,6 +5,9 @@ import { MessageCircle, Sparkles, TrendingUp, Percent } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CartaoDoCronograma } from "@/components/admin/cartao-do-cronograma";
+import { carregarCronograma } from "@/server/services/cronograma";
+import { proximoDaFila } from "@/lib/cronograma";
 import { SalesChart, type SalesChartPoint } from "@/components/admin/sales-chart";
 import { StatDeHoje } from "@/components/admin/estatisticas/stat-de-hoje";
 import { SeletorDePeriodo } from "@/components/admin/estatisticas/seletor-de-periodo";
@@ -170,6 +173,22 @@ export default async function AdminDashboardPage({
     }),
   ]);
 
+  // A fila do cronograma. Consulta própria e fora do Promise.all acima: ela
+  // cria a fila do painel na primeira vez que alguém abre o Início, e misturar
+  // uma escrita no meio de nove leituras paralelas esconde essa diferença.
+  const { cronograma, itens: itensDoCronograma } =
+    await carregarCronograma(tenantId);
+  const itemAtivoDoCronograma =
+    itensDoCronograma.find((i) => i.status === "ATIVO") ?? null;
+  const emEsperaDoCronograma = itensDoCronograma.filter(
+    (i) => i.status === "AGUARDANDO",
+  );
+  const proximoItem = proximoDaFila(emEsperaDoCronograma);
+  const proximoDoCronograma = proximoItem
+    ? { titulo: emEsperaDoCronograma.find((i) => i.id === proximoItem.id)!.raffle.title }
+    : null;
+  const aguardandoNoCronograma = emEsperaDoCronograma.length;
+
   const conversaoHoje =
     visitas.visitantesHoje > 0
       ? Math.round((kpiHoje.atual.reservas / visitas.visitantesHoje) * 100)
@@ -315,7 +334,7 @@ export default async function AdminDashboardPage({
         <p className="text-xs text-muted-foreground">Tempo real</p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-5">
           <h3 className="mb-3 font-semibold">Reservas em risco</h3>
           <Risco risco={risco} />
@@ -324,6 +343,13 @@ export default async function AdminDashboardPage({
           <h3 className="mb-3 font-semibold">Campanhas ativas</h3>
           <ProgressoCampanhas campanhas={campanhas} />
         </Card>
+        <CartaoDoCronograma
+          automacaoAtiva={cronograma.automacaoAtiva}
+          ativo={itemAtivoDoCronograma?.raffle.title ?? null}
+          proximo={proximoDoCronograma?.titulo ?? null}
+          aguardando={aguardandoNoCronograma}
+          comErro={Boolean(cronograma.ultimoErro)}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

@@ -60,9 +60,37 @@ enum TenantHostKind {
 
 enum RaffleStatus {
   DRAFT
+  /// Pronto e na fila do cronograma, esperando a vez de ir ao ar.
+  ///
+  /// Fica DEPOIS de DRAFT no enum de proposito: a lista do painel ordena por
+  /// status, e a fila pertence ao topo, junto do que ainda pede trabalho.
+  /// Para o publico ele nao existe: NA_VITRINE so aceita ACTIVE e FINISHED, e
+  /// a pagina do slug recusa qualquer coisa fora disso.
+  QUEUED
   ACTIVE
   FINISHED
   CANCELLED
+}
+
+/// A situacao de um sorteio DENTRO da fila do cronograma.
+///
+/// Separada de RaffleStatus porque as duas respondem perguntas diferentes: o
+/// status da campanha diz se ela esta a venda, e este diz onde ela esta na
+/// fila. A mesma campanha pode sair da fila (REMOVIDO) e continuar existindo
+/// como rascunho.
+enum ScheduleItemStatus {
+  /// Esperando a vez.
+  AGUARDANDO
+  /// E o sorteio que esta no ar por conta desta fila.
+  ATIVO
+  /// Cumpriu o ciclo inteiro: vendeu, sorteou, terminou.
+  CONCLUIDO
+  /// Pulado neste ciclo. Continua existindo e pode voltar para a fila.
+  PULADO
+  /// Tirado da fila pelo admin. A campanha volta a ser rascunho.
+  REMOVIDO
+  /// A ativacao falhou. Exige olho humano, e a fila para ate alguem resolver.
+  FALHOU
 }
 
 enum RafflePrivacy {
@@ -461,6 +489,7 @@ model Tenant {
   boostEntries   BoostEntry[]
   progress       UserProgress[]
   activityLogs   ActivityLog[]   @relation("TenantActivityLogs")
+  cronograma     DrawSchedule?
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -791,6 +820,9 @@ model Raffle {
   /// dois ganhadores para o mesmo prêmio.
   draw     Draw?
   drawSeed DrawSeed?
+
+  /// O lugar desta campanha na fila do cronograma, se ela estiver lá.
+  itemDoCronograma DrawScheduleItem?
 
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
@@ -2268,6 +2300,86 @@ model ActivityLog {
 /// precisa ser avisado de que a contagem começou, ele já tem a hora e conta
 /// sozinho. E é isso que faz o sistema sobreviver a um restart no meio da
 /// transmissão: o estado não estava na memória de ninguém.
+/// A FILA DE SORTEIOS DE UM PAINEL.
+///
+/// Uma por tenant, criada na primeira vez que alguem abre o cronograma. Uma so
+/// de proposito: com duas filas, "qual e o proximo?" passaria a ter duas
+/// respostas, e essa e a pergunta que o recurso inteiro existe para responder.
+/// O agrupamento por dia que o painel mostra vem do campo `dia` de cada item,
+/// e e rotulo de organizacao: a fila nunca para por causa da virada da noite.
+model DrawSchedule {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Com a automacao pausada, o sorteio no ar continua vendendo, sorteando e
+  /// terminando normalmente. A unica coisa que deixa de acontecer e a
+  /// ativacao do proximo da fila.
+  automacaoAtiva Boolean @default(true)
+
+  /// Espera entre o fim de um sorteio e a ativacao do proximo, em segundos.
+  /// Zero e imediato, que e o padrao. A contagem comeca quando o sorteio
+  /// anterior TERMINA de verdade, nao quando ele esgota.
+  atrasoEmSegundos Int @default(0)
+
+  /// A ultima falha de ativacao, para o painel mostrar o aviso e oferecer
+  /// "tentar novamente". Limpo assim que uma ativacao da certo.
+  ultimoErro   String?
+  ultimoErroEm DateTime?
+
+  itens DrawScheduleItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// UM SORTEIO DENTRO DA FILA.
+///
+/// A campanha continua sendo dona de tudo o que e sorteio (venda, premiacao,
+/// motor, ganhador). Este registro so guarda o lugar dela na fila e o que
+/// aconteceu com ela ali: quando entrou, quando foi ativada, se foi pulada,
+/// se a ativacao falhou, e se quem ativou foi o sistema ou uma pessoa.
+model DrawScheduleItem {
+  id         String       @id @default(cuid())
+  scheduleId String
+  schedule   DrawSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  /// Uma campanha ocupa no maximo uma linha da fila, garantido aqui. Item
+  /// removido ou concluido tambem ocupa a chave: recolocar na fila reaproveita
+  /// a linha, e com isso o historico da campanha na fila fica num lugar so.
+  raffleId String @unique
+  raffle   Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+
+  status ScheduleItemStatus @default(AGUARDANDO)
+
+  /// Menor primeiro. So ordena entre os que ainda esperam.
+  posicao Int @default(0)
+
+  /// O dia a que este item pertence no painel. Rotulo de organizacao: o
+  /// sistema NUNCA compara isto com o relogio para decidir alguma coisa, ou a
+  /// fila da noite morreria a meia-noite.
+  dia DateTime? @db.Date
+
+  ativadoEm    DateTime?
+  concluidoEm  DateTime?
+  puladoEm     DateTime?
+  removidoEm   DateTime?
+
+  /// Quem ativou: "AUTOMATICO" quando veio do fim do sorteio anterior,
+  /// "MANUAL" quando alguem clicou. Nulo enquanto nao foi ativado.
+  ativadoPor String?
+
+  /// O motivo da ultima falha de ativacao deste item.
+  erro String?
+
+  criadoPorId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scheduleId, status, posicao])
+}
+
 model Draw {
   id String @id @default(cuid())
 

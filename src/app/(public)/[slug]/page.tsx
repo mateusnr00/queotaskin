@@ -45,6 +45,8 @@ import { raffleUrl } from "@/lib/raffle-url";
 import { getCurrentTenant } from "@/lib/tenant";
 import { getBrand } from "@/lib/brand";
 import { statusDaCampanha } from "@/lib/campanha-status";
+import { visivelAoPublico } from "@/lib/vitrine";
+import { ehDoPainel } from "@/lib/auth-helpers";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
 
 export async function generateMetadata({
@@ -60,6 +62,8 @@ export async function generateMetadata({
     select: {
       title: true,
       shortDescription: true,
+      status: true,
+      privacy: true,
       images: {
         where: { isCover: true },
         take: 1,
@@ -68,6 +72,11 @@ export async function generateMetadata({
     },
   });
   if (!raffle) return { title: "Sorteio" };
+  // Campanha que o público não pode abrir também não entrega título nem foto
+  // aqui. Sem esta linha, colar o link de um sorteio da fila no WhatsApp
+  // mostraria a skin e o nome da próxima campanha na pré-visualização, mesmo
+  // com a página respondendo 404 no clique.
+  if (!visivelAoPublico(raffle)) return { title: "Sorteio" };
 
   // A imagem da campanha é a melhor imagem que este link pode carregar: quem
   // recebe no WhatsApp vê a skin, não um retângulo cinza.
@@ -200,7 +209,20 @@ export default async function PublicRaffleDetailPage({
     auth(),
   ]);
   if (!raffle) notFound();
-  if (raffle.privacy === "PRIVATE") notFound();
+  // A PORTA DA FRENTE DO CRONOGRAMA.
+  //
+  // Esta consulta é por slug, então ela acha rascunho e campanha na fila do
+  // mesmo jeito que acha a que está no ar: não existe where nenhum barrando.
+  // Sem esta linha, quem descobrisse o slug de uma campanha preparada leria a
+  // página inteira dela, com skin, preço e quantidade de números, antes de o
+  // sorteio existir para o público.
+  //
+  // A pré-visualização de quem administra o painel continua funcionando, e é
+  // por isso que a checagem de sessão vem depois: ela custa uma consulta, e só
+  // é feita no caso raro de a campanha não ser pública.
+  if (!visivelAoPublico(raffle) && !(await ehDoPainel(raffle.tenantId))) {
+    notFound();
+  }
 
   // Limpa reservas dessa rifa que já passaram do expiresAt antes de
   // contar tickets vendidos / takenNumbers. Sem isso, números cuja

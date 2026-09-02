@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Ticket } from "lucide-react";
+import { CalendarClock, Plus, Ticket } from "lucide-react";
 import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import { Moldura } from "@/components/ui/moldura";
 import type { Metadata } from "next";
@@ -19,7 +19,12 @@ export const metadata: Metadata = { title: "Sorteios" };
 
 const PAGE_SIZE = 10;
 
-type ParsedStatus = "DRAFT" | "ACTIVE" | "FINISHED" | "CANCELLED";
+type ParsedStatus =
+  | "DRAFT"
+  | "QUEUED"
+  | "ACTIVE"
+  | "FINISHED"
+  | "CANCELLED";
 type ParsedPrivacy = "PUBLIC" | "PRIVATE";
 
 export default async function AdminRafflesListPage({
@@ -117,13 +122,22 @@ export default async function AdminRafflesListPage({
         titulo="Sorteios"
         migalha={[{ rotulo: "Admin", href: "/admin" }, { rotulo: "Sorteios" }]}
         acoes={
-          <Link
-            href="/admin/sorteios/novo"
-            className={buttonVariants({ className: "h-10" })}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Novo sorteio
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/sorteios/cronograma"
+              className={buttonVariants({ variant: "outline", className: "h-10" })}
+            >
+              <CalendarClock className="mr-1.5 h-4 w-4" />
+              Cronograma
+            </Link>
+            <Link
+              href="/admin/sorteios/novo"
+              className={buttonVariants({ className: "h-10" })}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Novo sorteio
+            </Link>
+          </div>
         }
       />
 

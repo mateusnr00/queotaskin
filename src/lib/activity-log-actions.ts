@@ -37,6 +37,19 @@ export const ACOES = {
   "sorteio.agendado": "agendou o sorteio ao vivo de",
   "sorteio.numero_gerado": "sorteou o número de",
   "sorteio.finalizado": "encerrou o sorteio ao vivo de",
+  // O cronograma. Ele troca a campanha do ar sozinho, então o histórico é a
+  // única testemunha de por que o sorteio de agora é este e não outro.
+  "cronograma.enfileirado": "colocou na fila do cronograma",
+  "cronograma.removido": "tirou da fila do cronograma",
+  "cronograma.pulado": "pulou neste ciclo",
+  "cronograma.reordenado": "mudou a ordem da fila do cronograma",
+  "cronograma.pausado": "pausou a automação do cronograma",
+  "cronograma.retomado": "retomou a automação do cronograma",
+  "cronograma.atraso_alterado": "mudou o intervalo entre sorteios",
+  "cronograma.ativado_auto": "ativou automaticamente",
+  "cronograma.ativado_manual": "ativou pelo cronograma",
+  "cronograma.ciclo_concluido": "concluiu o ciclo do cronograma de",
+  "cronograma.falhou": "não conseguiu ativar o próximo sorteio",
   // A entrega da skin. Quem marcou e quando é o que responde "essa skin já
   // saiu?" meses depois, quando a memória de quem operou não serve mais.
   "entrega.marcada": "marcou como entregue",

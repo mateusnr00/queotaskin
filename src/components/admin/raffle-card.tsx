@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 
 const STATUSES = [
   { value: "DRAFT", label: "Rascunho" },
+  { value: "QUEUED", label: "Na fila" },
   { value: "ACTIVE", label: "Ativo" },
   { value: "FINISHED", label: "Encerrado" },
   { value: "CANCELLED", label: "Cancelado" },
@@ -59,7 +60,7 @@ export interface RaffleCardData {
   title: string;
   slug: string;
   coverUrl: string | null;
-  status: "DRAFT" | "ACTIVE" | "FINISHED" | "CANCELLED";
+  status: "DRAFT" | "QUEUED" | "ACTIVE" | "FINISHED" | "CANCELLED";
   drawDate: string | null; // ISO string
   createdAt: string; // ISO string
   showOnHome: boolean;

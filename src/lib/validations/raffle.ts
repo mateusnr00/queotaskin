@@ -4,6 +4,10 @@ import { MAX_MIN_LEVEL } from "@/lib/rank";
 
 export const raffleStatusSchema = z.enum([
   "DRAFT",
+  // Preparada e na fila do cronograma. Invisível para o público, como
+  // rascunho, e diferente dele no painel: rascunho é trabalho pela metade,
+  // fila é trabalho pronto esperando a vez.
+  "QUEUED",
   "ACTIVE",
   "FINISHED",
   "CANCELLED",

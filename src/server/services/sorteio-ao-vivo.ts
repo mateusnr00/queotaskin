@@ -45,6 +45,7 @@ import { nomeCurto } from "@/lib/nome-curto";
 import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { rankFromXp, type Rank } from "@/lib/rank";
 import { registrarLog } from "@/server/services/activity-log";
+import { handleDrawFinished } from "@/server/services/cronograma";
 import { VENDIDO } from "@/server/services/vendidos";
 import {
   conferirProva,
@@ -636,6 +637,20 @@ export async function avancarSorteio(
       alvo: { tipo: "Raffle", id: draw.raffleId, rotulo: rifa?.title },
       detalhes: { sorteio: draw.publicId, numero: draw.winningNumber },
     });
+
+    // O CICLO ACABOU: é daqui que o cronograma puxa a próxima campanha.
+    //
+    // Este é o único ponto do sistema em que "o sorteio terminou" acontece uma
+    // vez só, porque a guarda de status acima já garantiu isso. Pendurar a
+    // fila em qualquer outro lugar (o esgotamento das cotas, o encerramento da
+    // campanha) publicaria a próxima antes de esta revelar o ganhador.
+    //
+    // Ele não pode derrubar a finalização: o cronograma engole os próprios
+    // erros, e se mesmo assim algo escapar, o catch aqui garante que o sorteio
+    // termina de qualquer jeito. A varredura do cron recupera a fila depois.
+    await handleDrawFinished(draw.raffleId).catch((err) =>
+      console.error("[sorteio-ao-vivo] cronograma:", err),
+    );
   }
 
   return prisma.draw.findUniqueOrThrow({ where: { id: draw.id } });

@@ -80,6 +80,7 @@ export function RafflesFilters() {
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
               <SelectItem value="DRAFT">Rascunho</SelectItem>
+              <SelectItem value="QUEUED">Na fila</SelectItem>
               <SelectItem value="ACTIVE">Ativo</SelectItem>
               <SelectItem value="FINISHED">Encerrado</SelectItem>
               <SelectItem value="CANCELLED">Cancelado</SelectItem>

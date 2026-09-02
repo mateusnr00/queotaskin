@@ -34,6 +34,32 @@ export const NA_VITRINE = {
   ],
 };
 
+/**
+ * Esta campanha pode ser ABERTA por quem não é do painel?
+ *
+ * A vitrine (`NA_VITRINE`) responde isso para as LISTAS, com um where que o
+ * banco executa. Esta função responde para a PÁGINA de uma campanha, que é
+ * alcançada pelo slug e não passa por where nenhum: `findUnique` acha rascunho
+ * e campanha na fila do cronograma do mesmo jeito.
+ *
+ * Antes do cronograma isso já era um furo, e um furo que dava para explorar
+ * chutando slug. Com a fila ele passaria a vazar o calendário inteiro do site:
+ * a próxima skin, o preço e a quantidade de números, tudo antes de a campanha
+ * existir para o público.
+ *
+ * O corte é estreito de propósito: só DRAFT e QUEUED somem. Encerrada e
+ * cancelada continuam abrindo, como sempre abriram, porque gente comprou nelas
+ * e volta para ver o resultado. Esconder uma campanha em que alguém gastou
+ * dinheiro seria trocar um vazamento por outro problema.
+ */
+export function visivelAoPublico(campanha: {
+  status: string;
+  privacy: string;
+}): boolean {
+  if (campanha.privacy !== "PUBLIC") return false;
+  return campanha.status !== "DRAFT" && campanha.status !== "QUEUED";
+}
+
 /** O orderBy do Prisma para qualquer listagem pública de campanhas. */
 export const ORDEM_DA_VITRINE = [
   { principal: "desc" as const },

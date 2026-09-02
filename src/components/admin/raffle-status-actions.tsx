@@ -14,6 +14,7 @@ import {
 
 const STATUSES = [
   { value: "DRAFT", label: "Rascunho" },
+  { value: "QUEUED", label: "Na fila" },
   { value: "ACTIVE", label: "Ativo" },
   { value: "FINISHED", label: "Encerrado" },
   { value: "CANCELLED", label: "Cancelado" },

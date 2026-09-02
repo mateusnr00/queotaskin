@@ -162,3 +162,25 @@ export async function sessionMayAccessOwnedResource(
   const role = session.user.role;
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
+
+/**
+ * Quem está olhando é do painel deste site?
+ *
+ * Serve para a PRÉ-VISUALIZAÇÃO: a página de uma campanha em rascunho ou na
+ * fila do cronograma responde 404 para o mundo, e continua abrindo para quem
+ * administra o painel. Sem isso, preparar a campanha viraria trabalho às
+ * cegas: não haveria como olhar a página antes de publicar.
+ *
+ * O papel vem do banco, e não do JWT: admin rebaixado hoje continuaria com
+ * "ADMIN" no token até relogar, e passaria por aqui vendo o calendário do
+ * site inteiro.
+ */
+export async function ehDoPainel(tenantId: string): Promise<boolean> {
+  const session = await auth();
+  const uid = session?.user?.id;
+  if (!uid) return false;
+  const fresh = await freshUser(uid);
+  if (!fresh) return false;
+  if (fresh.role === "SUPER_ADMIN") return true;
+  return fresh.role === "ADMIN" && fresh.tenantId === tenantId;
+}

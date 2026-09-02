@@ -34,7 +34,7 @@ const updateInputSchema = z.object({
 
 const statusUpdateSchema = z.object({
   id: z.string().cuid(),
-  status: z.enum(["DRAFT", "ACTIVE", "FINISHED", "CANCELLED"]),
+  status: z.enum(["DRAFT", "QUEUED", "ACTIVE", "FINISHED", "CANCELLED"]),
 });
 
 const highlightUpdateSchema = z.object({
