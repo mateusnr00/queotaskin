@@ -83,6 +83,11 @@ ainda dá para pegar. Todos os elementos têm largura fixa menos o nome, então
 as colunas se alinham entre as linhas sem grid, e o olho encontra cada
 informação sempre no mesmo x.
 
+Nome e sigla andam JUNTOS, num grupo só: os dois descrevem o mesmo item, e a
+sigla gruda no fim do nome em vez de flutuar na largura que sobrou. Com o nome
+esticando sozinho (`flex-1`), "FT" era empurrado para perto do estado e
+parecia pertencer a ele.
+
 O desgaste é a **sigla** (FN, MW, FT, WW, BS). "Field-Tested" ocupa quatro
 vezes o espaço e diz a mesma coisa para quem joga; numa linha única, é o texto
 que empurra o nome da skin para fora.

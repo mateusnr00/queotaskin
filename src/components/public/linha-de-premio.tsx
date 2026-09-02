@@ -146,20 +146,28 @@ export function LinhaDePremio({
         </span>
       )}
 
-      {/* O nome é o único elástico da linha, e o único que trunca. */}
-      <span
-        className="min-w-0 flex-1 truncate text-[13px] font-semibold sm:text-sm"
-        style={raridade ? { color: RARITY_TEXT_VAR[raridade] } : undefined}
-        title={nome}
-      >
-        {nome}
-      </span>
+      {/* NOME E SIGLA ANDAM JUNTOS.
+          Os dois descrevem o mesmo item, então formam um grupo só: a sigla
+          gruda no fim do nome, curto ou longo, e não flutua na largura que
+          sobrou. Com o nome esticando sozinho (flex-1), "FT" era empurrado
+          para perto do estado e parecia pertencer a ele.
 
-      {sigla && (
-        <span className="shrink-0 rounded border border-border/60 bg-background/50 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
-          {sigla}
+          O grupo é quem encolhe quando falta espaço, e só o nome trunca. */}
+      <span className="flex min-w-0 shrink items-center gap-2">
+        <span
+          className="truncate text-[13px] font-semibold sm:text-sm"
+          style={raridade ? { color: RARITY_TEXT_VAR[raridade] } : undefined}
+          title={nome}
+        >
+          {nome}
         </span>
-      )}
+
+        {sigla && (
+          <span className="shrink-0 rounded border border-border/60 bg-background/50 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+            {sigla}
+          </span>
+        )}
+      </span>
 
       <Estado
         temDono={temDono}
