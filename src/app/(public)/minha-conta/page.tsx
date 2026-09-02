@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { auth } from "@/auth";
+import { ContainerPublico } from "@/components/public/container";
 import { prisma } from "@/lib/db";
 import { getCurrentTenant } from "@/lib/tenant";
 import { STEAM_DELIVERY_NOTICE } from "@/lib/cs2";
@@ -102,7 +103,7 @@ export default async function MyAccountPage() {
     : [0, [], null, null];
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 md:py-8">
+    <ContainerPublico className="space-y-5">
       <header>
         <Etiqueta icone={<UserRound aria-hidden className="h-3 w-3" />}>
           Minha conta
@@ -358,7 +359,7 @@ export default async function MyAccountPage() {
           />
         </Link>
       </Moldura>
-    </div>
+    </ContainerPublico>
   );
 }
 

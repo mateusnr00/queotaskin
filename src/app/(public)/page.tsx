@@ -20,6 +20,7 @@ import {
   separarPrincipal,
 } from "@/lib/vitrine";
 import { notFound } from "next/navigation";
+import { ContainerPublico } from "@/components/public/container";
 
 // Sete campanhas ativas na home: uma principal e seis embaixo.
 //
@@ -264,14 +265,12 @@ export default async function HomePage() {
   const temGanhador = ganhadores.length > 0;
   const mostrarGanhadores = showWinners && temGanhador;
 
+  // Campanhas em cima, ganhadores embaixo. Os ganhadores eram uma coluna à
+  // direita, e ali cabiam três cartões estreitos antes de a coluna acabar.
+  // Embaixo e na largura toda, a lista respira e o resultado do sorteio, que é
+  // o que a pessoa vem conferir depois, tem o tamanho que merece.
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-6 md:py-10">
-      {/* Campanhas em cima, ganhadores embaixo.
-          Os ganhadores eram uma coluna à direita, e ali cabiam três cartões
-          estreitos antes de a coluna acabar. Embaixo e na largura toda, a
-          lista respira e o resultado do sorteio, que é o que a pessoa vem
-          conferir depois, tem o tamanho que merece. */}
-      <div className="mx-auto max-w-4xl">
+    <ContainerPublico>
         {/* ============ Campanhas ============ */}
         <section className="space-y-3">
           {showHeader && (
@@ -318,8 +317,7 @@ export default async function HomePage() {
             </div>
           </section>
         )}
-      </div>
-    </div>
+    </ContainerPublico>
   );
 }
 

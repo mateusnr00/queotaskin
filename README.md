@@ -718,6 +718,22 @@ concede cupom. O afiliado vê o primeiro nome com a inicial do sobrenome
 ("Mateus N.") e quanto cada indicado pagou; telefone, CPF e e-mail não saem do
 servidor.
 
+### A largura do conteúdo é uma só
+
+`ContainerPublico` (`components/public/container.tsx`). Cada página tinha a
+sua: a home em 4xl dentro de 6xl, "sorteios" e "meus títulos" em 3xl, "minha
+conta" e "afiliados" em 5xl. Navegar entre elas fazia o conteúdo estreitar e
+alargar a cada clique, e o cabeçalho, que é o mesmo em todas, ficava com
+margens que não batiam com nada abaixo dele.
+
+A medida vem da home. São duas caixas e não uma: a de fora segura o respiro
+lateral, a de dentro limita a linha de leitura. Com uma só, o `px-4` entraria
+na conta do máximo e o conteúdo ficaria 32px mais estreito que na home.
+
+A página da campanha (`/[slug]`) fica de fora e continua estreita
+(`max-w-md`, `md:max-w-2xl`): ali o que manda é o formulário de compra, que
+lê melhor numa coluna só.
+
 ## Sorteio ao vivo
 
 O resultado deixou de ser digitado no painel. Quando a campanha encerra

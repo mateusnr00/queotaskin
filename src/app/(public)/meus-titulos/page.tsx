@@ -9,6 +9,7 @@ import { formatBRL, formatDateTime } from "@/lib/format";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
 import { Etiqueta, Moldura } from "@/components/ui/moldura";
+import { ContainerPublico } from "@/components/public/container";
 
 export const metadata: Metadata = { title: "Meus títulos" };
 
@@ -118,7 +119,7 @@ export default async function MyTicketsPage({
       : reservations.filter((r) => abaDa(r) === abaAtiva);
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
+    <ContainerPublico>
       <header>
         <div>
           <Etiqueta icone={<Ticket aria-hidden className="h-3 w-3" />}>
@@ -240,7 +241,7 @@ export default async function MyTicketsPage({
           ))
         )}
       </div>
-    </div>
+    </ContainerPublico>
   );
 }
 

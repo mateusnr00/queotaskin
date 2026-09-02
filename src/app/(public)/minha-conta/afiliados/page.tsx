@@ -23,6 +23,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowRight, Gift, Link2, Ticket, TrendingUp, Users2 } from "lucide-react";
 
 import { auth } from "@/auth";
+import { ContainerPublico } from "@/components/public/container";
 import { prisma } from "@/lib/db";
 import { getCurrentTenant } from "@/lib/tenant";
 import { formatBRL } from "@/lib/format";
@@ -83,7 +84,7 @@ export default async function PaginaDeAfiliados() {
   // chance de registrar quem o indicou.
   if (!painel || painel.status === "INACTIVE") {
     return (
-      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 md:py-8">
+      <ContainerPublico className="space-y-5">
         <Cabecalho />
         <Moldura>
           <section className="space-y-4 p-5 md:p-6">
@@ -119,7 +120,7 @@ export default async function PaginaDeAfiliados() {
         ) : (
           <FormularioDeCodigo />
         )}
-      </div>
+      </ContainerPublico>
     );
   }
 
@@ -146,7 +147,7 @@ export default async function PaginaDeAfiliados() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 md:py-8">
+    <ContainerPublico className="space-y-5">
       <Cabecalho />
 
       {painel.status === "SUSPENDED" && (
@@ -483,7 +484,7 @@ export default async function PaginaDeAfiliados() {
           )}
         </section>
       </Moldura>
-    </div>
+    </ContainerPublico>
   );
 }
 

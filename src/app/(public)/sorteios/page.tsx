@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ContainerPublico } from "@/components/public/container";
 import type { Metadata } from "next";
 import { TicketCheck } from "lucide-react";
 
@@ -78,7 +79,7 @@ export default async function PublicRafflesListPage() {
     statusDaCampanha(vendidosPorRifa.get(r.id) ?? 0, r.totalNumbers, statusConfig);
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6 md:py-10">
+    <ContainerPublico>
       <div className="mb-3 flex items-baseline gap-2 px-1">
         <h1 className="text-base font-bold tracking-tight">
           <span className="mr-1.5">⚡</span>
@@ -115,6 +116,6 @@ export default async function PublicRafflesListPage() {
           )}
         </div>
       )}
-    </div>
+    </ContainerPublico>
   );
 }
