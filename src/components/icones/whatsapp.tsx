@@ -1,29 +1,59 @@
 // O glifo do WhatsApp.
 //
 // Escrito à mão porque o lucide, que é a fonte de ícones do resto do site, não
-// tem marcas: ele tirou os logos do pacote. O que estava no lugar no botão de
-// reivindicar era um balão de conversa genérico, e balão genérico não promete
-// WhatsApp, promete "chat". Quem acabou de ganhar uma skin precisa reconhecer
-// para onde o botão leva antes de clicar.
+// tem marcas: ele tirou os logos do pacote. Vive num componente só para não
+// haver dois WhatsApp diferentes no mesmo site conforme a tela.
 //
-// O desenho é o mesmo que já existia solto dentro da tela de compras do
-// painel. Trazer para cá foi para não haver dois WhatsApp diferentes no mesmo
-// site conforme a tela.
+// DESENHO DE TRAÇO, E NÃO GLIFO CHEIO
+//
+// Era o logo maciço. Virou contorno: balão e telefone desenhados com a mesma
+// espessura de linha do resto da interface, que é toda de ícones lineares
+// (lucide). O logo cheio era a única mancha sólida no meio de uma fileira de
+// traços, e puxava o olho para o botão de conversar como se ele fosse a ação
+// principal da tela, o que ele nunca é.
+//
+// A ESPESSURA ACOMPANHA O TAMANHO
+//
+// O traço é medido em unidades da caixa de 64, então ele encolhe junto com o
+// ícone: 2.3 é o desenho na medida original, e a 16 pixels isso vira meio
+// pixel, que sai da tela lavado. Por isso a espessura entra por propriedade,
+// com o padrão pensado para os botões pequenos do painel, e o desenho grande
+// pede o valor original.
 //
 // Herda a cor por currentColor, então serve no botão claro sobre a faixa
 // laranja do prêmio e no botão verde do painel.
 
-export function IconeDoWhatsapp({ className }: { className?: string }) {
+export function IconeDoWhatsapp({
+  className,
+  /**
+   * Espessura do traço, em unidades da caixa de 64.
+   *
+   * 4 é o padrão porque o uso mais comum é um botão de 16 a 20 pixels, e ali
+   * o traço de 2.3 do desenho original quase some. Em tamanho grande, passe
+   * 2.3 para ter a linha fina que o desenho pede.
+   */
+  strokeWidth = 4,
+}: {
+  className?: string;
+  strokeWidth?: number;
+}) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="currentColor"
+      viewBox="0 0 64 64"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={className}
       aria-hidden
       focusable="false"
     >
-      <path d="M19.05 4.91A9.82 9.82 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01ZM12.04 20.15c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.26 8.26 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.22 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43s-.56-1.34-.76-1.84c-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28Z" />
+      {/* O balão, com a ponta que sobra embaixo à esquerda. */}
+      <path d="M32 6C17.6 6 6 17.2 6 31c0 5.2 1.7 10 4.6 14L7 57l12.6-3.4c3.7 1.9 7.9 2.9 12.4 2.9C46.4 56.5 58 45.3 58 31 58 17.2 46.4 6 32 6Z" />
+      {/* O telefone de dentro. */}
+      <path d="M23.2 18.8c-.9 0-1.7.5-2.2 1.3-1.3 2.1-1.7 4.3-1 6.9 1.5 5.6 6.4 11.5 12 15.1 3.7 2.4 7.8 3.9 10.9 3 1.8-.6 4.3-3.8 4.7-5.6.3-1.2-.3-1.9-1.4-2.5l-6.7-3.2c-1-.5-1.9-.3-2.6.6l-2.4 2.9c-3.3-1.6-5.9-4-7.8-7.1l2.5-2.5c.8-.8 1-1.7.5-2.8l-3.2-4.2c-.8-1.2-1.7-1.9-3.3-1.9Z" />
     </svg>
   );
 }

@@ -834,7 +834,7 @@ function RankingRow({ buyer }: { buyer: TopBuyer }) {
             target="_blank"
             aria-label="WhatsApp"
             title="WhatsApp"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+            className="botao-de-whatsapp inline-flex h-9 w-9 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/10"
           >
             <IconeDoWhatsapp className="h-5 w-5" />
           </Link>
@@ -1626,7 +1626,7 @@ function TabelaDeCaixas({
                         rel="noopener noreferrer"
                         aria-label={`Avisar ${c.ganhador} no WhatsApp`}
                         title="Avisar no WhatsApp com a mensagem pronta"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                        className="botao-de-whatsapp inline-flex h-8 w-8 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-500/10"
                       >
                         <IconeDoWhatsapp className="h-5 w-5" />
                       </a>
@@ -3354,7 +3354,7 @@ function RowActions({
           target="_blank"
           aria-label="WhatsApp"
           title="Enviar mensagem no WhatsApp"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+          className="botao-de-whatsapp inline-flex h-9 w-9 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/10"
         >
           <IconeDoWhatsapp className="h-5 w-5" />
         </Link>

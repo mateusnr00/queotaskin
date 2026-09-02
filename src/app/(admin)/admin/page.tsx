@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MessageCircle, Sparkles, TrendingUp, Percent } from "lucide-react";
+import { Sparkles, TrendingUp, Percent } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
 import { CartaoDoCronograma } from "@/components/admin/cartao-do-cronograma";
 import { carregarCronograma } from "@/server/services/cronograma";
 import { proximoDaFila } from "@/lib/cronograma";
@@ -400,10 +401,10 @@ export default async function AdminDashboardPage({
                         href={wa}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-[#25D366] hover:bg-[#25D366]/10"
+                        className="botao-de-whatsapp flex h-9 w-9 items-center justify-center rounded-full text-[#25D366] hover:bg-[#25D366]/10"
                         aria-label="WhatsApp"
                       >
-                        <MessageCircle className="h-5 w-5" />
+                        <IconeDoWhatsapp className="h-5 w-5" />
                       </a>
                     )}
                   </li>

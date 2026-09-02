@@ -1207,7 +1207,7 @@ function BotaoDeParabens({ ganhador }: { ganhador: GanhadorDaRaspadinha }) {
       target="_blank"
       rel="noopener noreferrer"
       title="Avisar no WhatsApp"
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10"
+      className="botao-de-whatsapp inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 hover:bg-emerald-500/10"
     >
       <IconeDoWhatsapp className="h-4 w-4" />
       <span className="sr-only">Avisar {ganhador.ganhador} no WhatsApp</span>

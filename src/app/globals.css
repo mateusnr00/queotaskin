@@ -961,6 +961,39 @@
   }
 }
 
+/* O BOTÃO DE CHAMAR NO WHATSAPP.
+ *
+ * Cresce um dedo no ponteiro e afunda no clique. É o único botão do painel que
+ * tira a pessoa do site para uma conversa, e esse peso extra no toque é o que
+ * o separa dos vizinhos numa fileira de ícones todos iguais.
+ *
+ * Transform e opacity só: as duas rodam no compositor, então a lista de mil
+ * clientes não repinta ao passar o mouse por cima de uma linha.
+ */
+.botao-de-whatsapp {
+  transition:
+    transform 200ms ease,
+    opacity 200ms ease,
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+.botao-de-whatsapp:hover {
+  transform: scale(1.06);
+  opacity: 0.7;
+}
+
+.botao-de-whatsapp:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .botao-de-whatsapp:hover,
+  .botao-de-whatsapp:active {
+    transform: none;
+  }
+}
+
 /* A malha de pontos no canto do cartão de confirmação.
  *
  * Textura, e não decoração: ela dá superfície a um retângulo que de outro

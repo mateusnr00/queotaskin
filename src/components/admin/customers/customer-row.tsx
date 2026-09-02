@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MessageCircle, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import { ModBadge } from "@/components/rank/mod-badge";
 import { RankBadge } from "@/components/rank/rank-badge";
@@ -10,6 +10,7 @@ import type { Customer } from "@/server/services/customers";
 import { whatsappLink } from "@/server/services/customers";
 import { Moldura } from "@/components/ui/moldura";
 import { cn } from "@/lib/utils";
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
 
 /** Iniciais para o avatar: "Mateus Nascimento" -> "MN". */
 function iniciais(nome: string): string {
@@ -81,9 +82,9 @@ function Acoes({
           rel="noopener noreferrer"
           aria-label={`Abrir conversa no WhatsApp com ${customer.name}`}
           title="Conversar no WhatsApp"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="botao-de-whatsapp inline-flex h-9 w-9 items-center justify-center rounded-lg text-emerald-500 hover:bg-emerald-500/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          <MessageCircle className="h-4 w-4" />
+          <IconeDoWhatsapp className="h-4 w-4" />
         </a>
       ) : (
         <span

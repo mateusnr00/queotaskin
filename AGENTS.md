@@ -30,4 +30,11 @@ O script ignora `RUN_SEED` quando o banco já tem `Tenant`, então a variável
 esquecida não semeia produção de novo. É rede de proteção, não permissão para
 deixá-la lá.
 
+## WhatsApp
+
+Todo botão que abre conversa no WhatsApp usa `IconeDoWhatsapp`
+(`src/components/icones/whatsapp.tsx`), que é o balão e o telefone em traço,
+mais a classe `.botao-de-whatsapp` para o toque. Nada de balão genérico do
+lucide: balão genérico promete "chat", não promete WhatsApp.
+
 Não abra nem mergeie PR sem o usuário pedir.

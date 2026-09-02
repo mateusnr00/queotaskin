@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Moldura, Placa } from "@/components/ui/moldura";
-import { MessageCircle, Sparkles, Trophy, Users, Wallet } from "lucide-react";
+import { Sparkles, Trophy, Users, Wallet } from "lucide-react";
+
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
 import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import type { Metadata } from "next";
 
@@ -160,9 +162,9 @@ export default async function AdminRankingPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           title={`Conversar com ${row.name} no WhatsApp`}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 transition-colors hover:bg-emerald-500/10"
+                          className="botao-de-whatsapp inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 hover:bg-emerald-500/10"
                         >
-                          <MessageCircle className="h-4 w-4" />
+                          <IconeDoWhatsapp className="h-4 w-4" />
                         </a>
                       ) : (
                         <span className="text-xs text-muted-foreground">-</span>
