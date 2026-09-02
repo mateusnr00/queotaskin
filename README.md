@@ -718,6 +718,24 @@ concede cupom. O afiliado vê o primeiro nome com a inicial do sobrenome
 ("Mateus N.") e quanto cada indicado pagou; telefone, CPF e e-mail não saem do
 servidor.
 
+### O menu do celular
+
+`components/public/public-mobile-menu.tsx`. É por onde vem a maior parte do
+tráfego, e a gaveta tinha quatro defeitos além do desenho:
+
+Ela **nunca era desmontada**, só empurrada para fora com `translate-x-full`, e
+os links continuavam na ordem de tabulação: quem navega por teclado caía dentro
+de um menu invisível. Agora ela recebe `inert` quando fechada, o que tira o
+conteúdo da tabulação e do leitor de tela sem custar a animação de saída.
+
+A **página rolava atrás**, não fechava com **Esc**, e o foco não entrava nem
+voltava para o botão que abriu. E o rodapé encostava na **barra de gestos** do
+iPhone (`env(safe-area-inset-*)`).
+
+No desenho: cartão do usuário com o mesmo chip de rank do cabeçalho, itens
+agrupados por "o site" e "a pessoa", 48px de altura, fio na esquerda no item
+atual e, para visitante, "Criar minha conta" sólido acima de "Entrar".
+
 ### A largura do conteúdo é uma só
 
 `ContainerPublico` (`components/public/container.tsx`). Cada página tinha a

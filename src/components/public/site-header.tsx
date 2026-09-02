@@ -213,6 +213,14 @@ export async function SiteHeader() {
           userName={session?.user?.name ?? null}
           showAdminLink={showAdminLink}
           adminHref={adminLinkHref}
+          // O mesmo rank do cabeçalho entra no cartão do usuário dentro da
+          // gaveta: o dado já foi buscado aqui, e repetir a consulta lá
+          // dentro seria uma ida ao banco para mostrar o que já está na mão.
+          rank={
+            rankChip
+              ? { xp: rankChip.xp, xpPerBrl: rankChip.xpPerBrl, mod: ehMod }
+              : null
+          }
         />
       </div>
     </header>
