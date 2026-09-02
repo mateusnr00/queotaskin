@@ -76,6 +76,18 @@ import { registrarLog } from "@/server/services/activity-log";
  */
 export type OrigemDaAtivacao = "AUTOMATICO" | "MANUAL" | "RECUPERACAO";
 
+/** Onde entrar na fila. */
+export type PosicaoNaFila = "inicio" | "fim";
+
+/**
+ * Por onde a campanha entrou na fila.
+ *
+ * FORMULARIO é a criação ou a edição do sorteio decidindo o destino;
+ * CRONOGRAMA é o botão da própria tela da fila. Saber a diferença é o que
+ * permite descobrir, meses depois, como uma campanha foi parar ali.
+ */
+export type OrigemDoEnfileiramento = "FORMULARIO" | "CRONOGRAMA";
+
 export type FalhaDaAtivacao =
   | "AUTOMACAO_PAUSADA"
   | "FILA_BLOQUEADA"
@@ -209,19 +221,43 @@ export async function enfileirar(input: {
   raffleId: string;
   /** O dia a que o item pertence no painel. Só rótulo. */
   dia?: Date | null;
+  /** Onde entrar. O padrão é o fim, que é o caso normal. */
+  posicao?: PosicaoNaFila;
+  /** Por onde a campanha entrou na fila. Vai para a auditoria. */
+  origem?: OrigemDoEnfileiramento;
   adminId?: string | null;
 }): Promise<{ ok: true; itemId: string } | { ok: false; erros: string[] }> {
   const validacao = await validarCampanhaParaFila(input.raffleId, input.tenantId);
   if (validacao.erros.length > 0) return { ok: false, erros: validacao.erros };
 
   const cronograma = await garantirCronograma(input.tenantId);
+  const noComeco = input.posicao === "inicio";
 
   const item = await prisma.$transaction(async (tx) => {
-    const ultima = await tx.drawScheduleItem.aggregate({
-      where: { scheduleId: cronograma.id },
-      _max: { posicao: true },
-    });
-    const posicao = (ultima._max.posicao ?? -1) + 1;
+    // A TRAVA ANTES DE CONTAR.
+    //
+    // Sem ela, dois admins adicionando ao mesmo tempo leriam o mesmo "último
+    // lugar" e os dois entrariam na mesma posição, e aí quem decide a ordem
+    // do dia passa a ser o desempate por id em vez de quem organizou a fila.
+    await travarFila(tx, cronograma.id);
+
+    let posicao: number;
+    if (noComeco) {
+      // Entrar na frente empurra todo mundo um passo. É o preço de "este é o
+      // próximo": renumerar depois, fora da transação, deixaria uma janela em
+      // que duas campanhas disputam a mesma vaga.
+      await tx.drawScheduleItem.updateMany({
+        where: { scheduleId: cronograma.id, status: "AGUARDANDO" },
+        data: { posicao: { increment: 1 } },
+      });
+      posicao = 0;
+    } else {
+      const ultima = await tx.drawScheduleItem.aggregate({
+        where: { scheduleId: cronograma.id },
+        _max: { posicao: true },
+      });
+      posicao = (ultima._max.posicao ?? -1) + 1;
+    }
 
     const marcou = await tx.raffle.updateMany({
       where: {
@@ -266,7 +302,9 @@ export async function enfileirar(input: {
       id: input.raffleId,
       rotulo: validacao.titulo ?? undefined,
     },
-    detalhes: { posicao: item.posicao },
+    // A origem responde "como esta campanha foi parar na fila?" meses depois,
+    // quando a memória de quem operou não serve mais.
+    detalhes: { posicao: item.posicao, origem: input.origem ?? "CRONOGRAMA" },
   });
 
   return { ok: true, itemId: item.id };

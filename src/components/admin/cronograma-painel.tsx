@@ -32,8 +32,10 @@ import {
   MoreVertical,
   Pause,
   Play,
+  FileText,
   Plus,
   RotateCcw,
+  Sparkles,
   SkipForward,
   Trash2,
   Zap,
@@ -66,7 +68,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -822,13 +823,32 @@ function AdicionarNaFila({
 }) {
   const [aberto, setAberto] = useState(false);
   const [dia, setDia] = useState(() => new Date().toISOString().slice(0, 10));
+  const router = useRouter();
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger className={buttonVariants({ size: "sm" })}>
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
-        Adicionar
-      </DialogTrigger>
+      {/* DOIS CAMINHOS, e o primeiro é o que a operação usa todo dia: montar a
+          fila é quase sempre cadastrar skin nova, não caçar rascunho antigo.
+          O link já leva o destino escolhido, e o formulário abre com a opção
+          da fila marcada. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger className={buttonVariants({ size: "sm" })}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Adicionar
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => router.push("/admin/sorteios/novo?destino=cronograma")}
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Criar novo sorteio
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAberto(true)}>
+            <FileText className="mr-2 h-3.5 w-3.5" />
+            Adicionar rascunho existente
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar à fila</DialogTitle>

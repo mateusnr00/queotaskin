@@ -30,6 +30,7 @@ import {
   varrerCronogramas,
 } from "./cronograma";
 import { avancarSorteio } from "./sorteio-ao-vivo";
+import { definirStatusDaCampanha } from "./raffles";
 
 function isLocalDatabase(): boolean {
   const url = process.env.DATABASE_URL;
@@ -633,6 +634,148 @@ suite("cronograma de sorteios (integração)", () => {
 
     await ativarProximo({ tenantId, origem: "MANUAL" });
     expect(await statusDaCampanha(c)).toBe("ACTIVE");
+  });
+
+  // -------------------------------------------------------------------------
+  // O DESTINO ESCOLHIDO NO FORMULÁRIO
+  // -------------------------------------------------------------------------
+  //
+  // Estes casos exercitam o SERVIÇO, que é por onde a action passa. A action
+  // em si carrega sessão e revalidação de rota, que não existem fora do Next;
+  // a regra que decide o estado do banco é toda daqui.
+
+  it("1/2) rascunho e publicação não criam item na fila", async () => {
+    const rascunho = await novaCampanha("Só rascunho");
+    const publicada = await novaCampanha("Publicada agora");
+
+    // Destino RASCUNHO: nada acontece, que é o comportamento de sempre.
+    expect(await statusDaCampanha(rascunho)).toBe("DRAFT");
+
+    // Destino PUBLICAR passa pelo serviço de status, o mesmo do seletor da
+    // lista do painel, e não cria item nenhum no cronograma.
+    await definirStatusDaCampanha({
+      tenantId,
+      raffleId: publicada,
+      status: "ACTIVE",
+    });
+    expect(await statusDaCampanha(publicada)).toBe("ACTIVE");
+
+    const itens = await prisma.drawScheduleItem.count({
+      where: { raffleId: { in: [rascunho, publicada] } },
+    });
+    expect(itens).toBe(0);
+  });
+
+  it("3) destino cronograma deixa a campanha QUEUED, na posição escolhida", async () => {
+    const primeira = await novaCampanha("Primeira");
+    const segunda = await novaCampanha("Segunda");
+    const furando = await novaCampanha("Entra na frente");
+
+    await enfileirar({ tenantId, raffleId: primeira, origem: "FORMULARIO" });
+    await enfileirar({
+      tenantId,
+      raffleId: segunda,
+      posicao: "fim",
+      origem: "FORMULARIO",
+    });
+    await enfileirar({
+      tenantId,
+      raffleId: furando,
+      posicao: "inicio",
+      origem: "FORMULARIO",
+    });
+
+    expect(await statusDaCampanha(furando)).toBe("QUEUED");
+
+    const fila = await prisma.drawScheduleItem.findMany({
+      where: { raffleId: { in: [primeira, segunda, furando] } },
+      orderBy: { posicao: "asc" },
+      select: { raffleId: true, posicao: true },
+    });
+    // Quem entrou na frente é o primeiro, e os outros andaram um passo em vez
+    // de empatar na mesma posição.
+    expect(fila.map((f) => f.raffleId)).toEqual([furando, primeira, segunda]);
+    expect(new Set(fila.map((f) => f.posicao)).size).toBe(3);
+  });
+
+  it("4) campanha incompleta não entra na fila e não perde o trabalho", async () => {
+    // Sem prêmio: é o caso real de quem cria a campanha e vai configurar o
+    // resto depois.
+    const incompleta = await prisma.raffle.create({
+      data: {
+        tenantId,
+        createdById: userId,
+        slug: `cron-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: "Sem prêmio nenhum",
+        status: "DRAFT",
+        totalNumbers: 10,
+        pricePerNumber: 1,
+        privacy: "PUBLIC",
+      },
+      select: { id: true },
+    });
+    campanhasCriadas.push(incompleta.id);
+
+    const r = await enfileirar({
+      tenantId,
+      raffleId: incompleta.id,
+      origem: "FORMULARIO",
+    });
+    expect(r.ok).toBe(false);
+
+    // Sem estado parcial: a campanha continua rascunho e não existe item
+    // pendurado nela.
+    expect(await statusDaCampanha(incompleta.id)).toBe("DRAFT");
+    expect(
+      await prisma.drawScheduleItem.count({
+        where: { raffleId: incompleta.id },
+      }),
+    ).toBe(0);
+  });
+
+  it("5/6) rascunho entra na fila pela edição, e editar QUEUED não tira de lá", async () => {
+    const campanha = await novaCampanha("Vai para a fila pela edição");
+
+    const r = await enfileirar({
+      tenantId,
+      raffleId: campanha,
+      origem: "FORMULARIO",
+    });
+    expect(r.ok).toBe(true);
+    expect(await statusDaCampanha(campanha)).toBe("QUEUED");
+
+    // Editar o conteúdo é um update de campos do sorteio; ele não toca em
+    // status nem em item, então a campanha continua na fila.
+    await prisma.raffle.update({
+      where: { id: campanha },
+      data: { title: "Título novo depois de enfileirada" },
+    });
+    expect(await statusDaCampanha(campanha)).toBe("QUEUED");
+    expect(await statusDoItem(campanha)).toBe("AGUARDANDO");
+  });
+
+  it("8) dois admins adicionando ao mesmo tempo não empatam posição", async () => {
+    const a = await novaCampanha("Simultânea A");
+    const b = await novaCampanha("Simultânea B");
+    const c = await novaCampanha("Simultânea C");
+
+    // Sem a trava da fila, os três leriam o mesmo "último lugar" e entrariam
+    // na mesma posição, e a ordem do dia passaria a ser decidida pelo
+    // desempate por id em vez de por quem organizou.
+    await Promise.all([
+      enfileirar({ tenantId, raffleId: a, origem: "FORMULARIO" }),
+      enfileirar({ tenantId, raffleId: b, origem: "FORMULARIO" }),
+      enfileirar({ tenantId, raffleId: c, origem: "CRONOGRAMA" }),
+    ]);
+
+    const posicoes = (
+      await prisma.drawScheduleItem.findMany({
+        where: { raffleId: { in: [a, b, c] } },
+        select: { posicao: true },
+      })
+    ).map((i) => i.posicao);
+    expect(posicoes).toHaveLength(3);
+    expect(new Set(posicoes).size).toBe(3);
   });
 
   // -------------------------------------------------------------------------

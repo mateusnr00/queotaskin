@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { prisma } from "@/lib/db";
+import { ROTULO_DO_ITEM } from "@/lib/cronograma";
 import { camposObrigatoriosCoerentes } from "@/lib/validations/raffle";
 import { RaffleForm } from "@/components/admin/raffle-form";
 import { RaffleStatusActions } from "@/components/admin/raffle-status-actions";
@@ -76,6 +77,12 @@ export default async function EditRafflePage({
   const raffle = await prisma.raffle.findUnique({
     where: { id },
     include: {
+      // O lugar dela na fila, quando está no cronograma. É o que a aba Geral
+      // mostra no lugar das opções de destino: campanha enfileirada não
+      // escolhe destino de novo, ela diz onde está.
+      itemDoCronograma: {
+        select: { status: true, posicao: true, dia: true },
+      },
       images: { orderBy: { order: "asc" } },
       prizes: { orderBy: { position: "asc" } },
       promotions: { orderBy: { quantity: "asc" } },
@@ -282,6 +289,19 @@ export default async function EditRafflePage({
       <RaffleForm
         catalogoDePremios={catalogoDePremios}
         mode={{ kind: "edit", id: raffle.id }}
+        statusAtual={raffle.status}
+        noCronograma={
+          raffle.itemDoCronograma &&
+          raffle.itemDoCronograma.status !== "REMOVIDO"
+            ? {
+                dia: raffle.itemDoCronograma.dia
+                  ? raffle.itemDoCronograma.dia.toISOString().slice(0, 10)
+                  : null,
+                posicao: raffle.itemDoCronograma.posicao,
+                situacao: ROTULO_DO_ITEM[raffle.itemDoCronograma.status],
+              }
+            : null
+        }
         abaInicial={abaInicial}
         raffleTitle={raffle.title}
         initialTrofeuUrl={raffle.trofeuUrl}

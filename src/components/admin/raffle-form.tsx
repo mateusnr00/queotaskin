@@ -53,6 +53,12 @@ import { RafflePromotionsTab } from "@/components/admin/raffle-promotions-tab";
 import { RafflePaymentTab } from "@/components/admin/raffle-payment-tab";
 import { RaffleAwardedTicketsTab } from "@/components/admin/raffle-awarded-tickets-tab";
 import { SecaoDoFormulario } from "@/components/admin/secao-de-formulario";
+import {
+  DestinoDoSorteio,
+  hojeNoBrasil,
+  NoCronograma,
+  type DestinoEscolhido,
+} from "@/components/admin/destino-do-sorteio";
 import { cn } from "@/lib/utils";
 import { ESCADA_DE_RANK } from "@/lib/rank";
 import type { SkinDoCatalogoSimples } from "@/components/admin/campo-de-premio";
@@ -63,6 +69,7 @@ import {
 } from "@/lib/validations/raffle";
 import {
   createRaffleAction,
+  definirDestinoAction,
   updateRaffleAction,
 } from "@/server/actions/raffles";
 import { Button } from "@/components/ui/button";
@@ -102,6 +109,16 @@ interface PromotionData {
 
 interface RaffleFormProps {
   mode: Mode;
+  /**
+   * A situação atual da campanha, no modo edição. É ela que decide o que a
+   * seção de destino oferece: rascunho escolhe para onde vai, campanha na fila
+   * vê onde está, e no ar ou encerrada não vê nada disso.
+   */
+  statusAtual?: "DRAFT" | "QUEUED" | "ACTIVE" | "FINISHED" | "CANCELLED";
+  /** O lugar dela na fila, quando está no cronograma. */
+  noCronograma?: { dia: string | null; posicao: number; situacao: string } | null;
+  /** Destino pré-escolhido pela tela que trouxe o admin até aqui. */
+  destinoInicial?: "RASCUNHO" | "CRONOGRAMA";
   /**
    * Aba aberta ao montar. A criacao usa isso para continuar de onde o
    * usuario estava: ele clica em "Imagens" antes do sorteio existir, o
@@ -266,6 +283,9 @@ const ROTULOS_DE_RANK: Record<string, string> = {
 
 export function RaffleForm({
   mode,
+  statusAtual,
+  noCronograma = null,
+  destinoInicial = "RASCUNHO",
   abaInicial,
   raffleTitle = "",
   skins = [],
@@ -346,8 +366,21 @@ export function RaffleForm({
     if (mode.kind !== "create" || urlEscritaAMao) return;
     form.setValue("slug", toSlug(titulo), { shouldDirty: true });
   }
+  // O destino escolhido para depois de salvar. Só a criação e o rascunho o
+  // usam; para os outros estados a seção nem aparece.
+  const [destinoDoSorteio, setDestinoDoSorteio] = useState<DestinoEscolhido>({
+    tipo: destinoInicial,
+    dia: hojeNoBrasil(),
+    posicao: "fim",
+  });
+
   const isEdit = mode.kind === "edit";
   const raffleId = mode.kind === "edit" ? mode.id : "";
+  // Criação sempre escolhe. Na edição, só rascunho: campanha no ar, na fila,
+  // encerrada ou cancelada tem caminho próprio, e oferecer "publicar agora"
+  // numa campanha encerrada seria inventar uma regra que não existe.
+  const podeEscolherDestino =
+    mode.kind === "create" || statusAtual === "DRAFT";
   // Skin escolhida do catálogo. Só existe na criação: depois, prêmio e capa
   // passam a ser editados nas próprias abas.
   const [skinEscolhida, setSkinEscolhida] = useState<string | null>(null);
@@ -492,16 +525,70 @@ export function RaffleForm({
   ) {
     if (values.isFree) values.pricePerNumber = 0;
 
-    startTransition(async () => {
-      const result =
-        mode.kind === "create"
-          ? await createRaffleAction(
-              values,
-              skinEscolhida ?? undefined,
-              desgasteEscolhido ?? undefined,
-            )
-          : await updateRaffleAction({ id: mode.id, data: values });
+    // O DESTINO SÓ VALE NO BOTÃO DE SALVAR.
+    //
+    // Trocar de aba também cria o sorteio, e ali o admin está no meio da
+    // configuração: aplicar o destino nesse momento mandaria para a fila uma
+    // campanha sem imagem e sem prêmio. Com aba de destino, o sorteio nasce
+    // rascunho e a escolha continua na tela, esperando o salvar de verdade.
+    const destino = abaDeDestino === null ? destinoDoSorteio : null;
 
+    startTransition(async () => {
+      // Os dois caminhos ficam separados de propósito: a criação devolve o
+      // destino aplicado e a edição não, e uma variável só para os dois faria
+      // o tipo virar união em toda linha daqui para baixo.
+      if (mode.kind === "create") {
+        const result = await createRaffleAction(
+          values,
+          skinEscolhida ?? undefined,
+          desgasteEscolhido ?? undefined,
+          destino
+            ? { tipo: destino.tipo, dia: destino.dia, posicao: destino.posicao }
+            : undefined,
+        );
+        if (!result.ok) {
+          aoFalhar?.();
+          toast.error(result.error);
+          if (result.fieldErrors?.slug) {
+            form.setError("slug", { message: result.fieldErrors.slug[0] });
+          }
+          return;
+        }
+
+        const feito = result.data.destino;
+        if (feito.tipo === "CRONOGRAMA" && feito.enfileirado) {
+          // Fila alimentada: o caminho seguinte é cadastrar a próxima skin, e
+          // não abrir o editor desta. É o passo que a tela existe para poupar.
+          toast.success("Sorteio criado e adicionado ao cronograma");
+          // O destino VIAJA JUNTO. Sem ele na URL, o formulário novo voltava
+          // marcado como rascunho e o sorteio seguinte era salvo sem entrar na
+          // fila, em silêncio: o admin cadastraria cinco skins achando que
+          // montou o dia e encontraria uma fila com uma só.
+          router.push(
+            `/admin/sorteios/novo?destino=cronograma&enfileirado=${result.data.id}`,
+          );
+          return;
+        }
+        if (feito.tipo === "CRONOGRAMA") {
+          // Nada se perde: a campanha existe, salva como rascunho, e o motivo
+          // aparece na tela para o admin resolver e mandar para a fila depois.
+          toast.warning(
+            `Sorteio salvo como rascunho, mas não entrou no cronograma: ${feito.motivo}`,
+          );
+        } else {
+          toast.success(
+            feito.tipo === "PUBLICAR" ? "Sorteio publicado" : "Sorteio criado",
+          );
+        }
+        router.push(
+          `/admin/sorteios/${result.data.id}/editar${
+            abaDeDestino ? `?aba=${abaDeDestino}` : ""
+          }`,
+        );
+        return;
+      }
+
+      const result = await updateRaffleAction({ id: mode.id, data: values });
       if (!result.ok) {
         aoFalhar?.();
         toast.error(result.error);
@@ -510,18 +597,35 @@ export function RaffleForm({
         }
         return;
       }
-      toast.success(
-        mode.kind === "create" ? "Sorteio criado" : "Sorteio salvo",
-      );
-      if (mode.kind === "create") {
-        router.push(
-          `/admin/sorteios/${result.data.id}/editar${
-            abaDeDestino ? `?aba=${abaDeDestino}` : ""
-          }`,
-        );
+
+      // EDIÇÃO. O conteúdo já foi salvo; o destino, quando escolhido, vai
+      // depois e pela mesma função que a criação usa.
+      if (destino && destino.tipo !== "RASCUNHO" && statusAtual === "DRAFT") {
+        const r = await definirDestinoAction({
+          id: mode.id,
+          destino: {
+            tipo: destino.tipo,
+            dia: destino.dia,
+            posicao: destino.posicao,
+          },
+        });
+        if (!r.ok) {
+          toast.error(r.error);
+        } else if (r.data.tipo === "CRONOGRAMA" && !r.data.enfileirado) {
+          toast.warning(
+            `Salvo, mas não entrou no cronograma: ${r.data.motivo}`,
+          );
+        } else {
+          toast.success(
+            r.data.tipo === "PUBLICAR"
+              ? "Sorteio publicado"
+              : "Adicionado ao cronograma",
+          );
+        }
       } else {
-        router.refresh();
+        toast.success("Sorteio salvo");
       }
+      router.refresh();
     });
   }
 
@@ -1097,6 +1201,25 @@ export function RaffleForm({
                   </p>
                 </div>
               </SecaoDoFormulario>
+
+              {/* O DESTINO fica no fim, e não no topo: ele é a última decisão
+                  de quem preenche, e no topo viraria a primeira pergunta de um
+                  formulário que ainda não tem sorteio nenhum para mandar a
+                  lugar algum. */}
+              {podeEscolherDestino && (
+                <DestinoDoSorteio
+                  valor={destinoDoSorteio}
+                  onChange={setDestinoDoSorteio}
+                  desabilitado={isPending}
+                />
+              )}
+              {noCronograma && (
+                <NoCronograma
+                  dia={noCronograma.dia}
+                  posicao={noCronograma.posicao}
+                  situacao={noCronograma.situacao}
+                />
+              )}
             </div>
           </TabsContent>
 

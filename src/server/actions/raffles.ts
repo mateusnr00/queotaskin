@@ -19,7 +19,16 @@ import {
   camposObrigatoriosCoerentes,
   raffleGeneralSchema,
 } from "@/lib/validations/raffle";
-import { garantirSlugLivre } from "@/server/services/raffles";
+import {
+  destinoSchema,
+  type DestinoDoSorteioInput,
+  type ResultadoDoDestino,
+} from "@/lib/validations/destino";
+import {
+  definirStatusDaCampanha,
+  garantirSlugLivre,
+} from "@/server/services/raffles";
+import { enfileirar } from "@/server/services/cronograma";
 import { toSlug } from "@/lib/slug";
 import { registrarLog } from "@/server/services/activity-log";
 import { garantirSemente } from "@/server/services/sorteio-ao-vivo";
@@ -37,6 +46,52 @@ const statusUpdateSchema = z.object({
   status: z.enum(["DRAFT", "QUEUED", "ACTIVE", "FINISHED", "CANCELLED"]),
 });
 
+/**
+ * Aplica o destino a uma campanha que JÁ EXISTE.
+ *
+ * Fora da criação de propósito: a edição de um rascunho usa exatamente esta
+ * função, e é o que permite mandar para a fila de dentro do formulário sem ter
+ * uma segunda versão da regra.
+ *
+ * Nunca desfaz a campanha. Se o destino não puder ser cumprido (campanha
+ * incompleta para a fila), ela continua salva como rascunho e o motivo volta
+ * para a tela: perder o trabalho de configuração por causa de uma escolha de
+ * destino seria o pior desfecho possível.
+ */
+async function aplicarDestino(input: {
+  tenantId: string;
+  raffleId: string;
+  adminId: string;
+  destino: DestinoDoSorteioInput;
+}): Promise<ResultadoDoDestino> {
+  if (input.destino.tipo === "PUBLICAR") {
+    await definirStatusDaCampanha({
+      tenantId: input.tenantId,
+      raffleId: input.raffleId,
+      status: "ACTIVE",
+    });
+    return { tipo: "PUBLICAR" };
+  }
+
+  if (input.destino.tipo === "CRONOGRAMA") {
+    const r = await enfileirar({
+      tenantId: input.tenantId,
+      raffleId: input.raffleId,
+      dia: input.destino.dia
+        ? new Date(`${input.destino.dia}T12:00:00.000Z`)
+        : null,
+      posicao: input.destino.posicao ?? "fim",
+      origem: "FORMULARIO",
+      adminId: input.adminId,
+    });
+    return r.ok
+      ? { tipo: "CRONOGRAMA", enfileirado: true }
+      : { tipo: "CRONOGRAMA", enfileirado: false, motivo: r.erros.join(" ") };
+  }
+
+  return { tipo: "RASCUNHO" };
+}
+
 const highlightUpdateSchema = z.object({
   id: z.string().cuid(),
   showOnHome: z.boolean(),
@@ -52,8 +107,13 @@ export async function createRaffleAction(
   // desgaste, porque a mesma skin é sorteada em Field-Tested numa campanha e
   // em Factory New na outra; sem este parâmetro o prêmio nascia sem desgaste
   // e a ficha na página do sorteio ficava incompleta.
-  skinWear?: SkinWear
-): Promise<ActionResult<{ id: string; slug: string }>> {
+  skinWear?: SkinWear,
+  // Para onde a campanha vai depois de criada. Ausente é rascunho, que é o
+  // comportamento de sempre: nenhuma criação existente muda de efeito.
+  destinoBruto?: unknown,
+): Promise<
+  ActionResult<{ id: string; slug: string; destino: ResultadoDoDestino }>
+> {
   try {
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
@@ -210,11 +270,27 @@ export async function createRaffleAction(
         detalhes: { slug: raffle.slug },
       });
 
+      // O DESTINO, depois de a campanha existir e estar inteira.
+      //
+      // Aqui e não dentro da transação: enfileirar tem transação própria (com
+      // a trava da fila), e aninhar as duas seguraria a fila aberta pelo tempo
+      // da criação inteira, inclusive a cópia da capa.
+      const destino = destinoSchema.safeParse(destinoBruto ?? { tipo: "RASCUNHO" });
+      const resultadoDoDestino = destino.success
+        ? await aplicarDestino({
+            tenantId,
+            raffleId: raffle.id,
+            adminId: session.user.id,
+            destino: destino.data,
+          })
+        : ({ tipo: "RASCUNHO" } as ResultadoDoDestino);
+
       revalidatePath("/admin/sorteios");
+      revalidatePath("/admin/sorteios/cronograma");
       revalidatePath("/sorteios");
       revalidatePath("/");
 
-      return { ok: true, data: raffle };
+      return { ok: true, data: { ...raffle, destino: resultadoDoDestino } };
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -231,6 +307,59 @@ export async function createRaffleAction(
   } catch (err) {
     console.error("[createRaffleAction]", err);
     return { ok: false, error: "Erro ao criar sorteio" };
+  }
+}
+
+/**
+ * Aplica o destino a uma campanha que já existe. É o "adicionar ao cronograma"
+ * de dentro da edição de um rascunho.
+ *
+ * Mesma função que a criação usa, então não existem duas regras: a diferença
+ * entre os dois caminhos é só o momento.
+ */
+export async function definirDestinoAction(
+  raw: unknown,
+): Promise<ActionResult<ResultadoDoDestino>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+    const parsed = z
+      .object({ id: z.string().cuid(), destino: destinoSchema })
+      .safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    await assertRaffleInActiveTenant(parsed.data.id, session.user);
+
+    // Só rascunho muda de destino por aqui. Campanha no ar, na fila, encerrada
+    // ou cancelada tem caminho próprio, e deixar o formulário mexer nelas
+    // criaria uma segunda porta para regras que já existem em outro lugar.
+    const atual = await prisma.raffle.findUnique({
+      where: { id: parsed.data.id },
+      select: { status: true },
+    });
+    if (atual?.status !== "DRAFT") {
+      return {
+        ok: false,
+        error: "Só rascunho pode escolher destino por aqui.",
+      };
+    }
+
+    const resultado = await aplicarDestino({
+      tenantId,
+      raffleId: parsed.data.id,
+      adminId: session.user.id,
+      destino: parsed.data.destino,
+    });
+
+    revalidatePath("/admin/sorteios");
+    revalidatePath("/admin/sorteios/cronograma");
+    revalidatePath(`/admin/sorteios/${parsed.data.id}/editar`);
+    revalidatePath("/sorteios");
+    revalidatePath("/");
+    return { ok: true, data: resultado };
+  } catch (err) {
+    console.error("[definirDestinoAction]", err);
+    return { ok: false, error: "Erro ao aplicar o destino" };
   }
 }
 
@@ -517,20 +646,14 @@ export async function updateRaffleStatusAction(
       return { ok: false, error: "Dados inválidos" };
     }
 
-    const result = await prisma.raffle.updateMany({
-      where: { id: parsed.data.id, tenantId },
-      data: { status: parsed.data.status },
+    const mudou = await definirStatusDaCampanha({
+      tenantId,
+      raffleId: parsed.data.id,
+      status: parsed.data.status,
     });
-    if (result.count === 0) {
+    if (!mudou) {
       return { ok: false, error: "Sorteio não encontrado" };
     }
-
-    await registrarLog({
-      acao: "sorteio.status_alterado",
-      tenantId,
-      alvo: { tipo: "Raffle", id: parsed.data.id },
-      detalhes: { depois: { status: parsed.data.status } },
-    });
 
     revalidatePath("/admin/sorteios");
     revalidatePath("/sorteios");

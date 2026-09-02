@@ -2,8 +2,11 @@
 
 import { customAlphabet } from "nanoid";
 
+import type { RaffleStatus } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 import { toSlug } from "@/lib/slug";
+import { registrarLog } from "@/server/services/activity-log";
 
 const shortId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 6);
 
@@ -130,4 +133,36 @@ export async function pickSequentialNumbers(
     );
   }
   return picked;
+}
+
+
+/**
+ * Muda a situação de uma campanha, com o registro no histórico.
+ *
+ * Existe como serviço, e não solto dentro da action, porque agora tem dois
+ * chamadores: a lista do painel (o seletor de situação) e a criação de
+ * sorteio com destino "publicar agora". Duas cópias da mesma regra seriam
+ * duas regras no dia em que uma delas ganhasse uma verificação.
+ *
+ * O `updateMany` com tenantId no WHERE é o que impede um painel de mexer na
+ * campanha de outro, e o `count` é o que distingue "não achei" de "mudei".
+ */
+export async function definirStatusDaCampanha(input: {
+  tenantId: string;
+  raffleId: string;
+  status: RaffleStatus;
+}): Promise<boolean> {
+  const resultado = await prisma.raffle.updateMany({
+    where: { id: input.raffleId, tenantId: input.tenantId },
+    data: { status: input.status },
+  });
+  if (resultado.count === 0) return false;
+
+  await registrarLog({
+    acao: "sorteio.status_alterado",
+    tenantId: input.tenantId,
+    alvo: { tipo: "Raffle", id: input.raffleId },
+    detalhes: { depois: { status: input.status } },
+  });
+  return true;
 }
