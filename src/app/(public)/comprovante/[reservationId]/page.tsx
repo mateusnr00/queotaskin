@@ -305,6 +305,7 @@ export default async function ReservationReceiptPage({
         <TrilhaDoPedido estado="pago" titulo={reservation.raffle.title} />
         <PaidCelebration
           dobroAplicado={reservation.dobroAplicado}
+          raffleTitle={reservation.raffle.title}
           raffleSlug={reservation.raffle.slug}
           numbers={reservation.tickets.map((t) => t.number)}
           participantName={reservation.participantName}

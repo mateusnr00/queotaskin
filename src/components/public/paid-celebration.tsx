@@ -1,41 +1,40 @@
 import type { ReactNode } from "react";
 // Tela exibida quando o pagamento Pix é confirmado.
 //
-// Os textos (título, descrição, label do botão primário) e a imagem podem
-// ser personalizados por tenant em Admin, Configurações, Mensagens. Quando o
-// admin não preencheu nada, caímos pros defaults abaixo.
+// Os textos (título, descrição, label do botão primário) e a imagem podem ser
+// personalizados por tenant em Admin, Configurações, Mensagens. Quando o admin
+// não preencheu nada, caímos pros defaults abaixo.
 //
-// O VERDE ERA A PÁGINA INTEIRA, E AGORA É UM SINAL
+// A TELA TEM TRÊS ANDARES, E CADA UM RESPONDE UMA PERGUNTA
 //
-// A versão anterior tinha oito coisas verdes acima da dobra: a pílula do
-// estado, os três traços da trilha, a moldura do quadro, o fundo do quadro, o
-// selo, o título, a contagem de títulos e cada número. O site é laranja sobre
-// quase preto, então essa tela parecia ter vindo de outro produto, e dentro
-// dela nada se destacava: quando tudo é da cor do sucesso, o sucesso não tem
-// cor. Agora o verde aparece em três lugares e por um motivo cada: o selo do
-// visto, os números (que são o que a pessoa levou) e a palavra que confirma.
-// O resto é o cartão escuro do site, e o dinheiro é laranja, como no preço da
-// campanha.
+// "Deu certo?" é o cartão de cima: o visto, a frase e o número comprado, tudo
+// junto, porque a confirmação e o que foi comprado são a mesma notícia. "E
+// agora?" é o que vem no meio: o XP, as raspadinhas, as caixas, o que a compra
+// rendeu. "Quanto foi mesmo?" é o extrato, e ele fica por último de propósito:
+// é conferência, não notícia. Quem ganhou uma skin quer ver a skin, e ter
+// valor pago e hora do pagamento na frente empurrava a caixa premiada para
+// baixo da dobra no telefone.
 //
-// O QUADRO VAZIO VIROU O CONTEÚDO
+// O VERDE É SINAL, NÃO FUNDO
 //
-// O selo ficava sozinho no meio de um quadro de 180px de altura, e os
-// números, que são o motivo de a página existir, apareciam depois num cartão
-// separado com uma fileira de fichas pequenas. O peso estava no aviso e não
-// no que foi comprado. Agora é um cartão só: o visto e a frase numa linha
-// horizontal compacta, e os números logo abaixo, grandes, numa caixa
-// aninhada com o raio menor que o de fora.
+// Uma versão anterior tinha oito coisas verdes acima da dobra: a pílula do
+// estado, os traços da trilha, a moldura do quadro, o fundo do quadro, o selo,
+// o título, a contagem e cada número. O site é laranja sobre quase preto,
+// então a tela parecia vir de outro produto, e dentro dela nada se destacava:
+// quando tudo é da cor do sucesso, o sucesso não tem cor. Hoje o verde aparece
+// no visto, no rótulo dos números e nos números, que é onde ele significa
+// alguma coisa; o resto é o cartão escuro do site.
 //
-// AS QUATRO INFORMAÇÕES VIRARAM UMA FAIXA
+// O NÚMERO É DO TAMANHO DA NOTÍCIA
 //
-// Data do sorteio e "onde sai o resultado" moravam num rodapé do quadro
-// verde; valor e hora do pagamento, numa tabela de três linhas lá embaixo,
-// que ainda repetia o nome da campanha já escrito no cabeçalho da página.
-// Eram três blocos para quatro fatos curtos. Viraram uma faixa de células com
-// fio de um pixel entre elas, que é a densidade que o resto do site usa.
+// Com poucos números, cada um vira uma placa grande: quem comprou um título
+// tem UM número para guardar, e ele merece o tamanho de um troféu. A partir de
+// meia dúzia as placas encolhem, porque aí a pergunta deixa de ser "qual é o
+// meu número?" e passa a ser "quais são os meus números?", que se responde
+// varrendo uma lista.
 
 import Link from "next/link";
-import { CalendarDays, Check, Clock, Receipt, Trophy } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { formatBRL } from "@/lib/format";
@@ -45,7 +44,11 @@ import { SeloDeDobro } from "@/components/public/selo-de-dobro";
 const DEFAULT_TITLE = "Pagamento confirmado!";
 const DEFAULT_BUTTON_LABEL = "Ver mais campanhas";
 
+/** Até quantos números as placas ficam grandes. */
+const PLACAS_GRANDES_ATE = 6;
+
 interface Props {
+  raffleTitle: string;
   raffleSlug: string;
   numbers: number[];
   participantName: string;
@@ -64,6 +67,7 @@ interface Props {
 }
 
 export function PaidCelebration({
+  raffleTitle,
   raffleSlug,
   numbers,
   participantName,
@@ -82,91 +86,55 @@ export function PaidCelebration({
   const buttonLabel = customButtonLabel?.trim() || DEFAULT_BUTTON_LABEL;
   const imageUrl = customImageUrl?.trim() || null;
   const primeiroNome = participantName.trim().split(/\s+/)[0];
-
-  // Só entram fatos que o sistema cumpre. Não existe aviso automático por
-  // mensagem em lugar nenhum do código, então prometer "avisamos você" seria
-  // promessa que ninguém cumpre.
-  const celulas = [
-    drawDate && {
-      icone: CalendarDays,
-      rotulo: "Sorteio",
-      valor: new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "long",
-        timeZone: "America/Sao_Paulo",
-      }).format(drawDate),
-    },
-    { icone: Trophy, rotulo: "Resultado", valor: "Na campanha" },
-    {
-      icone: Receipt,
-      rotulo: "Valor pago",
-      valor: formatBRL(totalAmount),
-      // O dinheiro é laranja em todo o site, do preço da campanha ao botão
-      // de comprar. Aqui fecha o ciclo: é o mesmo número, na mesma cor.
-      destaque: true,
-    },
-    paidAt && {
-      icone: Clock,
-      rotulo: "Pago em",
-      valor: new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "America/Sao_Paulo",
-      }).format(paidAt),
-    },
-  ].filter(Boolean) as {
-    icone: typeof Trophy;
-    rotulo: string;
-    valor: string;
-    destaque?: boolean;
-  }[];
+  const umSo = numbers.length === 1;
+  const grandes = numbers.length <= PLACAS_GRANDES_ATE;
 
   return (
     <div className="space-y-3.5">
-      {/* O CARTÃO DA CONFIRMAÇÃO.
-
-          Um só, com o aviso em cima e os números dentro, e não dois
-          empilhados: são a mesma notícia vista de dois ângulos, "deu certo" e
-          "o que é seu". O clarão verde no topo é o que sobrou do quadro
-          inteiro pintado, e ele morre antes da metade do cartão, então o
-          fundo continua sendo o do site. */}
+      {/* O CARTÃO DA CONFIRMAÇÃO */}
       <section className="relative overflow-hidden rounded-2xl border bg-card">
+        {/* O clarão nasce ATRÁS DO VISTO e morre antes da metade do cartão.
+            Centralizado no topo ele acendia o lado direito, onde não há nada,
+            e o cartão voltava a parecer um quadro verde; ancorado no selo, ele
+            lê como a luz do próprio selo. */}
         <span
           aria-hidden
           className="pointer-events-none absolute -top-24 -left-16 h-48 w-64 rounded-full bg-emerald-500/15 blur-3xl"
         />
+        {/* A malha de pontos no canto. É o único enfeite da tela, e existe
+            para o cartão não ser um retângulo liso: dá textura sem competir
+            com nada, porque some antes de chegar no texto. */}
+        <span
+          aria-hidden
+          className="pontos-do-canto pointer-events-none absolute top-0 right-0 h-28 w-28"
+        />
 
         <div className="relative p-4 md:p-5">
-          {/* Em linha, e não centralizado. Centralizado, o selo precisava de
-              uma faixa de 180px só para ele e a frase quebrava em três
-              linhas; em linha, o mesmo conteúdo cabe em duas e o olho lê da
-              esquerda para a direita como no resto do site. */}
-          <div className="flex items-center gap-3.5">
-            <span className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+          <div className="flex items-center gap-3.5 md:gap-4">
+            <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
               {/* Anel que abre depois do selo e se dissipa. Fica atrás e sem
                   eventos: é enfeite, não pode capturar clique. */}
               <span
                 aria-hidden
                 className="confirmacao-anel pointer-events-none absolute inset-0 rounded-full border-2 border-emerald-400"
               />
-              <span className="confirmacao-entra flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/25">
-                <Check className="h-6 w-6 text-white" strokeWidth={3} />
+              <span className="confirmacao-entra flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 shadow-[0_0_24px_-2px_var(--color-emerald-500)]">
+                <Check className="h-7 w-7 text-white" strokeWidth={3} />
               </span>
             </span>
 
             <div className="min-w-0">
-              <h2 className="whitespace-pre-line text-lg font-bold leading-tight tracking-tight text-balance md:text-xl">
+              <h2 className="text-lg font-extrabold leading-tight tracking-tight whitespace-pre-line text-balance md:text-xl">
                 {title}
               </h2>
-              {/* Uma frase, com nome e contagem. Personalizada e concreta
-                  vale mais que agradecimento genérico. */}
-              <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
-                {primeiroNome ? `Pronto, ${primeiroNome}. ` : ""}
-                {numbers.length === 1
-                  ? "Seu número está garantido."
-                  : `Seus ${numbers.length} números estão garantidos.`}
+              {/* Uma frase, e ela fala do que foi comprado. "Obrigado pela
+                  participação" não diz nada que a pessoa não saiba. */}
+              <p className="mt-1 text-sm leading-snug text-muted-foreground">
+                {primeiroNome ? `${primeiroNome}, ` : ""}
+                {umSo
+                  ? "seu título já está garantido."
+                  : `seus ${numbers.length} títulos já estão garantidos.`}{" "}
+                Boa sorte!
               </p>
             </div>
           </div>
@@ -174,101 +142,45 @@ export function PaidCelebration({
           {/* O texto do painel, quando o dono escreveu um. Fica embaixo e
               menor: é recado da casa, não a confirmação. */}
           {description && (
-            <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-xs leading-relaxed whitespace-pre-line text-muted-foreground">
               {description}
             </p>
           )}
 
           {dobroAplicado && (
-            <SeloDeDobro total={numbers.length} className="mt-3.5" />
+            <SeloDeDobro total={numbers.length} className="mt-4" />
           )}
 
-          {/* OS NÚMEROS.
-
-              Caixa aninhada com raio menor que o de fora, para as curvas
-              ficarem concêntricas em vez de duas bordas brigando. É aqui que
-              o verde tem função: estes números são o que a pessoa vai
-              conferir de novo no dia do sorteio. */}
-          <div className="mt-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3">
-            <div className="mb-2.5 flex items-baseline justify-between gap-3">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Seus números
-              </h3>
-              <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
-                {numbers.length} título{numbers.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            <ul className="flex flex-wrap gap-1.5">
-              {numbers.map((n) => (
-                <li
-                  key={n}
-                  className="inline-flex h-11 min-w-14 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 font-mono text-lg font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-300"
-                >
-                  {n.toString().padStart(2, "0")}
-                </li>
-              ))}
-            </ul>
+          <div className="mt-4 mb-2.5 flex items-center justify-between gap-3">
+            <h3 className="text-[11px] font-bold tracking-wider text-emerald-600 uppercase dark:text-emerald-400">
+              {umSo ? "Seu número" : "Seus números"}
+            </h3>
+            <span className="shrink-0 rounded-full border bg-muted/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
+              {numbers.length} título{umSo ? "" : "s"}
+            </span>
           </div>
+
+          <ul className="flex flex-wrap gap-2">
+            {numbers.map((n) => (
+              <li
+                key={n}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 font-mono font-extrabold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-300",
+                  grandes
+                    ? "h-14 min-w-[4.25rem] px-3 text-2xl"
+                    : "h-11 min-w-14 px-2.5 text-lg",
+                )}
+              >
+                {n.toString().padStart(2, "0")}
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
-      {/* A FAIXA DE FATOS.
-
-          Fio de um pixel entre as células: o fundo é a cor da borda e cada
-          célula tem o fundo do cartão por cima. Grade de duas no telefone e
-          de tantas quantas houver no computador, porque com três células numa
-          grade de quatro sobraria um buraco do tamanho de uma célula. */}
-      <section
-        className={cn(
-          "grid gap-px overflow-hidden rounded-2xl border bg-border/70",
-          "grid-cols-2",
-          celulas.length === 4
-            ? "sm:grid-cols-4"
-            : celulas.length === 3
-              ? "sm:grid-cols-3"
-              : "sm:grid-cols-2",
-        )}
-      >
-        {celulas.map((c, i) => (
-          <div
-            key={c.rotulo}
-            className={cn(
-              "flex items-center gap-2.5 bg-card px-3.5 py-3",
-              // Célula ímpar sozinha na última linha do telefone ocupa a
-              // linha inteira, em vez de deixar metade vazia.
-              celulas.length % 2 === 1 &&
-                i === celulas.length - 1 &&
-                "col-span-2 sm:col-span-1",
-            )}
-          >
-            <c.icone
-              aria-hidden
-              className={cn(
-                "h-4 w-4 shrink-0",
-                c.destaque ? "text-primary" : "text-muted-foreground",
-              )}
-            />
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {c.rotulo}
-              </p>
-              <p
-                className={cn(
-                  "truncate text-sm font-semibold tabular-nums",
-                  c.destaque && "text-primary",
-                )}
-              >
-                {c.valor}
-              </p>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      {/* Espaço para o que vier entre o comprovante e os botões, hoje as
-          raspadinhas, as caixas surpresas e o bloco de XP. Fica aqui e não
-          depois dos botões porque quem clica em "Ver mais campanhas" sai da
-          página, e nunca veria o que estivesse embaixo deles. */}
+      {/* O que a compra rendeu: o XP, as raspadinhas, as caixas. Fica antes
+          dos botões porque quem clica em "Ver mais campanhas" sai da página, e
+          nunca veria o que estivesse embaixo deles. */}
       {children}
 
       {imageUrl && (
@@ -282,6 +194,47 @@ export function PaidCelebration({
         </div>
       )}
 
+      {/* O EXTRATO.
+
+          Linhas rótulo à esquerda, valor à direita, com um fio entre elas. Em
+          grade de duas colunas, "Pago em" caía numa faixa própria embaixo e as
+          informações pareciam vir de blocos diferentes; em linhas, elas se
+          leem como o que são, um recibo. */}
+      <section className="rounded-2xl border bg-card px-4 py-1 text-sm md:px-5">
+        <Linha rotulo="Sorteio">{raffleTitle}</Linha>
+        {drawDate && (
+          <Linha rotulo="Data do sorteio">
+            <span className="tabular-nums">
+              {new Intl.DateTimeFormat("pt-BR", {
+                day: "2-digit",
+                month: "long",
+                timeZone: "America/Sao_Paulo",
+              }).format(drawDate)}
+            </span>
+          </Linha>
+        )}
+        {/* Só entram fatos que o sistema cumpre. Não existe aviso automático
+            por mensagem em lugar nenhum do código, então prometer "avisamos
+            você" seria promessa que ninguém cumpre. */}
+        <Linha rotulo="Resultado">Na página da campanha</Linha>
+        <Linha rotulo="Valor pago">
+          <span className="font-bold tabular-nums">
+            {formatBRL(totalAmount)}
+          </span>
+        </Linha>
+        {paidAt && (
+          <Linha rotulo="Pago em">
+            <span className="tabular-nums">
+              {new Intl.DateTimeFormat("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+                timeZone: "America/Sao_Paulo",
+              }).format(paidAt)}
+            </span>
+          </Linha>
+        )}
+      </section>
+
       <div className="grid grid-cols-2 gap-2.5">
         <Link
           href={`/${raffleSlug}`}
@@ -293,6 +246,21 @@ export function PaidCelebration({
           {buttonLabel}
         </Link>
       </div>
+    </div>
+  );
+}
+
+function Linha({
+  rotulo,
+  children,
+}: {
+  rotulo: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b py-3 last:border-b-0">
+      <span className="shrink-0 text-xs text-muted-foreground">{rotulo}</span>
+      <span className="text-right font-medium">{children}</span>
     </div>
   );
 }

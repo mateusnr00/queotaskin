@@ -961,6 +961,20 @@
   }
 }
 
+/* A malha de pontos no canto do cartão de confirmação.
+ *
+ * Textura, e não decoração: ela dá superfície a um retângulo que de outro
+ * jeito seria liso, e some antes de chegar no texto por causa da máscara
+ * radial, então nunca disputa leitura com o que está escrito. A cor sai de
+ * currentColor para acompanhar o tema claro e o escuro sem duas regras. */
+.pontos-do-canto {
+  color: color-mix(in oklch, var(--foreground) 14%, transparent);
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 9px 9px;
+  -webkit-mask-image: radial-gradient(circle at 100% 0%, #000, transparent 72%);
+  mask-image: radial-gradient(circle at 100% 0%, #000, transparent 72%);
+}
+
 /* ---------------------------------------------------------------------------
    O CARTÃO DE XP DO COMPROVANTE
    ---------------------------------------------------------------------------
