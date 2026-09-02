@@ -11,7 +11,10 @@
 
 import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
 
-import { precoDaSkinAction } from "@/server/actions/preco-da-skin";
+import {
+  precoDaSkinAction,
+  precoDaSkinPeloNomeAction,
+} from "@/server/actions/preco-da-skin";
 import { precoPorNumero } from "@/lib/steam-market";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
@@ -30,6 +33,7 @@ import {
   Sparkles,
   Tag,
   TagsIcon,
+  RefreshCw,
   Ticket,
   Trash2,
   Trophy,
@@ -402,6 +406,25 @@ export function RaffleForm({
   } | null>(null);
   const [buscandoValor, setBuscandoValor] = useState(false);
   const [erroDoValor, setErroDoValor] = useState<string | null>(null);
+  // De onde veio o número: a Steam agora, o cache das últimas horas ou o
+  // valor guardado no catálogo. A tela diz, porque "R$ 1.200" da Steam de
+  // hoje e "R$ 1.200" digitado no catálogo em maio merecem confiança
+  // diferente na hora de decidir o preço da cota.
+  const [origemDoPreco, setOrigemDoPreco] = useState<
+    "steam" | "cache" | "catalogo" | null
+  >(null);
+
+  /**
+   * A skin do prêmio salvo, no modo edição.
+   *
+   * O prêmio guarda uma CÓPIA da ficha da skin, não uma referência ao
+   * catálogo, então o nome é o que liga um ao outro. Pega o primeiro prêmio
+   * com skin: é o prêmio principal em toda campanha deste site.
+   */
+  const skinDoPremio = (() => {
+    const p = initialPrizes.find((x) => x.skinName?.trim());
+    return p ? { nome: p.skinName.trim(), wear: p.skinWear } : null;
+  })();
   // Preço digitado à mão manda. Sugestão que sobrescreve o que a pessoa
   // acabou de escrever não é ajuda, é briga.
   const [precoEditadoAMao, setPrecoEditadoAMao] = useState(false);
@@ -442,13 +465,70 @@ export function RaffleForm({
       const r = await precoDaSkinAction({ skinTemplateId: skinId, wear });
       if (!r.ok) {
         setValorNaSteam(null);
+        setOrigemDoPreco(null);
         setErroDoValor(r.erro);
         return;
       }
       setValorNaSteam({ brl: r.brl, volume: r.volume });
+      setOrigemDoPreco(r.origem);
       aplicarSugestao(r.brl, form.getValues("totalNumbers"));
     } catch {
       setValorNaSteam(null);
+      setErroDoValor("Não foi possível falar com a Steam agora.");
+    } finally {
+      setBuscandoValor(false);
+    }
+  }
+
+  /**
+   * O botão "buscar preço" ao lado do campo.
+   *
+   * Existe porque a busca automática acontece na aba Geral, no momento em que
+   * a skin é escolhida, e o preço mora na aba Títulos: quando a Steam não
+   * responde, o aviso aparece numa tela que ninguém está olhando, e o efeito
+   * prático é o preço ficar no padrão sem explicação. Aqui a resposta chega
+   * onde a pergunta é feita.
+   *
+   * Na edição não existe seletor de skin, então a consulta vai pelo NOME do
+   * prêmio salvo, que é a única ligação que existe entre o sorteio e o
+   * catálogo.
+   */
+  async function buscarPrecoAgora() {
+    setErroDoValor(null);
+    setBuscandoValor(true);
+    try {
+      const r = isEdit
+        ? await precoDaSkinPeloNomeAction({
+            nome: skinDoPremio?.nome ?? "",
+            wear: skinDoPremio?.wear ?? null,
+            forcar: true,
+          })
+        : await precoDaSkinAction({
+            skinTemplateId: skinEscolhida ?? "",
+            wear: desgasteEscolhido,
+            forcar: true,
+          });
+      if (!r.ok) {
+        setValorNaSteam(null);
+        setOrigemDoPreco(null);
+        setErroDoValor(r.erro);
+        return;
+      }
+      setValorNaSteam({ brl: r.brl, volume: r.volume });
+      setOrigemDoPreco(r.origem);
+      // Clique é pedido explícito: ele passa por cima do "editado à mão",
+      // senão o botão não faria nada para quem já tinha mexido no campo.
+      const sugerido = precoPorNumero(
+        r.brl,
+        Number(form.getValues("totalNumbers")),
+      );
+      if (sugerido != null && !form.getValues("isFree")) {
+        form.setValue("pricePerNumber", sugerido, { shouldDirty: true });
+        setPrecoEditadoAMao(false);
+      }
+    } catch {
+      setValorNaSteam(null);
+      setOrigemDoPreco(null);
       setErroDoValor("Não foi possível falar com a Steam agora.");
     } finally {
       setBuscandoValor(false);
@@ -689,6 +769,24 @@ export function RaffleForm({
                     acompanharTitulo(nome);
                   }}
                 />
+              )}
+
+              {/* O RESULTADO APARECE AQUI, e não só na aba do preço.
+                  Escolher a skin é o que dispara a consulta, então é aqui que
+                  a resposta faz sentido. Antes ela saía embaixo do campo de
+                  preço, noutra aba: quando a Steam não respondia, o preço
+                  ficava no padrão e ninguém entendia por quê. */}
+              {!isEdit && (buscandoValor || valorNaSteam || erroDoValor) && (
+                <div className="px-1 text-xs">
+                  <AvisoDoPrecoSugerido
+                    buscando={buscandoValor}
+                    valor={valorNaSteam}
+                    origem={origemDoPreco}
+                    erro={erroDoValor}
+                    cotas={Number(form.watch("totalNumbers")) || 0}
+                    editadoAMao={precoEditadoAMao}
+                  />
+                </div>
               )}
 
               <SecaoDoFormulario
@@ -1241,7 +1339,30 @@ export function RaffleForm({
                     name="pricePerNumber"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Preço da cota (R$)</FormLabel>
+                        <div className="flex items-center justify-between gap-2">
+                          <FormLabel>Preço da cota (R$)</FormLabel>
+                          {/* O botão só aparece quando há skin para consultar:
+                              na criação, a escolhida no seletor; na edição, a
+                              do prêmio salvo. Sem skin ele não teria o que
+                              perguntar à Steam. */}
+                          {!isFree && (skinEscolhida || skinDoPremio) && (
+                            <button
+                              type="button"
+                              onClick={() => void buscarPrecoAgora()}
+                              disabled={buscandoValor}
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                            >
+                              <RefreshCw
+                                aria-hidden
+                                className={cn(
+                                  "h-3 w-3",
+                                  buscandoValor && "motion-safe:animate-spin",
+                                )}
+                              />
+                              {buscandoValor ? "Consultando..." : "Buscar preço"}
+                            </button>
+                          )}
+                        </div>
                         <FormControl>
                           <Input
                             type="number"
@@ -1265,6 +1386,7 @@ export function RaffleForm({
                           <AvisoDoPrecoSugerido
                             buscando={buscandoValor}
                             valor={valorNaSteam}
+                            origem={origemDoPreco}
                             erro={erroDoValor}
                             cotas={Number(form.watch("totalNumbers")) || 0}
                             editadoAMao={precoEditadoAMao}
@@ -1982,12 +2104,14 @@ function SwitchField({
 function AvisoDoPrecoSugerido({
   buscando,
   valor,
+  origem,
   erro,
   cotas,
   editadoAMao,
 }: {
   buscando: boolean;
   valor: { brl: number; volume: number | null } | null;
+  origem: "steam" | "cache" | "catalogo" | null;
   erro: string | null;
   cotas: number;
   editadoAMao: boolean;
@@ -2008,9 +2132,18 @@ function AvisoDoPrecoSugerido({
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const sugerido = precoPorNumero(valor.brl, cotas);
 
+  // O catálogo é valor guardado, e pode estar velho: dizer de onde veio é o
+  // que separa "a Steam cobra isso hoje" de "alguém digitou isso um dia".
+  const fonte =
+    origem === "catalogo"
+      ? "Valor do catálogo"
+      : origem === "cache"
+        ? "Steam (consulta recente)"
+        : "Steam";
+
   return (
     <FormDescription>
-      Steam: <b className="font-semibold">{emReais(valor.brl)}</b>
+      {fonte}: <b className="font-semibold">{emReais(valor.brl)}</b>
       {cotas > 0 && sugerido != null && (
         <>
           {" "}
