@@ -107,12 +107,26 @@ export function LinhaDePremio({
   return (
     <li
       className={cn(
-        "flex items-center gap-3 rounded-xl border border-l-[3px] p-2.5 transition-colors",
+        // overflow-hidden é o que faz o fio da esquerda seguir o canto
+        // arredondado. Antes o fio era `border-l-[3px]`, e uma borda grossa
+        // encontrando bordas de 1px num raio grande produz aquele bico: o
+        // navegador desenha a junção em diagonal, e a esquerda aparecia como
+        // um arco solto, deslocado do card.
+        "relative flex items-center gap-3 overflow-hidden rounded-xl border p-2.5 pl-4 transition-colors",
         temDono
-          ? "border-emerald-500/25 border-l-emerald-500 bg-emerald-500/[0.06]"
-          : "border-border/60 border-l-primary bg-muted/20",
+          ? "border-emerald-500/25 bg-emerald-500/[0.06]"
+          : "border-border/60 bg-muted/20",
       )}
     >
+      {/* O fio de estado, por dentro da moldura. */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute inset-y-0 left-0 w-[3px]",
+          temDono ? "bg-emerald-500" : "bg-primary",
+        )}
+      />
+
       {/* O SELO DA SKIN.
           Moldura dupla: a casca externa recebe o anel na cor da raridade e o
           miolo escuro segura a foto. É a mesma leitura de raridade que o

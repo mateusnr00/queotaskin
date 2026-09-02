@@ -77,6 +77,7 @@ export function AwardedTicketsSection({
           imagem={t.skinImageUrl}
           ganhador={t.participantName}
           time={t.time}
+          rotuloVago="Disponível"
         />
       ))}
     </ul>
