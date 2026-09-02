@@ -34,6 +34,7 @@
 import type { SkinWear } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { WEAR_STEAM } from "@/lib/cs2";
 import { buscarPrecoNaSteam, SteamLimitouError } from "@/lib/steam-market";
 
 /**
@@ -44,7 +45,7 @@ import { buscarPrecoNaSteam, SteamLimitouError } from "@/lib/steam-market";
  */
 const VALIDADE_HORAS = 12;
 
-export type OrigemDoPreco = "steam" | "cache" | "catalogo";
+export type OrigemDoPreco = "steam" | "steamanalyst" | "cache" | "catalogo";
 
 export type PrecoSugerido =
   | {
@@ -89,24 +90,22 @@ export async function precoSugeridoDaSkin(input: {
   });
   if (!skin) return { ok: false, erro: "Skin não encontrada no catálogo." };
 
-  if (!input.forcar) {
-    const guardado = await prisma.skinPreco.findFirst({
-      where: { skinTemplateId, wear },
-      select: { brl: true, buscadoEm: true, volume: true },
-    });
+  // O preço guardado deste desgaste, de qualquer idade. Ele serve duas vezes:
+  // fresco, evita a consulta; velho, é a reserva quando a Steam não responde.
+  const guardado = await prisma.skinPreco.findFirst({
+    where: { skinTemplateId, wear },
+    select: { brl: true, buscadoEm: true, volume: true, fonte: true },
+  });
+
+  if (!input.forcar && guardado) {
     const limite = Date.now() - VALIDADE_HORAS * 3_600_000;
-    if (guardado && guardado.buscadoEm.getTime() > limite) {
-      return {
-        ok: true,
-        brl: Number(guardado.brl),
-        origem: "cache",
-        buscadoEm: guardado.buscadoEm.toISOString(),
-        volume: guardado.volume,
-      };
-    }
+    if (guardado.buscadoEm.getTime() > limite) return doGuardado(guardado);
   }
 
   const doCatalogo = skin.skinValueBrl == null ? null : Number(skin.skinValueBrl);
+  /** A reserva, na ordem: preço deste desgaste, depois valor da skin. */
+  const reserva = (): PrecoSugerido | null =>
+    (guardado ? doGuardado(guardado) : null) ?? comCatalogo(doCatalogo);
 
   try {
     const achado = await buscarPrecoNaSteam(skin, wear);
@@ -115,7 +114,7 @@ export async function precoSugeridoDaSkin(input: {
         `[preco-de-skin] a Steam não tem anúncio de "${skin.name}" (${wear ?? "sem desgaste"})`,
       );
       return (
-        comCatalogo(doCatalogo) ?? {
+        reserva() ?? {
           ok: false,
           semPreco: true,
           erro: "A Steam não tem anúncio desta skin neste desgaste agora. Preencha o preço à mão.",
@@ -162,8 +161,8 @@ export async function precoSugeridoDaSkin(input: {
           : String(err);
     console.error(`[preco-de-skin] falha em "${skin.name}": ${motivo}`);
 
-    const doCache = comCatalogo(doCatalogo);
-    if (doCache) return doCache;
+    const deReserva = reserva();
+    if (deReserva) return deReserva;
 
     return {
       ok: false,
@@ -173,6 +172,28 @@ export async function precoSugeridoDaSkin(input: {
           : "Não foi possível falar com a Steam agora. Preencha o preço à mão.",
     };
   }
+}
+
+/**
+ * O preço guardado, dizendo de onde ele veio.
+ *
+ * Preço da SteamAnalyst não é "cache da Steam": é outra fonte, com outra
+ * régua (média de sete dias, convertida do dólar), e a tela precisa poder
+ * dizer isso a quem está decidindo o preço da cota.
+ */
+function doGuardado(linha: {
+  brl: unknown;
+  buscadoEm: Date;
+  volume: number | null;
+  fonte: string;
+}): PrecoSugerido {
+  return {
+    ok: true,
+    brl: Number(linha.brl),
+    origem: linha.fonte === "steamanalyst" ? "steamanalyst" : "cache",
+    buscadoEm: linha.buscadoEm.toISOString(),
+    volume: linha.volume,
+  };
 }
 
 function comCatalogo(brl: number | null): PrecoSugerido | null {
@@ -194,24 +215,58 @@ export async function precoSugeridoPeloNome(input: {
   wear: SkinWear | null;
   forcar?: boolean;
 }): Promise<PrecoSugerido> {
-  const nome = input.nome.trim();
-  if (!nome) return { ok: false, erro: "O prêmio ainda não tem skin." };
+  const { base, wear } = separarDesgasteDoNome(input.nome, input.wear);
+  if (!base) return { ok: false, erro: "O prêmio ainda não tem skin." };
 
+  // Comparação sem caixa: o nome do prêmio é uma cópia digitada em algum
+  // momento, e uma letra maiúscula de diferença não pode custar a consulta.
   const skin = await prisma.skinTemplate.findFirst({
-    where: { tenantId: input.tenantId, name: nome },
+    where: {
+      tenantId: input.tenantId,
+      name: { equals: base, mode: "insensitive" },
+    },
     select: { id: true },
   });
   if (!skin) {
     return {
       ok: false,
-      erro: `"${nome}" não está no catálogo de skins, então não dá para consultar o preço.`,
+      erro: `"${base}" não está no catálogo de skins, então não dá para consultar o preço. Cadastre a skin no catálogo ou preencha o preço à mão.`,
     };
   }
 
   return precoSugeridoDaSkin({
     skinTemplateId: skin.id,
     tenantId: input.tenantId,
-    wear: input.wear,
+    wear,
     forcar: input.forcar,
   });
+}
+
+/**
+ * Separa "AWP | Asiimov (Field-Tested)" em nome e desgaste.
+ *
+ * O prêmio guarda o nome COM o acabamento entre parênteses em campanhas
+ * antigas, e o catálogo guarda sem: são duas convenções que nasceram em
+ * momentos diferentes. Sem esta separação, a busca por nome não achava nada e
+ * o painel dizia que a skin não está no catálogo, com ela lá o tempo todo.
+ *
+ * O desgaste explícito manda. Ele só é deduzido do nome quando não veio, que é
+ * exatamente o caso das campanhas antigas.
+ */
+function separarDesgasteDoNome(
+  nome: string,
+  wear: SkinWear | null,
+): { base: string; wear: SkinWear | null } {
+  const limpo = nome.trim();
+  const casa = limpo.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
+  if (!casa) return { base: limpo, wear };
+
+  const dentro = casa[2]!.trim().toLowerCase();
+  const achado = (Object.keys(WEAR_STEAM) as SkinWear[]).find(
+    (w) => WEAR_STEAM[w].toLowerCase() === dentro,
+  );
+  // Parêntese que não é desgaste conhecido fica no nome: existe skin cujo nome
+  // termina em parênteses por outro motivo.
+  if (!achado) return { base: limpo, wear };
+  return { base: casa[1]!.trim(), wear: wear ?? achado };
 }

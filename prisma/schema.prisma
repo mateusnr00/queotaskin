@@ -946,8 +946,18 @@ model SkinPreco {
   /// Nulo para item sem desgaste, como agente.
   wear SkinWear?
 
-  /// Em reais, como a Steam devolve com currency=7. Sem conversao nossa.
+  /// Em reais. Da Steam vem assim (currency=7); da SteamAnalyst vem em dolar
+  /// e e convertido com a mesma cotacao que a tela de Entregas usa.
   brl Decimal @db.Decimal(10, 2)
+
+  /// De onde saiu este preco: "steam" (mediana do mercado agora) ou
+  /// "steamanalyst" (media de 7 dias, ou o minimo sugerido para item raro).
+  /// A tela diz qual e, porque a confianca nos dois nao e a mesma.
+  fonte String @default("steam")
+
+  /// O valor em dolar, quando a fonte cobra em dolar. Guardado para dar para
+  /// conferir a conversao depois sem refazer a consulta.
+  usd Decimal? @db.Decimal(10, 2)
 
   /// O nome exato que a Steam reconheceu. Guardado porque para faca sem
   /// pintura ele difere do nome do catalogo, e sem isso a diferenca viraria

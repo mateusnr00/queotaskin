@@ -38,7 +38,15 @@ export async function precoDaSkinAction(
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
     const parsed = porId.safeParse(raw);
-    if (!parsed.success) return { ok: false, erro: "Dados inválidos" };
+    if (!parsed.success) {
+      // Mensagem específica em vez de "dados inválidos": o caso real é o
+      // clique antes de escolher a skin, e "dados inválidos" não diz a
+      // ninguém o que fazer a seguir.
+      return {
+        ok: false,
+        erro: "Escolha a skin do catálogo antes de buscar o preço.",
+      };
+    }
 
     return await precoSugeridoDaSkin({
       skinTemplateId: parsed.data.skinTemplateId,
@@ -71,7 +79,12 @@ export async function precoDaSkinPeloNomeAction(
     const session = await getAdminOrThrow();
     const tenantId = await getActiveTenantIdForAdmin(session.user);
     const parsed = porNome.safeParse(raw);
-    if (!parsed.success) return { ok: false, erro: "Dados inválidos" };
+    if (!parsed.success) {
+      return {
+        ok: false,
+        erro: "Este sorteio não tem uma skin no prêmio para consultar.",
+      };
+    }
 
     return await precoSugeridoPeloNome({
       nome: parsed.data.nome,

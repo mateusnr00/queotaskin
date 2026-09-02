@@ -19,6 +19,7 @@ import {
   camposObrigatoriosCoerentes,
   raffleGeneralSchema,
 } from "@/lib/validations/raffle";
+import { mensagemDeCamposInvalidos } from "@/lib/validations/campos-do-sorteio";
 import {
   destinoSchema,
   type DestinoDoSorteioInput,
@@ -120,10 +121,11 @@ export async function createRaffleAction(
 
     const parsed = raffleGeneralSchema.safeParse(raw);
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
       return {
         ok: false,
-        error: "Dados inválidos",
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        error: mensagemDeCamposInvalidos(fieldErrors),
+        fieldErrors,
       };
     }
 
@@ -372,10 +374,11 @@ export async function updateRaffleAction(
 
     const parsed = updateInputSchema.safeParse(raw);
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
       return {
         ok: false,
-        error: "Dados inválidos",
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        error: mensagemDeCamposInvalidos(fieldErrors),
+        fieldErrors,
       };
     }
 

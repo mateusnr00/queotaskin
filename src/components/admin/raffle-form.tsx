@@ -411,7 +411,7 @@ export function RaffleForm({
   // hoje e "R$ 1.200" digitado no catálogo em maio merecem confiança
   // diferente na hora de decidir o preço da cota.
   const [origemDoPreco, setOrigemDoPreco] = useState<
-    "steam" | "cache" | "catalogo" | null
+    "steam" | "steamanalyst" | "cache" | "catalogo" | null
   >(null);
 
   /**
@@ -2111,7 +2111,7 @@ function AvisoDoPrecoSugerido({
 }: {
   buscando: boolean;
   valor: { brl: number; volume: number | null } | null;
-  origem: "steam" | "cache" | "catalogo" | null;
+  origem: "steam" | "steamanalyst" | "cache" | "catalogo" | null;
   erro: string | null;
   cotas: number;
   editadoAMao: boolean;
@@ -2137,9 +2137,11 @@ function AvisoDoPrecoSugerido({
   const fonte =
     origem === "catalogo"
       ? "Valor do catálogo"
-      : origem === "cache"
-        ? "Steam (consulta recente)"
-        : "Steam";
+      : origem === "steamanalyst"
+        ? "SteamAnalyst (média de 7 dias)"
+        : origem === "cache"
+          ? "Steam (consulta recente)"
+          : "Steam";
 
   return (
     <FormDescription>
