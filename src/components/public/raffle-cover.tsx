@@ -41,12 +41,8 @@ export function RaffleCover({
   title: string;
   skinName?: string | null;
   rarity?: SkinRarity | null;
-  /**
-   * "hero" mostra o nome completo; "thumb" só a sigla e o brilho; "selo" é o
-   * thumb num quadrado de ~56px, onde a tipografia do thumb (16px) corta a
-   * sigla no meio e "SSG 08" vira "SS...".
-   */
-  variant?: "hero" | "thumb" | "selo";
+  /** "hero" mostra o nome completo; "thumb" só a sigla e o brilho. */
+  variant?: "hero" | "thumb";
   /**
    * "cobrir" preenche a moldura cortando o que sobra, bom para card em
    * grade, onde uniformidade vale mais que ver a arte inteira. "conter"
@@ -87,7 +83,7 @@ export function RaffleCover({
 
   const accent = rarityColor(rarity ?? null);
   const nome = (skinName ?? title).replace(/^\W+/, "");
-  const thumb = variant === "thumb" || variant === "selo";
+  const thumb = variant === "thumb";
 
   return (
     <div
@@ -108,24 +104,12 @@ export function RaffleCover({
       />
 
       {thumb ? (
-        <div
-          className={cn(
-            "absolute inset-0 flex items-center justify-center",
-            // No selo o respiro lateral é menor: com px-2 sobravam 40px para
-            // "SSG 08", e a sigla saía cortada em "SSG ...".
-            variant === "selo" ? "px-1" : "px-2",
-          )}
-        >
+        <div className="absolute inset-0 flex items-center justify-center px-2">
           {/* truncate porque a sigla nem sempre é sigla: "Specialist Gloves"
               não tem abreviação óbvia e sai inteira, e numa miniatura de
               96px a palavra vazava para fora da moldura. */}
           <span
-            className={cn(
-              "max-w-full truncate leading-none font-extrabold tracking-tight",
-              // 9px no selo: ele encolheu para 40px quando a linha virou uma
-              // só, e a 11px "SSG 08" voltava a sair como "SS...".
-              variant === "selo" ? "text-[9px]" : "text-base sm:text-lg",
-            )}
+            className="max-w-full truncate text-base leading-none font-extrabold tracking-tight sm:text-lg"
             style={{ color: `${accent}`, textShadow: "0 2px 10px rgba(0,0,0,.5)" }}
           >
             {siglaDaArma(nome)}

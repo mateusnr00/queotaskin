@@ -76,7 +76,7 @@ outras junto e para dar para ver qual falhou.
 
 ### A linha de prêmio é uma linha só
 
-`[foto] 031  AK-47 | Vulcan  FT  ·········  ● Disponível`
+`031  AK-47 | Vulcan  FT  ················  ● Disponível`
 
 Na ordem em que a pergunta é feita: qual número, o que é, em que estado, e se
 ainda dá para pegar. Todos os elementos têm largura fixa menos o nome, então
@@ -98,28 +98,23 @@ metade contemplada vira parede de cor. No celular sobra só o pingo, porque
 "DISPONÍVEL" come 85px de uma tela de 390px e quem paga a conta é o nome da
 skin. O texto continua no leitor de tela e volta a partir do tablet.
 
-### A foto da skin na lista de prêmios
+### A foto da skin no cadastro do prêmio
 
 `AwardedTicket.skinImageUrl` é copiada do catálogo pelo MESMO casamento de
 nome que já resolvia a raridade (`imagemDoPremio`, irmã de `raridadeDoPremio`),
-na hora de salvar os títulos premiados. Guardada na linha, e não buscada ao
-desenhar: a lista é pública e de tráfego alto, e cruzar as 865 skins do
-catálogo a cada visita para achar meia dúzia de fotos é conta que não se paga.
+na hora de salvar os títulos premiados.
 
-A foto é a mesma URL da Steam que o catálogo guarda, servida direto: o host da
-Valve não está em `images.remotePatterns`, então `podeOtimizar` devolve false e
-a imagem sai sem passar pelo otimizador, em vez de tomar 400 dele.
+A lista pública NÃO a exibe: a miniatura chegou a existir e saiu, porque num
+quadrado de 40px o render da Steam vira uma manchinha e só empurrava número e
+nome para dentro da linha. A cor da raridade no nome dá a mesma leitura de
+relance, e a foto grande continua no topo da campanha, onde ela funciona.
 
-Título premiado cadastrado ANTES desta coluna existir nasce sem foto e só a
+A coluna fica preenchida assim mesmo: custa uma linha na gravação, e a foto
+volta sem reprocessar nada se um dia servir noutro lugar.
+
+Título premiado cadastrado ANTES desta coluna existir nasce sem ela e só a
 recebe quando alguém salvar a aba de novo, porque o save apaga e recria as
-linhas. Foi preciso um preenchimento retroativo uma vez, casando pelo mesmo
-critério.
-
-Prêmio que não é skin ("R$ 500 no Pix") não casa e fica sem foto, como já
-ficava sem cor. Nesse caso o selo desenha a sigla da arma sobre o brilho da
-raridade (`RaffleCover variant="selo"`), então espaço vazio nunca aparece e o
-selo tem tamanho fixo nos três estados: com foto, sem foto e carregando. A
-lista não pula de altura.
+linhas.
 
 ### Destaque automático
 

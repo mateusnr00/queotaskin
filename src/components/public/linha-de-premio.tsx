@@ -11,10 +11,10 @@
 //
 // Agora tudo mora na mesma linha, na ordem em que a pergunta é feita:
 //
-//   [foto]  031   AK-47 | Vulcan   FT   ················   ● Disponível
+//   031   AK-47 | Vulcan  FT   ······················   ● Disponível
 //
-// "Qual número?" (o âncora da esquerda), "o que é?" (a foto e o nome), "em que
-// estado?" (a sigla) e "ainda dá para pegar?" (a direita). Todos os elementos
+// "Qual número?" (o âncora da esquerda), "o que é?" (o nome), "em que estado?"
+// (a sigla) e "ainda dá para pegar?" (a direita). Todos os elementos
 // têm largura fixa menos o nome, então as colunas se alinham entre as linhas
 // sem grid: o olho desce a lista e encontra cada informação sempre no mesmo x.
 //
@@ -32,20 +32,25 @@
 // numa lista com metade contemplada vira parede de cor; o fade dá o mesmo
 // destaque e some quando não é preciso olhar para ele.
 //
-// A foto vem do catálogo, casada pelo nome. Prêmio que não é skin ("R$ 500 no
-// Pix") não tem foto: o selo mostra a sigla da arma sobre o brilho da
-// raridade, o mesmo desenho da capa de campanha sem imagem. Espaço vazio nunca
-// aparece, e o selo tem tamanho fixo nos três estados (com foto, sem foto e
-// carregando), então a lista não pula de altura enquanto as imagens chegam.
+// SEM MINIATURA
+//
+// A lista já teve o selo da skin à esquerda, e ele saiu. Num quadrado de 40px
+// o render da Steam vira uma manchinha: a arma aparece de lado, pequena e
+// sobre fundo próprio, e o que deveria vender o item só empurrava o número e o
+// nome para dentro da linha. A cor da raridade no nome dá a mesma leitura de
+// relance, e a foto grande continua onde ela funciona, no topo da campanha.
+//
+// `AwardedTicket.skinImageUrl` continua sendo preenchida na gravação: é o
+// mesmo casamento de nome que resolve a raridade, custa uma linha, e a foto
+// volta sem reprocessar nada se um dia ela for útil noutro lugar.
 
 import type { SkinRarity } from "@prisma/client";
 import { Trophy } from "lucide-react";
 
-import { RARITY_TEXT_VAR, rarityColor } from "@/lib/cs2";
+import { RARITY_TEXT_VAR } from "@/lib/cs2";
 import { nomeCurto } from "@/lib/nome-curto";
 import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
-import { RaffleCover } from "@/components/public/raffle-cover";
 import { desgasteCurto, separarDesgaste } from "@/lib/premio-nome";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +58,6 @@ export function LinhaDePremio({
   numero,
   premio,
   raridade,
-  imagem,
   ganhador,
   time,
   reservado,
@@ -64,11 +68,6 @@ export function LinhaDePremio({
   premio: string;
   /** Preenchida quando o premio veio do catalogo. Pinta o nome. */
   raridade?: SkinRarity | null;
-  /**
-   * A foto da skin, resolvida no servidor. Ausente é caso normal: prêmio que
-   * não é skin não tem foto, e o selo desenha a sigla da arma no lugar.
-   */
-  imagem?: string | null;
   ganhador: string | null;
   /**
    * O time para quem o ganhador torce, já resolvido no servidor. Chega pronto
@@ -93,7 +92,6 @@ export function LinhaDePremio({
   // A sigla quando ela existe; o texto original quando o que veio entre
   // parênteses não é um desgaste conhecido, porque aí ele diz outra coisa.
   const sigla = desgasteCurto(desgaste) ?? desgaste;
-  const cor = rarityColor(raridade ?? null);
 
   return (
     <li
@@ -101,7 +99,7 @@ export function LinhaDePremio({
         // overflow-hidden faz o fio da esquerda seguir o canto arredondado.
         // Como borda grossa (`border-l-[3px]`) ele encontrava as bordas de 1px
         // em diagonal e aparecia como um arco solto, deslocado do card.
-        "relative flex items-center gap-2.5 overflow-hidden rounded-lg border py-1.5 pr-1.5 pl-3 transition-colors sm:gap-3",
+        "relative flex items-center gap-2.5 overflow-hidden rounded-lg border py-2 pr-1.5 pl-2.5 transition-colors sm:gap-3 sm:pl-3",
         temDono
           ? "border-emerald-500/20 bg-emerald-500/[0.04]"
           : "border-border/50 bg-muted/[0.15]",
@@ -114,28 +112,6 @@ export function LinhaDePremio({
           temDono ? "bg-emerald-500" : "bg-primary/70",
         )}
       />
-
-      {/* O selo da skin, com o anel na cor da raridade: a mesma leitura que o
-          jogador tem dentro do jogo, antes de qualquer texto. */}
-      <span
-        className="shrink-0 rounded-md p-px"
-        style={{
-          background: `linear-gradient(150deg, ${cor}, ${cor}26 55%, ${cor}0f)`,
-        }}
-      >
-        <RaffleCover
-          url={imagem ?? null}
-          title={nome}
-          skinName={nome}
-          rarity={raridade ?? null}
-          variant="selo"
-          // Render de skin tem fundo transparente e proporção própria: cortar
-          // para preencher comeria o cano da arma.
-          ajuste="conter"
-          className="h-9 w-9 rounded-[5px] sm:h-10 sm:w-10"
-          sizes="40px"
-        />
-      </span>
 
       {numero && (
         // Largura fixa em ch para os números caírem em coluna entre as

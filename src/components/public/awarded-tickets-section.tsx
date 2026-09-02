@@ -74,7 +74,6 @@ export function AwardedTicketsSection({
           numero={String(t.number).padStart(padDigits, "0")}
           premio={t.prizeDescription}
           raridade={t.skinRarity}
-          imagem={t.skinImageUrl}
           ganhador={t.participantName}
           time={t.time}
           rotuloVago="Disponível"
