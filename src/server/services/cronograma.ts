@@ -11,14 +11,28 @@
 // campanha. Tudo isso continua no motor que já existe. O cronograma responde
 // UMA pergunta: qual campanha vai ao ar depois desta.
 //
+// UM CAMINHO SÓ: handleDrawFinished
+//
+// O gancho do motor e o reconciliador do cron chamam a MESMA função. O gancho
+// é o caminho rápido (roda no mesmo processo que acabou de finalizar o
+// sorteio) e o reconciliador é a rede (roda de minuto em minuto e encontra o
+// que o gancho não terminou). Se a lógica morasse nos dois, o dia em que elas
+// discordassem seria o dia em que duas campanhas subiriam juntas.
+//
 // O GATILHO É O FIM DE VERDADE
 //
 // Campanha vira FINISHED no instante em que ESGOTA, não quando o sorteio
 // acontece: é assim que o motor congela o universo antes da transmissão. Usar
 // isso como gatilho publicaria a próxima campanha dez minutos antes de a
-// anterior revelar o ganhador, com as duas no ar ao mesmo tempo. Por isso o
-// gancho fica no único ponto em que o ciclo termina de verdade: a transição do
-// Draw para FINISHED, que o motor faz uma vez só, com guarda de status.
+// anterior revelar o ganhador. Por isso o gatilho é a transição do Draw para
+// FINISHED, que o motor faz uma vez só, com guarda de status.
+//
+// A MEMÓRIA FICA NO BANCO, NUNCA EM MEMÓRIA
+//
+// `Draw.cronogramaProcessadoEm` responde "este fim já foi processado?" e
+// `DrawSchedule.ativarApos` responde "a partir de que hora o próximo pode
+// entrar?". Não existe setTimeout, nem fila em memória, nem processo que
+// "está segurando" alguma coisa. Servidor que cai no meio volta e continua.
 //
 // AS TRÊS TRAVAS
 //
@@ -26,14 +40,18 @@
 //    garantia que sobrevive a qualquer erro de raciocínio deste arquivo.
 //
 // 2. SELECT ... FOR UPDATE na linha da fila. Duas ativações simultâneas viram
-//    uma fila indiana: a segunda só olha a fila depois que a primeira gravou,
-//    e aí ela vê o item ativo e desiste. Sem a trava, as duas leriam "não tem
-//    ninguém ativo" no mesmo instante e as duas seguiriam.
+//    uma fila indiana: a segunda só olha a fila depois que a primeira gravou.
 //
 // 3. GUARDA DE STATUS em toda escrita. Nenhuma transição é "ler, decidir,
 //    escrever": é UPDATE com o estado anterior no WHERE, e quem leva o
-//    `count: 1` é quem faz o trabalho. É o que torna tudo idempotente, do
-//    webhook reentregue ao clique duplo.
+//    `count: 1` faz o trabalho. É o que torna tudo idempotente.
+//
+// FALHA NÃO PULA NINGUÉM
+//
+// Se a ativação do próximo falhar, o item vira FALHOU e a fila PARA. Nada
+// entra no lugar dele sozinho. Publicar a campanha seguinte por conta própria
+// seria trocar um problema conhecido (a fila parada, com aviso na tela) por um
+// desconhecido: a skin errada no ar às três da manhã.
 
 import { Prisma } from "@prisma/client";
 import type { DrawSchedule, DrawScheduleItem, Raffle } from "@prisma/client";
@@ -48,12 +66,19 @@ import {
 } from "@/lib/cronograma";
 import { registrarLog } from "@/server/services/activity-log";
 
-/** Quem mandou ativar. Fica gravado no item e no histórico. */
-export type OrigemDaAtivacao = "AUTOMATICO" | "MANUAL";
+/**
+ * Quem mandou ativar. Fica gravado no item e no histórico.
+ *
+ * A diferença entre AUTOMATICO e RECUPERACAO importa na auditoria: a primeira
+ * é a fila andando como deveria, a segunda é o reconciliador consertando um
+ * fim que ficou pela metade. Ver as duas no histórico é o que permite
+ * descobrir que o gancho anda morrendo sem ninguém notar.
+ */
+export type OrigemDaAtivacao = "AUTOMATICO" | "MANUAL" | "RECUPERACAO";
 
 export type FalhaDaAtivacao =
-  | "SEM_FILA"
   | "AUTOMACAO_PAUSADA"
+  | "FILA_BLOQUEADA"
   | "JA_TEM_ATIVO"
   | "FILA_VAZIA"
   | "ITEM_FORA_DA_FILA"
@@ -65,6 +90,9 @@ export type ResultadoDaAtivacao =
   | { ok: true; raffleId: string; titulo: string; itemId: string }
   | { ok: false; motivo: FalhaDaAtivacao; detalhe?: string };
 
+/** Quantos fins pendentes o reconciliador processa por passada. */
+const LOTE_DA_RECUPERACAO = 20;
+
 // ---------------------------------------------------------------------------
 // A FILA
 // ---------------------------------------------------------------------------
@@ -74,7 +102,7 @@ export type ResultadoDaAtivacao =
  *
  * `upsert` e não "busca, se não achar cria": duas abas abrindo o cronograma no
  * mesmo segundo criariam duas filas, e a chave única do tenant transformaria
- * isso num erro na cara do admin. Assim a corrida é resolvida pelo banco.
+ * isso num erro na cara do admin.
  */
 export async function garantirCronograma(
   tenantId: string,
@@ -93,7 +121,7 @@ export interface ItemComCampanha extends DrawScheduleItem {
   > & { capa: string | null };
 }
 
-/** A fila inteira, com o que a tela precisa mostrar de cada campanha. */
+/** A fila inteira, com o que a tela do painel precisa mostrar. */
 export async function carregarCronograma(tenantId: string): Promise<{
   cronograma: DrawSchedule;
   itens: ItemComCampanha[];
@@ -111,11 +139,7 @@ export async function carregarCronograma(tenantId: string): Promise<{
           status: true,
           totalNumbers: true,
           pricePerNumber: true,
-          images: {
-            where: { isCover: true },
-            take: 1,
-            select: { url: true },
-          },
+          images: { where: { isCover: true }, take: 1, select: { url: true } },
         },
       },
     },
@@ -151,7 +175,7 @@ export async function validarCampanhaParaFila(
       pricePerNumber: true,
       isFree: true,
       privacy: true,
-      _count: { select: { prizes: true, images: true } },
+      _count: { select: { prizes: true } },
       images: { where: { isCover: true }, take: 1, select: { id: true } },
     },
   });
@@ -177,10 +201,8 @@ export async function validarCampanhaParaFila(
  *
  * A campanha sai de DRAFT e vira QUEUED, e é isso que a esconde do site: nem a
  * vitrine nem a página do slug aceitam QUEUED. O item entra AGUARDANDO, na
- * última posição.
- *
- * Recolocar uma campanha que já esteve na fila reaproveita a linha, e por isso
- * o histórico dela (quando foi ativada, quando foi pulada) fica num lugar só.
+ * última posição. Recolocar uma campanha que já esteve na fila reaproveita a
+ * linha, e o histórico dela fica num lugar só.
  */
 export async function enfileirar(input: {
   tenantId: string;
@@ -201,8 +223,6 @@ export async function enfileirar(input: {
     });
     const posicao = (ultima._max.posicao ?? -1) + 1;
 
-    // A campanha só entra na fila se ainda estiver parada. QUEUED também
-    // passa: é o caso de mexer no dia de um item que já espera.
     const marcou = await tx.raffle.updateMany({
       where: {
         id: input.raffleId,
@@ -241,7 +261,11 @@ export async function enfileirar(input: {
   await registrarLog({
     acao: "cronograma.enfileirado",
     tenantId: input.tenantId,
-    alvo: { tipo: "Raffle", id: input.raffleId, rotulo: validacao.titulo ?? undefined },
+    alvo: {
+      tipo: "Raffle",
+      id: input.raffleId,
+      rotulo: validacao.titulo ?? undefined,
+    },
     detalhes: { posicao: item.posicao },
   });
 
@@ -252,8 +276,7 @@ export async function enfileirar(input: {
  * Adota uma campanha que JÁ ESTÁ no ar como o item ativo da fila.
  *
  * Existe para o primeiro dia. Sem isto, a fila só começaria a valer depois que
- * a campanha do momento terminasse por fora dela, e o admin teria de esperar um
- * ciclo inteiro para o cronograma virar realidade.
+ * a campanha do momento terminasse por fora dela.
  */
 export async function adotarComoAtivo(input: {
   tenantId: string;
@@ -355,10 +378,18 @@ export async function removerDaFila(input: {
     tenantId: input.tenantId,
     alvo: { tipo: "Raffle", id: item.raffleId, rotulo: item.raffle.title },
   });
+  await limparBloqueioSeResolvido(input.tenantId);
   return { ok: true };
 }
 
-/** Pula neste ciclo. A campanha continua preparada e pode voltar depois. */
+/**
+ * Pula neste ciclo.
+ *
+ * A campanha continua QUEUED, ou seja, preparada e invisível: pular é sobre a
+ * VEZ dela, não sobre o trabalho feito nela. E é o único jeito de destravar
+ * uma fila parada por falha, o que é de propósito: quem decide abandonar a
+ * campanha que não subiu é gente, não o sistema.
+ */
 export async function pularItem(input: {
   tenantId: string;
   itemId: string;
@@ -367,8 +398,8 @@ export async function pularItem(input: {
   if (!item) return { ok: false, erro: "Item não encontrado." };
 
   const mudou = await prisma.drawScheduleItem.updateMany({
-    where: { id: item.id, status: "AGUARDANDO" },
-    data: { status: "PULADO", puladoEm: new Date() },
+    where: { id: item.id, status: { in: ["AGUARDANDO", "FALHOU"] } },
+    data: { status: "PULADO", puladoEm: new Date(), erro: null },
   });
   if (mudou.count !== 1) {
     return { ok: false, erro: "Só dá para pular quem está aguardando." };
@@ -379,10 +410,43 @@ export async function pularItem(input: {
     tenantId: input.tenantId,
     alvo: { tipo: "Raffle", id: item.raffleId, rotulo: item.raffle.title },
   });
+  await limparBloqueioSeResolvido(input.tenantId);
   return { ok: true };
 }
 
-/** Devolve para a fila quem foi pulado ou removido. */
+/**
+ * Tenta de novo o item que falhou, sem mudar o lugar dele na fila.
+ *
+ * É o botão do aviso de erro. Devolver para o fim da fila (que é o que
+ * `devolverParaFila` faz) resolveria o bloqueio e trocaria a ordem do dia sem
+ * ninguém pedir: quem clica em "tentar novamente" está dizendo "consertei,
+ * sobe esta agora", e não "manda para o fim".
+ */
+export async function tentarNovamente(input: {
+  tenantId: string;
+  itemId: string;
+}): Promise<ResultadoDaAtivacao> {
+  const item = await itemDoTenant(input.itemId, input.tenantId);
+  if (!item) return { ok: false, motivo: "ITEM_FORA_DA_FILA" };
+
+  const voltou = await prisma.drawScheduleItem.updateMany({
+    where: { id: item.id, status: "FALHOU" },
+    data: { status: "AGUARDANDO", erro: null },
+  });
+  if (voltou.count !== 1) return { ok: false, motivo: "ITEM_FORA_DA_FILA" };
+
+  const r = await ativarProximo({
+    tenantId: input.tenantId,
+    origem: "MANUAL",
+    itemId: item.id,
+  });
+  // Falhou de novo: o item volta a travar a fila, e o aviso continua na tela.
+  if (!r.ok && r.motivo === "CAMPANHA_MUDOU") return r;
+  if (r.ok) await limparBloqueioSeResolvido(input.tenantId);
+  return r;
+}
+
+/** Devolve para o fim da fila quem foi pulado, removido ou falhou. */
 export async function devolverParaFila(input: {
   tenantId: string;
   itemId: string;
@@ -402,9 +466,9 @@ export async function devolverParaFila(input: {
 /**
  * Grava a ordem que a tela produziu.
  *
- * Recebe a lista inteira dos que aguardam, na ordem nova, e renumera de zero.
- * Renumerar tudo em vez de trocar dois valores é o que mantém a fila
- * previsível depois de uma sequência de arrastos.
+ * Só os que AGUARDAM entram: o item ativo é o sorteio que está no ar, e mudar
+ * a posição dele não significaria nada. Renumera de zero em vez de trocar dois
+ * valores, o que mantém a fila previsível depois de uma sequência de arrastos.
  */
 export async function reordenarFila(input: {
   tenantId: string;
@@ -438,7 +502,12 @@ export async function reordenarFila(input: {
   return { ok: true };
 }
 
-/** Liga e desliga a troca automática. Não mexe em quem já está no ar. */
+/**
+ * Liga e desliga a troca automática.
+ *
+ * Não mexe em quem já está no ar e não mexe no erro: pausa é intenção do
+ * admin, erro é estado operacional, e o painel mostra os dois separados.
+ */
 export async function definirAutomacao(input: {
   tenantId: string;
   ativa: boolean;
@@ -502,21 +571,43 @@ function violouChaveUnica(err: unknown): boolean {
  * Ativa um item específico, ou o próximo da fila quando `itemId` não vem.
  *
  * Tudo numa transação: ou a campanha vai ao ar E o item vira ATIVO, ou nada
- * acontece. Um estado parcial aqui seria campanha publicada sem dono na fila,
- * que é o defeito mais caro possível: ninguém saberia quem ativar depois.
+ * acontece. Estado parcial aqui seria campanha publicada sem dono na fila, e
+ * ninguém saberia quem ativar depois.
+ *
+ * FALHA NÃO PULA. Se o item da vez não puder subir, ele vira FALHOU e a fila
+ * para até alguém pular ou consertar. A ativação manual de um item específico
+ * é a exceção: ali quem escolheu foi gente, e a fila não fica bloqueada por
+ * uma escolha que ela mesma pode refazer.
  */
 export async function ativarProximo(input: {
   tenantId: string;
   origem: OrigemDaAtivacao;
   /** Quando vem, ativa este item. Sem ele, o primeiro que aguarda. */
   itemId?: string;
-  /** Só para o caminho automático: respeita a pausa. */
+  /** Só para os caminhos automáticos: respeita a pausa e o bloqueio. */
   respeitarPausa?: boolean;
 }): Promise<ResultadoDaAtivacao> {
   const cronograma = await garantirCronograma(input.tenantId);
   if (input.respeitarPausa && !cronograma.automacaoAtiva) {
     return { ok: false, motivo: "AUTOMACAO_PAUSADA" };
   }
+
+  // A FILA BLOQUEADA POR FALHA.
+  //
+  // Um item que não subiu segura a fila inteira, e isso é o desenho, não um
+  // efeito colateral: publicar a campanha seguinte por conta própria trocaria
+  // um problema visível (fila parada, aviso na tela) por um invisível (a skin
+  // errada no ar). Só um comando humano (pular, remover, tentar de novo)
+  // destrava.
+  if (input.respeitarPausa) {
+    const travado = await prisma.drawScheduleItem.findFirst({
+      where: { scheduleId: cronograma.id, status: "FALHOU" },
+      select: { id: true },
+    });
+    if (travado) return { ok: false, motivo: "FILA_BLOQUEADA" };
+  }
+
+  let alvoQueFalhou: { id: string; raffleId: string } | null = null;
 
   try {
     const resultado = await prisma.$transaction(
@@ -542,6 +633,7 @@ export async function ativarProximo(input: {
             motivo: input.itemId ? "ITEM_FORA_DA_FILA" : "FILA_VAZIA",
           };
         }
+        alvoQueFalhou = { id: alvo.id, raffleId: alvo.raffleId };
 
         const campanha = await tx.raffle.findFirst({
           where: { id: alvo.raffleId, tenantId: input.tenantId },
@@ -550,8 +642,8 @@ export async function ativarProximo(input: {
         if (!campanha) return { ok: false, motivo: "CAMPANHA_MUDOU" };
 
         // A campanha só sobe se ainda estiver QUEUED. É a guarda que impede
-        // republicar uma campanha que o admin tirou da fila pela outra tela
-        // entre a leitura e a escrita.
+        // republicar uma campanha que saiu da fila por outra tela entre a
+        // leitura e a escrita.
         const publicou = await tx.raffle.updateMany({
           where: { id: alvo.raffleId, status: "QUEUED" },
           data: { status: "ACTIVE" },
@@ -560,7 +652,7 @@ export async function ativarProximo(input: {
           return {
             ok: false,
             motivo: "CAMPANHA_MUDOU",
-            detalhe: `A campanha "${campanha.title}" não estava mais na fila.`,
+            detalhe: `A campanha "${campanha.title}" não estava mais pronta para subir (situação: ${campanha.status}).`,
           };
         }
 
@@ -585,78 +677,177 @@ export async function ativarProximo(input: {
     );
 
     if (resultado.ok) {
+      // Deu certo: some o erro anterior e a hora de liberação, que já foi
+      // cumprida. Sem isto, o reconciliador tentaria ativar de novo no minuto
+      // seguinte, e o painel continuaria mostrando um erro resolvido.
       await prisma.drawSchedule.update({
         where: { id: cronograma.id },
-        data: { ultimoErro: null, ultimoErroEm: null },
+        data: { ultimoErro: null, ultimoErroEm: null, ativarApos: null },
       });
       await registrarLog({
-        acao:
-          input.origem === "AUTOMATICO"
-            ? "cronograma.ativado_auto"
-            : "cronograma.ativado_manual",
+        acao: acaoDeAtivacao(input.origem),
         tenantId: input.tenantId,
-        origem: input.origem === "AUTOMATICO" ? "SISTEMA" : "PAINEL",
-        ...(input.origem === "AUTOMATICO"
-          ? { ator: { nome: "Cronograma" } }
-          : {}),
-        alvo: { tipo: "Raffle", id: resultado.raffleId, rotulo: resultado.titulo },
+        origem: input.origem === "MANUAL" ? "PAINEL" : "SISTEMA",
+        ...(input.origem === "MANUAL" ? {} : { ator: { nome: "Cronograma" } }),
+        alvo: {
+          tipo: "Raffle",
+          id: resultado.raffleId,
+          rotulo: resultado.titulo,
+        },
       });
+      return resultado;
+    }
+
+    // Falha de verdade (a campanha não estava pronta) trava a fila. "Já tem
+    // ativo", "fila vazia" e "corrida" não são falhas: são a fila dizendo que
+    // não há o que fazer agora.
+    if (resultado.motivo === "CAMPANHA_MUDOU" && alvoQueFalhou) {
+      await bloquearFila(
+        cronograma.id,
+        input.tenantId,
+        alvoQueFalhou,
+        resultado.detalhe ?? "A campanha não estava pronta para subir.",
+      );
     }
     return resultado;
   } catch (err) {
-    // Chave única violada é a outra transação tendo vencido a corrida: o
-    // objetivo (ter uma campanha no ar) foi cumprido, só não por nós.
     if (violouChaveUnica(err)) return { ok: false, motivo: "JA_TEM_ATIVO" };
 
     const detalhe = err instanceof Error ? err.message : String(err);
     console.error("[cronograma] falha ao ativar", detalhe);
-    await registrarFalha(cronograma.id, input.tenantId, detalhe);
+    await bloquearFila(cronograma.id, input.tenantId, alvoQueFalhou, detalhe);
     return { ok: false, motivo: "ERRO", detalhe };
   }
 }
 
-async function registrarFalha(
+function acaoDeAtivacao(origem: OrigemDaAtivacao) {
+  if (origem === "MANUAL") return "cronograma.ativado_manual" as const;
+  if (origem === "RECUPERACAO") return "cronograma.ativado_recuperacao" as const;
+  return "cronograma.ativado_auto" as const;
+}
+
+/**
+ * Marca a falha: no item, para a fila parar nele, e no cronograma, para o
+ * painel mostrar o aviso com "tentar novamente".
+ *
+ * Não desliga a automação. A intenção do admin continua sendo "trocar
+ * sozinho"; o que existe é um erro impedindo, e as duas coisas precisam
+ * aparecer separadas na tela.
+ */
+async function bloquearFila(
   scheduleId: string,
   tenantId: string,
+  alvo: { id: string; raffleId: string } | null,
   motivo: string,
 ): Promise<void> {
-  await prisma.drawSchedule
-    .update({
+  const curto = motivo.slice(0, 500);
+  let titulo: string | undefined;
+  try {
+    if (alvo) {
+      await prisma.drawScheduleItem.updateMany({
+        where: { id: alvo.id, status: "AGUARDANDO" },
+        data: { status: "FALHOU", erro: curto },
+      });
+      titulo =
+        (
+          await prisma.raffle.findUnique({
+            where: { id: alvo.raffleId },
+            select: { title: true },
+          })
+        )?.title ?? undefined;
+    }
+    await prisma.drawSchedule.update({
       where: { id: scheduleId },
-      data: { ultimoErro: motivo.slice(0, 500), ultimoErroEm: new Date() },
-    })
-    .catch(() => {});
+      data: { ultimoErro: curto, ultimoErroEm: new Date() },
+    });
+  } catch (err) {
+    console.error("[cronograma] falha ao registrar a falha", err);
+  }
   await registrarLog({
     acao: "cronograma.falhou",
     tenantId,
     origem: "SISTEMA",
     ator: { nome: "Cronograma" },
-    detalhes: { motivo: motivo.slice(0, 300) },
+    // O alvo é a CAMPANHA, e não o item: é o nome dela que o histórico precisa
+    // dizer para alguém entender o aviso sem abrir o banco.
+    ...(alvo
+      ? { alvo: { tipo: "Raffle" as const, id: alvo.raffleId, rotulo: titulo } }
+      : {}),
+    detalhes: { motivo: curto.slice(0, 300) },
+  });
+}
+
+/**
+ * Some com o aviso de erro quando não sobrou nenhum item travado.
+ *
+ * Chamado depois de pular e de remover, que são os dois comandos humanos que
+ * destravam a fila. O aviso não pode sobreviver ao problema: um banner
+ * vermelho permanente vira paisagem e some da atenção justamente quando
+ * aparecer de verdade.
+ */
+async function limparBloqueioSeResolvido(tenantId: string): Promise<void> {
+  const cronograma = await prisma.drawSchedule.findUnique({
+    where: { tenantId },
+    select: { id: true, ultimoErro: true },
+  });
+  if (!cronograma?.ultimoErro) return;
+  const aindaTravado = await prisma.drawScheduleItem.count({
+    where: { scheduleId: cronograma.id, status: "FALHOU" },
+  });
+  if (aindaTravado > 0) return;
+  await prisma.drawSchedule.update({
+    where: { id: cronograma.id },
+    data: { ultimoErro: null, ultimoErroEm: null },
   });
 }
 
 // ---------------------------------------------------------------------------
-// O CICLO TERMINOU
+// O CICLO TERMINOU: UM CAMINHO SÓ
 // ---------------------------------------------------------------------------
 
+export interface ResultadoDaFinalizacao {
+  /**
+   * PROCESSADO: este fim foi fechado agora, por esta chamada.
+   * JA_PROCESSADO: outra chamada chegou primeiro, ou o fim não vale mais.
+   * FORA_DA_FILA: a campanha não faz parte do cronograma.
+   */
+  situacao: "PROCESSADO" | "JA_PROCESSADO" | "FORA_DA_FILA";
+  /**
+   * A ativação do próximo aconteceu nesta mesma chamada.
+   *
+   * Existe para quem chama poder contar direito. Sem intervalo configurado, a
+   * ativação acontece aqui dentro; com intervalo, ela fica para o
+   * reconciliador. Um contador que só somasse o segundo caminho diria "zero
+   * ativações" num dia inteiro de fila andando.
+   */
+  ativou: boolean;
+}
+
 /**
- * O gancho do motor: este sorteio acabou de terminar.
+ * ESTE SORTEIO ACABOU. A função central, e a única porta.
  *
- * Chamado no único ponto em que a transmissão vira FINISHED de verdade, e
- * idempotente pelo mesmo mecanismo: fechar o item é um UPDATE com o status
- * anterior no WHERE, então a segunda chamada não fecha nada e não ativa nada.
+ * O gancho do motor chama daqui, no mesmo processo que acabou de finalizar a
+ * transmissão. O reconciliador do cron chama daqui, quando encontra um fim que
+ * ninguém processou. As duas entradas, a mesma regra.
  *
- * Nunca joga. Uma falha aqui não pode derrubar a finalização do sorteio, que é
+ * A idempotência tem duas camadas, e a de baixo é o que sobrevive a queda de
+ * servidor: `Draw.cronogramaProcessadoEm` é reivindicado com um UPDATE que
+ * exige a coluna nula, então só uma chamada no mundo inteiro faz o trabalho,
+ * mesmo que dez aconteçam no mesmo segundo em máquinas diferentes.
+ *
+ * Nunca joga: uma falha aqui não pode derrubar a finalização do sorteio, que é
  * a operação importante do momento.
  */
-export async function handleDrawFinished(raffleId: string): Promise<void> {
+export async function handleDrawFinished(
+  raffleId: string,
+  origem: OrigemDaAtivacao = "AUTOMATICO",
+): Promise<ResultadoDaFinalizacao> {
   try {
     const item = await prisma.drawScheduleItem.findUnique({
       where: { raffleId },
       select: {
         id: true,
         status: true,
-        scheduleId: true,
         schedule: {
           select: {
             id: true,
@@ -667,15 +858,40 @@ export async function handleDrawFinished(raffleId: string): Promise<void> {
         },
       },
     });
-    // Campanha fora da fila: o sorteio dela não é assunto do cronograma.
-    if (!item) return;
+
+    const draw = await prisma.draw.findUnique({
+      where: { raffleId },
+      select: { id: true, status: true, cronogramaProcessadoEm: true },
+    });
+
+    // A reivindicação. Campanha sem sorteio automático (ganhador digitado,
+    // encerramento manual) não tem linha em Draw, e aí a idempotência fica por
+    // conta da guarda de status do item, logo abaixo.
+    const agora = new Date();
+    if (draw) {
+      if (draw.status !== "FINISHED") {
+        return { situacao: "JA_PROCESSADO", ativou: false };
+      }
+      const reivindicou = await prisma.draw.updateMany({
+        where: { id: draw.id, cronogramaProcessadoEm: null },
+        data: { cronogramaProcessadoEm: agora },
+      });
+      if (reivindicou.count !== 1) {
+        return { situacao: "JA_PROCESSADO", ativou: false };
+      }
+    }
+
+    // Campanha fora da fila: o sorteio dela não é assunto do cronograma. A
+    // marca no Draw já foi gravada, então o reconciliador não volta aqui.
+    if (!item) return { situacao: "FORA_DA_FILA", ativou: false };
 
     const fechou = await prisma.drawScheduleItem.updateMany({
       where: { id: item.id, status: "ATIVO" },
-      data: { status: "CONCLUIDO", concluidoEm: new Date() },
+      data: { status: "CONCLUIDO", concluidoEm: agora },
     });
-    // Já fechado: outra chamada chegou primeiro. Não ativa de novo.
-    if (fechou.count !== 1) return;
+    if (fechou.count !== 1) {
+      return { situacao: "JA_PROCESSADO", ativou: false };
+    }
 
     await registrarLog({
       acao: "cronograma.ciclo_concluido",
@@ -685,108 +901,135 @@ export async function handleDrawFinished(raffleId: string): Promise<void> {
       alvo: { tipo: "Raffle", id: raffleId },
     });
 
-    if (!item.schedule.automacaoAtiva) return;
-    // Com atraso configurado, quem ativa é a varredura do cron, quando a hora
-    // chegar. Segurar a resposta aqui prenderia a requisição do sorteio.
-    if (item.schedule.atrasoEmSegundos > 0) return;
+    // A HORA DE LIBERAÇÃO, GRAVADA. Mesmo sem atraso: assim o reconciliador
+    // enxerga a ativação pendente se o processo morrer nas próximas linhas.
+    const liberacao = liberadoEm(agora, item.schedule.atrasoEmSegundos)!;
+    await prisma.drawSchedule.update({
+      where: { id: item.schedule.id },
+      data: { ativarApos: liberacao },
+    });
 
-    await ativarProximo({
+    if (!item.schedule.automacaoAtiva) {
+      return { situacao: "PROCESSADO", ativou: false };
+    }
+    // Com atraso, quem ativa é o reconciliador quando a hora chegar. Segurar a
+    // resposta aqui prenderia a requisição do sorteio, e um setTimeout morreria
+    // no primeiro deploy.
+    if (liberacao > new Date()) {
+      return { situacao: "PROCESSADO", ativou: false };
+    }
+
+    const ativacao = await ativarProximo({
       tenantId: item.schedule.tenantId,
-      origem: "AUTOMATICO",
+      origem,
       respeitarPausa: true,
     });
+    return { situacao: "PROCESSADO", ativou: ativacao.ok };
   } catch (err) {
     console.error("[cronograma] handleDrawFinished", raffleId, err);
+    return { situacao: "JA_PROCESSADO", ativou: false };
   }
 }
 
 /**
- * A varredura do cron. Fecha ciclos que terminaram por fora e ativa o que já
- * pode entrar.
+ * O RECONCILIADOR. Roda de minuto em minuto, junto do cron do sorteio.
  *
- * Ela existe por três motivos, e nenhum deles é "ativar sorteio sozinho": o
- * atraso configurado (que não pode segurar a requisição do sorteio), o fim de
- * campanha por caminho manual (ganhador digitado, admin encerrando na mão) e a
- * nova tentativa depois de uma ativação que falhou.
+ * Ele existe para três buracos, e nenhum deles é "ativar sorteio sozinho":
  *
- * Ela NUNCA ativa sem contexto: só entra em ação quando existe um ciclo
- * concluído antes, e o atraso dele já venceu. Fila parada sem nada ter
- * terminado continua parada, esperando decisão de gente.
+ * 1. O gancho que não terminou. O processo pode morrer entre a transição do
+ *    sorteio para FINISHED e a ativação do próximo. Sorteio finalizado com
+ *    `cronogramaProcessadoEm` nulo é exatamente isso, e é a primeira coisa que
+ *    ele procura.
+ *
+ * 2. O intervalo configurado. A hora de liberação está gravada; ele só
+ *    pergunta se já passou.
+ *
+ * 3. A campanha encerrada por fora do motor (ganhador digitado, admin mudando
+ *    o status na mão). Ali não existe Draw para disparar gancho nenhum.
+ *
+ * Ele NUNCA começa uma fila parada: sem um ciclo concluído antes, com hora de
+ * liberação gravada, ele não ativa nada.
  */
 export async function varrerCronogramas(agora: Date = new Date()): Promise<{
-  concluidos: number;
+  finalizacoesProcessadas: number;
   ativados: number;
 }> {
-  let concluidos = 0;
+  let finalizacoesProcessadas = 0;
   let ativados = 0;
+
+  // 1. Os fins que ninguém processou. Mesma função do gancho, origem
+  //    RECUPERACAO para o histórico dizer que foi conserto e não rotina.
+  const pendentes = await prisma.draw.findMany({
+    where: {
+      status: "FINISHED",
+      cronogramaProcessadoEm: null,
+      // Só sorteio de campanha que ESTÁ numa fila. O site tem campanha fora do
+      // cronograma, e o fim delas não é assunto daqui: sem este filtro o
+      // reconciliador reivindicaria linha por linha o histórico inteiro de
+      // sorteios do painel só para descobrir, uma a uma, que não tem nada a
+      // fazer com elas.
+      raffle: { itemDoCronograma: { isNot: null } },
+    },
+    orderBy: { finishedAt: "asc" },
+    take: LOTE_DA_RECUPERACAO,
+    select: { raffleId: true },
+  });
+  for (const draw of pendentes) {
+    const r = await handleDrawFinished(draw.raffleId, "RECUPERACAO");
+    if (r.situacao === "PROCESSADO") finalizacoesProcessadas++;
+    if (r.ativou) ativados++;
+  }
 
   const cronogramas = await prisma.drawSchedule.findMany({
     where: { automacaoAtiva: true },
-    select: { id: true, tenantId: true, atrasoEmSegundos: true },
+    select: { id: true, tenantId: true, atrasoEmSegundos: true, ativarApos: true },
   });
 
   for (const cronograma of cronogramas) {
     try {
-      // 1. O ativo terminou por fora do motor?
+      // 2. A campanha que acabou por fora do motor. Campanha esgotada com
+      //    sorteio a caminho NÃO é ciclo concluído: ela vira FINISHED no
+      //    encerramento e a transmissão ainda vai acontecer. Sorteio em ERROR
+      //    também não fecha: ele pede gente olhando, e empurrar a fila por
+      //    cima de um erro esconderia o problema.
       const ativo = await prisma.drawScheduleItem.findFirst({
         where: { scheduleId: cronograma.id, status: "ATIVO" },
         select: {
-          id: true,
           raffleId: true,
           raffle: {
             select: { status: true, draw: { select: { status: true } } },
           },
         },
       });
-
-      if (ativo) {
-        const campanhaParada = ativo.raffle.status !== "ACTIVE";
-        const sorteio = ativo.raffle.draw;
-        // Campanha esgotada com sorteio a caminho NÃO é ciclo concluído: ela
-        // vira FINISHED no encerramento e a transmissão ainda vai acontecer.
-        // Sorteio em ERROR também não fecha: ele pede gente olhando, e
-        // empurrar a fila por cima de um erro esconderia o problema.
-        const cicloAcabou =
-          campanhaParada && (sorteio === null || sorteio.status === "FINISHED");
-        if (!cicloAcabou) continue;
-
-        const fechou = await prisma.drawScheduleItem.updateMany({
-          where: { id: ativo.id, status: "ATIVO" },
-          data: { status: "CONCLUIDO", concluidoEm: agora },
-        });
-        if (fechou.count === 1) {
-          concluidos++;
-          await registrarLog({
-            acao: "cronograma.ciclo_concluido",
-            tenantId: cronograma.tenantId,
-            origem: "SISTEMA",
-            ator: { nome: "Cronograma" },
-            alvo: { tipo: "Raffle", id: ativo.raffleId },
-          });
-        }
+      if (ativo && ativo.raffle.status !== "ACTIVE" && !ativo.raffle.draw) {
+        const r = await handleDrawFinished(ativo.raffleId, "RECUPERACAO");
+        if (r.situacao === "PROCESSADO") finalizacoesProcessadas++;
+        if (r.ativou) ativados++;
       }
 
-      // 2. Dá para ativar o próximo?
-      const ultimoConcluido = await prisma.drawScheduleItem.findFirst({
-        where: { scheduleId: cronograma.id, status: "CONCLUIDO" },
-        orderBy: { concluidoEm: "desc" },
-        select: { concluidoEm: true },
+      // 3. A ativação pendente cuja hora chegou.
+      const atual = await prisma.drawSchedule.findUnique({
+        where: { id: cronograma.id },
+        select: { ativarApos: true, automacaoAtiva: true },
       });
-      // Nada terminou ainda: a fila não começa sozinha.
-      if (!ultimoConcluido?.concluidoEm) continue;
+      if (!atual?.automacaoAtiva) continue;
+      if (!atual.ativarApos || atual.ativarApos > agora) continue;
 
-      const liberado = liberadoEm(
-        ultimoConcluido.concluidoEm,
-        cronograma.atrasoEmSegundos,
-      );
-      if (!liberado || liberado > agora) continue;
-
-      const resultado = await ativarProximo({
+      const r = await ativarProximo({
         tenantId: cronograma.tenantId,
-        origem: "AUTOMATICO",
+        origem: "RECUPERACAO",
         respeitarPausa: true,
       });
-      if (resultado.ok) ativados++;
+      if (r.ok) {
+        ativados++;
+      } else if (r.motivo === "FILA_VAZIA") {
+        // Fila vazia não é pendência: limpa a hora para o reconciliador parar
+        // de acordar por causa dela todo minuto.
+        await prisma.drawSchedule.update({
+          where: { id: cronograma.id },
+          data: { ativarApos: null },
+        });
+      }
     } catch (err) {
       // Um painel que falha não pode levar os outros junto: a varredura é
       // global e roda para todos de uma vez.
@@ -794,7 +1037,7 @@ export async function varrerCronogramas(agora: Date = new Date()): Promise<{
     }
   }
 
-  return { concluidos, ativados };
+  return { finalizacoesProcessadas, ativados };
 }
 
 // ---------------------------------------------------------------------------

@@ -68,6 +68,29 @@ export const ORDEM_DA_VITRINE = [
 ];
 
 /**
+ * A ordem das situações na lista do painel, escrita por extenso.
+ *
+ * O `orderBy: { status: "asc" }` logo abaixo usa a ordem FÍSICA do enum no
+ * Postgres, e essa é uma dependência silenciosa: quem recriasse o tipo noutra
+ * ordem mudaria a lista do painel sem tocar em nenhuma linha de TypeScript.
+ *
+ * Esta constante existe para a dependência deixar de ser silenciosa. O teste
+ * de integração compara ela com o que o banco realmente tem e falha se as duas
+ * discordarem, o que transforma um bug invisível num teste vermelho.
+ *
+ * A ordem é a do trabalho: o que ainda pede atenção em cima, o que acabou
+ * embaixo. Rascunho antes de fila porque rascunho é trabalho pela metade;
+ * fila antes de ativa porque é o que vai ao ar a seguir.
+ */
+export const ORDEM_DAS_SITUACOES = [
+  "DRAFT",
+  "QUEUED",
+  "ACTIVE",
+  "FINISHED",
+  "CANCELLED",
+] as const;
+
+/**
  * O orderBy da LISTA DO PAINEL, que não é a mesma da vitrine.
  *
  * A vitrine pública só mostra campanha viva, então lá a ordem é a de exibição

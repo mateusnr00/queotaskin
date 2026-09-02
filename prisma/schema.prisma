@@ -2322,8 +2322,24 @@ model DrawSchedule {
   /// anterior TERMINA de verdade, nao quando ele esgota.
   atrasoEmSegundos Int @default(0)
 
+  /// A HORA EM QUE O PROXIMO PODE ENTRAR, gravada no banco.
+  ///
+  /// Nao existe setTimeout em lugar nenhum deste recurso. Quando um ciclo
+  /// termina, a hora de liberacao e calculada uma vez e gravada aqui; o
+  /// reconciliador so pergunta se ela ja passou. Deploy no meio do intervalo,
+  /// restart e autoscale nao perdem nada, porque o relogio nao esta na
+  /// memoria de nenhum processo.
+  ///
+  /// Nula quer dizer "nao ha ativacao pendente".
+  ativarApos DateTime?
+
   /// A ultima falha de ativacao, para o painel mostrar o aviso e oferecer
   /// "tentar novamente". Limpo assim que uma ativacao da certo.
+  ///
+  /// Erro NAO desliga a automacao. Sao coisas diferentes: pausa e intencao do
+  /// admin, erro e estado operacional. Misturar as duas faria o sistema
+  /// mentir sobre o que o admin quis, e o dia seguinte comecaria pausado sem
+  /// ninguem ter pausado nada.
   ultimoErro   String?
   ultimoErroEm DateTime?
 
@@ -2412,6 +2428,19 @@ model Draw {
   /// Primeira vez que alguém observou a contagem em curso. Fica nulo se o
   /// sistema esteve fora do ar durante os sessenta segundos, e essa ausência
   /// é informação: diz que ninguém viu a contagem.
+  /// Quando o CRONOGRAMA processou o fim deste sorteio.
+  ///
+  /// É a memória que sobrevive a queda de servidor. O gancho do motor pode
+  /// morrer entre a transição para FINISHED e a ativação do próximo, e sem um
+  /// registro no banco ninguém saberia que aquele fim ficou pela metade.
+  ///
+  /// Sorteio FINISHED com esta coluna nula é trabalho pendente, e é exatamente
+  /// isso que o reconciliador procura de minuto em minuto. Preenchida, o fim
+  /// já foi processado e nada mais acontece por causa dele.
+  ///
+  /// Quem escreve aqui é só o cronograma. O motor do sorteio não olha para ela.
+  cronogramaProcessadoEm DateTime?
+
   countdownStartedAt DateTime?
   /// O instante em que o número foi escolhido. É o carimbo do resultado.
   drawExecutedAt     DateTime?

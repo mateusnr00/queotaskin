@@ -96,6 +96,7 @@ import {
   pularItemAction,
   removerDoCronogramaAction,
   reordenarFilaAction,
+  tentarNovamenteAction,
 } from "@/server/actions/cronograma";
 
 export interface ItemDoPainel {
@@ -163,6 +164,9 @@ export function CronogramaPainel({
   const [adotar, setAdotar] = useState("");
 
   const ativo = itens.find((i) => i.status === "ATIVO") ?? null;
+  // O item que travou a fila. Enquanto ele existir, nada entra sozinho: é o
+  // desenho, e a tela precisa dizer isso com todas as letras.
+  const travado = itens.find((i) => i.status === "FALHOU") ?? null;
   const doServidor = useMemo(
     () => itens.filter((i) => i.status === "AGUARDANDO").map((i) => i.id),
     [itens],
@@ -187,8 +191,10 @@ export function CronogramaPainel({
     [itens],
   );
   const fila = ordem.map((id) => porId.get(id)!).filter(Boolean);
+  // O que saiu da fila e pode voltar. O item travado NÃO entra aqui: ele tem
+  // cartão próprio, com as ações que resolvem o bloqueio.
   const foraDaFila = itens.filter(
-    (i) => i.status === "PULADO" || i.status === "REMOVIDO" || i.status === "FALHOU",
+    (i) => i.status === "PULADO" || i.status === "REMOVIDO",
   );
 
   const sensores = useSensors(
@@ -262,13 +268,24 @@ export function CronogramaPainel({
               )}
             </span>
             <div>
-              <p className="text-sm font-bold">
+              {/* PAUSA E ERRO SÃO COISAS DIFERENTES, e a tela mostra as duas.
+                  Pausa é intenção do admin; erro é estado operacional. Fundir
+                  os dois faria o sistema mentir sobre o que o admin quis, e o
+                  dia seguinte começaria pausado sem ninguém ter pausado. */}
+              <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
                 Automação {automacaoAtiva ? "ativa" : "pausada"}
+                {travado && (
+                  <span className="rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-destructive uppercase">
+                    Bloqueada por erro
+                  </span>
+                )}
               </p>
               <p className="text-xs text-muted-foreground">
-                {automacaoAtiva
-                  ? "O próximo da fila entra sozinho quando o sorteio atual terminar."
-                  : "O sorteio no ar continua normal. Só a troca automática está parada."}
+                {travado
+                  ? "A fila está parada numa falha. Resolva o aviso abaixo para ela voltar a andar."
+                  : automacaoAtiva
+                    ? "O próximo da fila entra sozinho quando o sorteio atual terminar."
+                    : "O sorteio no ar continua normal. Só a troca automática está parada."}
               </p>
             </div>
           </div>
@@ -345,37 +362,69 @@ export function CronogramaPainel({
         </div>
       </Card>
 
-      {/* ERRO NA AUTOMAÇÃO */}
-      {ultimoErro && (
+      {/* A FALHA QUE TRAVOU A FILA.
+
+          Três saídas, e todas humanas: consertar e tentar de novo, desistir
+          desta campanha e liberar a próxima, ou abrir para ver o que está
+          errado. O sistema não escolhe nenhuma sozinho. */}
+      {(travado || ultimoErro) && (
         <Card className="border-destructive/40 bg-destructive/5 p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-destructive">
-                Erro na automação
+                {travado
+                  ? `Falha ao ativar ${travado.titulo}`
+                  : "Erro na automação"}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Não foi possível ativar o próximo sorteio
+                A fila parou aqui e NÃO pulou para a próxima campanha
                 {ultimoErroEm
-                  ? ` em ${new Date(ultimoErroEm).toLocaleString("pt-BR")}`
+                  ? `. Última tentativa em ${new Date(ultimoErroEm).toLocaleString("pt-BR")}`
                   : ""}
-                . A fila continua íntegra: nada foi ativado pela metade.
+                . Nada foi publicado pela metade.
               </p>
               <p className="mt-1 font-mono text-[11px] break-all text-muted-foreground">
-                {ultimoErro}
+                {travado?.erro ?? ultimoErro}
               </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3"
-                disabled={pendente}
-                onClick={() =>
-                  rodar(() => ativarAgoraAction({}), "Sorteio ativado")
-                }
-              >
-                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                Tentar novamente
-              </Button>
+
+              {travado && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    disabled={pendente}
+                    onClick={() =>
+                      rodar(
+                        () => tentarNovamenteAction({ itemId: travado.id }),
+                        "Sorteio ativado",
+                      )
+                    }
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                    Tentar novamente
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pendente}
+                    onClick={() =>
+                      rodar(
+                        () => pularItemAction({ itemId: travado.id }),
+                        "Pulado. A fila voltou a andar.",
+                      )
+                    }
+                  >
+                    <SkipForward className="mr-1.5 h-3.5 w-3.5" />
+                    Pular
+                  </Button>
+                  <Link
+                    href={`/admin/sorteios/${travado.raffleId}/editar`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    Editar
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -572,11 +621,7 @@ export function CronogramaPainel({
                   {item.titulo}
                 </span>
                 <Selo tom="cinza">
-                  {item.status === "PULADO"
-                    ? "Pulado"
-                    : item.status === "FALHOU"
-                      ? "Falhou"
-                      : "Removido"}
+                  {item.status === "PULADO" ? "Pulado" : "Removido"}
                 </Selo>
                 <Button
                   size="sm"

@@ -20,6 +20,7 @@ import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import {
   adotarComoAtivo,
   ativarProximo,
+  tentarNovamente,
   definirAtraso,
   definirAutomacao,
   devolverParaFila,
@@ -232,6 +233,36 @@ export async function definirAtrasoAction(raw: unknown): Promise<ActionResult> {
 }
 
 /**
+ * O botão "tentar novamente" do aviso de erro.
+ *
+ * Devolve o item travado para a fila e tenta subir ELE, no lugar em que
+ * estava. Se falhar de novo, ele trava de novo, e o aviso continua.
+ */
+export async function tentarNovamenteAction(
+  raw: unknown,
+): Promise<ActionResult<{ titulo: string }>> {
+  try {
+    const session = await getAdminOrThrow();
+    const tenantId = await getActiveTenantIdForAdmin(session.user);
+    const parsed = z.object({ itemId: z.string().cuid() }).safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Dados inválidos" };
+
+    const r = await tentarNovamente({ tenantId, itemId: parsed.data.itemId });
+    if (!r.ok) {
+      return {
+        ok: false,
+        error: r.detalhe ?? "Não foi possível ativar. O item segue travado.",
+      };
+    }
+    revalidarTudo();
+    return { ok: true, data: { titulo: r.titulo } };
+  } catch (err) {
+    console.error("[tentarNovamenteAction]", err);
+    return { ok: false, error: "Erro ao tentar de novo" };
+  }
+}
+
+/**
  * Ativação pelo painel.
  *
  * Passa pelo mesmo caminho da automática, com as mesmas travas: a única
@@ -256,6 +287,8 @@ export async function ativarAgoraAction(
     });
     if (!r.ok) {
       const mensagens: Record<string, string> = {
+        FILA_BLOQUEADA:
+          "A fila está travada por uma falha. Resolva o aviso antes de continuar.",
         JA_TEM_ATIVO:
           "Já existe uma campanha no ar por esta fila. Espere o sorteio dela terminar.",
         FILA_VAZIA: "A fila está vazia.",

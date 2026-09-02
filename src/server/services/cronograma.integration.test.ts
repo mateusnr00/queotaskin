@@ -13,7 +13,11 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
-import { NA_VITRINE, visivelAoPublico } from "@/lib/vitrine";
+import {
+  NA_VITRINE,
+  ORDEM_DAS_SITUACOES,
+  visivelAoPublico,
+} from "@/lib/vitrine";
 import {
   ativarProximo,
   carregarCronograma,
@@ -95,6 +99,38 @@ suite("cronograma de sorteios (integração)", () => {
     return i.status;
   }
 
+  /**
+   * Cria um sorteio JÁ FINALIZADO para a campanha, do jeito que o motor
+   * deixaria: fases no passado, número sorteado e a marca do cronograma nula,
+   * que é o que diz "este fim ainda não foi processado".
+   */
+  async function sorteioFinalizado(raffleId: string): Promise<string> {
+    const agora = Date.now();
+    const marco = (s: number) => new Date(agora - 600_000 + s * 1000);
+    const draw = await prisma.draw.create({
+      data: {
+        publicId: `DRW-T${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        raffleId,
+        status: "FINISHED",
+        raffleEndedAt: marco(0),
+        drawScheduledAt: marco(1),
+        drawStartsAt: marco(2),
+        revealAt: marco(3),
+        winnerRevealAt: marco(4),
+        winningNumber: 1,
+        drawExecutedAt: marco(2),
+        finishedAt: marco(5),
+        eligibleTicketCount: 1,
+      },
+      select: { id: true },
+    });
+    await prisma.raffle.update({
+      where: { id: raffleId },
+      data: { status: "FINISHED" },
+    });
+    return draw.id;
+  }
+
   beforeEach(async () => {
     const tenant = await prisma.tenant.findFirst({ select: { id: true } });
     if (!tenant) throw new Error("Banco sem Tenant: rode o seed antes.");
@@ -111,6 +147,15 @@ suite("cronograma de sorteios (integração)", () => {
       userId = user.id;
       usuariosCriados.push(user.id);
     }
+
+    // Sorteios finalizados por OUTRAS suítes (a do motor cria vários) ficam
+    // com a marca do cronograma nula, e o reconciliador acordaria por causa
+    // deles no meio destes casos. Marcá-los como processados é o equivalente,
+    // no banco compartilhado do desenvolvimento, a começar com a mesa limpa.
+    await prisma.draw.updateMany({
+      where: { status: "FINISHED", cronogramaProcessadoEm: null },
+      data: { cronogramaProcessadoEm: new Date() },
+    });
 
     // Cada caso começa com a fila limpa: os itens são do tenant do seed, e um
     // teste deixando lixo faria o seguinte ativar a campanha errada.
@@ -198,7 +243,9 @@ suite("cronograma de sorteios (integração)", () => {
     await naFila(a);
     await ativarProximo({ tenantId, origem: "MANUAL" });
 
-    await expect(handleDrawFinished(a)).resolves.toBeUndefined();
+    const r = await handleDrawFinished(a);
+    expect(r.situacao).toBe("PROCESSADO");
+    expect(r.ativou).toBe(false);
     expect(await statusDoItem(a)).toBe("CONCLUIDO");
 
     const { itens } = await carregarCronograma(tenantId);
@@ -309,7 +356,7 @@ suite("cronograma de sorteios (integração)", () => {
     expect(await statusDaCampanha(c)).toBe("QUEUED");
   });
 
-  it("a campanha saindo da fila no meio da ativação não deixa estado pela metade", async () => {
+  it("E) falha no meio da ativação não deixa estado pela metade", async () => {
     const a = await novaCampanha("A");
     await naFila(a);
 
@@ -317,11 +364,24 @@ suite("cronograma de sorteios (integração)", () => {
     // escrita: a guarda `status: QUEUED` no UPDATE é o que impede publicar.
     await prisma.raffle.update({ where: { id: a }, data: { status: "DRAFT" } });
 
-    const r = await ativarProximo({ tenantId, origem: "AUTOMATICO" });
+    const r = await ativarProximo({
+      tenantId,
+      origem: "AUTOMATICO",
+      respeitarPausa: true,
+    });
     expect(r.ok).toBe(false);
-    // Rollback: nem a campanha subiu, nem o item virou ativo.
+
+    // Rollback: a campanha NÃO subiu. E o item ficou marcado como falho, que é
+    // o que segura a fila até alguém resolver.
     expect(await statusDaCampanha(a)).toBe("DRAFT");
-    expect(await statusDoItem(a)).toBe("AGUARDANDO");
+    expect(await statusDoItem(a)).toBe("FALHOU");
+
+    const cronograma = await prisma.drawSchedule.findUniqueOrThrow({
+      where: { tenantId },
+      select: { ultimoErro: true, automacaoAtiva: true },
+    });
+    expect(cronograma.ultimoErro).toBeTruthy();
+    expect(cronograma.automacaoAtiva).toBe(true);
   });
 
   // -------------------------------------------------------------------------
@@ -394,7 +454,7 @@ suite("cronograma de sorteios (integração)", () => {
     });
 
     const r = await varrerCronogramas();
-    expect(r.concluidos).toBeGreaterThanOrEqual(1);
+    expect(r.finalizacoesProcessadas).toBeGreaterThanOrEqual(1);
     expect(await statusDaCampanha(b)).toBe("ACTIVE");
   });
 
@@ -420,6 +480,159 @@ suite("cronograma de sorteios (integração)", () => {
 
     await varrerCronogramas(new Date(Date.now() + 301_000));
     expect(await statusDaCampanha(b)).toBe("ACTIVE");
+  });
+
+  // -------------------------------------------------------------------------
+  // RECUPERAÇÃO: O PROCESSO MORREU NO MEIO
+  // -------------------------------------------------------------------------
+
+  it("A) o processo morre antes de ativar, e o reconciliador ativa uma vez só", async () => {
+    const a = await novaCampanha("A");
+    const b = await novaCampanha("B");
+    await naFila(a);
+    await naFila(b);
+    await ativarProximo({ tenantId, origem: "MANUAL" });
+
+    // O sorteio terminou de verdade e o gancho NUNCA rodou: é exatamente o que
+    // sobra no banco quando a instância morre entre a transição do sorteio e a
+    // ativação do próximo.
+    await sorteioFinalizado(a);
+    expect(await statusDoItem(a)).toBe("ATIVO");
+    expect(await statusDaCampanha(b)).toBe("QUEUED");
+
+    const r = await varrerCronogramas();
+    expect(r.finalizacoesProcessadas).toBe(1);
+    expect(r.ativados).toBe(1);
+    expect(await statusDoItem(a)).toBe("CONCLUIDO");
+    expect(await statusDaCampanha(b)).toBe("ACTIVE");
+
+    // O item foi ativado pelo RECONCILIADOR, e o histórico diz isso: é o que
+    // permite descobrir que o gancho anda morrendo.
+    const item = await prisma.drawScheduleItem.findUniqueOrThrow({
+      where: { raffleId: b },
+      select: { ativadoPor: true },
+    });
+    expect(item.ativadoPor).toBe("RECUPERACAO");
+  });
+
+  it("B) o fim já processado não é processado de novo", async () => {
+    const a = await novaCampanha("A");
+    const b = await novaCampanha("B");
+    const c = await novaCampanha("C");
+    await naFila(a);
+    await naFila(b);
+    await naFila(c);
+    await ativarProximo({ tenantId, origem: "MANUAL" });
+
+    const drawId = await sorteioFinalizado(a);
+    await varrerCronogramas();
+    expect(await statusDaCampanha(b)).toBe("ACTIVE");
+
+    const marca = await prisma.draw.findUniqueOrThrow({
+      where: { id: drawId },
+      select: { cronogramaProcessadoEm: true },
+    });
+    expect(marca.cronogramaProcessadoEm).not.toBeNull();
+
+    // A segunda passada não encontra pendência, e a terceira campanha
+    // continua esperando a vez dela.
+    const segunda = await varrerCronogramas();
+    expect(segunda.finalizacoesProcessadas).toBe(0);
+    expect(segunda.ativados).toBe(0);
+    expect(await statusDaCampanha(c)).toBe("QUEUED");
+
+    // E chamar o gancho de novo, à mão, também não move nada.
+    expect((await handleDrawFinished(a)).situacao).toBe("JA_PROCESSADO");
+    expect(await statusDaCampanha(c)).toBe("QUEUED");
+  });
+
+  it("C) o intervalo fica no banco e sobrevive ao reinício", async () => {
+    const a = await novaCampanha("A");
+    const b = await novaCampanha("B");
+    await naFila(a);
+    await naFila(b);
+    await ativarProximo({ tenantId, origem: "MANUAL" });
+
+    const cronograma = await garantirCronograma(tenantId);
+    await prisma.drawSchedule.update({
+      where: { id: cronograma.id },
+      data: { atrasoEmSegundos: 300 },
+    });
+
+    await sorteioFinalizado(a);
+    await varrerCronogramas();
+
+    // A hora de liberação foi GRAVADA. Nenhum setTimeout: o processo pode
+    // morrer agora que a informação continua de pé.
+    const depois = await prisma.drawSchedule.findUniqueOrThrow({
+      where: { id: cronograma.id },
+      select: { ativarApos: true },
+    });
+    expect(depois.ativarApos).not.toBeNull();
+    expect(await statusDaCampanha(b)).toBe("QUEUED");
+
+    // Antes da hora, nada. Depois, entra.
+    await varrerCronogramas(new Date(Date.now() + 60_000));
+    expect(await statusDaCampanha(b)).toBe("QUEUED");
+
+    await varrerCronogramas(new Date(depois.ativarApos!.getTime() + 1000));
+    expect(await statusDaCampanha(b)).toBe("ACTIVE");
+
+    // Cumprida, a hora é limpa: o reconciliador não fica acordando por ela.
+    const limpo = await prisma.drawSchedule.findUniqueOrThrow({
+      where: { id: cronograma.id },
+      select: { ativarApos: true },
+    });
+    expect(limpo.ativarApos).toBeNull();
+  });
+
+  it("F) o item que falha bloqueia a fila e o seguinte NÃO entra", async () => {
+    const a = await novaCampanha("A");
+    const b = await novaCampanha("B que falha");
+    const c = await novaCampanha("C");
+    await naFila(a);
+    await naFila(b);
+    await naFila(c);
+    await ativarProximo({ tenantId, origem: "MANUAL" });
+
+    // B sai da fila por outra tela entre a leitura e a escrita: a guarda de
+    // status impede a publicação, e é o caso de falha mais realista.
+    await prisma.raffle.update({ where: { id: b }, data: { status: "DRAFT" } });
+
+    await sorteioFinalizado(a);
+    await varrerCronogramas();
+
+    // B falhou, e C NÃO subiu no lugar dele. Publicar a seguinte sozinho seria
+    // trocar um problema visível pela skin errada no ar.
+    expect(await statusDoItem(b)).toBe("FALHOU");
+    expect(await statusDaCampanha(c)).toBe("QUEUED");
+
+    const cronograma = await prisma.drawSchedule.findUniqueOrThrow({
+      where: { tenantId },
+      select: { ultimoErro: true, automacaoAtiva: true },
+    });
+    expect(cronograma.ultimoErro).toBeTruthy();
+    // ERRO NÃO É PAUSA: a intenção do admin continua sendo trocar sozinho.
+    expect(cronograma.automacaoAtiva).toBe(true);
+
+    // A fila continua parada em todas as passadas seguintes.
+    await varrerCronogramas();
+    expect(await statusDaCampanha(c)).toBe("QUEUED");
+
+    // Só o comando humano destrava. Pular B libera C.
+    const itemB = await prisma.drawScheduleItem.findUniqueOrThrow({
+      where: { raffleId: b },
+      select: { id: true },
+    });
+    await pularItem({ tenantId, itemId: itemB.id });
+    const depois = await prisma.drawSchedule.findUniqueOrThrow({
+      where: { tenantId },
+      select: { ultimoErro: true },
+    });
+    expect(depois.ultimoErro).toBeNull();
+
+    await ativarProximo({ tenantId, origem: "MANUAL" });
+    expect(await statusDaCampanha(c)).toBe("ACTIVE");
   });
 
   // -------------------------------------------------------------------------
@@ -454,5 +667,32 @@ suite("cronograma de sorteios (integração)", () => {
     expect(
       await prisma.raffle.count({ where: { ...NA_VITRINE, tenantId, id: a } }),
     ).toBe(1);
+  });
+});
+
+/**
+ * A ordem física do enum de situação no Postgres.
+ *
+ * A lista do painel ordena por `status: "asc"`, e isso usa a ordem em que os
+ * valores foram declarados NO BANCO, não a do schema.prisma. É uma dependência
+ * que nenhum `tsc` enxerga: recriar o tipo noutra ordem mudaria a tela sem
+ * mudar uma linha de código.
+ *
+ * Este teste é o que torna a dependência visível. Se alguém recriar o enum e
+ * puser QUEUED no fim, ele falha aqui, e não numa terça-feira em que a fila
+ * apareceu embaixo das campanhas canceladas.
+ */
+const suiteDoEnum = isLocalDatabase() ? describe : describe.skip;
+
+suiteDoEnum("a ordem das situações no banco", () => {
+  it("é exatamente a que o painel espera", async () => {
+    const linhas = await prisma.$queryRaw<{ valor: string }[]>`
+      SELECT e.enumlabel AS valor
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'RaffleStatus'
+      ORDER BY e.enumsortorder
+    `;
+    expect(linhas.map((l) => l.valor)).toEqual([...ORDEM_DAS_SITUACOES]);
   });
 });

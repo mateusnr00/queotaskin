@@ -42,11 +42,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const resultado = await processarSorteios();
-    // A fila do cronograma vem DEPOIS, e na mesma passada: o sorteio que
-    // acabou de terminar aqui em cima já pode liberar o próximo logo abaixo.
-    // Ela cobre o que o gancho do motor não alcança: o intervalo configurado
-    // entre sorteios, a campanha encerrada na mão e a nova tentativa depois de
-    // uma ativação que falhou.
+    // O RECONCILIADOR DO CRONOGRAMA, na mesma passada: o sorteio que acabou
+    // de terminar aqui em cima já pode liberar o próximo logo abaixo.
+    //
+    // Ele chama a MESMA função que o gancho do motor chama. O gancho é o
+    // caminho rápido; este é a rede que pega o que ficou pela metade: o
+    // processo que morreu antes de ativar, o intervalo configurado entre
+    // sorteios e a campanha encerrada por caminho manual.
     const cronograma = await varrerCronogramas();
     return NextResponse.json(
       { ok: true, ...resultado, cronograma },

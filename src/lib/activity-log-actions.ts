@@ -48,6 +48,7 @@ export const ACOES = {
   "cronograma.atraso_alterado": "mudou o intervalo entre sorteios",
   "cronograma.ativado_auto": "ativou automaticamente",
   "cronograma.ativado_manual": "ativou pelo cronograma",
+  "cronograma.ativado_recuperacao": "ativou pelo reconciliador",
   "cronograma.ciclo_concluido": "concluiu o ciclo do cronograma de",
   "cronograma.falhou": "não conseguiu ativar o próximo sorteio",
   // A entrega da skin. Quem marcou e quando é o que responde "essa skin já
