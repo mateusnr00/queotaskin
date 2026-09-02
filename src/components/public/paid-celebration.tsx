@@ -151,24 +151,31 @@ export function PaidCelebration({
             <SeloDeDobro total={numbers.length} className="mt-4" />
           )}
 
-          <div className="mt-4 mb-2.5 flex items-center justify-between gap-3">
+          {/* O rótulo fica no EIXO do cartão, junto com as placas, e a
+              contagem se ancora na direita por cima da mesma linha. Alinhados
+              os dois à esquerda, o rótulo virava legenda de tabela; no centro,
+              ele é o título do que vem embaixo. */}
+          <div className="relative mt-4 mb-3 flex items-center justify-center">
             <h3 className="text-[11px] font-bold tracking-wider text-emerald-600 uppercase dark:text-emerald-400">
               {umSo ? "Seu número" : "Seus números"}
             </h3>
-            <span className="shrink-0 rounded-full border bg-muted/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
+            <span className="absolute right-0 shrink-0 rounded-full border bg-muted/40 px-2.5 py-1 text-[11px] font-semibold tabular-nums">
               {numbers.length} título{umSo ? "" : "s"}
             </span>
           </div>
 
-          <ul className="flex flex-wrap gap-2">
+          {/* Centradas, e quebrando em linhas: com uma placa só ela fica no
+              meio do cartão, e com muitas elas se agrupam em blocos centrados,
+              que é o desenho de uma cartela e não o de uma lista. */}
+          <ul className="flex flex-wrap justify-center gap-2">
             {numbers.map((n) => (
               <li
                 key={n}
                 className={cn(
                   "inline-flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 font-mono font-extrabold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-300",
                   grandes
-                    ? "h-14 min-w-[4.25rem] px-3 text-2xl"
-                    : "h-11 min-w-14 px-2.5 text-lg",
+                    ? "h-12 min-w-16 px-3 text-xl"
+                    : "h-10 min-w-[3.25rem] px-2.5 text-base",
                 )}
               >
                 {n.toString().padStart(2, "0")}
@@ -213,10 +220,6 @@ export function PaidCelebration({
             </span>
           </Linha>
         )}
-        {/* Só entram fatos que o sistema cumpre. Não existe aviso automático
-            por mensagem em lugar nenhum do código, então prometer "avisamos
-            você" seria promessa que ninguém cumpre. */}
-        <Linha rotulo="Resultado">Na página da campanha</Linha>
         <Linha rotulo="Valor pago">
           <span className="font-bold tabular-nums">
             {formatBRL(totalAmount)}
