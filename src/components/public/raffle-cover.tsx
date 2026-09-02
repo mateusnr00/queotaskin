@@ -122,9 +122,9 @@ export function RaffleCover({
           <span
             className={cn(
               "max-w-full truncate leading-none font-extrabold tracking-tight",
-              variant === "selo"
-                ? "text-[11px]"
-                : "text-base sm:text-lg",
+              // 9px no selo: ele encolheu para 40px quando a linha virou uma
+              // só, e a 11px "SSG 08" voltava a sair como "SS...".
+              variant === "selo" ? "text-[9px]" : "text-base sm:text-lg",
             )}
             style={{ color: `${accent}`, textShadow: "0 2px 10px rgba(0,0,0,.5)" }}
           >

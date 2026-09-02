@@ -74,6 +74,25 @@ para escolher a skin na mão, cadastrar uma nova com aquele nome, ou pular.
 O envio é um arquivo por vez, de propósito, para uma falha não levar as
 outras junto e para dar para ver qual falhou.
 
+### A linha de prêmio é uma linha só
+
+`[foto] 031  AK-47 | Vulcan  FT  ·········  ● Disponível`
+
+Na ordem em que a pergunta é feita: qual número, o que é, em que estado, e se
+ainda dá para pegar. Todos os elementos têm largura fixa menos o nome, então
+as colunas se alinham entre as linhas sem grid, e o olho encontra cada
+informação sempre no mesmo x.
+
+O desgaste é a **sigla** (FN, MW, FT, WW, BS). "Field-Tested" ocupa quatro
+vezes o espaço e diz a mesma coisa para quem joga; numa linha única, é o texto
+que empurra o nome da skin para fora.
+
+O estado ancora à direita com `ml-auto` e um degradê que morre para a
+esquerda: separa sem borda nem faixa, e preenchimento sólido numa lista com
+metade contemplada vira parede de cor. No celular sobra só o pingo, porque
+"DISPONÍVEL" come 85px de uma tela de 390px e quem paga a conta é o nome da
+skin. O texto continua no leitor de tela e volta a partir do tablet.
+
 ### A foto da skin na lista de prêmios
 
 `AwardedTicket.skinImageUrl` é copiada do catálogo pelo MESMO casamento de

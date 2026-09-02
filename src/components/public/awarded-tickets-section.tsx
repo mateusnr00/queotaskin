@@ -67,7 +67,7 @@ export function AwardedTicketsSection({
   const canCollapse = tickets.length > COLLAPSED_VISIBLE;
 
   const list = (
-    <ul className="space-y-2">
+    <ul className="space-y-1.5">
       {visible.map((t) => (
         <LinhaDePremio
           key={t.number}
@@ -165,13 +165,9 @@ export function AwardedTicketsSection({
           />
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          {winnersCount === 0
-            ? total === 1
-              ? "Um título premiado ainda em jogo. Comprou o número, levou a skin na hora."
-              : `${total} títulos premiados ainda em jogo. Comprou o número, levou a skin na hora.`
-            : winnersCount === total
-              ? "Todos os títulos premiados já saíram."
-              : `${total - winnersCount} de ${total} ainda em jogo.`}
+          {winnersCount === total
+            ? "Todos já saíram."
+            : "Comprou o número, levou a skin na hora."}
         </p>
       </div>
       {list}
