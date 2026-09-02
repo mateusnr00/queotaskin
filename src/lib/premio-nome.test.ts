@@ -5,6 +5,7 @@ import type { SkinRarity } from "@prisma/client";
 import {
   chaveDoNome,
   desgasteCurto,
+  imagemDoPremio,
   raridadeDoPremio,
   separarDesgaste,
 } from "./premio-nome";
@@ -100,6 +101,39 @@ describe("raridadeDoPremio", () => {
 
   it("skin cadastrada sem raridade não inventa cor", () => {
     expect(raridadeDoPremio("Agente sem raridade", catalogo)).toBeNull();
+  });
+});
+
+describe("imagemDoPremio", () => {
+  const fotos = new Map<string, string | null>([
+    [chaveDoNome("AK-47 | Vulcan"), "https://steam/vulcan.png"],
+    [chaveDoNome("★ Karambit | Doppler"), "https://steam/karambit.png"],
+    [chaveDoNome("Agente sem foto"), null],
+  ]);
+
+  it("acha a foto ignorando o desgaste, como a raridade faz", () => {
+    expect(imagemDoPremio("AK-47 | Vulcan (Field-Tested)", fotos)).toBe(
+      "https://steam/vulcan.png",
+    );
+  });
+
+  it("acha a faca com e sem a estrela no texto do prêmio", () => {
+    expect(imagemDoPremio("★ Karambit | Doppler (Factory New)", fotos)).toBe(
+      "https://steam/karambit.png",
+    );
+    expect(imagemDoPremio("karambit doppler", fotos)).toBe(
+      "https://steam/karambit.png",
+    );
+  });
+
+  it("prêmio que não é skin fica sem foto, e isso é o caso normal", () => {
+    expect(imagemDoPremio("R$ 500 no Pix", fotos)).toBeNull();
+  });
+
+  it("skin no catálogo sem foto devolve null, e não undefined", () => {
+    // A tela testa `imagem ?? null`, e undefined vazando daqui viraria um
+    // terceiro estado silencioso.
+    expect(imagemDoPremio("Agente sem foto", fotos)).toBeNull();
   });
 });
 

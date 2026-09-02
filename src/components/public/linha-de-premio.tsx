@@ -89,8 +89,16 @@ export function LinhaDePremio({
    * segredo até a abertura.
    */
   reservado?: boolean;
-  /** O que dizer quando ainda nao tem dono. */
-  rotuloVago: string;
+  /**
+   * O que dizer quando ainda não tem dono. OPCIONAL: sem ele, a linha não
+   * escreve nada nesse caso.
+   *
+   * Nos Títulos Premiados o "Em jogo" era ruído: prêmio ainda em jogo é o
+   * estado da maioria das linhas, e repetir o óbvio em todas gastava a única
+   * posição da linha onde a informação incomum, o "levou", precisa saltar.
+   * Quem tem dono continua dizendo quem levou.
+   */
+  rotuloVago?: string;
 }) {
   const temDono = Boolean(ganhador);
   const { nome, desgaste } = separarDesgaste(premio);
@@ -181,14 +189,14 @@ export function LinhaDePremio({
               <Ponto className="bg-amber-500" />
               Reservado
             </span>
-          ) : (
+          ) : rotuloVago ? (
             <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
               {/* O ponto pulsa porque este é o estado que convida a comprar,
                   e para de pulsar para quem pediu menos movimento. */}
               <Ponto className="bg-primary motion-safe:animate-pulse" />
               {rotuloVago}
             </span>
-          )}
+          ) : null}
         </div>
       </div>
     </li>

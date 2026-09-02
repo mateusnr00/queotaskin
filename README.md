@@ -82,6 +82,15 @@ na hora de salvar os títulos premiados. Guardada na linha, e não buscada ao
 desenhar: a lista é pública e de tráfego alto, e cruzar as 865 skins do
 catálogo a cada visita para achar meia dúzia de fotos é conta que não se paga.
 
+A foto é a mesma URL da Steam que o catálogo guarda, servida direto: o host da
+Valve não está em `images.remotePatterns`, então `podeOtimizar` devolve false e
+a imagem sai sem passar pelo otimizador, em vez de tomar 400 dele.
+
+Título premiado cadastrado ANTES desta coluna existir nasce sem foto e só a
+recebe quando alguém salvar a aba de novo, porque o save apaga e recria as
+linhas. Foi preciso um preenchimento retroativo uma vez, casando pelo mesmo
+critério.
+
 Prêmio que não é skin ("R$ 500 no Pix") não casa e fica sem foto, como já
 ficava sem cor. Nesse caso o selo desenha a sigla da arma sobre o brilho da
 raridade (`RaffleCover variant="selo"`), então espaço vazio nunca aparece e o
