@@ -130,16 +130,16 @@ interface RaffleFormProps {
   // Dados da aba "Pagamento", só populados no modo edit.
   initialPaymentProvider?:
     | "SYNCPAY"
-    | "CODEPAY"
     | "SIGILOPAY"
     | "NEXUSPAG"
+    | "HORSEPAY"
     | null;
   tenantPaymentDefault?: PaymentProviderEnum;
   configuredProviders?: {
     syncpay: boolean;
-    codepay: boolean;
     sigilopay: boolean;
     nexuspag: boolean;
+    horsepay: boolean;
   };
   // O tipo vem da própria aba, e não copiado aqui: a lista ganhou condições de
   // saída e a marca de número já vendido, e uma cópia desatualizada apagaria
@@ -280,9 +280,9 @@ export function RaffleForm({
   tenantPaymentDefault = "SYNCPAY",
   configuredProviders = {
     syncpay: false,
-    codepay: false,
     sigilopay: false,
     nexuspag: false,
+    horsepay: false,
   },
   initialAwardedTickets = [],
   titulosDisponiveis,

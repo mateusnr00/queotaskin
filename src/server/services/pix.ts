@@ -55,8 +55,8 @@ function buildWebhookUrl(
 ): { url: string } | { faltando: string } {
   const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
   if (!base) return { faltando: "NEXT_PUBLIC_APP_URL" };
-  // Cada gateway tem o próprio token: SYNCPAY_WEBHOOK_TOKEN /
-  // CODEPAY_WEBHOOK_TOKEN. Isolar permite rotacionar sem afetar o outro.
+  // Cada gateway tem o próprio token: SYNCPAY_WEBHOOK_TOKEN,
+  // HORSEPAY_WEBHOOK_TOKEN. Isolar permite rotacionar um sem afetar o outro.
   const envKey = `${provider.name}_WEBHOOK_TOKEN`;
   const token = process.env[envKey];
   if (!token) return { faltando: envKey };
@@ -252,8 +252,8 @@ function extractPixCode(raw: unknown): string | null {
 }
 
 // Polling de status no gateway como FALLBACK ao webhook. Só funciona pros
-// providers que implementam `getStatus` (SyncPay sim; CodePay não, webhook
-// only). Throttled per-reservation pra não estourar rate limit.
+// providers que implementam `getStatus`, que hoje são todos os ativos.
+// Throttled per-reservation pra não estourar rate limit.
 const lastStatusPollByPayment = new Map<string, number>();
 const STATUS_POLL_THROTTLE_MS = 15_000;
 

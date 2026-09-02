@@ -36,25 +36,21 @@ export default async function PagamentosPage() {
       syncpayClientId: true,
       syncpayClientSecretEnc: true,
       syncpayBaseUrl: true,
-      codepayClientId: true,
-      codepayPasswordEnc: true,
       sigilopayClientId: true,
       sigilopayClientSecretEnc: true,
       nexuspagApiKeyEnc: true,
       nexuspagWebhookSecretEnc: true,
+      horsepayClientKey: true,
+      horsepayClientSecretEnc: true,
+      horsepayWebhookSecretEnc: true,
     },
   });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
   const syncpayWebhookToken = process.env.SYNCPAY_WEBHOOK_TOKEN ?? "";
-  const codepayWebhookToken = process.env.CODEPAY_WEBHOOK_TOKEN ?? "";
   const syncpayWebhookUrl =
     appUrl && syncpayWebhookToken
       ? `${appUrl}/api/webhooks/syncpay/${syncpayWebhookToken}`
-      : null;
-  const codepayWebhookUrl =
-    appUrl && codepayWebhookToken
-      ? `${appUrl}/api/webhooks/codepay/${codepayWebhookToken}`
       : null;
   const sigilopayWebhookToken = process.env.SIGILOPAY_WEBHOOK_TOKEN ?? "";
   const sigilopayWebhookUrl =
@@ -65,6 +61,11 @@ export default async function PagamentosPage() {
   const nexuspagWebhookUrl =
     appUrl && nexuspagWebhookToken
       ? `${appUrl}/api/webhooks/nexuspag/${nexuspagWebhookToken}`
+      : null;
+  const horsepayWebhookToken = process.env.HORSEPAY_WEBHOOK_TOKEN ?? "";
+  const horsepayWebhookUrl =
+    appUrl && horsepayWebhookToken
+      ? `${appUrl}/api/webhooks/horsepay/${horsepayWebhookToken}`
       : null;
 
   return (
@@ -89,16 +90,14 @@ export default async function PagamentosPage() {
           // Tenant.paymentProvider pode ser MERCADO_PAGO (enum legado), que o
           // form não conhece: qualquer coisa fora da lista cai pra SYNCPAY.
           provider:
-            tenant.paymentProvider === "CODEPAY" ||
             tenant.paymentProvider === "SIGILOPAY" ||
-            tenant.paymentProvider === "NEXUSPAG"
+            tenant.paymentProvider === "NEXUSPAG" ||
+            tenant.paymentProvider === "HORSEPAY"
               ? tenant.paymentProvider
               : "SYNCPAY",
           syncpayClientId: tenant.syncpayClientId ?? "",
           syncpayClientSecretConfigured: Boolean(tenant.syncpayClientSecretEnc),
           syncpayBaseUrl: tenant.syncpayBaseUrl ?? "",
-          codepayClientId: tenant.codepayClientId ?? "",
-          codepayPasswordConfigured: Boolean(tenant.codepayPasswordEnc),
           sigilopayClientId: tenant.sigilopayClientId ?? "",
           sigilopayClientSecretConfigured: Boolean(
             tenant.sigilopayClientSecretEnc,
@@ -107,12 +106,19 @@ export default async function PagamentosPage() {
           nexuspagWebhookSecretConfigured: Boolean(
             tenant.nexuspagWebhookSecretEnc,
           ),
+          horsepayClientKey: tenant.horsepayClientKey ?? "",
+          horsepayClientSecretConfigured: Boolean(
+            tenant.horsepayClientSecretEnc,
+          ),
+          horsepayWebhookSecretConfigured: Boolean(
+            tenant.horsepayWebhookSecretEnc,
+          ),
         }}
         webhookUrls={{
           syncpay: syncpayWebhookUrl,
-          codepay: codepayWebhookUrl,
           sigilopay: sigilopayWebhookUrl,
           nexuspag: nexuspagWebhookUrl,
+          horsepay: horsepayWebhookUrl,
         }}
       />
     </div>

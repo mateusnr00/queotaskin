@@ -35,13 +35,13 @@ import {
   type FaixaDeTaxa,
 } from "@/lib/taxa-de-gateway";
 
-export type GatewayComTaxa = "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | "NEXUSPAG";
+export type GatewayComTaxa = "SYNCPAY" | "SIGILOPAY" | "NEXUSPAG" | "HORSEPAY";
 
 const ROTULO: Record<GatewayComTaxa, string> = {
   SYNCPAY: "SyncPay",
-  CODEPAY: "CodePay",
   SIGILOPAY: "SigiloPay",
   NEXUSPAG: "NexusPag",
+  HORSEPAY: "HorsePay",
 };
 
 const GATEWAYS = Object.keys(ROTULO) as GatewayComTaxa[];

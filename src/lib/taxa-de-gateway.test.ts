@@ -107,7 +107,7 @@ describe("taxaTotal", () => {
     const r = taxaTotal(
       [
         { valor: 100, provider: "SYNCPAY" },
-        { valor: 100, provider: "CODEPAY" },
+        { valor: 100, provider: "HORSEPAY" },
       ],
       porProvider,
     );

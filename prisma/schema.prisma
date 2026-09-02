@@ -138,9 +138,9 @@ enum PaymentMethod {
 enum PaymentProvider {
   MERCADO_PAGO
   SYNCPAY
-  CODEPAY
   SIGILOPAY
   NEXUSPAG
+  HORSEPAY
 }
 
 enum CommissionStatus {
@@ -280,8 +280,6 @@ model Tenant {
   syncpayClientId          String?
   syncpayClientSecretEnc   String?
   syncpayBaseUrl           String?
-  codepayClientId          String?
-  codepayPasswordEnc       String?
   sigilopayClientId        String?
   sigilopayClientSecretEnc String?
   sigilopayBaseUrl         String?
@@ -291,6 +289,14 @@ model Tenant {
   /// quem nao provou ser a NexusPag e a porta aberta mais cara do sistema.
   nexuspagWebhookSecretEnc String?
   nexuspagBaseUrl          String?
+  /// Chave publica da HorsePay (client_key). Sozinha nao autentica nada: e o
+  /// par dela, o client_secret, que sai daqui cifrado.
+  horsepayClientKey        String?
+  horsepayClientSecretEnc  String?
+  /// Segredo do HMAC das notificacoes, do painel deles em Configuracoes,
+  /// Integracao. E mostrado uma vez so. Sem ele a rota do webhook recusa tudo.
+  horsepayWebhookSecretEnc String?
+  horsepayBaseUrl          String?
 
   // Customização das páginas finais (pagamento confirmado / reserva
   // expirada). Quando NULL, renderiza o texto padrão hardcoded. Cada

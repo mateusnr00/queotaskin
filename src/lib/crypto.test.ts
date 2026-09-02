@@ -15,7 +15,7 @@ afterEach(() => {
 
 describe("crypto", () => {
   it("encrypt → decrypt volta o texto original", () => {
-    const plain = "JgLJuiwtR4@Ux"; // exemplo do formato CodePay
+    const plain = "JgLJuiwtR4@Ux"; // segredo curto com pontuação
     const ct = encryptSecret(plain);
     expect(ct).not.toContain(plain);
     expect(decryptSecret(ct)).toBe(plain);

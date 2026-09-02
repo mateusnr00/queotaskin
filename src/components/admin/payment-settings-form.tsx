@@ -2,12 +2,13 @@
 
 // Form de configuração do gateway de PIX por tenant.
 //
-// - Toggle provider (SyncPay/CodePay) muda quais campos aparecem.
+// - Trocar o gateway no seletor muda quais campos aparecem.
 // - Secrets nunca voltam do servidor, quando já tem um salvo, mostramos
 //   placeholder "•••• já configurado" e enviar vazio = manter o atual.
-// - Mostra a URL exata do webhook que o admin precisa cadastrar no painel
-//   do gateway (CodePay é global no painel deles; SyncPay vem no postback
-//   da request, mas a URL é a mesma).
+// - Mostra a URL exata do webhook. A HorsePay e a NexusPag recebem essa URL
+//   em cada cobrança; a SyncPay também, mas é a mesma para todas, então
+//   mostrar aqui serve para conferência e para cadastro manual quando o
+//   painel do gateway pede.
 
 import { useState, useTransition } from "react";
 import { useForm, type Resolver } from "react-hook-form";
@@ -39,39 +40,41 @@ import {
 
 // Mantém em sync com paymentSettingsSchema do server action.
 const schema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]),
+  provider: z.enum(["SYNCPAY", "SIGILOPAY", "NEXUSPAG", "HORSEPAY"]),
   syncpayClientId: z.string().max(200).optional().default(""),
   syncpayClientSecret: z.string().max(500).optional().default(""),
   syncpayBaseUrl: z.string().max(300).optional().default(""),
-  codepayClientId: z.string().max(200).optional().default(""),
-  codepayPassword: z.string().max(500).optional().default(""),
   sigilopayClientId: z.string().max(200).optional().default(""),
   sigilopayClientSecret: z.string().max(500).optional().default(""),
   nexuspagApiKey: z.string().max(500).optional().default(""),
   nexuspagWebhookSecret: z.string().max(500).optional().default(""),
+  horsepayClientKey: z.string().max(200).optional().default(""),
+  horsepayClientSecret: z.string().max(500).optional().default(""),
+  horsepayWebhookSecret: z.string().max(500).optional().default(""),
 });
 type FormValues = z.infer<typeof schema>;
 
 interface InitialValues {
-  provider: "SYNCPAY" | "CODEPAY" | "SIGILOPAY" | "NEXUSPAG";
+  provider: "SYNCPAY" | "SIGILOPAY" | "NEXUSPAG" | "HORSEPAY";
   syncpayClientId: string;
   syncpayClientSecretConfigured: boolean;
   syncpayBaseUrl: string;
-  codepayClientId: string;
-  codepayPasswordConfigured: boolean;
   sigilopayClientId: string;
   sigilopayClientSecretConfigured: boolean;
   nexuspagApiKeyConfigured: boolean;
   nexuspagWebhookSecretConfigured: boolean;
+  horsepayClientKey: string;
+  horsepayClientSecretConfigured: boolean;
+  horsepayWebhookSecretConfigured: boolean;
 }
 
 interface Props {
   initial: InitialValues;
   webhookUrls: {
     syncpay: string | null;
-    codepay: string | null;
     sigilopay: string | null;
     nexuspag: string | null;
+    horsepay: string | null;
   };
 }
 
@@ -86,12 +89,13 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
       syncpayClientId: initial.syncpayClientId,
       syncpayClientSecret: "",
       syncpayBaseUrl: initial.syncpayBaseUrl,
-      codepayClientId: initial.codepayClientId,
-      codepayPassword: "",
       sigilopayClientId: initial.sigilopayClientId,
       sigilopayClientSecret: "",
       nexuspagApiKey: "",
       nexuspagWebhookSecret: "",
+      horsepayClientKey: initial.horsepayClientKey,
+      horsepayClientSecret: "",
+      horsepayWebhookSecret: "",
     },
   });
 
@@ -111,10 +115,11 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
       form.reset({
         ...values,
         syncpayClientSecret: "",
-        codepayPassword: "",
         sigilopayClientSecret: "",
         nexuspagApiKey: "",
         nexuspagWebhookSecret: "",
+        horsepayClientSecret: "",
+        horsepayWebhookSecret: "",
       });
     });
   }
@@ -137,17 +142,17 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
                     <SelectValue
                       labels={{
                         SYNCPAY: "SyncPay",
-                        CODEPAY: "CodePay",
                         SIGILOPAY: "SigiloPay",
                         NEXUSPAG: "NexusPag",
+                        HORSEPAY: "HorsePay",
                       }}
                     />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SYNCPAY">SyncPay</SelectItem>
-                    <SelectItem value="CODEPAY">CodePay</SelectItem>
                     <SelectItem value="SIGILOPAY">SigiloPay</SelectItem>
                     <SelectItem value="NEXUSPAG">NexusPag</SelectItem>
+                    <SelectItem value="HORSEPAY">HorsePay</SelectItem>
                   </SelectContent>
                 </Select>
               </FormControl>
@@ -226,19 +231,23 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
           </ProviderCard>
         )}
 
-        {provider === "CODEPAY" && (
-          <ProviderCard title="Credenciais CodePay" webhookUrl={webhookUrls.codepay} webhookEnv="CODEPAY_WEBHOOK_TOKEN">
+        {provider === "HORSEPAY" && (
+          <ProviderCard
+            title="Credenciais HorsePay"
+            webhookUrl={webhookUrls.horsepay}
+            webhookEnv="HORSEPAY_WEBHOOK_TOKEN"
+          >
             <FormField
               control={form.control}
-              name="codepayClientId"
+              name="horsepayClientKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Integration ID</FormLabel>
+                  <FormLabel>Client Key</FormLabel>
                   <FormControl>
                     <Input autoComplete="off" {...field} />
                   </FormControl>
                   <FormDescription>
-                    Painel CodePay → Integração → ID.
+                    Painel HorsePay, em Configurações, Integração.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -246,22 +255,54 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
             />
             <FormField
               control={form.control}
-              name="codepayPassword"
+              name="horsepayClientSecret"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Secret Key</FormLabel>
+                  <FormLabel>Client Secret</FormLabel>
                   <FormControl>
                     <Input
                       type="password"
                       autoComplete="new-password"
                       placeholder={
-                        initial.codepayPasswordConfigured
+                        initial.horsepayClientSecretConfigured
                           ? "•••• já configurado (deixe vazio pra manter)"
                           : ""
                       }
                       {...field}
                     />
                   </FormControl>
+                  <FormDescription>
+                    O par da Client Key. Juntos eles trocam por um token que
+                    vale quatro horas, e é o token que assina cada cobrança.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="horsepayWebhookSecret"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Webhook Secret</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={
+                        initial.horsepayWebhookSecretConfigured
+                          ? "•••• já configurado (deixe vazio pra manter)"
+                          : ""
+                      }
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Painel HorsePay, em Configurações, Integração. Eles mostram
+                    esse segredo uma vez só.{" "}
+                    <b className="font-semibold">Sem ele nada é confirmado</b>:
+                    a rota recusa notificação que não venha assinada com ele.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

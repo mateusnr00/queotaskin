@@ -4,7 +4,7 @@
 // instantâneo). Idempotente: tickets que já estão AWARDED não mexem.
 //
 // Chamado por:
-// - Webhook SyncPay/CodePay quando transiciona reservation pra PAID
+// - Webhook do gateway quando transiciona reservation pra PAID
 // - markReservationPaidAction (admin)
 // - Auto-cura de rifa grátis (comprovante page)
 

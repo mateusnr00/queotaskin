@@ -1,6 +1,6 @@
 // Distribuição automática de Caixas Surpresas após pagamento aprovado.
 //
-// Chamado pelo webhook (SyncPay/CodePay) e pelo markReservationPaidAction
+// Chamado pelo webhook do gateway e pelo markReservationPaidAction
 // quando uma reservation vai pra PAID. Idempotente: se já existem
 // SurpriseBox pra essa reserva, não cria duplicatas (UNOPENED count vs.
 // expectativa do combo).

@@ -1,46 +1,49 @@
-// Webhook da SigiloPay. URL = /api/webhooks/sigilopay/<SIGILOPAY_WEBHOOK_TOKEN>.
+// Webhook da HorsePay. URL = /api/webhooks/horsepay/<HORSEPAY_WEBHOOK_TOKEN>.
 //
-// Cadastrado uma vez no painel deles, em Configurações > Webhooks, marcando os
-// eventos de transação. A URL é fixa: a SigiloPay limita 20 webhooks por
-// integração e a documentação avisa que quem estoura esse limite está mandando
-// uma URL diferente por transação. A nossa referência viaja no corpo da
-// cobrança, não no endereço.
+// Vai no campo callback_url de cada cobrança, então a nossa URL é sempre a
+// mesma e não precisa ser cadastrada no painel deles.
 //
-// A PROVA DE ORIGEM É O TOKEN DO CAMINHO, E SÓ ELE
+// DUAS PROVAS, E AQUI A SEGUNDA É DE VERDADE
 //
-// A notificação traz um campo `token`, e eu cheguei a compará-lo com um valor
-// guardado no Tenant, achando que fosse fixo da integração. Não é: a primeira
-// transação real mostrou a MESMA transação, no MESMO evento, chegando quatro
-// vezes em dois segundos com dois tokens diferentes. Três entregas legítimas
-// levaram 403 por causa disso.
+// O token secreto no caminho barra quem não conhece a URL. A assinatura HMAC
+// barra quem conhece a URL mas não tem o segredo: ele vem do painel deles, por
+// fora da mensagem, então conferir prova mesmo alguma coisa. Sem segredo
+// cadastrado a rota recusa tudo, em vez de "aceitar por enquanto": confirmar
+// pagamento é a porta mais cara do sistema para deixar destrancada.
 //
-// E não era só instável, era inútil como prova: nunca recebemos esse token por
-// outro caminho, então a primeira notificação de qualquer transação teria de
-// ser aceita de olhos fechados de todo jeito. Verificar contra um valor que só
-// existe dentro da própria mensagem não prova nada. O segredo no caminho da
-// URL é a defesa de verdade, e é a mesma que a SyncPay usa aqui.
+// O CORPO CRU É OBRIGATÓRIO
 //
-// SEMPRE 2XX, MENOS QUANDO É PARA REENVIAR
+// A assinatura cobre o corpo exatamente como ele chegou. Ler com req.json() e
+// reserializar reordena chaves e muda espaços, e a conferência passa a falhar
+// por um motivo invisível de ler no código. Por isso o corpo entra como texto
+// e o JSON.parse vem depois.
 //
-// A SigiloPay reenvia o que não recebe 2XX. Então evento que não nos interessa,
-// cobrança que não é nossa e payload sem transação respondem 200 com um motivo:
-// tratar isso como erro colocaria a notificação em loop de reentrega. O 403 do
-// token errado é de propósito, esse não queremos de volta.
+// INFRAÇÃO NÃO É RESPOSTA DE COBRANÇA
+//
+// As notificações do MED chegam por este mesmo endereço, no mesmo formato,
+// mais o campo infraction_status. E chegam com status false. Tratá-las como
+// notificação de pagamento marcaria como recusado um Pix que caiu, então elas
+// são gravadas no histórico e param por aí.
+//
+// SEMPRE 2XX QUANDO NÃO É PARA REENVIAR
+//
+// A documentação deles pede HTTP 200 na confirmação. Evento fora do escopo e
+// cobrança de outro sistema também respondem 200, com o motivo: reentregar
+// algo que nunca vai ser processado só enche a fila dos dois lados. O 401
+// fica para o que importa, a assinatura que não confere.
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { lerWebhook } from "@/lib/sigilopay";
+import { assinaturaConfere, lerWebhook } from "@/lib/horsepay";
+import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { computeTicketsToRecreate } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { awardXpForReservation } from "@/server/services/xp";
-import {
-  processarPagamentoConfirmado,
-  reverterCompraDeIndicado,
-} from "@/server/services/afiliados";
+import { processarPagamentoConfirmado } from "@/server/services/afiliados";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -48,38 +51,68 @@ interface RouteParams {
 
 export async function POST(req: Request, { params }: RouteParams) {
   const { token } = await params;
-  const esperado = process.env.SIGILOPAY_WEBHOOK_TOKEN;
+  const esperado = process.env.HORSEPAY_WEBHOOK_TOKEN;
 
   if (!esperado || token !== esperado) {
     return new NextResponse("forbidden", { status: 403 });
   }
 
+  // Cru, e não req.json(): é sobre este texto exato que a assinatura foi
+  // calculada.
+  const corpoCru = await req.text();
+
+  const segredo = await segredoDoWebhook();
+  if (!segredo) {
+    console.error(
+      "[horsepay webhook] sem segredo cadastrado, notificação recusada",
+    );
+    return new NextResponse("unauthorized", { status: 401 });
+  }
+  if (!assinaturaConfere(req.headers.get("x-signature"), corpoCru, segredo)) {
+    console.warn("[horsepay webhook] assinatura não confere");
+    return new NextResponse("unauthorized", { status: 401 });
+  }
+
   let body: unknown = null;
   try {
-    body = await req.json();
+    body = JSON.parse(corpoCru);
   } catch {
     return new NextResponse("invalid json", { status: 400 });
   }
 
   const aviso = lerWebhook(body);
-  if (!aviso) {
-    return NextResponse.json({ ok: true, ignored: "evento fora do escopo" });
-  }
-  if (!aviso.idDaTransacao) {
-    console.warn("[sigilopay webhook] sem id de transação", body);
+  if (!aviso?.externalId) {
+    console.warn("[horsepay webhook] corpo sem external_id");
     return NextResponse.json({ ok: true, ignored: "sem id de transação" });
+  }
+  if (aviso.saque) {
+    // Saque não sai daqui: a plataforma só recebe.
+    return NextResponse.json({ ok: true, ignored: "notificação de saque" });
   }
 
   const evento = await prisma.paymentWebhookEvent.create({
     data: {
-      provider: "SIGILOPAY",
-      externalId: aviso.idDaTransacao,
+      provider: "HORSEPAY",
+      externalId: aviso.externalId,
       payload: body as Prisma.InputJsonValue,
     },
   });
 
+  if (aviso.infracao) {
+    // Fica registrada e visível no histórico, e o pagamento não se mexe. Quem
+    // vai responder a defesa é gente, no painel deles.
+    console.warn(
+      `[horsepay webhook] infração ${aviso.infracao} na transação ${aviso.externalId}`,
+    );
+    await prisma.paymentWebhookEvent.update({
+      where: { id: evento.id },
+      data: { processedAt: new Date() },
+    });
+    return NextResponse.json({ ok: true, infracao: aviso.infracao });
+  }
+
   const payment = await prisma.payment.findUnique({
-    where: { externalId: aviso.idDaTransacao },
+    where: { externalId: aviso.externalId },
     select: {
       id: true,
       reservationId: true,
@@ -130,7 +163,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       try {
         recriar = await computeTicketsToRecreate(payment.reservationId);
       } catch (err) {
-        console.error("[sigilopay webhook] computeTicketsToRecreate falhou:", err);
+        console.error("[horsepay webhook] computeTicketsToRecreate falhou:", err);
       }
     }
 
@@ -158,14 +191,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     });
 
     await autoAwardTicketsForReservation(payment.reservationId).catch((err) =>
-      console.error("[sigilopay webhook] autoAwardTickets falhou:", err)
+      console.error("[horsepay webhook] autoAwardTickets falhou:", err)
     );
     await autoGenerateSurpriseBoxesForReservation(payment.reservationId).catch(
       (err) =>
-        console.error("[sigilopay webhook] autoGenerateSurpriseBoxes falhou:", err)
+        console.error("[horsepay webhook] autoGenerateSurpriseBoxes falhou:", err)
     );
     await gerarRaspadinhasParaReserva(payment.reservationId).catch((err) =>
-      console.error("[sigilopay webhook] gerarRaspadinhas falhou:", err)
+      console.error("[horsepay webhook] gerarRaspadinhas falhou:", err)
     );
     // Credita o XP do rank. Idempotente: reentrega do webhook não dobra.
     await awardXpForReservation(payment.reservationId);
@@ -173,35 +206,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     // credita o progresso de quem indicou. Idempotente por índice único, o
     // que importa aqui: este webhook chega mais de uma vez.
     await processarPagamentoConfirmado(payment.reservationId).catch((err) =>
-      console.error(`[sigilopay webhook] afiliado falhou:`, err),
+      console.error(`[horsepay webhook] afiliado falhou:`, err),
     );
-  } else if (aviso.desfazPagamento) {
-    // Estorno e chargeback chegam DEPOIS do dinheiro ter entrado. A cobrança
-    // vira REFUNDED e o evento fica registrado, mas os números emitidos, os
-    // prêmios já sorteados e o XP creditado NÃO são desfeitos aqui: isso é
-    // decisão de negócio, e desfazer sozinho um sorteio que já aconteceu causa
-    // mais estrago do que conserta. O admin resolve o caso com a lista de
-    // eventos na mão.
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: "REFUNDED" },
-    });
-    // O programa de afiliados é a exceção ao parágrafo acima, e dá para
-    // desfazer sem estragar nada: o progresso daquela compra volta atrás e as
-    // entradas que ela liberou, se ainda estiverem paradas no saldo, são
-    // recolhidas. Entrada já gasta num sorteio fica de pé, e o movimento
-    // registra a diferença para o admin ver.
-    await reverterCompraDeIndicado(payment.reservationId).catch((err) =>
-      console.error("[sigilopay webhook] estorno de afiliado falhou:", err),
-    );
-    console.warn(
-      `[sigilopay webhook] ${aviso.evento} na reserva ${payment.reservationId}: números e prêmios mantidos, revisar manualmente`
-    );
-  } else if (aviso.status === "REJECTED" && payment.status === "PENDING") {
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: "REJECTED" },
-    });
   }
 
   await prisma.paymentWebhookEvent.update({
@@ -210,4 +216,26 @@ export async function POST(req: Request, { params }: RouteParams) {
   });
 
   return NextResponse.json({ ok: true, status: aviso.status });
+}
+
+/**
+ * O segredo do webhook, decriptado.
+ *
+ * Vem do Tenant e não de env var: cada tenant tem a própria conta na HorsePay,
+ * e um segredo global assinaria por todos.
+ */
+async function segredoDoWebhook(): Promise<string | null> {
+  const tenant = await prisma.tenant.findFirst({
+    where: { horsepayWebhookSecretEnc: { not: null } },
+    select: { horsepayWebhookSecretEnc: true },
+  });
+  if (!tenant?.horsepayWebhookSecretEnc || !isEncryptionConfigured()) {
+    return null;
+  }
+  try {
+    return decryptSecret(tenant.horsepayWebhookSecretEnc);
+  } catch (err) {
+    console.error("[horsepay webhook] falha ao decriptar o segredo:", err);
+    return null;
+  }
 }

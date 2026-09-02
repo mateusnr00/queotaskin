@@ -527,7 +527,7 @@ const promotionsSchema = z.object({
 const paymentProviderSchema = z.object({
   raffleId: z.string().cuid(),
   paymentProvider: z
-    .enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"])
+    .enum(["SYNCPAY", "SIGILOPAY", "NEXUSPAG", "HORSEPAY"])
     .nullable(),
 });
 

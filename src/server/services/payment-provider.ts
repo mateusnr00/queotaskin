@@ -1,7 +1,8 @@
 // Abstração de provider de PIX por sorteio.
 //
 // Modelo:
-// - Credenciais ficam no Tenant (SyncPay + CodePay, ambos podem coexistir).
+// - Credenciais ficam no Tenant, e os gateways coexistem: um tenant pode ter
+//   os quatro configurados ao mesmo tempo.
 // - tenant.paymentProvider = gateway padrão pra novos sorteios.
 // - raffle.paymentProvider = override por sorteio (NULL = usa o do tenant).
 //
@@ -19,9 +20,10 @@ import {
   type SyncPayCredentials,
 } from "@/lib/syncpay";
 import {
-  createPixCharge as codepayCreatePix,
-  type CodePayCredentials,
-} from "@/lib/codepay";
+  consultarDeposito as horseConsulta,
+  criarCobrancaPix as horseCriaPix,
+  type HorsePayCredentials,
+} from "@/lib/horsepay";
 import {
   consultarCobranca as nexusConsulta,
   criarCobrancaPix as nexusCriaPix,
@@ -36,13 +38,13 @@ import {
 export interface PaymentProviderClient {
   /** Nome canônico, vai pro Payment.provider e pra URL do webhook. */
   name: PaymentProviderEnum;
-  /** Path do webhook esperado por esse gateway, p.ex. "syncpay" ou "codepay". */
+  /** Path do webhook esperado por esse gateway, p.ex. "syncpay" ou "horsepay". */
   webhookPath: string;
   createPixCharge(input: CreatePixInput): Promise<{
     pixCode: string;
     identifier: string;
   }>;
-  /** Polling opcional, só SyncPay implementa hoje. */
+  /** Polling opcional. Sustenta o botão "já paguei" de quem implementa. */
   getStatus?(
     identifier: string
   ): Promise<{ status: "PENDING" | "APPROVED" | "REJECTED"; raw: unknown }>;
@@ -63,15 +65,15 @@ export interface CreatePixInput {
   };
 }
 
-// Credenciais do tenant já decriptadas. Os dois objetos são independentes,
-// um tenant pode ter SyncPay+CodePay configurados ao mesmo tempo e cada
-// sorteio escolhe qual usar.
+// Credenciais do tenant já decriptadas. Os objetos são independentes: um
+// tenant pode ter todos os gateways configurados ao mesmo tempo e cada sorteio
+// escolhe qual usar.
 interface TenantCredentials {
   defaultProvider: PaymentProviderEnum;
   syncpay?: SyncPayCredentials;
-  codepay?: CodePayCredentials;
   sigilopay?: SigiloPayCredentials;
   nexuspag?: NexusPagCredentials;
+  horsepay?: HorsePayCredentials;
 }
 
 export type ProviderResolution =
@@ -116,14 +118,16 @@ async function loadTenantCredentials(tenantId: string): Promise<
       syncpayClientId: true,
       syncpayClientSecretEnc: true,
       syncpayBaseUrl: true,
-      codepayClientId: true,
-      codepayPasswordEnc: true,
       sigilopayClientId: true,
       sigilopayClientSecretEnc: true,
       sigilopayBaseUrl: true,
       nexuspagApiKeyEnc: true,
       nexuspagWebhookSecretEnc: true,
       nexuspagBaseUrl: true,
+      horsepayClientKey: true,
+      horsepayClientSecretEnc: true,
+      horsepayWebhookSecretEnc: true,
+      horsepayBaseUrl: true,
     },
   });
   if (!tenant) {
@@ -136,9 +140,9 @@ async function loadTenantCredentials(tenantId: string): Promise<
 
   const hasAnySecret =
     Boolean(tenant.syncpayClientSecretEnc) ||
-    Boolean(tenant.codepayPasswordEnc) ||
     Boolean(tenant.sigilopayClientSecretEnc) ||
-    Boolean(tenant.nexuspagApiKeyEnc);
+    Boolean(tenant.nexuspagApiKeyEnc) ||
+    Boolean(tenant.horsepayClientSecretEnc);
   if (hasAnySecret && !isEncryptionConfigured()) {
     return {
       ok: false,
@@ -160,24 +164,6 @@ async function loadTenantCredentials(tenantId: string): Promise<
       return {
         ok: false,
         error: `Falha ao decriptar credencial SyncPay: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-        code: "ENCRYPTION_KEY_MISSING",
-      };
-    }
-  }
-
-  let codepay: CodePayCredentials | undefined;
-  if (tenant.codepayClientId && tenant.codepayPasswordEnc) {
-    try {
-      codepay = {
-        clientId: tenant.codepayClientId,
-        password: decryptSecret(tenant.codepayPasswordEnc),
-      };
-    } catch (err) {
-      return {
-        ok: false,
-        error: `Falha ao decriptar credencial CodePay: ${
           err instanceof Error ? err.message : String(err)
         }`,
         code: "ENCRYPTION_KEY_MISSING",
@@ -225,14 +211,36 @@ async function loadTenantCredentials(tenantId: string): Promise<
     }
   }
 
+  let horsepay: HorsePayCredentials | undefined;
+  if (tenant.horsepayClientKey && tenant.horsepayClientSecretEnc) {
+    try {
+      horsepay = {
+        clientKey: tenant.horsepayClientKey,
+        clientSecret: decryptSecret(tenant.horsepayClientSecretEnc),
+        webhookSecret: tenant.horsepayWebhookSecretEnc
+          ? decryptSecret(tenant.horsepayWebhookSecretEnc)
+          : undefined,
+        baseUrl: tenant.horsepayBaseUrl ?? undefined,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: `Falha ao decriptar credencial HorsePay: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        code: "ENCRYPTION_KEY_MISSING",
+      };
+    }
+  }
+
   return {
     ok: true,
     creds: {
       defaultProvider: tenant.paymentProvider,
       syncpay,
-      codepay,
       sigilopay,
       nexuspag,
+      horsepay,
     },
   };
 }
@@ -241,28 +249,38 @@ function buildProvider(
   effective: PaymentProviderEnum,
   creds: TenantCredentials
 ): ProviderResolution {
-  if (effective === "CODEPAY") {
-    if (!creds.codepay) {
+  if (effective === "HORSEPAY") {
+    if (!creds.horsepay) {
       return {
         ok: false,
         error:
-          "CodePay selecionada mas sem credenciais. Configure em Admin → Configurações → Pagamentos.",
+          "HorsePay selecionada mas sem credenciais. Configure em Admin, Configurações, Pagamentos.",
         code: "PROVIDER_NOT_CONFIGURED",
       };
     }
-    const cpCreds = creds.codepay;
+    const hpCreds = creds.horsepay;
     return {
       ok: true,
       provider: {
-        name: "CODEPAY",
-        webhookPath: "codepay",
+        name: "HORSEPAY",
+        webhookPath: "horsepay",
         async createPixCharge(input) {
-          const charge = await codepayCreatePix(cpCreds, {
+          const cobranca = await horseCriaPix(hpCreds, {
             amount: input.amount,
-            externalRef: input.externalRef,
-            // CodePay não tem campo de webhook por request, é global no painel.
+            payerName: input.client.name,
+            // A reserva volta no callback como client_reference_id, e é o que
+            // liga a notificação deles à compra daqui.
+            clientReferenceId: input.externalRef,
+            callbackUrl: input.webhookUrl,
+            phone: input.client.phone.replace(/\D/g, "") || undefined,
           });
-          return { pixCode: charge.pix_code, identifier: charge.identifier };
+          return {
+            pixCode: cobranca.pixCode,
+            identifier: cobranca.transactionId,
+          };
+        },
+        async getStatus(identifier) {
+          return horseConsulta(hpCreds, identifier);
         },
       },
     };

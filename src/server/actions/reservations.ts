@@ -523,7 +523,7 @@ export async function checkPaymentStatusAction(
 
 // Marca uma reserva como paga MANUALMENTE, usado pelo admin quando o
 // webhook do gateway falhou e ele confirma o pagamento por fora (ex.: viu
-// no painel da CodePay/SyncPay). Atomicidade total: Payment + Reservation
+// no painel do gateway). Atomicidade total: Payment + Reservation
 // + Ticket transicionam juntos. Idempotente (chamar 2x em PAID não faz
 // nada). Restrita ao tenant do admin pra impedir cross-tenant.
 export async function markReservationPaidAction(

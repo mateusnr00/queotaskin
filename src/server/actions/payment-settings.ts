@@ -1,8 +1,8 @@
 "use server";
 
-// Configurações de pagamento por tenant, escolha de gateway (SyncPay /
-// CodePay) e credenciais. Secrets são encriptados antes de gravar (AES-256-GCM
-// via PAYMENT_SECRET_ENCRYPTION_KEY).
+// Configurações de pagamento por tenant: qual gateway e as credenciais dele.
+// Secrets são encriptados antes de gravar (AES-256-GCM via
+// PAYMENT_SECRET_ENCRYPTION_KEY).
 //
 // O admin nunca vê o secret de volta. Quando edita, o campo aparece vazio com
 // placeholder "•••• já configurado". Enviar vazio = "manter o que está lá";
@@ -19,7 +19,7 @@ import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
 const paymentSettingsSchema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]),
+  provider: z.enum(["SYNCPAY", "SIGILOPAY", "NEXUSPAG", "HORSEPAY"]),
   syncpayClientId: z.string().max(200).optional().default(""),
   // Vazio = manter atual; com valor = sobrescrever.
   syncpayClientSecret: z.string().max(500).optional().default(""),
@@ -32,12 +32,13 @@ const paymentSettingsSchema = z.object({
       (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
       "URL deve começar com http:// ou https://"
     ),
-  codepayClientId: z.string().max(200).optional().default(""),
-  codepayPassword: z.string().max(500).optional().default(""),
   sigilopayClientId: z.string().max(200).optional().default(""),
   sigilopayClientSecret: z.string().max(500).optional().default(""),
   nexuspagApiKey: z.string().max(500).optional().default(""),
   nexuspagWebhookSecret: z.string().max(500).optional().default(""),
+  horsepayClientKey: z.string().max(200).optional().default(""),
+  horsepayClientSecret: z.string().max(500).optional().default(""),
+  horsepayWebhookSecret: z.string().max(500).optional().default(""),
 });
 
 export type PaymentSettingsInput = z.input<typeof paymentSettingsSchema>;
@@ -63,10 +64,11 @@ export async function updatePaymentSettingsAction(
   // Sem ela, deixa o admin editar o resto mas bloqueia a parte de secret.
   const wantsSecretWrite =
     data.syncpayClientSecret.length > 0 ||
-    data.codepayPassword.length > 0 ||
     data.sigilopayClientSecret.length > 0 ||
     data.nexuspagApiKey.length > 0 ||
-    data.nexuspagWebhookSecret.length > 0;
+    data.nexuspagWebhookSecret.length > 0 ||
+    data.horsepayClientSecret.length > 0 ||
+    data.horsepayWebhookSecret.length > 0;
   if (wantsSecretWrite && !isEncryptionConfigured()) {
     return {
       ok: false,
@@ -85,13 +87,13 @@ export async function updatePaymentSettingsAction(
     };
   }
 
-  // Validação cruzada: se escolheu CodePay, precisa ter clientId. Se não
-  // tem password salva e nem está enviando uma, bloqueia.
-  if (data.provider === "CODEPAY" && !data.codepayClientId) {
+  if (data.provider === "HORSEPAY" && !data.horsepayClientKey) {
     return {
       ok: false,
-      error: "Selecione CodePay exige preencher o Integration ID.",
-      fieldErrors: { codepayClientId: ["Obrigatório quando provider = CodePay"] },
+      error: "Selecionar HorsePay exige preencher a Client Key.",
+      fieldErrors: {
+        horsepayClientKey: ["Obrigatório quando o gateway é HorsePay"],
+      },
     };
   }
 
@@ -100,8 +102,8 @@ export async function updatePaymentSettingsAction(
     paymentProvider: data.provider,
     syncpayClientId: data.syncpayClientId || null,
     syncpayBaseUrl: data.syncpayBaseUrl || null,
-    codepayClientId: data.codepayClientId || null,
     sigilopayClientId: data.sigilopayClientId || null,
+    horsepayClientKey: data.horsepayClientKey || null,
   };
 
   if (data.syncpayClientSecret) {
@@ -110,16 +112,22 @@ export async function updatePaymentSettingsAction(
     // Limpou o clientId → limpa também o secret pra não ficar órfão.
     update.syncpayClientSecretEnc = null;
   }
-  if (data.codepayPassword) {
-    update.codepayPasswordEnc = encryptSecret(data.codepayPassword);
-  } else if (!data.codepayClientId) {
-    update.codepayPasswordEnc = null;
-  }
   if (data.nexuspagApiKey) {
     update.nexuspagApiKeyEnc = encryptSecret(data.nexuspagApiKey);
   }
   if (data.nexuspagWebhookSecret) {
     update.nexuspagWebhookSecretEnc = encryptSecret(data.nexuspagWebhookSecret);
+  }
+  if (data.horsepayClientSecret) {
+    update.horsepayClientSecretEnc = encryptSecret(data.horsepayClientSecret);
+  } else if (!data.horsepayClientKey) {
+    // Limpou a chave pública: limpa o segredo junto, para não sobrar secret
+    // órfão de uma integração que já saiu.
+    update.horsepayClientSecretEnc = null;
+    update.horsepayWebhookSecretEnc = null;
+  }
+  if (data.horsepayWebhookSecret) {
+    update.horsepayWebhookSecretEnc = encryptSecret(data.horsepayWebhookSecret);
   }
   if (data.sigilopayClientSecret) {
     update.sigilopayClientSecretEnc = encryptSecret(data.sigilopayClientSecret);
@@ -130,18 +138,20 @@ export async function updatePaymentSettingsAction(
   }
 
   // Última validação: o provider escolhido precisa ter credenciais
-  // efetivamente disponíveis. Pra CodePay, ou veio password agora ou já
-  // tem encriptada salva.
-  if (data.provider === "CODEPAY" && !data.codepayPassword) {
-    const existing = await prisma.tenant.findUnique({
+  // efetivamente disponíveis. Ou o secret veio agora, ou já está salvo
+  // encriptado de um cadastro anterior.
+  if (data.provider === "HORSEPAY" && !data.horsepayClientSecret) {
+    const atual = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { codepayPasswordEnc: true },
+      select: { horsepayClientSecretEnc: true },
     });
-    if (!existing?.codepayPasswordEnc) {
+    if (!atual?.horsepayClientSecretEnc) {
       return {
         ok: false,
-        error: "CodePay exige a SecretKey. Preencha o campo.",
-        fieldErrors: { codepayPassword: ["Obrigatório no primeiro cadastro"] },
+        error: "HorsePay exige o Client Secret. Preencha o campo.",
+        fieldErrors: {
+          horsepayClientSecret: ["Obrigatório no primeiro cadastro"],
+        },
       };
     }
   }
@@ -213,7 +223,7 @@ const faixaSchema = z.object({
 });
 
 const taxasSchema = z.object({
-  provider: z.enum(["SYNCPAY", "CODEPAY", "SIGILOPAY", "NEXUSPAG"]),
+  provider: z.enum(["SYNCPAY", "SIGILOPAY", "NEXUSPAG", "HORSEPAY"]),
   /** A lista inteira do gateway. Vazia apaga as faixas dele. */
   faixas: z.array(faixaSchema).max(10),
 });

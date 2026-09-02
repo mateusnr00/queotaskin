@@ -111,20 +111,22 @@ export default async function EditRafflePage({
       paymentProvider: true,
       syncpayClientId: true,
       syncpayClientSecretEnc: true,
-      codepayClientId: true,
-      codepayPasswordEnc: true,
       sigilopayClientId: true,
       sigilopayClientSecretEnc: true,
       nexuspagApiKeyEnc: true,
+      horsepayClientKey: true,
+      horsepayClientSecretEnc: true,
     },
   });
   const configuredProviders = {
     syncpay: Boolean(tenant.syncpayClientId && tenant.syncpayClientSecretEnc),
-    codepay: Boolean(tenant.codepayClientId && tenant.codepayPasswordEnc),
     sigilopay: Boolean(
       tenant.sigilopayClientId && tenant.sigilopayClientSecretEnc,
     ),
     nexuspag: Boolean(tenant.nexuspagApiKeyEnc),
+    horsepay: Boolean(
+      tenant.horsepayClientKey && tenant.horsepayClientSecretEnc,
+    ),
   };
 
   // Nome, telefone e CPF sempre ligados; o resto é escolha do admin. A mesma
@@ -319,10 +321,10 @@ export default async function EditRafflePage({
           accumulative: raffle.promotionsAccumulative,
         }}
         initialPaymentProvider={
-          raffle.paymentProvider === "CODEPAY" ||
           raffle.paymentProvider === "SYNCPAY" ||
           raffle.paymentProvider === "SIGILOPAY" ||
-          raffle.paymentProvider === "NEXUSPAG"
+          raffle.paymentProvider === "NEXUSPAG" ||
+          raffle.paymentProvider === "HORSEPAY"
             ? raffle.paymentProvider
             : null
         }
