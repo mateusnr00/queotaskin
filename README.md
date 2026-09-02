@@ -94,9 +94,13 @@ que empurra o nome da skin para fora.
 
 O estado ancora à direita com `ml-auto` e um degradê que morre para a
 esquerda: separa sem borda nem faixa, e preenchimento sólido numa lista com
-metade contemplada vira parede de cor. No celular sobra só o pingo, porque
-"DISPONÍVEL" come 85px de uma tela de 390px e quem paga a conta é o nome da
-skin. O texto continua no leitor de tela e volta a partir do tablet.
+metade contemplada vira parede de cor.
+
+O texto do estado aparece SEMPRE, inclusive no telefone. Ele chegou a sumir lá,
+sobrando o pingo, para dar largura ao nome, e a economia não valeu: um pingo
+verde sozinho não diz "disponível" para quem nunca viu a lista, e o estado é
+metade do que a linha existe para responder. O espaço sai do resto (rótulo de
+10px e respiro menor no degradê), e o nome, único elástico, absorve.
 
 ### A foto da skin no cadastro do prêmio
 

@@ -99,7 +99,7 @@ export function LinhaDePremio({
         // overflow-hidden faz o fio da esquerda seguir o canto arredondado.
         // Como borda grossa (`border-l-[3px]`) ele encontrava as bordas de 1px
         // em diagonal e aparecia como um arco solto, deslocado do card.
-        "relative flex items-center gap-2.5 overflow-hidden rounded-lg border py-2 pr-1.5 pl-2.5 transition-colors sm:gap-3 sm:pl-3",
+        "relative flex items-center gap-2 overflow-hidden rounded-lg border py-2 pr-1 pl-2.5 transition-colors sm:gap-3 sm:pr-1.5 sm:pl-3",
         temDono
           ? "border-emerald-500/20 bg-emerald-500/[0.04]"
           : "border-border/50 bg-muted/[0.15]",
@@ -209,10 +209,14 @@ function Estado({
 /**
  * O selo de estado sem dono, com o degradê morrendo para a esquerda.
  *
- * NO CELULAR SOBRA SÓ O PINGO. Numa tela de 390px, "DISPONÍVEL" come 85px, e
- * quem paga a conta é o nome da skin, que é o que vende: "★ Karambit |
- * Doppler" virava "★ Ka...". A cor já diz o estado, e o texto continua para
- * quem usa leitor de tela e reaparece a partir do tablet.
+ * O texto aparece SEMPRE, inclusive no telefone. Ele já chegou a sumir lá,
+ * sobrando o pingo, para dar largura ao nome da skin, e a economia não valeu:
+ * um pingo verde sozinho não diz "disponível" para quem nunca viu esta lista,
+ * e o estado é metade do que a linha existe para responder.
+ *
+ * O espaço sai do resto: no telefone o rótulo encolhe para 10px e o respiro
+ * do degradê cai pela metade. O nome, que é o único elástico, absorve a
+ * diferença e trunca quando precisa.
  */
 function Selo({
   cor,
@@ -226,14 +230,14 @@ function Selo({
   return (
     <span
       className={cn(
-        "ml-auto flex shrink-0 items-center gap-1.5 rounded-full py-1 pr-2 pl-3 text-[11px] font-bold tracking-wide uppercase sm:pr-2.5 sm:pl-5",
+        "ml-auto flex shrink-0 items-center gap-1 rounded-full py-1 pr-1.5 pl-2.5 text-[10px] font-bold tracking-wide uppercase sm:gap-1.5 sm:pr-2.5 sm:pl-5 sm:text-[11px]",
         cor === "emerald"
           ? "bg-gradient-to-l from-emerald-500/20 via-emerald-500/10 to-transparent text-emerald-500 dark:text-emerald-400"
           : "bg-gradient-to-l from-amber-500/20 via-amber-500/10 to-transparent text-amber-500",
       )}
     >
       {children}
-      <span className="sr-only sm:not-sr-only">{texto}</span>
+      {texto}
     </span>
   );
 }
