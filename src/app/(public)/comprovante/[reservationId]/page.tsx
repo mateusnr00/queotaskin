@@ -21,6 +21,7 @@ import { TituloDaAba } from "@/components/public/titulo-da-aba";
 import { EventoDeCompra } from "@/components/public/evento-de-compra";
 import { SeloDeDobro } from "@/components/public/selo-de-dobro";
 import { ComoVoltar } from "@/components/public/como-voltar";
+import { ContainerPublico } from "@/components/public/container";
 import {
   ensurePixForReservation,
   pollPaymentStatusIfPending,
@@ -289,7 +290,7 @@ export default async function ReservationReceiptPage({
         b.status !== "UNOPENED" && b.prize ? { prize: b.prize.prize } : null,
     }));
     return (
-      <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+      <ContainerPublico largura="foco" className="space-y-4">
         {/* Título da aba por estado. Quem paga costuma ter a aba em
             segundo plano quando o webhook confirma, e o visto é o sinal
             de que já pode voltar. */}
@@ -304,7 +305,6 @@ export default async function ReservationReceiptPage({
         <TrilhaDoPedido estado="pago" titulo={reservation.raffle.title} />
         <PaidCelebration
           dobroAplicado={reservation.dobroAplicado}
-          raffleTitle={reservation.raffle.title}
           raffleSlug={reservation.raffle.slug}
           numbers={reservation.tickets.map((t) => t.number)}
           participantName={reservation.participantName}
@@ -360,7 +360,7 @@ export default async function ReservationReceiptPage({
             />
           )}
         </PaidCelebration>
-      </div>
+      </ContainerPublico>
     );
   }
 
@@ -368,7 +368,7 @@ export default async function ReservationReceiptPage({
   // countdown, sem PixError, sem badge, nada disso faz sentido aqui.
   if (reservation.status === "EXPIRED" || reservation.status === "CANCELLED") {
     return (
-      <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+      <ContainerPublico largura="foco" className="space-y-4">
         <TituloDaAba texto="Reserva expirada" />
         <TrilhaDoPedido estado="encerrado" titulo={reservation.raffle.title} />
         <ExpiredReservation
@@ -380,7 +380,7 @@ export default async function ReservationReceiptPage({
           customButtonLabel={tenantMessages?.expiredButtonLabel}
           customImageUrl={tenantMessages?.expiredImageUrl}
         />
-      </div>
+      </ContainerPublico>
     );
   }
 
@@ -415,7 +415,7 @@ export default async function ReservationReceiptPage({
     // o Pix ficava espremido entre o cronômetro e os dados do participante,
     // e o título dizia "Reserva confirmada" numa reserva que ainda não
     // estava paga.
-    <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6 md:max-w-lg md:py-10">
+    <ContainerPublico largura="foco" className="space-y-4">
       <TrilhaDoPedido estado="aguardando" titulo={reservation.raffle.title} />
 
       {/* Valor e prazo no mesmo cartão. Eram dois quadros grandes e
@@ -501,7 +501,7 @@ export default async function ReservationReceiptPage({
       </section>
 
       <ComoVoltar temConta={reservation.userId !== null} />
-    </div>
+    </ContainerPublico>
   );
 }
 

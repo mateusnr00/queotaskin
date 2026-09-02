@@ -22,6 +22,15 @@ const LARGURAS = {
   leitura: "max-w-4xl",
   /** Para tela de tabela ou grade, que sufoca em 4xl. */
   larga: "max-w-6xl",
+  /**
+   * Para tela de tarefa única, como o comprovante.
+   *
+   * Ela é uma coluna de leitura vertical (pagar, conferir, sair), e em 4xl os
+   * cartões viram faixas de meio metro com três palavras dentro. O respiro
+   * lateral continua vindo da caixa de fora, então o alinhamento com o
+   * cabeçalho é o mesmo das outras páginas.
+   */
+  foco: "max-w-xl",
 } as const;
 
 export function ContainerPublico({
