@@ -392,6 +392,7 @@ export default async function PublicRaffleDetailPage({
       number: a.number,
       prizeDescription: a.prizeDescription,
       skinRarity: a.skinRarity,
+      skinImageUrl: a.skinImageUrl,
       participantName: participantByNumber.get(a.number) ?? null,
       // Resolvido aqui, no servidor: as linhas rodam no cliente e não têm como
       // consultar o banco de times.

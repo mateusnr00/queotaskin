@@ -41,8 +41,12 @@ export function RaffleCover({
   title: string;
   skinName?: string | null;
   rarity?: SkinRarity | null;
-  /** "hero" mostra o nome completo; "thumb" só a sigla e o brilho. */
-  variant?: "hero" | "thumb";
+  /**
+   * "hero" mostra o nome completo; "thumb" só a sigla e o brilho; "selo" é o
+   * thumb num quadrado de ~56px, onde a tipografia do thumb (16px) corta a
+   * sigla no meio e "SSG 08" vira "SS...".
+   */
+  variant?: "hero" | "thumb" | "selo";
   /**
    * "cobrir" preenche a moldura cortando o que sobra, bom para card em
    * grade, onde uniformidade vale mais que ver a arte inteira. "conter"
@@ -83,7 +87,7 @@ export function RaffleCover({
 
   const accent = rarityColor(rarity ?? null);
   const nome = (skinName ?? title).replace(/^\W+/, "");
-  const thumb = variant === "thumb";
+  const thumb = variant === "thumb" || variant === "selo";
 
   return (
     <div
@@ -104,12 +108,24 @@ export function RaffleCover({
       />
 
       {thumb ? (
-        <div className="absolute inset-0 flex items-center justify-center px-2">
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center justify-center",
+            // No selo o respiro lateral é menor: com px-2 sobravam 40px para
+            // "SSG 08", e a sigla saía cortada em "SSG ...".
+            variant === "selo" ? "px-1" : "px-2",
+          )}
+        >
           {/* truncate porque a sigla nem sempre é sigla: "Specialist Gloves"
               não tem abreviação óbvia e sai inteira, e numa miniatura de
               96px a palavra vazava para fora da moldura. */}
           <span
-            className="max-w-full truncate text-base leading-none font-extrabold tracking-tight sm:text-lg"
+            className={cn(
+              "max-w-full truncate leading-none font-extrabold tracking-tight",
+              variant === "selo"
+                ? "text-[11px]"
+                : "text-base sm:text-lg",
+            )}
             style={{ color: `${accent}`, textShadow: "0 2px 10px rgba(0,0,0,.5)" }}
           >
             {siglaDaArma(nome)}

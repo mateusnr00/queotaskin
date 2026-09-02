@@ -74,6 +74,20 @@ para escolher a skin na mão, cadastrar uma nova com aquele nome, ou pular.
 O envio é um arquivo por vez, de propósito, para uma falha não levar as
 outras junto e para dar para ver qual falhou.
 
+### A foto da skin na lista de prêmios
+
+`AwardedTicket.skinImageUrl` é copiada do catálogo pelo MESMO casamento de
+nome que já resolvia a raridade (`imagemDoPremio`, irmã de `raridadeDoPremio`),
+na hora de salvar os títulos premiados. Guardada na linha, e não buscada ao
+desenhar: a lista é pública e de tráfego alto, e cruzar as 865 skins do
+catálogo a cada visita para achar meia dúzia de fotos é conta que não se paga.
+
+Prêmio que não é skin ("R$ 500 no Pix") não casa e fica sem foto, como já
+ficava sem cor. Nesse caso o selo desenha a sigla da arma sobre o brilho da
+raridade (`RaffleCover variant="selo"`), então espaço vazio nunca aparece e o
+selo tem tamanho fixo nos três estados: com foto, sem foto e carregando. A
+lista não pula de altura.
+
 ### Destaque automático
 
 `headlineSkin()` elege o prêmio de **maior raridade** como o destaque da

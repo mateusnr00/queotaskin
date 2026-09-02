@@ -5,34 +5,51 @@
 // caixa sólida e o prêmio em texto solto, o outro com o prêmio dentro de uma
 // pílula e sem número. Mesma informação, dois desenhos.
 //
+// A FOTO DA SKIN ENTRA NA LINHA
+//
+// Era o que faltava. A lista vendia uma skin sem mostrar a skin: quem chega na
+// página vê o item grande no topo, desce até os títulos premiados e encontra
+// três linhas de texto. O item que a pessoa pode levar por R$ 2,67 aparecia
+// como uma frase, e frase não dá vontade de comprar.
+//
+// A foto vem do catálogo, casada pelo nome, e prêmio que não é skin ("R$ 500
+// no Pix") continua sem foto: nesse caso o selo mostra a sigla da arma sobre o
+// brilho da raridade, que é o mesmo desenho que a capa de campanha sem imagem
+// usa. Espaço vazio nunca aparece, e o tamanho do selo é fixo, então a lista
+// não pula quando as fotos terminam de carregar.
+//
 // O NOME DO PRÊMIO GANHA A LINHA INTEIRA
 //
-// Era esse o defeito de verdade. As três informações disputavam a largura na
-// mesma linha, e no telefone sobravam uns 150px para o nome da skin. O
-// resultado media 243px de texto em 173px de caixa: "SSG 08 | Emphorosaur-S
-// (Field-Tested)" saía cortado, e "M4A1-S | Printstream (Field-Tested)"
-// quebrava no meio da palavra, separando "(Field-" de "Tested)". O nome do
-// prêmio e o que vende a campanha, e era ele que estava sendo espremido.
+// As três informações disputavam a largura na mesma linha, e no telefone
+// sobravam uns 150px para o nome da skin. O resultado media 243px de texto em
+// 173px de caixa: "SSG 08 | Emphorosaur-S (Field-Tested)" saía cortado, e
+// "M4A1-S | Printstream (Field-Tested)" quebrava no meio da palavra, separando
+// "(Field-" de "Tested)".
 //
-// Agora o nome ocupa a linha toda e o ganhador desce para a segunda, onde cabe
-// inteiro. "Joao Vitor de Alencar" pedia 125px e recebia 90.
+// O desgaste sai destacado do nome, num chip. Em CS2 "AK-47 | Vulcan" e
+// "Field-Tested" são dois fatos distintos, e jogar tudo no mesmo peso obriga a
+// pessoa a ler a linha inteira para achar a condição do item.
 //
-// O desgaste sai destacado do nome. Em CS2 "AK-47 | Vulcan" e "Field-Tested"
-// sao dois fatos distintos, e jogar tudo no mesmo peso obriga a pessoa a ler a
-// linha inteira para achar a condicao do item.
+// O NÚMERO CONTINUA SENDO O PRIMEIRO DA LINHA A SER LIDO
 //
-// O estado vira um fio na borda esquerda, e nao preenchimento do bloco todo.
-// Com cinco de oito ja contemplados, o preenchimento solido virava uma parede
-// verde sem ritmo, e o que ainda esta em jogo, que e o que sustenta a decisao
+// Quem varre esta lista procura o próprio número, então ele não podia virar
+// detalhe ao lado da foto. Ele fica acima do nome, alinhado na mesma posição
+// em todas as linhas (o selo tem largura fixa), com tabular-nums para os
+// dígitos caírem em coluna. A varredura vertical continua funcionando.
+//
+// O estado vira um fio na borda esquerda, e não preenchimento do bloco todo.
+// Com cinco de oito já contemplados, o preenchimento sólido virava uma parede
+// verde sem ritmo, e o que ainda está em jogo, que é o que sustenta a decisão
 // de comprar, sumia no meio.
 
 import type { SkinRarity } from "@prisma/client";
 import { Trophy } from "lucide-react";
 
-import { RARITY_TEXT_VAR } from "@/lib/cs2";
+import { RARITY_TEXT_VAR, rarityColor } from "@/lib/cs2";
 import { nomeCurto } from "@/lib/nome-curto";
 import type { TimeDeCS2 } from "@/lib/times-cs2";
 import { EmblemaDoTime } from "@/components/times/emblema-do-time";
+import { RaffleCover } from "@/components/public/raffle-cover";
 import { separarDesgaste } from "@/lib/premio-nome";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +57,7 @@ export function LinhaDePremio({
   numero,
   premio,
   raridade,
+  imagem,
   ganhador,
   time,
   reservado,
@@ -50,6 +68,11 @@ export function LinhaDePremio({
   premio: string;
   /** Preenchida quando o premio veio do catalogo. Pinta o nome. */
   raridade?: SkinRarity | null;
+  /**
+   * A foto da skin, resolvida no servidor. Ausente é caso normal: prêmio que
+   * não é skin não tem foto, e o selo desenha a sigla da arma no lugar.
+   */
+  imagem?: string | null;
   ganhador: string | null;
   /**
    * O time para quem o ganhador torce, já resolvido no servidor. Chega pronto
@@ -71,68 +94,114 @@ export function LinhaDePremio({
 }) {
   const temDono = Boolean(ganhador);
   const { nome, desgaste } = separarDesgaste(premio);
+  const cor = rarityColor(raridade ?? null);
 
   return (
     <li
       className={cn(
-        "flex items-start gap-3 rounded-xl border border-l-[3px] px-3 py-2.5 transition-colors",
+        "flex items-center gap-3 rounded-xl border border-l-[3px] p-2.5 transition-colors",
         temDono
           ? "border-emerald-500/25 border-l-emerald-500 bg-emerald-500/[0.06]"
           : "border-border/60 border-l-primary bg-muted/20",
       )}
     >
-      {numero && (
-        // Continua sendo o primeiro elemento da linha porque a pessoa varre
-        // esta lista procurando o proprio numero. O que mudou foi o peso: era
-        // o elemento mais alto da linha, em caixa solida, competindo com o
-        // premio que ele so identifica.
-        <span className="mt-px shrink-0 rounded-md bg-foreground/[0.07] px-2 py-1 text-[13px] font-bold tabular-nums text-foreground/80">
-          {numero}
-        </span>
-      )}
+      {/* O SELO DA SKIN.
+          Moldura dupla: a casca externa recebe o anel na cor da raridade e o
+          miolo escuro segura a foto. É a mesma leitura de raridade que o
+          jogador tem dentro do jogo, e é o que faz uma faca dourada se
+          distinguir de uma AK azul antes de qualquer leitura de texto.
+
+          Tamanho fixo em todos os estados: com a foto, sem a foto e enquanto
+          ela carrega. Assim a lista nunca pula de altura. */}
+      <span
+        className="relative shrink-0 rounded-lg p-px"
+        style={{
+          // Anel na cor da raridade, mais forte no canto de cima: é o que
+          // separa uma faca dourada de uma AK azul antes de qualquer leitura.
+          background: `linear-gradient(150deg, ${cor}, ${cor}33 45%, ${cor}14)`,
+        }}
+      >
+        <RaffleCover
+          url={imagem ?? null}
+          title={nome}
+          skinName={nome}
+          rarity={raridade ?? null}
+          variant="selo"
+          // A foto de skin é um render com fundo transparente e proporção
+          // própria: cortar para preencher comeria o cano da arma.
+          ajuste="conter"
+          className="h-14 w-14 rounded-[7px] sm:h-16 sm:w-16"
+          sizes="64px"
+        />
+      </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold leading-snug [overflow-wrap:anywhere]">
-          {/* A cor da raridade, a mesma leitura que o jogador tem dentro do
-              jogo: Oculta vermelha, Secreta rosa, faca dourada. Sai por
-              variavel CSS porque a cor oficial da Valve reprova em contraste
-              como texto, e cada tema precisa do seu tom. */}
+        {numero && (
+          // Acima do nome, e alinhado com o de todas as outras linhas: é por
+          // ele que a pessoa varre a lista procurando o próprio título.
+          <p className="mb-0.5 font-mono text-[11px] font-bold tracking-wider tabular-nums text-muted-foreground">
+            Nº {numero}
+          </p>
+        )}
+
+        <p className="text-sm font-semibold leading-snug [overflow-wrap:anywhere]">
+          {/* A cor da raridade sai por variável CSS: a cor oficial da Valve
+              reprova em contraste como texto, e cada tema precisa do seu tom. */}
           <span
             style={raridade ? { color: RARITY_TEXT_VAR[raridade] } : undefined}
           >
             {nome}
           </span>
+        </p>
+
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
           {desgaste && (
-            // whitespace-nowrap: o desgaste e um rotulo compacto e desce
-            // inteiro para a linha de baixo quando nao cabe. Sem isso o
-            // navegador quebra no hifen e sai "Field-" numa linha e "Tested"
-            // na outra, que e o defeito que esta correcao veio consertar.
-            <span className="whitespace-nowrap font-medium text-muted-foreground">
-              {" "}
+            // Chip, e não texto solto colado no nome: o desgaste é um fato
+            // separado do nome da pintura. whitespace-nowrap porque ele desce
+            // inteiro para a linha de baixo quando não cabe, em vez de o
+            // navegador quebrar no hífen e produzir "Field-" e "Tested".
+            <span className="whitespace-nowrap rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
               {desgaste}
             </span>
           )}
-        </p>
-        {temDono ? (
-          <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-            <Trophy aria-hidden className="h-3.5 w-3.5 shrink-0" />
-            <span className="[overflow-wrap:anywhere]">
-              {nomeCurto(ganhador!)}
+
+          {temDono ? (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <Trophy aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              <span className="[overflow-wrap:anywhere]">
+                {nomeCurto(ganhador!)}
+              </span>
+              {/* O emblema depois do nome, e não antes: quem varre esta lista
+                  procura o próprio nome, e um escudo na frente atrasa a
+                  leitura de cada linha. */}
+              {time && <EmblemaDoTime time={time} tamanho="sm" />}
             </span>
-            {/* O emblema depois do nome, e nao antes: quem varre esta lista
-                procura o proprio nome, e um escudo na frente atrasa a leitura
-                de cada linha. */}
-            {time && <EmblemaDoTime time={time} tamanho="sm" />}
-          </p>
-        ) : reservado ? (
-          <p className="mt-1 text-xs font-semibold text-amber-500">Reservado</p>
-        ) : (
-          <p className="mt-1 text-xs font-semibold text-primary">
-            {rotuloVago}
-          </p>
-        )}
+          ) : reservado ? (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
+              <Ponto className="bg-amber-500" />
+              Reservado
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              {/* O ponto pulsa porque este é o estado que convida a comprar,
+                  e para de pulsar para quem pediu menos movimento. */}
+              <Ponto className="bg-primary motion-safe:animate-pulse" />
+              {rotuloVago}
+            </span>
+          )}
+        </div>
       </div>
     </li>
+  );
+}
+
+/** O pingo de estado, do tamanho de um acento. */
+function Ponto({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("h-1.5 w-1.5 shrink-0 rounded-full", className)}
+    />
   );
 }
 

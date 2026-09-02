@@ -31,6 +31,8 @@ export interface PublicAwardedTicket {
   number: number;
   prizeDescription: string;
   skinRarity: SkinRarity | null;
+  /** A foto da skin, copiada do catálogo na hora do cadastro. */
+  skinImageUrl: string | null;
   participantName: string | null;
   /** Time do ganhador, resolvido no servidor. Nulo quando não há conta. */
   time: TimeDeCS2 | null;
@@ -72,6 +74,7 @@ export function AwardedTicketsSection({
           numero={String(t.number).padStart(padDigits, "0")}
           premio={t.prizeDescription}
           raridade={t.skinRarity}
+          imagem={t.skinImageUrl}
           ganhador={t.participantName}
           time={t.time}
           rotuloVago="Em jogo"
@@ -137,12 +140,39 @@ export function AwardedTicketsSection({
     // diferentes faziam parecer que vieram de produtos diferentes. O h2 também
     // devolve a seção para a navegação por cabeçalho do leitor de tela.
     <section className="space-y-3 rounded-2xl border bg-card p-4 md:p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-base font-bold">
-          <Trophy className="h-5 w-5 shrink-0 text-amber-500" />
-          Títulos Premiados
-        </h2>
-        <ContadorDePremios feitos={winnersCount} total={total} />
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-base font-bold">
+            <Trophy className="h-5 w-5 shrink-0 text-amber-500" />
+            Títulos Premiados
+          </h2>
+          <ContadorDePremios feitos={winnersCount} total={total} />
+        </div>
+        {/* Quanto já saiu, numa barra fina. O contador diz o número; a barra
+            diz de relance se a lista está intocada ou quase no fim, que é a
+            leitura que faz alguém decidir comprar agora. */}
+        <div
+          role="progressbar"
+          aria-valuenow={winnersCount}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-label="Títulos premiados já contemplados"
+          className="h-1 overflow-hidden rounded-full bg-muted"
+        >
+          <div
+            className="h-full rounded-full bg-amber-500 transition-[width] duration-500"
+            style={{ width: `${total > 0 ? (winnersCount / total) * 100 : 0}%` }}
+          />
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {winnersCount === 0
+            ? total === 1
+              ? "Um título premiado ainda em jogo. Comprou o número, levou a skin na hora."
+              : `${total} títulos premiados ainda em jogo. Comprou o número, levou a skin na hora.`
+            : winnersCount === total
+              ? "Todos os títulos premiados já saíram."
+              : `${total - winnersCount} de ${total} ainda em jogo.`}
+        </p>
       </div>
       {list}
       {expander}

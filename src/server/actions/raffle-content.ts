@@ -16,7 +16,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { assertRaffleInActiveTenant } from "@/lib/tenant";
-import { chaveDoNome, raridadeDoPremio } from "@/lib/premio-nome";
+import {
+  chaveDoNome,
+  imagemDoPremio,
+  raridadeDoPremio,
+} from "@/lib/premio-nome";
 import {
   apagarArquivoSeOrfao,
   isStorageConfigured,
@@ -733,12 +737,17 @@ export async function setRaffleAwardedTicketsAction(
     // que impede a cor de ficar velha quando alguém edita o texto depois.
     // Prêmio que não é skin simplesmente não casa e fica sem cor, que é o
     // caso normal de "R$ 500 no Pix".
+    // A foto vem na mesma passada: os dois Maps saem de uma consulta só, e
+    // quem casa é a mesma chave normalizada.
     const catalogo = new Map<string, SkinRarity | null>();
+    const fotos = new Map<string, string | null>();
     for (const skin of await prisma.skinTemplate.findMany({
       where: { tenantId: raffle.tenantId },
-      select: { name: true, skinRarity: true },
+      select: { name: true, skinRarity: true, imageUrl: true },
     })) {
-      catalogo.set(chaveDoNome(skin.name), skin.skinRarity);
+      const chave = chaveDoNome(skin.name);
+      catalogo.set(chave, skin.skinRarity);
+      fotos.set(chave, skin.imageUrl);
     }
 
     const norm = (v: string) => (v.trim() ? v.trim() : null);
@@ -763,6 +772,7 @@ export async function setRaffleAwardedTicketsAction(
           number: i.number,
           prizeDescription: i.prizeDescription,
           skinRarity: raridadeDoPremio(i.prizeDescription, catalogo),
+          skinImageUrl: imagemDoPremio(i.prizeDescription, fotos),
           isInstantPrize: true,
           saidaTitulosDe: i.saidaTitulosDe ?? null,
           saidaTitulosAte: i.saidaTitulosAte ?? null,

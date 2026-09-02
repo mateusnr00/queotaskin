@@ -1229,6 +1229,15 @@ model AwardedTicket {
   /// que é a leitura que o jogador já tem dentro do jogo.
   skinRarity SkinRarity?
 
+  /// A FOTO da skin, copiada do catálogo pelo mesmo casamento de nome que
+  /// resolve a raridade. Guardada aqui, e não buscada na hora de desenhar a
+  /// página: a lista é pública e de tráfego alto, e cruzar 865 skins do
+  /// catálogo a cada visita para achar sete fotos é conta que não se paga.
+  ///
+  /// Nula é o caso normal de prêmio que não é skin, e a lista desenha o
+  /// selo com a sigla da arma no lugar, sem espaço vazio.
+  skinImageUrl String?
+
   /// CONDICOES PARA O NUMERO PAGAR.
   ///
   /// Aqui NAO existe ponto de saida em porcentagem, e a diferenca e do

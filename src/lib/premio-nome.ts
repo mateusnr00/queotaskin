@@ -77,6 +77,23 @@ export function raridadeDoPremio(
 }
 
 /**
+ * A FOTO do prêmio, achada pelo mesmo caminho da raridade.
+ *
+ * Existe separada e não junto da raridade porque nem todo chamador precisa
+ * das duas, e cada um monta o seu Map na consulta que já faz. O que as duas
+ * têm em comum é o critério: casa pelo nome normalizado, e prêmio que não é
+ * skin ("R$ 500 no Pix") simplesmente não casa e fica sem foto, como já fica
+ * sem cor.
+ */
+export function imagemDoPremio(
+  premio: string,
+  catalogo: Map<string, string | null>,
+): string | null {
+  const { nome } = separarDesgaste(premio);
+  return catalogo.get(chaveDoNome(nome)) ?? null;
+}
+
+/**
  * A chave de comparação de nomes de prêmio.
  *
  * Delega para chaveDeBusca, do catálogo, que além de tirar acento e caixa
