@@ -152,21 +152,27 @@ export function FeaturedRaffleCard({
 
             Aparece só no cartão principal: repetido em cada campanha, o mesmo
             aviso viraria ruído em vez de lembrete. */}
-        {/* A FAIXA DE CONDIÇÕES, logo acima do preço.
-            Nível mínimo e boost ativo dizem quem pode comprar e com o que a
-            compra vai render: as duas coisas pertencem ao momento da decisão,
-            não ao topo da arte. Uma linha só, que quebra sozinha em 320px. */}
-        {(raffle.minLevel || (boostAtivo && vendendo)) && (
-          <div className="flex flex-wrap items-center gap-2">
-            <SeloDeExclusiva minLevel={raffle.minLevel} />
-            {boostAtivo && vendendo && (
-              <SeloDoBoost boost={boostAtivo} className="md:hidden" />
-            )}
-          </div>
+        {/* O selo do boost continua em linha própria: ele é uma frase, não um
+            rótulo, e disputaria a largura do rodapé com o preço e o botão. O
+            selo de nível desceu para lá, onde a decisão acontece. */}
+        {boostAtivo && vendendo && (
+          <SeloDoBoost boost={boostAtivo} className="md:hidden" />
         )}
 
-        <div className="flex items-end justify-between gap-3 border-t pt-3">
-          <span>
+        {/* O RODAPÉ EM UMA LINHA SÓ: PREÇO, NÍVEL, BOTÃO.
+            O selo de nível ocupava uma linha inteira acima daqui, e ele é
+            uma condição da compra: pertence à mesma linha em que o preço e o
+            botão estão. Numa vitrine que rola, cada linha a menos por cartão
+            é um cartão a mais aparecendo na tela.
+
+            `items-center` alinha os três pelo meio, `min-w-0` deixa o preço
+            e o selo cederem largura, e só o botão é `shrink-0`: é ele que
+            não pode encolher, porque é o que a pessoa vem tocar. */}
+        <div className="flex items-center justify-between gap-1.5 border-t pt-3 sm:gap-2">
+          {/* O preço não cede largura: cedendo, "R$ 2,38" quebra no espaço e
+              vira duas linhas, que é o oposto de compactar. Quem cede é o
+              rótulo do nível, e só ele. */}
+          <span className="shrink-0 whitespace-nowrap">
             {/* GRÁTIS NÃO PRECISA DE RÓTULO.
                 "Por número" existe para dizer que aquele valor é o de UMA
                 cota, e não o total: com preço, a distinção importa. Grátis
@@ -177,7 +183,7 @@ export function FeaturedRaffleCard({
                 que um preço qualquer, o que é o contrário do que ele vale:
                 é o argumento mais forte que o cartão tem para oferecer. */}
             {!(raffle.isFree && vendendo) && (
-              <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
+              <span className="block text-[10px] tracking-normal whitespace-nowrap text-muted-foreground uppercase sm:tracking-wider">
                 {vendendo ? "Por número" : "Títulos vendidos"}
               </span>
             )}
@@ -194,7 +200,18 @@ export function FeaturedRaffleCard({
                 : sold.toLocaleString("pt-BR")}
             </span>
           </span>
-          <span className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
+          {/* Entre o preço e o botão, e não colado em nenhum dos dois: o
+              selo é a condição que liga os dois lados da frase, "custa isto,
+              para quem é deste nível, entre aqui".
+
+              Em 320px o rótulo aperta primeiro, encolhendo padding e corpo,
+              antes de qualquer coisa pensar em quebrar linha. */}
+          <SeloDeExclusiva
+            minLevel={raffle.minLevel}
+            className="min-w-0 shrink gap-1 pr-1 text-[8px] tracking-normal sm:gap-1.5 sm:pr-2.5 sm:text-[10px] sm:tracking-wider"
+          />
+
+          <span className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90 sm:px-4">
             {vendendo ? "Participar" : "Assistir ao sorteio"}
           </span>
         </div>
@@ -244,7 +261,13 @@ export function CompactRaffleCard({
             e selo de status não cabem numa linha de 240px, e travados eles
             transbordavam o card em até 92px, com "Aguardando sorteio" saindo
             pela borda. Quebrar é a saída certa aqui, porque nenhum dos três
-            pode ser cortado nem escondido. */}
+            pode ser cortado nem escondido.
+
+            Tentei travar a linha também aqui, como no cartão grande, e em
+            320px o resultado foi o rótulo do nível reduzido a nada e o
+            "ADQUIRA JÁ!" quebrando em duas linhas por cima do selo: a coluna
+            de conteúdo deste cartão tem cerca de 180px, e os três somam 228.
+            No cartão grande a linha inteira está disponível, e lá cabe. */}
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
           <span
             className={cn(

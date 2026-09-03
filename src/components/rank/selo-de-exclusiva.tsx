@@ -42,7 +42,11 @@ export function SeloDeExclusiva({
           longe, e o cadeado só dizia "fechado", que é o que menos importa
           aqui. */}
       <RankBadge rank={rankFromXp(degrau.xp)} size="xs" />
-      {degrau.label}
+      {/* O rótulo trunca em vez de esticar o selo. No rodapé do cartão ele
+          divide a linha com o preço e com o botão, e crescer ali empurraria
+          justamente o botão para fora. O desenho do nível fica, que é o que
+          se reconhece de longe. */}
+      <span className="truncate">{degrau.label}</span>
     </span>
   );
 }
