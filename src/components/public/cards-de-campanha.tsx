@@ -116,14 +116,30 @@ export function FeaturedRaffleCard({
           className={cn("w-full", MOLDURA_DO_DESTAQUE)}
           priority
         />
-        {/* Só o selo de situação fica sobre a arte.
-            O de nível mínimo saiu daqui: em 350px os dois juntos não cabiam
-            na largura e o "PRATA ELITE" era engolido pela logo desenhada na
-            própria capa da skin. E ele não é rótulo de vitrine, é CONDIÇÃO DE
-            COMPRA: o lugar dele é junto do preço, que é onde o cartão
-            compacto já o colocava. */}
-        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5">
-          <SeloDeStatus texto={statusBadge} />
+        {/* OS DOIS SELOS NO TOPO DA ARTE, UM EM CADA PONTA.
+            Uma faixa só, com `justify-between`, e não dois elementos
+            absolutos independentes: ancorados cada um no seu canto, eles
+            crescem um em direção ao outro e se sobrepõem no nome de rank mais
+            comprido. Aqui a faixa é o container, e o espaço entre eles é
+            garantido pela própria caixa.
+
+            O nível já esteve aqui e saiu, porque sobre a capa da skin o
+            "PRATA ELITE" era engolido pela logo desenhada na arte. O que
+            resolve isso é o fundo escuro atrás dele, e não mudá-lo de lugar:
+            a condição de compra volta para a vitrine, e o rodapé fica com o
+            preço e o botão, que é o que decide o toque. */}
+        <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+          <SeloDeStatus texto={statusBadge} className="shrink-0" />
+          {/* O fundo escuro é do INVÓLUCRO, não do selo: o selo pinta a
+              própria cor por style inline, que venceria qualquer classe, e
+              trocá-la apagaria a cor do rank. Assim a cor dele compõe por
+              cima do escuro, e a borda e o texto seguem os do degrau. */}
+          <span className="min-w-0 shrink rounded-full bg-black/55 backdrop-blur-sm">
+            <SeloDeExclusiva
+              minLevel={raffle.minLevel}
+              className="min-w-0 pr-1.5 sm:pr-2.5"
+            />
+          </span>
         </div>
       </div>
 
@@ -168,11 +184,8 @@ export function FeaturedRaffleCard({
             `items-center` alinha os três pelo meio, `min-w-0` deixa o preço
             e o selo cederem largura, e só o botão é `shrink-0`: é ele que
             não pode encolher, porque é o que a pessoa vem tocar. */}
-        <div className="flex items-center justify-between gap-1.5 border-t pt-3 sm:gap-2">
-          {/* O preço não cede largura: cedendo, "R$ 2,38" quebra no espaço e
-              vira duas linhas, que é o oposto de compactar. Quem cede é o
-              rótulo do nível, e só ele. */}
-          <span className="shrink-0 whitespace-nowrap">
+        <div className="flex items-end justify-between gap-3 border-t pt-3">
+          <span>
             {/* GRÁTIS NÃO PRECISA DE RÓTULO.
                 "Por número" existe para dizer que aquele valor é o de UMA
                 cota, e não o total: com preço, a distinção importa. Grátis
@@ -183,7 +196,7 @@ export function FeaturedRaffleCard({
                 que um preço qualquer, o que é o contrário do que ele vale:
                 é o argumento mais forte que o cartão tem para oferecer. */}
             {!(raffle.isFree && vendendo) && (
-              <span className="block text-[10px] tracking-normal whitespace-nowrap text-muted-foreground uppercase sm:tracking-wider">
+              <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
                 {vendendo ? "Por número" : "Títulos vendidos"}
               </span>
             )}
@@ -200,18 +213,7 @@ export function FeaturedRaffleCard({
                 : sold.toLocaleString("pt-BR")}
             </span>
           </span>
-          {/* Entre o preço e o botão, e não colado em nenhum dos dois: o
-              selo é a condição que liga os dois lados da frase, "custa isto,
-              para quem é deste nível, entre aqui".
-
-              Em 320px o rótulo aperta primeiro, encolhendo padding e corpo,
-              antes de qualquer coisa pensar em quebrar linha. */}
-          <SeloDeExclusiva
-            minLevel={raffle.minLevel}
-            className="min-w-0 shrink gap-1 pr-1 text-[8px] tracking-normal sm:gap-1.5 sm:pr-2.5 sm:text-[10px] sm:tracking-wider"
-          />
-
-          <span className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90 sm:px-4">
+          <span className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors group-hover:bg-primary/90">
             {vendendo ? "Participar" : "Assistir ao sorteio"}
           </span>
         </div>
