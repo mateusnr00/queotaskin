@@ -53,7 +53,7 @@ export function MinLevelGate({
   const percent = alvo.xp > 0 ? Math.min(100, (xp / alvo.xp) * 100) : 0;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* O cabeçalho na horizontal: selo, rótulo e degrau numa fileira só.
           Empilhado, os três gastavam três alturas de linha e um espaço morto
           de cada lado do selo centralizado. */}
@@ -66,7 +66,7 @@ export function MinLevelGate({
           >
             {gratuita ? "Grátis a partir do" : "Exclusiva a partir do"}
           </p>
-          <h2 className="mt-1 truncate text-lg leading-tight font-extrabold">
+          <h2 className="mt-0.5 truncate text-lg leading-tight font-extrabold">
             {alvo.label}
           </h2>
         </div>
@@ -83,44 +83,50 @@ export function MinLevelGate({
         )}
       </div>
 
-      {/* Uma frase, e curta. A anterior repetia "não custa nada" logo abaixo
-          da faixa GRÁTIS, que diz isso em corpo 24. */}
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {gratuita
-          ? `Disponível gratuitamente para quem já alcançou o ${alvo.label}.`
-          : `Reservada para quem já alcançou o ${alvo.label}.`}
-      </p>
+      {/* A frase e o progresso andam juntos: a frase diz qual é o degrau, a
+          barra diz onde a pessoa está nele. Ficam num bloco só, mais perto um
+          do outro do que do cabeçalho, porque é uma leitura só.
 
-      {isLoggedIn ? (
-        // Sem divisor: o espaçamento já separa, e a linha horizontal era mais
-        // uma régua atravessando um bloco de 400 pixels de altura.
-        <div className="space-y-2">
-          <div className="flex items-center gap-2.5">
-            <RankBadge rank={rank} size="sm" />
-            <RankMeter
-              percent={percent}
-              color={alvo.color}
-              height={6}
-              className="rank-meter-cresce flex-1"
-              label={`Progresso até ${alvo.label}`}
-            />
-            {/* Apagado: é o degrau que ainda não é dela. */}
-            <RankBadge rank={rankFromXp(alvo.xp)} size="sm" muted />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Você está no{" "}
-            <b className="font-semibold text-foreground">{rank.label}</b> ·
-            faltam{" "}
-            <b className="font-semibold text-foreground">
-              {faltamXp.toLocaleString("pt-BR")} XP
-            </b>
-          </p>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Entre na sua conta para ver quanto falta para o seu rank.
+          Curta. A anterior repetia "não custa nada" logo abaixo da faixa
+          GRÁTIS, que diz isso em corpo 22. */}
+      <div className="space-y-2">
+        <p className="text-xs leading-snug text-muted-foreground">
+          {gratuita
+            ? `Disponível a partir do ${alvo.label}.`
+            : `Reservada a partir do ${alvo.label}.`}
         </p>
-      )}
+
+        {isLoggedIn ? (
+          // Sem divisor: o espaçamento já separa, e a linha horizontal era
+          // mais uma régua atravessando um bloco de 400 pixels de altura.
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <RankBadge rank={rank} size="sm" />
+              <RankMeter
+                percent={percent}
+                color={alvo.color}
+                height={6}
+                className="rank-meter-cresce flex-1"
+                label={`Progresso até ${alvo.label}`}
+              />
+              {/* Apagado: é o degrau que ainda não é dela. */}
+              <RankBadge rank={rankFromXp(alvo.xp)} size="sm" muted />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Você está no{" "}
+              <b className="font-semibold text-foreground">{rank.label}</b> ·
+              faltam{" "}
+              <b className="font-semibold text-foreground">
+                {faltamXp.toLocaleString("pt-BR")} XP
+              </b>
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Entre na sua conta para ver quanto falta para o seu rank.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function FaixaDeGratuito({
           className={
             comprido
               ? "text-base font-extrabold tracking-[0.06em] uppercase"
-              : "text-2xl font-extrabold tracking-[0.08em] uppercase"
+              : "text-[1.4rem] leading-8 font-extrabold tracking-[0.08em] uppercase"
           }
         >
           {texto}
