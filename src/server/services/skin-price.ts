@@ -40,13 +40,21 @@ export const CACHE_EM_SEGUNDOS = 600;
 /** A rede tem de ter fim: ninguém segura o formulário esperando a Steam. */
 const TIMEOUT_EM_MS = 8000;
 
-/** O motivo da falha, para a tela dizer o que fazer. */
+/**
+ * O motivo da falha, distinguido no servidor.
+ *
+ * São cinco e não um porque o conserto de cada um é outro: limite pede
+ * espera, bloqueio pede trocar de fonte, "não encontrado" pede conferir o
+ * nome, e resposta inválida pede olhar se o endpoint mudou. A tela traduz
+ * todos para uma frase; o log guarda o código.
+ */
 export type MotivoDaFalha =
-  | "SEM_ANUNCIO"
-  | "LIMITE"
-  | "TEMPO_ESGOTADO"
-  | "FONTE_FORA"
-  | "RESPOSTA_INVALIDA";
+  | "PRICE_NOT_FOUND"
+  | "PRICE_PROVIDER_RATE_LIMIT"
+  | "PRICE_PROVIDER_BLOCKED"
+  | "PRICE_PROVIDER_TIMEOUT"
+  | "PRICE_PROVIDER_UNAVAILABLE"
+  | "INVALID_PROVIDER_RESPONSE";
 
 export interface PrecoDeMercado {
   marketHashName: string;
@@ -57,7 +65,7 @@ export interface PrecoDeMercado {
   volume: number | null;
   fetchedAt: Date;
   /** Qual fonte respondeu, para a tela e para a auditoria. */
-  fonte: string;
+  provider: string;
 }
 
 export type ResultadoDoPreco =
@@ -138,13 +146,13 @@ export const SteamMarketProvider: SkinPriceProvider = {
       return abortou
         ? {
             ok: false,
-            motivo: "TEMPO_ESGOTADO",
+            motivo: "PRICE_PROVIDER_TIMEOUT",
             mensagem:
               "A Steam demorou demais para responder. Preencha o preço à mão ou tente de novo.",
           }
         : {
             ok: false,
-            motivo: "FONTE_FORA",
+            motivo: "PRICE_PROVIDER_UNAVAILABLE",
             mensagem:
               "Não foi possível falar com a Steam agora. Preencha o preço à mão.",
           };
@@ -153,15 +161,27 @@ export const SteamMarketProvider: SkinPriceProvider = {
     if (res.status === 429) {
       return {
         ok: false,
-        motivo: "LIMITE",
+        motivo: "PRICE_PROVIDER_RATE_LIMIT",
         mensagem:
           "A Steam está limitando as consultas agora. Espere cerca de um minuto, ou preencha o preço à mão.",
+      };
+    }
+    // 403 e 401 são BLOQUEIO, e bloqueio não é "fonte fora do ar": é a fonte
+    // recusando este chamador. A diferença decide o conserto, e foi
+    // exatamente ela que matou as duas fontes de despejo deste projeto: uma
+    // respondia 403 a IP de datacenter e não ia voltar sozinha.
+    if (res.status === 403 || res.status === 401) {
+      return {
+        ok: false,
+        motivo: "PRICE_PROVIDER_BLOCKED",
+        mensagem:
+          "A Steam recusou a consulta feita pelo servidor. Preencha o preço à mão.",
       };
     }
     if (!res.ok) {
       return {
         ok: false,
-        motivo: "FONTE_FORA",
+        motivo: "PRICE_PROVIDER_UNAVAILABLE",
         mensagem: `A Steam respondeu ${res.status}. Preencha o preço à mão.`,
       };
     }
@@ -172,7 +192,7 @@ export const SteamMarketProvider: SkinPriceProvider = {
     } catch {
       return {
         ok: false,
-        motivo: "RESPOSTA_INVALIDA",
+        motivo: "INVALID_PROVIDER_RESPONSE",
         mensagem:
           "A Steam respondeu em formato inesperado. Preencha o preço à mão.",
       };
@@ -183,7 +203,7 @@ export const SteamMarketProvider: SkinPriceProvider = {
     if (!corpo || corpo.success !== true) {
       return {
         ok: false,
-        motivo: "SEM_ANUNCIO",
+        motivo: "PRICE_NOT_FOUND",
         mensagem:
           "Não foi possível encontrar o preço dessa skin na Steam. Confira o nome ou preencha o preço à mão.",
       };
@@ -197,7 +217,7 @@ export const SteamMarketProvider: SkinPriceProvider = {
     if (referencia == null) {
       return {
         ok: false,
-        motivo: "SEM_ANUNCIO",
+        motivo: "PRICE_NOT_FOUND",
         mensagem:
           "A Steam respondeu sem preço para essa skin agora. Preencha o preço à mão.",
       };
@@ -211,7 +231,7 @@ export const SteamMarketProvider: SkinPriceProvider = {
         medianPriceBrl: median,
         volume: volumeDaSteam(corpo.volume),
         fetchedAt: new Date(),
-        fonte: SteamMarketProvider.nome,
+        provider: SteamMarketProvider.nome,
       },
     };
   },
@@ -238,7 +258,7 @@ export async function precoDaSkinNoMercado(input: {
 }): Promise<ResultadoDoPreco> {
   const nome = nomeDeMercado(input.skin, input.wear);
   const primeira = await PROVIDER_ATIVO.buscar(nome, { forcar: input.forcar });
-  if (primeira.ok || primeira.motivo !== "SEM_ANUNCIO") return primeira;
+  if (primeira.ok || primeira.motivo !== "PRICE_NOT_FOUND") return primeira;
 
   if (!input.wear && ehSemPintura(input.skin.name)) {
     return PROVIDER_ATIVO.buscar(nomeDeMercado(input.skin, "FACTORY_NEW"), {

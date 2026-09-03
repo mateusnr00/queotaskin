@@ -70,6 +70,8 @@ export function PainelDoPrecoDaSteam({
   erro,
   aoAtualizar,
   podeAtualizar,
+  editadoAMao,
+  aoUsarSugestao,
 }: {
   preco: PrecoDeReferencia | null;
   totalDeNumeros: number;
@@ -80,6 +82,9 @@ export function PainelDoPrecoDaSteam({
   aoAtualizar: () => void;
   /** Falso quando não há skin escolhida: não há o que consultar. */
   podeAtualizar: boolean;
+  /** Quando true, a sugestão vira oferta em vez de preencher o campo. */
+  editadoAMao: boolean;
+  aoUsarSugestao: (valor: number) => void;
 }) {
   const exato = preco ? precoExatoPorNumero(preco.brl, totalDeNumeros) : null;
   const sugerido = preco ? precoPorNumero(preco.brl, totalDeNumeros) : null;
@@ -136,7 +141,7 @@ export function PainelDoPrecoDaSteam({
               buscando && "motion-safe:animate-spin",
             )}
           />
-          {buscando ? "Buscando..." : "Atualizar preço"}
+          {buscando ? "Buscando..." : preco ? "Atualizar preço" : "Buscar preço"}
         </Button>
       </div>
 
@@ -144,6 +149,15 @@ export function PainelDoPrecoDaSteam({
         // Aviso, e não bloqueio: o campo de preço continua editável embaixo.
         <p className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-amber-500">
           {erro}
+        </p>
+      )}
+
+      {!preco && !buscando && !erro && (
+        // A fonte é opcional, e a tela diz isso antes de alguém clicar.
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          O preço da cota pode ser preenchido à mão. Buscar é atalho, não
+          obrigação: a consulta é a uma fonte externa que pode estar fora do
+          ar ou recusar a chamada.
         </p>
       )}
 
@@ -183,6 +197,31 @@ export function PainelDoPrecoDaSteam({
               valor={formatBRL(preco.medianaBrl)}
             />
           )}
+          {/* A OFERTA, EM VEZ DA SUBSTITUIÇÃO.
+              Quem digitou um preço não o perde porque a quantidade de cotas
+              mudou ou porque o preço foi buscado de novo. A sugestão nova
+              aparece aqui, com um botão, e aplicar é outra decisão. */}
+          {editadoAMao && sugerido != null && sugerido !== precoDaCota && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/25 bg-primary/[0.06] px-3 py-2">
+              <p className="text-[11px] leading-relaxed">
+                Novo preço sugerido:{" "}
+                <b className="font-semibold text-primary">
+                  {formatBRL(sugerido)}
+                </b>
+                . O seu preço foi mantido.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 shrink-0 text-[11px]"
+                onClick={() => aoUsarSugestao(sugerido)}
+              >
+                Usar este preço
+              </Button>
+            </div>
+          )}
+
           {preco.volume != null && preco.volume < 5 && (
             <p className="pt-1 text-[11px] leading-relaxed text-amber-500">
               Só {preco.volume} venda{preco.volume === 1 ? "" : "s"} nas últimas

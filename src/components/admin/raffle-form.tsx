@@ -422,20 +422,29 @@ export function RaffleForm({
   const [precoEditadoAMao, setPrecoEditadoAMao] = useState(false);
 
   /** Aplica valor ÷ cotas no campo de preço, se a sugestão ainda for bem-vinda. */
-  function aplicarSugestao(
-    brl: number,
-    cotas: unknown,
-    opcoes?: { mesmoEditado?: boolean },
-  ) {
-    // Preço digitado à mão manda. Sugestão que sobrescreve o que a pessoa
-    // acabou de escrever não é ajuda, é briga. A exceção é o clique em
-    // "Atualizar preço", que é um pedido explícito por um número novo.
-    if (form.getValues("isFree")) return;
-    if (precoEditadoAMao && !opcoes?.mesmoEditado) return;
+  /**
+   * Preenche o preço da cota, e só enquanto ninguém digitou nada.
+   *
+   * PREÇO DIGITADO À MÃO É DEFINITIVO.
+   *
+   * Depois que a pessoa escreve um valor, nada aqui o substitui: nem trocar a
+   * quantidade de cotas, nem buscar o preço de novo. A sugestão nova aparece
+   * no painel como oferta, com um botão para aplicar. Sugestão que sobrescreve
+   * o que alguém acabou de escrever não é ajuda, é briga, e some sem a pessoa
+   * ver.
+   */
+  function aplicarSugestao(brl: number, cotas: unknown) {
+    if (form.getValues("isFree") || precoEditadoAMao) return;
     const sugerido = precoPorNumero(brl, Number(cotas));
     if (sugerido != null) {
       form.setValue("pricePerNumber", sugerido, { shouldDirty: true });
     }
+  }
+
+  /** Aplica a sugestão a pedido, quando quem digitou muda de ideia. */
+  function usarSugestao(valor: number) {
+    form.setValue("pricePerNumber", valor, { shouldDirty: true });
+    setPrecoEditadoAMao(false);
   }
 
   /**
@@ -506,13 +515,9 @@ export function RaffleForm({
         buscadoEm: r.buscadoEm,
         marketHashName: r.marketHashName,
       });
-      // Clique explícito passa por cima do "editado à mão": sem isso o botão
-      // não faria nada para quem já tinha mexido no campo. A troca de skin
-      // também recalcula, porque o preço antigo é de outra skin.
-      if (opcoes?.forcar) setPrecoEditadoAMao(false);
-      aplicarSugestao(r.brl, form.getValues("totalNumbers"), {
-        mesmoEditado: opcoes?.forcar,
-      });
+      // Não sobrescreve quem digitou, nem no clique: a sugestão nova aparece
+      // no painel como oferta, e aplicar é outra decisão.
+      aplicarSugestao(r.brl, form.getValues("totalNumbers"));
     } catch {
       setPrecoDaSteam(null);
       setErroDoPreco(
@@ -745,17 +750,21 @@ export function RaffleForm({
                   escolhida={skinEscolhida}
                   aoEscolher={(id) => {
                     setSkinEscolhida(id);
-                    // O catálogo entra na hora, para o campo não ficar vazio
-                    // enquanto a Steam responde; a Steam corrige em seguida.
+                    // Só o catálogo, que é local e instantâneo. A consulta
+                    // externa é do BOTÃO: buscar sozinho a cada skin escolhida
+                    // foi o que queimou o limite por IP da fonte antes.
                     usarValorDoCatalogo(id);
-                    void buscarPrecoNaSteam({ skinId: id, wear: null });
+                    setPrecoDaSteam(null);
+                    setErroDoPreco(null);
                   }}
                   desgaste={desgasteEscolhido}
                   aoEscolherDesgaste={(w) => {
                     setDesgasteEscolhido(w);
                     // A mesma AWP custa milhares a mais Factory New do que
-                    // Battle-Scarred: trocar o desgaste é trocar de preço.
-                    void buscarPrecoNaSteam({ wear: w });
+                    // Battle-Scarred, então o preço buscado para o desgaste
+                    // anterior deixa de valer. Não busca de novo sozinho: só
+                    // descarta e espera o clique.
+                    setPrecoDaSteam(null);
                   }}
                   aoPreencherTitulo={(nome) => {
                     form.setValue("title", nome, { shouldDirty: true });
@@ -1338,6 +1347,8 @@ export function RaffleForm({
                   erro={erroDoPreco}
                   podeAtualizar={isEdit ? true : skinEscolhida != null}
                   aoAtualizar={() => void buscarPrecoNaSteam({ forcar: true })}
+                  editadoAMao={precoEditadoAMao}
+                  aoUsarSugestao={usarSugestao}
                 />
 
                 <div className="grid gap-4 md:grid-cols-3">

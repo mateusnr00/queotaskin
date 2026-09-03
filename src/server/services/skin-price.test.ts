@@ -46,7 +46,7 @@ describe("SteamMarketProvider", () => {
     // nem da rede, e o formulário não pode travar por causa dela.
     steamResponde({ success: false });
     const r = await SteamMarketProvider.buscar("Skin que não existe");
-    expect(r).toMatchObject({ ok: false, motivo: "SEM_ANUNCIO" });
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_NOT_FOUND" });
     if (!r.ok) expect(r.mensagem).toMatch(/preencha o preço à mão/i);
   });
 
@@ -61,20 +61,28 @@ describe("SteamMarketProvider", () => {
   it("sem preço nenhum vira SEM_ANUNCIO", async () => {
     steamResponde({ success: true, volume: "3" });
     const r = await SteamMarketProvider.buscar("Faca sem anúncio");
-    expect(r).toMatchObject({ ok: false, motivo: "SEM_ANUNCIO" });
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_NOT_FOUND" });
   });
 
   it("429 vira LIMITE, com o que fazer na mensagem", async () => {
     steamResponde({}, 429);
     const r = await SteamMarketProvider.buscar("AK-47 | Redline (Field-Tested)");
-    expect(r).toMatchObject({ ok: false, motivo: "LIMITE" });
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_PROVIDER_RATE_LIMIT" });
     if (!r.ok) expect(r.mensagem).toMatch(/limitando/i);
   });
 
-  it("outro status de erro vira FONTE_FORA e diz qual foi", async () => {
+  it("403 vira BLOQUEIO, que não é o mesmo que fonte fora do ar", async () => {
+    // A diferença decide o conserto: fora do ar volta sozinha, bloqueio não.
+    // Foi um 403 a IP de datacenter que matou uma das fontes deste projeto.
+    steamResponde({}, 403);
+    const r = await SteamMarketProvider.buscar("AK-47 | Redline (Field-Tested)");
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_PROVIDER_BLOCKED" });
+  });
+
+  it("outro status de erro vira indisponível e diz qual foi", async () => {
     steamResponde({}, 503);
     const r = await SteamMarketProvider.buscar("AK-47 | Redline (Field-Tested)");
-    expect(r).toMatchObject({ ok: false, motivo: "FONTE_FORA" });
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_PROVIDER_UNAVAILABLE" });
     if (!r.ok) expect(r.mensagem).toContain("503");
   });
 
@@ -85,7 +93,7 @@ describe("SteamMarketProvider", () => {
       throw e;
     });
     const r = await SteamMarketProvider.buscar("AK-47 | Redline (Field-Tested)");
-    expect(r).toMatchObject({ ok: false, motivo: "TEMPO_ESGOTADO" });
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_PROVIDER_TIMEOUT" });
   });
 
   it("rede caída vira FONTE_FORA, e não exceção solta", async () => {
@@ -93,7 +101,7 @@ describe("SteamMarketProvider", () => {
       throw new TypeError("fetch failed");
     });
     const r = await SteamMarketProvider.buscar("AK-47 | Redline (Field-Tested)");
-    expect(r).toMatchObject({ ok: false, motivo: "FONTE_FORA" });
+    expect(r).toMatchObject({ ok: false, motivo: "PRICE_PROVIDER_UNAVAILABLE" });
   });
 
   it("corpo que não é JSON vira RESPOSTA_INVALIDA", async () => {
@@ -105,7 +113,7 @@ describe("SteamMarketProvider", () => {
       },
     }));
     const r = await SteamMarketProvider.buscar("AK-47 | Redline (Field-Tested)");
-    expect(r).toMatchObject({ ok: false, motivo: "RESPOSTA_INVALIDA" });
+    expect(r).toMatchObject({ ok: false, motivo: "INVALID_PROVIDER_RESPONSE" });
   });
 });
 

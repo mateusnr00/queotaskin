@@ -2,6 +2,14 @@
 
 // O preço de referência da skin, para o painel sugerir a cota.
 //
+// UMA FONTE DE VERDADE: O CATÁLOGO
+//
+// A consulta grava em `SkinTemplate`, que é onde a skin mora e de onde o
+// formulário lê. O prêmio continua recebendo a CÓPIA CONGELADA no instante da
+// criação, como sempre fez, e nada aqui escreve nele. Guardar procedência nos
+// dois lugares criaria duas versões do mesmo número, e a pergunta "quanto
+// valia?" passaria a ter duas respostas.
+//
 // Camada fina: confere quem chama, resolve o painel ativo, deriva o nome de
 // mercado A PARTIR DO BANCO e delega ao provider. A regra da fonte mora no
 // serviço, porque ela é peça trocável e a tela não pode conhecê-la.
@@ -37,7 +45,7 @@ export type PrecoDaSkinResultado =
       volume: number | null;
       marketHashName: string;
       buscadoEm: string;
-      fonte: string;
+      provider: string;
     }
   | { ok: false; erro: string; motivo?: MotivoDaFalha };
 
@@ -46,13 +54,6 @@ const entrada = z.object({
   wear: z.nativeEnum(SkinWear).nullable().optional(),
   /** Ignora o cache. É o botão "Atualizar preço" da tela. */
   forcar: z.boolean().optional(),
-  /**
-   * Quando vem, o preço buscado fica gravado no prêmio deste sorteio.
-   *
-   * Só na edição, e só por clique: é o único caminho pelo qual o valor de uma
-   * campanha que já existe muda. Nada aqui roda sozinho.
-   */
-  raffleId: z.string().cuid().optional(),
 });
 
 export async function precoDaSkinAction(
@@ -97,9 +98,7 @@ export async function precoDaSkinAction(
       return { ok: false, erro: r.mensagem, motivo: r.motivo };
     }
 
-    if (parsed.data.raffleId) {
-      await gravarNoPremio(parsed.data.raffleId, tenantId, r.preco);
-    }
+    await gravarNoCatalogo(parsed.data.skinTemplateId, tenantId, r.preco);
 
     return {
       ok: true,
@@ -108,7 +107,7 @@ export async function precoDaSkinAction(
       volume: r.preco.volume,
       marketHashName: r.preco.marketHashName,
       buscadoEm: r.preco.fetchedAt.toISOString(),
-      fonte: r.preco.fonte,
+      provider: r.preco.provider,
     };
   } catch (err) {
     console.error("[precoDaSkinAction]", err);
@@ -117,36 +116,40 @@ export async function precoDaSkinAction(
 }
 
 /**
- * Grava o preço no prêmio principal do sorteio.
+ * Grava o preço no item do CATÁLOGO.
  *
- * O tenant entra no `where` do updateMany: um id de sorteio de outro painel
- * simplesmente não encontra linha, em vez de escrever no prêmio alheio.
+ * O tenant entra no `where` do updateMany: um id de outro painel simplesmente
+ * não encontra linha, em vez de escrever no catálogo alheio.
  *
- * Mexe só no prêmio de posição 1 que tem skin. Prêmio secundário e prêmio que
- * não é skin ("R$ 500 no Pix") não têm preço de mercado para receber.
+ * `skinValueBrl` recebe o preço de referência. Ele já era o valor da skin
+ * mostrado no painel e na página pública, e continua sendo: a consulta
+ * externa atualiza esse mesmo campo em vez de inventar um paralelo.
+ *
+ * `marketHashName` guarda o nome exato consultado, e é ele que diz A QUAL
+ * DESGASTE o valor pertence. O catálogo tem uma linha por skin e vários
+ * desgastes possíveis, então consultar outro desgaste sobrescreve o valor.
+ * É uma limitação conhecida, e o nome gravado é o que a torna legível em vez
+ * de silenciosa.
  */
-async function gravarNoPremio(
-  raffleId: string,
+async function gravarNoCatalogo(
+  skinTemplateId: string,
   tenantId: string,
   preco: {
     marketHashName: string;
     lowestPriceBrl: number;
     medianPriceBrl: number | null;
     fetchedAt: Date;
+    provider: string;
   },
 ) {
-  await prisma.prize.updateMany({
-    where: {
-      raffleId,
-      position: 1,
-      skinName: { not: null },
-      raffle: { tenantId },
-    },
+  await prisma.skinTemplate.updateMany({
+    where: { id: skinTemplateId, tenantId },
     data: {
       skinValueBrl: preco.lowestPriceBrl,
-      steamMarketHashName: preco.marketHashName,
-      steamMedianPriceBrl: preco.medianPriceBrl,
-      steamPriceUpdatedAt: preco.fetchedAt,
+      marketHashName: preco.marketHashName,
+      priceProvider: preco.provider,
+      externalMedianPriceBrl: preco.medianPriceBrl,
+      externalPriceUpdatedAt: preco.fetchedAt,
     },
   });
 }
@@ -208,7 +211,14 @@ export async function precoDaSkinDoSorteioAction(
       return { ok: false, erro: r.mensagem, motivo: r.motivo };
     }
 
-    await gravarNoPremio(parsed.data.raffleId, tenantId, r.preco);
+    // Grava no CATÁLOGO, não no prêmio: o prêmio é a cópia congelada e não
+    // pode mudar porque o mercado mexeu. A ligação é pelo nome, que é o que
+    // liga o prêmio ao item do catálogo.
+    const doCatalogo = await prisma.skinTemplate.findFirst({
+      where: { tenantId, name: { equals: premio.skinName, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (doCatalogo) await gravarNoCatalogo(doCatalogo.id, tenantId, r.preco);
 
     return {
       ok: true,
@@ -217,7 +227,7 @@ export async function precoDaSkinDoSorteioAction(
       volume: r.preco.volume,
       marketHashName: r.preco.marketHashName,
       buscadoEm: r.preco.fetchedAt.toISOString(),
-      fonte: r.preco.fonte,
+      provider: r.preco.provider,
     };
   } catch (err) {
     console.error("[precoDaSkinDoSorteioAction]", err);

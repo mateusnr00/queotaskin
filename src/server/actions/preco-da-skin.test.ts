@@ -7,8 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirstSkin = vi.fn();
+const updateManySkin = vi.fn();
 const findFirstPrize = vi.fn();
-const updateManyPrize = vi.fn();
 
 vi.mock("@/lib/auth-helpers", () => ({
   getAdminOrThrow: async () => ({
@@ -20,11 +20,11 @@ vi.mock("@/lib/tenant", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   prisma: {
-    skinTemplate: { findFirst: (a: unknown) => findFirstSkin(a) },
-    prize: {
-      findFirst: (a: unknown) => findFirstPrize(a),
-      updateMany: (a: unknown) => updateManyPrize(a),
+    skinTemplate: {
+      findFirst: (a: unknown) => findFirstSkin(a),
+      updateMany: (a: unknown) => updateManySkin(a),
     },
+    prize: { findFirst: (a: unknown) => findFirstPrize(a) },
   },
 }));
 
@@ -53,7 +53,7 @@ beforeEach(() => {
     skinSouvenir: false,
     skinWear: null,
   });
-  updateManyPrize.mockResolvedValue({ count: 1 });
+  updateManySkin.mockResolvedValue({ count: 1 });
 });
 
 describe("precoDaSkinAction", () => {
@@ -113,57 +113,40 @@ describe("precoDaSkinAction", () => {
     if (!r.ok) expect(r.erro).toMatch(/não encontrada/i);
   });
 
-  it("sem raffleId, não grava nada: a criação ainda nem tem prêmio", async () => {
-    steamResponde({ success: true, lowest_price: "R$ 10,00" });
-    await precoDaSkinAction({ skinTemplateId: SKIN, wear: null });
-    expect(updateManyPrize).not.toHaveBeenCalled();
-  });
-
-  it("com raffleId, grava o retrato no prêmio principal e só nele", async () => {
+  it("grava no CATÁLOGO, que é a fonte única do valor", async () => {
     steamResponde({
       success: true,
       lowest_price: "R$ 1.249,90",
       median_price: "R$ 1.200,00",
     });
 
-    await precoDaSkinAction({
-      skinTemplateId: SKIN,
-      wear: "FIELD_TESTED",
-      raffleId: SORTEIO,
-    });
+    await precoDaSkinAction({ skinTemplateId: SKIN, wear: "FIELD_TESTED" });
 
-    const chamada = updateManyPrize.mock.calls[0]?.[0] as {
+    const chamada = updateManySkin.mock.calls[0]?.[0] as {
       where: Record<string, unknown>;
       data: Record<string, unknown>;
     };
-    // Só o prêmio 1 que tem skin, e só dentro do painel de quem chamou.
-    expect(chamada.where).toMatchObject({
-      raffleId: SORTEIO,
-      position: 1,
-      raffle: { tenantId: "t1" },
-    });
+    // Só dentro do painel de quem chamou.
+    expect(chamada.where).toMatchObject({ id: SKIN, tenantId: "t1" });
     expect(chamada.data).toMatchObject({
       skinValueBrl: 1249.9,
-      steamMedianPriceBrl: 1200,
-      steamMarketHashName: "AK-47 | Redline (Field-Tested)",
+      externalMedianPriceBrl: 1200,
+      marketHashName: "AK-47 | Redline (Field-Tested)",
+      priceProvider: "Steam Community Market",
     });
-    expect(chamada.data.steamPriceUpdatedAt).toBeInstanceOf(Date);
+    expect(chamada.data.externalPriceUpdatedAt).toBeInstanceOf(Date);
   });
 
   it("Steam sem anúncio não grava e explica o que fazer", async () => {
     steamResponde({ success: false });
-    const r = await precoDaSkinAction({
-      skinTemplateId: SKIN,
-      wear: null,
-      raffleId: SORTEIO,
-    });
+    const r = await precoDaSkinAction({ skinTemplateId: SKIN, wear: null });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.motivo).toBe("SEM_ANUNCIO");
+      expect(r.motivo).toBe("PRICE_NOT_FOUND");
       expect(r.erro).toMatch(/preço à mão/i);
     }
-    // O importante: valor velho não é sobrescrito por uma consulta que falhou.
-    expect(updateManyPrize).not.toHaveBeenCalled();
+    // O importante: valor velho não é sobrescrito por consulta que falhou.
+    expect(updateManySkin).not.toHaveBeenCalled();
   });
 
   it("clique antes de escolher a skin diz o que fazer", async () => {
@@ -183,13 +166,15 @@ describe("precoDaSkinDoSorteioAction", () => {
     });
     const chamadas = steamResponde({ success: true, lowest_price: "R$ 5.000,00" });
 
+    findFirstSkin.mockResolvedValue({ id: SKIN });
     const r = await precoDaSkinDoSorteioAction({ raffleId: SORTEIO });
     expect(r).toMatchObject({ ok: true, brl: 5000 });
 
     // A fase saiu do nome: a Steam não tem "Doppler Phase 2".
     const url = decodeURIComponent(String(chamadas[0]?.[0]));
     expect(url).toContain("★ Karambit | Doppler (Factory New)");
-    expect(updateManyPrize).toHaveBeenCalled();
+    // E o que foi gravado foi o CATÁLOGO, nunca o prêmio congelado.
+    expect(updateManySkin).toHaveBeenCalled();
   });
 
   it("sorteio sem skin no prêmio não consulta nada", async () => {

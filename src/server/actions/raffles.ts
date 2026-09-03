@@ -29,7 +29,6 @@ import {
   definirStatusDaCampanha,
   garantirSlugLivre,
 } from "@/server/services/raffles";
-import { precoDaSkinNoMercado } from "@/server/services/skin-price";
 import { enfileirar } from "@/server/services/cronograma";
 import { toSlug } from "@/lib/slug";
 import { registrarLog } from "@/server/services/activity-log";
@@ -168,25 +167,16 @@ export async function createRaffleAction(
         })
       : null;
 
-    // O PREÇO DA STEAM, BUSCADO AQUI E NÃO RECEBIDO DA TELA.
+    // A CRIAÇÃO NÃO FALA COM FONTE EXTERNA.
     //
-    // O formulário acabou de consultar para sugerir a cota, então esta
-    // chamada cai no cache do Next e não custa rede. Ela existe mesmo assim
-    // porque preço que chega pelo navegador é preço que o cliente escolheu:
-    // o valor gravado tem de ser o que ESTE servidor viu.
+    // Chegou a falar, e estava errado: consulta externa no caminho de criar
+    // campanha transforma um serviço de terceiro em pré-requisito para
+    // publicar sorteio. A fonte que este projeto usa já respondeu 429 em
+    // produção, e o pior caso seria a criação esperando o tempo limite dela.
     //
-    // Fora da transação, pelo mesmo motivo da cópia da capa: chamada de rede
-    // lá dentro seguraria a transação aberta pelo tempo da resposta.
-    //
-    // Falhando, o prêmio nasce com o valor do catálogo, que é o comportamento
-    // de sempre. Steam fora do ar não pode impedir alguém de criar campanha.
-    const precoDaSteam = skin
-      ? await precoDaSkinNoMercado({
-          skin,
-          wear: skinWear ?? skin.skinWear,
-        }).catch(() => null)
-      : null;
-    const daSteam = precoDaSteam?.ok ? precoDaSteam.preco : null;
+    // O preço entra ANTES, pelo botão "Buscar preço", que grava no catálogo.
+    // Aqui o prêmio só copia o que o catálogo diz, que é o que ele sempre
+    // fez, e essa cópia é o retrato congelado do valor.
 
     // A arte de campanha da skin, se houver. A do desgaste escolhido manda; a
     // genérica (wear nulo) é o resto. A foto da skin nunca entra aqui: ela é
@@ -233,14 +223,13 @@ export async function createRaffleAction(
               skinFloat: skin.skinFloat,
               skinStatTrak: skin.skinStatTrak,
               skinSouvenir: skin.skinSouvenir,
-              // O preço da Steam manda quando ele veio; o do catálogo é a
-              // reserva. Uma vez gravado aqui, ele NÃO se atualiza sozinho:
-              // preço de cota de campanha em venda não muda porque o mercado
-              // mexeu. Trocar exige clique em "Atualizar preço".
-              skinValueBrl: daSteam?.lowestPriceBrl ?? skin.skinValueBrl,
-              steamMarketHashName: daSteam?.marketHashName ?? null,
-              steamMedianPriceBrl: daSteam?.medianPriceBrl ?? null,
-              steamPriceUpdatedAt: daSteam?.fetchedAt ?? null,
+              // O RETRATO CONGELADO.
+              //
+              // Copiado do catálogo no instante da criação e nunca mais
+              // atualizado sozinho: preço de cota de campanha em venda não
+              // muda porque o mercado mexeu. Se o catálogo for reconsultado
+              // amanhã, este número continua o de hoje.
+              skinValueBrl: skin.skinValueBrl,
               skinCollection: skin.skinCollection,
               skinInspectUrl: skin.skinInspectUrl,
             },
