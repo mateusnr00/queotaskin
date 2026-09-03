@@ -8,6 +8,7 @@ import { expireForRaffle } from "@/server/services/reservations";
 import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
 import { dobroAtivo } from "@/lib/promocao-em-dobro";
 import { DetalhesDoSorteio } from "@/components/public/detalhes-do-sorteio";
+import { getLinkDoGrupoDeWhatsapp } from "@/lib/links-sociais";
 import { FaixaDeDobro } from "@/components/public/faixa-de-dobro";
 import { FaixaDeGratuito } from "@/components/public/faixa-de-gratuito";
 import { situacaoDaEntrada } from "@/server/services/afiliados";
@@ -117,7 +118,7 @@ export default async function PublicRaffleDetailPage({
   const tenant = await getCurrentTenant();
   if (!tenant) notFound();
 
-  const [raffle, session] = await Promise.all([
+  const [raffle, session, linkDoGrupoDeWhatsapp] = await Promise.all([
     prisma.raffle.findUnique({
       where: { tenantId_slug: { tenantId: tenant.id, slug } },
       include: {
@@ -208,6 +209,9 @@ export default async function PublicRaffleDetailPage({
       },
     }),
     auth(),
+    // O convite do grupo, na mesma ida ao banco das outras duas consultas:
+    // ele não depende da campanha, e em série somaria uma viagem à página.
+    getLinkDoGrupoDeWhatsapp(),
   ]);
   if (!raffle) notFound();
   // A PORTA DA FRENTE DO CRONOGRAMA.
@@ -760,6 +764,8 @@ export default async function PublicRaffleDetailPage({
           <DetalhesDoSorteio
             description={raffle.description}
             aberto={raffle.descriptionMode === "EXPANDED"}
+            linkDoGrupo={linkDoGrupoDeWhatsapp}
+            nomeDoSite={tenant.name}
           />
         )}
 

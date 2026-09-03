@@ -16,6 +16,7 @@
 // os rótulos do gerador, e aí este componente cai no parágrafo de sempre.
 // Descrição escrita à mão não vira ficha inventada.
 
+import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
 import { lerFichaDaDescricao } from "@/lib/descricao-padrao";
 
 function Ficha({ description }: { description: string }) {
@@ -63,20 +64,66 @@ function Ficha({ description }: { description: string }) {
   );
 }
 
+/**
+ * O convite para o grupo, no pé da seção.
+ *
+ * Fica fora do campo de descrição de propósito: colar o link dentro do texto
+ * salvaria um botão em cada campanha, e trocar o convite, que expira, viraria
+ * editar sorteio por sorteio. O texto continua sendo texto; o convite é
+ * configuração, e sai de uma vez em todas as campanhas.
+ *
+ * Verde do WhatsApp em superfície, e não em bloco cheio: a ação principal
+ * desta página é comprar cota, e ela é o botão laranja logo acima. Um segundo
+ * botão sólido do mesmo tamanho disputaria com ela.
+ */
+function ConviteDoGrupo({ link, nomeDoSite }: { link: string; nomeDoSite: string }) {
+  return (
+    <div className="border-t border-border/40 px-4 py-3">
+      <p className="text-sm leading-snug font-semibold">
+        Entre no grupo da {nomeDoSite} no WhatsApp
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+        Receba novidades, avisos de sorteios e acompanhe a comunidade.
+      </p>
+      <a
+        href={link}
+        target="_blank"
+        // `noopener` fecha o acesso da aba nova ao `window.opener` desta;
+        // `noreferrer` evita mandar o endereço do sorteio junto.
+        rel="noopener noreferrer"
+        className="botao-de-whatsapp botao-de-whatsapp--faixa mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-700 sm:w-auto dark:text-emerald-400"
+      >
+        <IconeDoWhatsapp className="h-4 w-4" strokeWidth={4} />
+        Entrar no grupo do WhatsApp
+      </a>
+    </div>
+  );
+}
+
 export function DetalhesDoSorteio({
   description,
   aberto,
+  linkDoGrupo,
+  nomeDoSite,
 }: {
   description: string;
   /** Modo EXPANDIDO: o texto já vem aberto, sem o clique do "ver mais". */
   aberto: boolean;
+  /** Convite já validado. Nulo, e o convite não aparece. */
+  linkDoGrupo?: string | null;
+  nomeDoSite: string;
 }) {
+  const convite = linkDoGrupo ? (
+    <ConviteDoGrupo link={linkDoGrupo} nomeDoSite={nomeDoSite} />
+  ) : null;
+
   if (aberto) {
     return (
       <div className="overflow-hidden rounded-xl border bg-card">
         <h2 className="px-4 py-3 text-sm font-semibold">Detalhes do sorteio</h2>
         <div className="border-t">
           <Ficha description={description} />
+          {convite}
         </div>
       </div>
     );
@@ -92,6 +139,7 @@ export function DetalhesDoSorteio({
       </summary>
       <div className="border-t">
         <Ficha description={description} />
+        {convite}
       </div>
     </details>
   );

@@ -69,6 +69,7 @@ interface Props {
     companyName: string;
     siteDescription: string;
     supportPhone: string | null;
+    whatsappGroupUrl: string | null;
     supportEmail: string | null;
     homeCampaignsTitle: string;
     homeCampaignsCaption: string;
@@ -859,6 +860,9 @@ function GeralTab({ initial }: Props) {
  */
 function SuporteTab({ initial }: Props) {
   const [supportPhone, setSupportPhone] = useState(initial.supportPhone ?? "");
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState(
+    initial.whatsappGroupUrl ?? "",
+  );
   const [supportEmail, setSupportEmail] = useState(initial.supportEmail ?? "");
   const [isPending, startTransition] = useTransition();
 
@@ -866,6 +870,7 @@ function SuporteTab({ initial }: Props) {
     startTransition(async () => {
       const result = await updateSiteAction({
         supportPhone: supportPhone || null,
+        whatsappGroupUrl: whatsappGroupUrl.trim() || null,
         supportEmail: supportEmail || null,
       });
       if (!result.ok) {
@@ -927,6 +932,29 @@ function SuporteTab({ initial }: Props) {
           onChange={(e) => setSupportEmail(e.target.value)}
           placeholder="suporte@exemplo.com"
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="whatsappGroupUrl">Grupo do WhatsApp</Label>
+        <Input
+          id="whatsappGroupUrl"
+          inputMode="url"
+          value={whatsappGroupUrl}
+          onChange={(e) => setWhatsappGroupUrl(e.target.value)}
+          placeholder="https://chat.whatsapp.com/..."
+          aria-describedby="whatsappGroupUrl-ajuda"
+        />
+        {/* O convite vira link numa página pública, então o servidor recusa
+            o que não for endereço https do WhatsApp. Dizer isso aqui evita
+            colar um encurtador e achar que salvou. */}
+        <p
+          id="whatsappGroupUrl-ajuda"
+          className="text-xs leading-relaxed text-muted-foreground"
+        >
+          O convite do grupo, como convite de entrar no grupo na página de cada
+          sorteio. Só endereço do próprio WhatsApp, começando com https. Em
+          branco, o convite não aparece.
+        </p>
       </div>
 
       <div className="flex justify-end border-t pt-4">

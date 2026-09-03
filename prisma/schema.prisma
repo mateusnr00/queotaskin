@@ -401,6 +401,10 @@ model Tenant {
 
   supportPhone                      String?
   supportEmail                      String?
+  /// Convite do grupo de WhatsApp da comunidade, mostrado como chamada na
+  /// página do sorteio. Nulo, e a chamada simplesmente não aparece: link de
+  /// grupo expira e é trocado, e o painel troca sozinho sem deploy.
+  whatsappGroupUrl                  String?
   homeCampaignsTitle                String?
   homeCampaignsCaption              String?
   showWinnersOnHome                 Boolean   @default(false)

@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 import { conferirId } from "@/lib/analytics-ids";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
+import { linkDeGrupoDeWhatsapp } from "@/lib/links-sociais";
 import {
   deleteRaffleImage,
   EXTENSOES_DE_AUDIO,
@@ -54,6 +55,16 @@ const siteSettingsSchema = z.object({
     .nullable()
     .or(z.literal(""))
     .transform((v) => (v ? v : null)),
+  // O convite do grupo. Validado de novo no servidor, e não só no navegador:
+  // o que chega numa action é o que o cliente mandou, não o que o formulário
+  // mostrou.
+  whatsappGroupUrl: z
+    .string()
+    .max(300)
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((v) => linkDeGrupoDeWhatsapp(v)),
   homeCampaignsTitle: z.string().max(60).optional(),
   homeCampaignsCaption: z.string().max(120).optional(),
   showWinnersOnHome: z.boolean().optional(),
@@ -220,6 +231,8 @@ export async function updateSiteAction(
     if (data.siteDescription !== undefined) update.siteDescription = data.siteDescription;
     if (data.supportPhone !== undefined) update.supportPhone = data.supportPhone;
     if (data.supportEmail !== undefined) update.supportEmail = data.supportEmail;
+    if (data.whatsappGroupUrl !== undefined)
+      update.whatsappGroupUrl = data.whatsappGroupUrl;
     if (data.homeCampaignsTitle !== undefined) update.homeCampaignsTitle = data.homeCampaignsTitle;
     if (data.homeCampaignsCaption !== undefined) update.homeCampaignsCaption = data.homeCampaignsCaption;
     if (data.showWinnersOnHome !== undefined) update.showWinnersOnHome = data.showWinnersOnHome;

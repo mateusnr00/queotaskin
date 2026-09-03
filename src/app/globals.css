@@ -2043,3 +2043,21 @@
     display: none;
   }
 }
+
+/* O MESMO TOQUE, EM BOTÃO LARGO.
+ *
+ * Crescer 6% é o gesto de um botão redondo de 36 pixels numa fileira de
+ * ícones: ali o salto é o que separa o WhatsApp dos vizinhos. Numa faixa que
+ * ocupa a largura do cartão, o mesmo salto empurra a borda para fora do
+ * container e lê como anúncio piscando. A faixa fica parada e só clareia, e
+ * guarda o afundar para o clique, que é onde o toque importa.
+ */
+.botao-de-whatsapp--faixa:hover {
+  transform: none;
+  opacity: 1;
+  filter: brightness(1.12);
+}
+
+.botao-de-whatsapp--faixa:active {
+  transform: scale(0.995);
+}
