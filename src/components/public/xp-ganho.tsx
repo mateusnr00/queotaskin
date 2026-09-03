@@ -52,16 +52,24 @@ export function XpGanho({
   const subiu = antes.rank.label !== depois.rank.label;
 
   return (
-    <div className="xp-cartao xp-entra relative flex items-center gap-2.5 overflow-hidden rounded-2xl border p-3.5 sm:gap-4 sm:p-5">
+    <div className="xp-cartao xp-entra relative overflow-hidden rounded-2xl border p-3.5 sm:p-5">
       {/* O fio de luz da esquerda, na cor da marca. Mesma ideia da faixa de
           preço da campanha: marca a borda do cartão sem fechar uma moldura
           colorida em volta dele. */}
       <span aria-hidden className="xp-fio absolute inset-y-[20%] left-0 w-0.5" />
 
-      <EmblemaDeXp />
+      {/* A BARRA SAIU DA COLUNA DO MEIO.
+          Eram três colunas lado a lado em qualquer largura, e num telefone de
+          390px a do meio ficava com pouco mais de 200: o título quebrava
+          torto, a barra virava um toco e "Faltam 1.613 XP" espremia. Agora o
+          cabeçalho é uma faixa e o progresso é outra, de borda a borda. No
+          desktop também ficou melhor: a barra atravessando o cartão inteiro
+          lê como progresso, e não como detalhe de uma coluna. */}
+      <div className="flex items-center gap-3 sm:gap-4">
+        <EmblemaDeXp />
 
-      <div className="min-w-0 flex-1">
-        <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground sm:text-xs">
+        <div className="min-w-0 flex-1">
+        <p className="mb-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-muted-foreground sm:text-xs">
           {/* Visto verde, do tamanho de um acento. A página inteira já diz
               "pagamento confirmado" no cabeçalho, então aqui a linha diz o
               que ESTE cartão veio contar: o XP entrou. */}
@@ -92,14 +100,33 @@ export function XpGanho({
             : `Você está em ${depois.rank.label}, com ${total.toLocaleString("pt-BR")} XP.`}
         </p>
 
-        {/* A BARRA E A PORCENTAGEM.
+        </div>
 
-            A barra sai do servidor já na largura final, então a transição de
-            CSS nunca dispara: quem faz ela correr é a animação `barra-cresce`,
-            que interpola de zero até a largura que o elemento já tem. É o
-            mesmo recurso da barra de vendas da campanha, e é o que mantém o
-            valor certo para quem está sem JavaScript. */}
-        <div className="mt-2.5 flex items-center gap-2.5">
+        {/* O GANHO. Sem largura mínima grande e sem coluna própria: ele é
+            curto, e reservar 92px fixos para ele era o que estreitava o texto
+            ao lado no celular. */}
+        <div className="flex shrink-0 flex-col items-end justify-center self-stretch pl-2.5 sm:border-l sm:pl-4">
+          {/* O rótulo some no celular. Ele cortava na borda e roubava a
+              largura do título ao lado, e o número em laranja e negrito já
+              diz o que é sem precisar de legenda. A borda também: dois
+              elementos de moldura num cartão de 358px é ruído. */}
+          <span className="mb-0.5 hidden text-[10px] font-semibold tracking-wider text-muted-foreground uppercase sm:block">
+            Você ganhou
+          </span>
+          <span className="xp-estoura whitespace-nowrap text-base font-extrabold leading-none tabular-nums text-primary sm:text-xl">
+            +{ganho.toLocaleString("pt-BR")} XP
+          </span>
+        </div>
+      </div>
+
+      {/* A BARRA E A PORCENTAGEM.
+
+          A barra sai do servidor já na largura final, então a transição de
+          CSS nunca dispara: quem faz ela correr é a animação `barra-cresce`,
+          que interpola de zero até a largura que o elemento já tem. É o
+          mesmo recurso da barra de vendas da campanha, e é o que mantém o
+          valor certo para quem está sem JavaScript. */}
+        <div className="mt-3 flex items-center gap-2.5 sm:mt-3.5">
           <div
             role="progressbar"
             aria-valuenow={Math.round(depois.percent)}
@@ -135,21 +162,6 @@ export function XpGanho({
             </>
           )}
         </p>
-      </div>
-
-      {/* O GANHO, na coluna da direita.
-
-          Separado por um fio e não por um cartão dentro do cartão: é a mesma
-          notícia, só que o número. `self-stretch` faz o fio ir de borda a
-          borda do conteúdo, senão ele ficaria flutuando na altura do texto. */}
-      <div className="flex min-w-[66px] shrink-0 flex-col items-end justify-center self-stretch border-l pl-2.5 sm:min-w-[92px] sm:pl-4">
-        <span className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-[10px]">
-          Você ganhou
-        </span>
-        <span className="xp-estoura text-base font-extrabold leading-none tabular-nums text-primary sm:text-xl">
-          +{ganho.toLocaleString("pt-BR")} XP
-        </span>
-      </div>
     </div>
   );
 }
@@ -168,7 +180,7 @@ function EmblemaDeXp() {
   return (
     <div
       aria-hidden
-      className="relative grid h-[52px] w-[52px] shrink-0 place-items-center sm:h-[78px] sm:w-[78px]"
+      className="relative grid h-[42px] w-[42px] shrink-0 place-items-center sm:h-[78px] sm:w-[78px]"
     >
       <svg viewBox="0 0 100 100" fill="none" className="h-full w-full">
         <path
@@ -185,7 +197,7 @@ function EmblemaDeXp() {
           fill="#68C9FF"
         />
       </svg>
-      <span className="absolute bottom-0.5 text-[10px] font-black leading-none tracking-wide text-[#66c8ff] sm:text-[13px]">
+      <span className="absolute bottom-0.5 text-[8px] font-black leading-none tracking-wide text-[#66c8ff] sm:text-[13px]">
         XP
       </span>
     </div>
