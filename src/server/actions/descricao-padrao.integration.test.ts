@@ -81,7 +81,7 @@ conta("descrição padrão, da criação até a leitura pública", () => {
     const texto = montarDescricaoPadrao({
       nomeDaSkin: "★ Karambit | Doppler (Factory New)",
       precoBrl: 4812.9,
-      nomeDoSite: "Qué Ota? Skin",
+      nomeDoSite: "QuéOta Skin",
     });
 
     const slug = `descricao-padrao-${Date.now()}`;
@@ -108,7 +108,7 @@ conta("descrição padrão, da criação até a leitura pública", () => {
     const texto = montarDescricaoPadrao({
       nomeDaSkin: "Glock-18 | Fade (Minimal Wear)",
       precoBrl: null,
-      nomeDoSite: "Qué Ota? Skin",
+      nomeDoSite: "QuéOta Skin",
     });
 
     const slug = `descricao-sem-preco-${Date.now()}`;

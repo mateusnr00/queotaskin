@@ -16,7 +16,7 @@
 //
 // O NOME DO SITE VEM DE FORA.
 //
-// A plataforma serve mais de um painel. "Qué Ota? Skin" escrito aqui dentro
+// A plataforma serve mais de um painel. "QuéOta Skin" escrito aqui dentro
 // viraria a marca errada no dia em que outro painel gerar uma descrição.
 
 import { formatBRL } from "@/lib/format";

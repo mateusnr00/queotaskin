@@ -83,7 +83,7 @@ describe("os links de WhatsApp", () => {
     for (const a of arquivos) {
       if (!a.relativo.endsWith(".tsx")) continue;
       // Cada <a ...> que aponta para o WhatsApp precisa das duas palavras.
-      const tags = a.fonte.match(/<a\b[^>]*>/gs) ?? [];
+      const tags = a.fonte.match(/<a\b[^>]*>/g) ?? [];
       for (const tag of tags) {
         const paraWhatsapp = /wa\.me|api\.whatsapp|chat\.whatsapp|linkDoGrupo|whatsappUrl/.test(tag);
         if (!paraWhatsapp) continue;

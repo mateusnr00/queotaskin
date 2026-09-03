@@ -6,7 +6,7 @@ import {
   montarDescricaoPadrao,
 } from "./descricao-padrao";
 
-const SITE = "Qué Ota? Skin";
+const SITE = "QuéOta Skin";
 
 /**
  * Troca o espaço não separável por um comum, só para o teste poder escrever
@@ -34,7 +34,7 @@ describe("montarDescricaoPadrao", () => {
         "",
         "PREÇO STEAM: R$ 2.139,27",
         "",
-        "O sorteio acontece diretamente na Qué Ota? Skin, de forma automática após o encerramento da campanha.",
+        "O sorteio acontece diretamente na QuéOta Skin, de forma automática após o encerramento da campanha.",
         "",
         "O resultado e o vencedor ficam disponíveis no próprio site.",
         "",
@@ -122,7 +122,7 @@ describe("montarDescricaoPadrao", () => {
       nomeDoSite: "Outra Loja",
     });
     expect(texto).toContain("diretamente na Outra Loja, de forma automática");
-    expect(texto).not.toContain("Qué Ota");
+    expect(texto).not.toContain("QuéOta");
   });
 
   it("é determinística: mesmos dados, texto idêntico", () => {
@@ -156,7 +156,7 @@ describe("montarDescricaoPadrao", () => {
 });
 
 describe("decidir entre escrever e oferecer", () => {
-  const nomeDoSite = "Qué Ota? Skin";
+  const nomeDoSite = "QuéOta Skin";
   const daAwp = montarDescricaoPadrao({
     nomeDaSkin: "AWP | Dragon Lore (Field-Tested)",
     precoBrl: 2139.27,
@@ -246,7 +246,7 @@ describe("ler a ficha da descrição", () => {
   const padrao = montarDescricaoPadrao({
     nomeDaSkin: "AK-47 | Redline (Field-Tested)",
     precoBrl: 128.45,
-    nomeDoSite: "Qué Ota? Skin",
+    nomeDoSite: "QuéOta Skin",
   });
 
   it("separa prêmio, valor e o resto do texto", () => {
@@ -255,7 +255,7 @@ describe("ler a ficha da descrição", () => {
     expect(ficha!.premio).toBe("AK-47 | Redline (Field-Tested)");
     expect(semNbsp(ficha!.valor ?? "")).toBe("R$ 128,45");
     expect(ficha!.corpo).toBe(
-      "O sorteio acontece diretamente na Qué Ota? Skin, de forma automática após o encerramento da campanha.\n\nO resultado e o vencedor ficam disponíveis no próprio site.\n\nBoa sorte! 🍀",
+      "O sorteio acontece diretamente na QuéOta Skin, de forma automática após o encerramento da campanha.\n\nO resultado e o vencedor ficam disponíveis no próprio site.\n\nBoa sorte! 🍀",
     );
   });
 
@@ -264,7 +264,7 @@ describe("ler a ficha da descrição", () => {
       montarDescricaoPadrao({
         nomeDaSkin: "Glock-18 | Fade",
         precoBrl: null,
-        nomeDoSite: "Qué Ota? Skin",
+        nomeDoSite: "QuéOta Skin",
       }),
     );
     expect(ficha!.premio).toBe("Glock-18 | Fade");
@@ -293,7 +293,7 @@ describe("ler a ficha da descrição", () => {
       montarDescricaoPadrao({
         nomeDaSkin: "★ Sport Gloves | Amphibious (Field-Tested)",
         precoBrl: 9990.5,
-        nomeDoSite: "Qué Ota? Skin",
+        nomeDoSite: "QuéOta Skin",
       }),
     );
     expect(ficha!.premio).toBe("★ Sport Gloves | Amphibious (Field-Tested)");
@@ -315,7 +315,7 @@ describe("ler a ficha da descrição", () => {
       "",
       "VALOR STEAM: R$ 1.940,60",
       "",
-      "O sorteio acontece diretamente na Qué Ota? Skin após o encerramento da rifa.",
+      "O sorteio acontece diretamente na QuéOta Skin após o encerramento da rifa.",
       "O resultado e o vencedor ficam disponíveis no próprio site.",
       "",
       "Boa sorte! 🍀",
