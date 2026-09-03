@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { expireForRaffle } from "@/server/services/reservations";
 import { contarOcupados, contarVendidos } from "@/server/services/vendidos";
 import { dobroAtivo } from "@/lib/promocao-em-dobro";
+import { DetalhesDoSorteio } from "@/components/public/detalhes-do-sorteio";
 import { FaixaDeDobro } from "@/components/public/faixa-de-dobro";
 import { FaixaDeGratuito } from "@/components/public/faixa-de-gratuito";
 import { situacaoDaEntrada } from "@/server/services/afiliados";
@@ -755,31 +756,12 @@ export default async function PublicRaffleDetailPage({
           </div>
         )}
 
-        {raffle.description &&
-          (raffle.descriptionMode === "EXPANDED" ? (
-            <div className="rounded-xl border bg-card px-4 py-3 space-y-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Descrição / Regulamento
-              </h2>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                {raffle.description}
-              </p>
-            </div>
-          ) : (
-            <details className="rounded-xl border bg-card overflow-hidden group">
-              <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-muted/50">
-                <span>Descrição / Regulamento</span>
-                <span className="text-muted-foreground transition-transform group-open:rotate-180">
-                  ▾
-                </span>
-              </summary>
-              <div className="border-t px-4 py-3">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                  {raffle.description}
-                </p>
-              </div>
-            </details>
-          ))}
+        {raffle.description && (
+          <DetalhesDoSorteio
+            description={raffle.description}
+            aberto={raffle.descriptionMode === "EXPANDED"}
+          />
+        )}
 
         {raffle.prizesShow && raffle.prizes.length > 0 && (
           <PrizesSection prizes={skinPrizes} />

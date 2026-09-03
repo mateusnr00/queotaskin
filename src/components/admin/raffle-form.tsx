@@ -1094,39 +1094,35 @@ export function RaffleForm({
 
                       {/* A OFERTA, EM VEZ DA SUBSTITUIÇÃO.
                           Quem já escreveu não perde o texto porque trocou a
-                          skin ou porque o preço da Steam chegou. A versão
-                          nova fica aqui, com um botão, e trocar é decisão de
-                          quem escreveu. */}
+                          skin ou porque o preço da Steam chegou.
+
+                          Aviso, e não alerta: o texto novo inteiro repetido
+                          aqui embaixo dobrava a altura do campo e obrigava a
+                          ler duas descrições para escolher entre duas. Uma
+                          linha e dois botões dizem a mesma coisa, e o próprio
+                          campo mostra o resultado de "atualizar". */}
                       {descricaoOferecida && (
-                        <div className="mt-2 rounded-lg border border-primary/25 bg-primary/[0.06] p-3">
-                          <p className="text-[11px] leading-relaxed">
-                            A skin ou o preço mudaram, e o seu texto foi
-                            mantido. A descrição padrão atualizada ficaria
-                            assim:
-                          </p>
-                          <pre className="mt-2 max-h-32 overflow-auto rounded-md bg-black/25 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
-                            {descricaoOferecida}
-                          </pre>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Button
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                          <span>
+                            A skin ou o preço foram alterados. Seu texto
+                            personalizado foi mantido.
+                          </span>
+                          <span className="flex items-center gap-3">
+                            <button
                               type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-[11px]"
+                              className="font-medium text-primary underline-offset-2 hover:underline"
                               onClick={usarDescricaoOferecida}
                             >
-                              Usar esta descrição
-                            </Button>
-                            <Button
+                              Atualizar para o padrão
+                            </button>
+                            <button
                               type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-[11px]"
+                              className="underline-offset-2 hover:underline"
                               onClick={() => setDescricaoOferecida(null)}
                             >
-                              Manter o meu texto
-                            </Button>
-                          </div>
+                              Manter meu texto
+                            </button>
+                          </span>
                         </div>
                       )}
 

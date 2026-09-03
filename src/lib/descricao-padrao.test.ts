@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   decidirAtualizacaoDaDescricao,
+  lerFichaDaDescricao,
   montarDescricaoPadrao,
 } from "./descricao-padrao";
 
@@ -32,7 +33,7 @@ describe("montarDescricaoPadrao", () => {
         "",
         "VALOR STEAM: R$ 2.139,27",
         "",
-        "O sorteio acontece diretamente na Qué Ota? Skin, de forma automática após o encerramento da rifa.",
+        "O sorteio acontece diretamente na Qué Ota? Skin após o encerramento da rifa.",
         "O resultado e o vencedor ficam disponíveis no próprio site.",
         "",
         "Boa sorte! 🍀",
@@ -118,7 +119,7 @@ describe("montarDescricaoPadrao", () => {
       precoBrl: 50,
       nomeDoSite: "Outra Loja",
     });
-    expect(texto).toContain("diretamente na Outra Loja,");
+    expect(texto).toContain("diretamente na Outra Loja após");
     expect(texto).not.toContain("Qué Ota");
   });
 
@@ -236,5 +237,70 @@ describe("decidir entre escrever e oferecer", () => {
         nova: "",
       }),
     ).toBe("nada");
+  });
+});
+
+describe("ler a ficha da descrição", () => {
+  const padrao = montarDescricaoPadrao({
+    nomeDaSkin: "AK-47 | Redline (Field-Tested)",
+    precoBrl: 128.45,
+    nomeDoSite: "Qué Ota? Skin",
+  });
+
+  it("separa prêmio, valor e o resto do texto", () => {
+    const ficha = lerFichaDaDescricao(padrao);
+    expect(ficha).not.toBeNull();
+    expect(ficha!.premio).toBe("AK-47 | Redline (Field-Tested)");
+    expect(semNbsp(ficha!.valor ?? "")).toBe("R$ 128,45");
+    expect(ficha!.corpo).toBe(
+      "O sorteio acontece diretamente na Qué Ota? Skin após o encerramento da rifa.\nO resultado e o vencedor ficam disponíveis no próprio site.\n\nBoa sorte! 🍀",
+    );
+  });
+
+  it("sem preço, a ficha tem prêmio e nenhum valor", () => {
+    const ficha = lerFichaDaDescricao(
+      montarDescricaoPadrao({
+        nomeDaSkin: "Glock-18 | Fade",
+        precoBrl: null,
+        nomeDoSite: "Qué Ota? Skin",
+      }),
+    );
+    expect(ficha!.premio).toBe("Glock-18 | Fade");
+    expect(ficha!.valor).toBeNull();
+    expect(ficha!.corpo).toContain("Boa sorte!");
+  });
+
+  // Sem isto, a descrição escrita à mão apareceria repartida em rótulos que
+  // ninguém escreveu.
+  it("texto que não saiu do template não vira ficha", () => {
+    expect(lerFichaDaDescricao("Sorteio da facão, chama no direct.")).toBeNull();
+    expect(lerFichaDaDescricao("")).toBeNull();
+    expect(lerFichaDaDescricao(null)).toBeNull();
+    expect(lerFichaDaDescricao("PRÊMIO: na mesma linha não conta")).toBeNull();
+  });
+
+  it("quem trocou só o final continua com prêmio e valor em destaque", () => {
+    const meu = `PRÊMIO:\n★ Karambit | Doppler\n\nVALOR STEAM: R$ 4.800,00\n\nEntrego em até 24h, e o pagamento é só via Pix.`;
+    const ficha = lerFichaDaDescricao(meu);
+    expect(ficha!.premio).toBe("★ Karambit | Doppler");
+    expect(ficha!.corpo).toBe("Entrego em até 24h, e o pagamento é só via Pix.");
+  });
+
+  it("o ★ e o desgaste atravessam a leitura intactos", () => {
+    const ficha = lerFichaDaDescricao(
+      montarDescricaoPadrao({
+        nomeDaSkin: "★ Sport Gloves | Amphibious (Field-Tested)",
+        precoBrl: 9990.5,
+        nomeDoSite: "Qué Ota? Skin",
+      }),
+    );
+    expect(ficha!.premio).toBe("★ Sport Gloves | Amphibious (Field-Tested)");
+    expect(semNbsp(ficha!.valor ?? "")).toBe("R$ 9.990,50");
+  });
+
+  it("o valor lido é o que foi GRAVADO, e não um preço recalculado", () => {
+    // Campanha publicada com um preço não muda de valor quando a Steam muda.
+    const antiga = `PRÊMIO:\nAWP | Asiimov\n\nVALOR STEAM: R$ 1,00\n\nBoa sorte! 🍀`;
+    expect(lerFichaDaDescricao(antiga)!.valor).toBe("R$ 1,00");
   });
 });

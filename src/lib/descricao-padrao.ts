@@ -61,7 +61,7 @@ export function montarDescricaoPadrao({
   const blocos = [
     `PRÊMIO:\n${nome}`,
     ...(temPreco ? [`VALOR STEAM: ${formatBRL(precoBrl!)}`] : []),
-    `O sorteio acontece diretamente na ${site}, de forma automática após o encerramento da rifa.\nO resultado e o vencedor ficam disponíveis no próprio site.`,
+    `O sorteio acontece diretamente na ${site} após o encerramento da rifa.\nO resultado e o vencedor ficam disponíveis no próprio site.`,
     "Boa sorte! 🍀",
   ];
 
@@ -98,4 +98,52 @@ export function decidirAtualizacaoDaDescricao({
   if (agora === nova.trim()) return "nada";
   if (agora === "" || agora === ultimaGerada.trim()) return "aplicar";
   return "oferecer";
+}
+
+// OS RÓTULOS SÃO O CONTRATO ENTRE O GERADOR E A PÁGINA.
+//
+// A página do sorteio mostra prêmio e valor como ficha, e não como duas
+// linhas de parágrafo. Para isso ela precisa reconhecer o texto que saiu
+// daqui, e reconhecer é comparar com estas mesmas constantes: rótulo escrito
+// à mão nos dois lugares vira ficha que some no dia em que um dos dois muda.
+const ROTULO_DO_PREMIO = "PRÊMIO:";
+const ROTULO_DO_VALOR = "VALOR STEAM:";
+
+export interface FichaDaDescricao {
+  /** O nome do prêmio, já com o desgaste. */
+  premio: string;
+  /** O valor formatado, exatamente como foi gravado. Nulo quando não houver. */
+  valor: string | null;
+  /** O que vem depois da ficha, para sair como texto corrido. */
+  corpo: string;
+}
+
+/**
+ * Lê a ficha de uma descrição que saiu do template padrão.
+ *
+ * Devolve `null` para qualquer outro texto, e é isso que mantém a descrição
+ * escrita à mão intacta: sem ficha, a página cai no parágrafo de sempre. O
+ * reconhecimento é só do começo, então quem apagou o "boa sorte" e escreveu
+ * as próprias regras continua com prêmio e valor em destaque.
+ *
+ * Trabalha sobre o texto GRAVADO, e não sobre a skin: campanha antiga
+ * continua mostrando o valor com que foi publicada, mesmo que o preço de
+ * referência tenha mudado depois.
+ */
+export function lerFichaDaDescricao(texto: string | null | undefined): FichaDaDescricao | null {
+  const limpo = (texto ?? "").trim();
+  if (!limpo.startsWith(`${ROTULO_DO_PREMIO}\n`)) return null;
+
+  const blocos = limpo.split("\n\n");
+  const premio = blocos[0].slice(ROTULO_DO_PREMIO.length).trim();
+  if (!premio) return null;
+
+  let resto = blocos.slice(1);
+  let valor: string | null = null;
+  if (resto[0]?.startsWith(`${ROTULO_DO_VALOR} `)) {
+    valor = resto[0].slice(ROTULO_DO_VALOR.length).trim() || null;
+    resto = resto.slice(1);
+  }
+
+  return { premio, valor, corpo: resto.join("\n\n").trim() };
 }
