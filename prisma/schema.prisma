@@ -950,9 +950,10 @@ model SkinPreco {
   /// e e convertido com a mesma cotacao que a tela de Entregas usa.
   brl Decimal @db.Decimal(10, 2)
 
-  /// De onde saiu este preco: "steam" (mediana do mercado agora) ou
-  /// "steamanalyst" (media de 7 dias, ou o minimo sugerido para item raro).
-  /// A tela diz qual e, porque a confianca nos dois nao e a mesma.
+  /// De onde saiu este preco: "steam" (consulta direta, mediana de agora) ou
+  /// "despejo" (mediana de 7 dias do Mercado da Steam, vinda do arquivo em
+  /// lote e convertida do dolar). Os dois sao da Steam e mesmo assim nao sao o
+  /// mesmo numero, e a tela diz qual esta mostrando.
   fonte String @default("steam")
 
   /// O valor em dolar, quando a fonte cobra em dolar. Guardado para dar para

@@ -1,24 +1,32 @@
-// Enche o catálogo de preços a partir do despejo da SteamAnalyst.
+// Enche o catálogo de preços a partir do despejo público de mercado.
 //
-// A rota deles devolve TODOS os itens numa resposta só, então ela não serve
-// para perguntar o preço de uma skin: serve para abastecer o catálogo inteiro
-// de uma vez. Depois disso, o painel pergunta o preço de UMA skin e a resposta
-// sai do banco, sem depender de ninguém estar no ar naquele segundo.
+// O painel precisa do preço de centenas de skins. Perguntar uma por uma ao
+// Mercado da Comunidade Steam é o que já não funciona: a rota deles é por
+// item, não é documentada e é limitada por IP, e um IP de datacenter (que é de
+// onde a Vercel fala) é o primeiro a apanhar. Foi assim que a primeira
+// campanha criada com skin do catálogo nasceu com o preço no padrão.
 //
-// É o oposto do Mercado da Comunidade Steam, que é consulta por item, limitada
-// por IP e sem contrato. As duas convivem: a Steam continua sendo a fonte viva
-// quando responde, e este despejo é o chão que sustenta o painel quando ela
-// não responde.
+// A saída é o despejo: uma resposta com o mercado inteiro, cruzada com o
+// catálogo de uma vez. Depois disso o painel pergunta o preço de UMA skin e a
+// resposta sai do banco, sem depender de ninguém estar no ar naquele segundo.
 //
-// A CHAVE NÃO MORA NO CÓDIGO
+// A RÉGUA CONTINUA SENDO A STEAM
 //
-// Ela vem de STEAMANALYST_API_KEY, e é a URL inteira que é secreta: a chave
-// vai no CAMINHO da rota, não num header. Por isso a URL nunca é registrada em
-// log, nem em erro, nem em mensagem de tela.
+// O despejo traz a mediana do Mercado da Steam por janela de tempo, que é
+// exatamente o número que a consulta direta daria, só que entregue por um
+// caminho que responde a servidor. Não é preço de outro mercado: Buff e
+// Skinport vêm no mesmo arquivo e são ignorados de propósito, porque misturar
+// mercado com mercado daria um número que não é de lugar nenhum.
+//
+// GRÁTIS E SEM CHAVE
+//
+// Não há credencial para guardar, rotacionar ou vazar. É uma decisão de
+// operação, não de arquitetura: a fonte paga chegou a ser considerada e ficou
+// de fora.
 //
 // O DÓLAR VIRA REAL NA MESMA COTAÇÃO DO RESTO DO SITE
 //
-// A SteamAnalyst cobra em dólar. A conversão usa o mesmo serviço da tela de
+// O despejo cobra em dólar. A conversão usa o mesmo serviço da tela de
 // Entregas (AwesomeAPI com PTAX atrás), então o valor de uma skin no catálogo
 // e o custo de uma entrega falam a mesma língua.
 
@@ -26,12 +34,12 @@ import type { Prisma, SkinWear } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import {
-  BASE_STEAMANALYST,
   chaveDoNome,
+  lerDespejoDoCsgotrader,
   lerNomeDeMercado,
-  precoDoItem,
-  type ItemDaSteamAnalyst,
-} from "@/lib/steamanalyst";
+  URL_CSGOTRADER,
+  type PrecoEmLote,
+} from "@/lib/precos-em-lote";
 import { cambioDoDia } from "@/server/services/cotacao";
 
 /** O despejo é grande; a rede tem de ter um fim. */
@@ -43,7 +51,7 @@ const LOTE = 200;
 export type ResultadoDaSincronizacao =
   | {
       ok: true;
-      /** Quantos itens do despejo casaram com o catálogo. */
+      /** Quantos pares de skin e desgaste ficaram com preço. */
       atualizados: number;
       /** Quantas skins do catálogo ficaram com pelo menos um preço. */
       skinsComPreco: number;
@@ -64,14 +72,8 @@ export type ResultadoDaSincronizacao =
 export async function sincronizarPrecosDoCatalogo(input: {
   tenantId: string;
 }): Promise<ResultadoDaSincronizacao> {
-  const chave = process.env.STEAMANALYST_API_KEY?.trim();
-  if (!chave) {
-    return {
-      ok: false,
-      erro: "Falta a chave da SteamAnalyst. Configure STEAMANALYST_API_KEY no Vercel.",
-    };
-  }
-
+  // A cotação vem ANTES do despejo, e de propósito: ela é uma requisição
+  // pequena, e sem ela o arquivo inteiro seria baixado para nada.
   const cambio = await cambioDoDia("USD", new Date(), { deHoje: true });
   if (!cambio.cambio) {
     return {
@@ -81,14 +83,19 @@ export async function sincronizarPrecosDoCatalogo(input: {
   }
   const dolar = cambio.cambio.taxa;
 
-  let itens: ItemDaSteamAnalyst[];
+  let precos: PrecoEmLote[];
   try {
-    itens = await baixarDespejo(chave);
+    precos = lerDespejoDoCsgotrader(await baixar(URL_CSGOTRADER));
   } catch (err) {
-    // A mensagem do erro nunca carrega a URL: a chave está dentro dela.
     const motivo = err instanceof Error ? err.message : String(err);
-    console.error("[steamanalyst] falha ao baixar o despejo:", motivo);
+    console.error("[precos] falha ao baixar o despejo:", motivo);
     return { ok: false, erro: `Não foi possível baixar os preços: ${motivo}` };
+  }
+  if (precos.length === 0) {
+    return {
+      ok: false,
+      erro: "O despejo de preços veio vazio ou em formato inesperado. Tente de novo em alguns minutos.",
+    };
   }
 
   const catalogo = await prisma.skinTemplate.findMany({
@@ -96,7 +103,6 @@ export async function sincronizarPrecosDoCatalogo(input: {
     select: {
       id: true,
       name: true,
-      skinWears: true,
       skinStatTrak: true,
       skinSouvenir: true,
     },
@@ -106,12 +112,18 @@ export async function sincronizarPrecosDoCatalogo(input: {
   /** Um preço por (skin, desgaste), já em real. */
   const encontrados = new Map<
     string,
-    { skinTemplateId: string; wear: SkinWear | null; brl: number; usd: number; nome: string; volume: number | null }
+    {
+      skinTemplateId: string;
+      wear: SkinWear | null;
+      brl: number;
+      usd: number;
+      nome: string;
+      volume: number | null;
+    }
   >();
 
-  for (const item of itens) {
-    if (!item.market_name) continue;
-    const nome = lerNomeDeMercado(item.market_name);
+  for (const item of precos) {
+    const nome = lerNomeDeMercado(item.marketName);
     if (!nome) continue;
 
     const skin = porNome.get(chaveDoNome(nome.base));
@@ -121,17 +133,13 @@ export async function sincronizarPrecosDoCatalogo(input: {
     if (nome.statTrak !== skin.skinStatTrak) continue;
     if (nome.souvenir !== skin.skinSouvenir) continue;
 
-    const preco = precoDoItem(item);
-    if (!preco) continue;
-
-    const chaveLocal = `${skin.id}|${nome.wear ?? ""}`;
-    encontrados.set(chaveLocal, {
+    encontrados.set(`${skin.id}|${nome.wear ?? ""}`, {
       skinTemplateId: skin.id,
       wear: nome.wear,
-      brl: Math.round(preco.usd * dolar * 100) / 100,
-      usd: Math.round(preco.usd * 100) / 100,
-      nome: item.market_name,
-      volume: preco.volume,
+      brl: Math.round(item.usd * dolar * 100) / 100,
+      usd: Math.round(item.usd * 100) / 100,
+      nome: item.marketName,
+      volume: item.volume,
     });
   }
 
@@ -141,10 +149,11 @@ export async function sincronizarPrecosDoCatalogo(input: {
   // Grava em lotes: são milhares de linhas, e uma transação só seguraria a
   // tabela pelo tempo inteiro da escrita.
   for (let i = 0; i < linhas.length; i += LOTE) {
-    const lote = linhas.slice(i, i + LOTE);
     const operacoes: Prisma.PrismaPromise<unknown>[] = [];
-    for (const linha of lote) {
+    for (const linha of linhas.slice(i, i + LOTE)) {
       operacoes.push(
+        // upsert por (skin, wear) não dá com wear nulo, porque o índice único
+        // dele é parcial: o Prisma não enxerga isso como chave.
         prisma.skinPreco.deleteMany({
           where: { skinTemplateId: linha.skinTemplateId, wear: linha.wear },
         }),
@@ -154,7 +163,7 @@ export async function sincronizarPrecosDoCatalogo(input: {
             wear: linha.wear,
             brl: linha.brl,
             usd: linha.usd,
-            fonte: "steamanalyst",
+            fonte: "despejo",
             nomeConsultado: linha.nome,
             volume: linha.volume,
             buscadoEm: agora,
@@ -198,44 +207,30 @@ export async function sincronizarPrecosDoCatalogo(input: {
     ok: true,
     atualizados: linhas.length,
     skinsComPreco: porSkin.size,
-    itensNoDespejo: itens.length,
+    itensNoDespejo: precos.length,
     dolar,
     fonteDoDolar: cambio.cambio.fonte,
   };
 }
 
 /**
- * Baixa e normaliza o despejo.
+ * A ida à rede, com fim.
  *
- * A resposta pode vir como lista ou como objeto com o nome do item na chave, e
- * a documentação mostra só o formato de UM item. Aceitar as duas formas é mais
- * barato que descobrir isso em produção, num sábado, com o catálogo vazio.
+ * O arquivo é grande e a função tem tempo limitado: sem o relógio, uma fonte
+ * lenta seguraria a requisição até a plataforma derrubar, e a tela mostraria
+ * um erro genérico em vez do motivo.
  */
-async function baixarDespejo(chave: string): Promise<ItemDaSteamAnalyst[]> {
+async function baixar(url: string): Promise<unknown> {
   const controle = new AbortController();
   const relogio = setTimeout(() => controle.abort(), TIMEOUT_EM_MS);
   try {
-    const res = await fetch(`${BASE_STEAMANALYST}/${encodeURIComponent(chave)}`, {
+    const res = await fetch(url, {
       headers: { Accept: "application/json" },
       cache: "no-store",
       signal: controle.signal,
     });
-    if (res.status === 401 || res.status === 403) {
-      throw new Error("a chave foi recusada (401/403). Confira o valor no Vercel.");
-    }
-    if (!res.ok) throw new Error(`a API respondeu ${res.status}.`);
-
-    const corpo: unknown = await res.json();
-    if (Array.isArray(corpo)) return corpo as ItemDaSteamAnalyst[];
-    if (corpo && typeof corpo === "object") {
-      return Object.entries(corpo as Record<string, ItemDaSteamAnalyst>).map(
-        ([chaveDoItem, item]) =>
-          item && typeof item === "object"
-            ? { market_name: item.market_name ?? chaveDoItem, ...item }
-            : { market_name: chaveDoItem },
-      );
-    }
-    throw new Error("a resposta não veio no formato esperado.");
+    if (!res.ok) throw new Error(`a fonte respondeu ${res.status}.`);
+    return await res.json();
   } finally {
     clearTimeout(relogio);
   }

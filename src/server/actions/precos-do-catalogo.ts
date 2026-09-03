@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { registrarLog } from "@/server/services/activity-log";
-import { sincronizarPrecosDoCatalogo } from "@/server/services/steamanalyst-sync";
+import { sincronizarPrecosDoCatalogo } from "@/server/services/sincronizar-precos";
 import type { ActionResult } from "@/server/actions/auth";
 
 export async function atualizarPrecosDoCatalogoAction(): Promise<

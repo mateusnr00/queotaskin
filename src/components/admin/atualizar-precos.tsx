@@ -2,13 +2,13 @@
 
 // O botão que enche o catálogo de preços de uma vez.
 //
-// A SteamAnalyst devolve o mercado inteiro numa resposta só, então não faz
-// sentido pendurar isso na criação do sorteio: é uma tarefa de acervo, e o
-// lugar dela é o acervo. Depois de rodar, o preço de qualquer skin do catálogo
-// já está no banco quando alguém for criar a campanha.
+// O despejo traz o mercado inteiro numa resposta só, então não faz sentido
+// pendurar isso na criação do sorteio: é uma tarefa de acervo, e o lugar dela
+// é o acervo. Depois de rodar, o preço de qualquer skin do catálogo já está no
+// banco quando alguém for criar a campanha.
 //
-// Demora e é caro do lado deles, então nada de automático: quem clica sabe o
-// que está pedindo.
+// Baixa um arquivo grande e pesa do outro lado, então nada de automático: quem
+// clica sabe o que está pedindo.
 
 import { useTransition, useState } from "react";
 import { RefreshCw } from "lucide-react";

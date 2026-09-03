@@ -45,7 +45,7 @@ import { buscarPrecoNaSteam, SteamLimitouError } from "@/lib/steam-market";
  */
 const VALIDADE_HORAS = 12;
 
-export type OrigemDoPreco = "steam" | "steamanalyst" | "cache" | "catalogo";
+export type OrigemDoPreco = "steam" | "despejo" | "cache" | "catalogo";
 
 export type PrecoSugerido =
   | {
@@ -177,9 +177,10 @@ export async function precoSugeridoDaSkin(input: {
 /**
  * O preço guardado, dizendo de onde ele veio.
  *
- * Preço da SteamAnalyst não é "cache da Steam": é outra fonte, com outra
- * régua (média de sete dias, convertida do dólar), e a tela precisa poder
- * dizer isso a quem está decidindo o preço da cota.
+ * Preço vindo do despejo não é "cache da consulta": é a mediana de sete dias
+ * convertida do dólar, e a consulta direta é a mediana de agora. As duas são
+ * da Steam e mesmo assim não são o mesmo número, e a tela precisa poder dizer
+ * qual está mostrando.
  */
 function doGuardado(linha: {
   brl: unknown;
@@ -190,7 +191,7 @@ function doGuardado(linha: {
   return {
     ok: true,
     brl: Number(linha.brl),
-    origem: linha.fonte === "steamanalyst" ? "steamanalyst" : "cache",
+    origem: linha.fonte === "despejo" ? "despejo" : "cache",
     buscadoEm: linha.buscadoEm.toISOString(),
     volume: linha.volume,
   };
