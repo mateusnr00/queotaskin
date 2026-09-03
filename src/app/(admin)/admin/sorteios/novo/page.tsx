@@ -19,6 +19,16 @@ export default async function NewRafflePage({
 }) {
   const session = await requireAdmin();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+  // O nome do painel entra na descrição padrão. A plataforma serve mais de um,
+  // então a marca não pode estar escrita dentro do gerador do texto.
+  const nomeDoSite =
+    (
+      await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true },
+      })
+    )?.name ?? "";
   const sp = await searchParams;
 
   // O destino que a tela anterior sugeriu. É só a marca do rádio: quem decide
@@ -106,6 +116,7 @@ export default async function NewRafflePage({
           campanha anterior ainda preenchidos: o admin cadastraria a Asiimov
           por cima da Redline sem perceber. */}
       <RaffleForm
+        nomeDoSite={nomeDoSite}
         key={sp.enfileirado ?? "novo"}
         mode={{ kind: "create" }}
         destinoInicial={destinoInicial}

@@ -13,6 +13,10 @@ import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
 
 import { precoPorNumero } from "@/lib/dinheiro";
 import {
+  decidirAtualizacaoDaDescricao,
+  montarDescricaoPadrao,
+} from "@/lib/descricao-padrao";
+import {
   PainelDoPrecoDaSteam,
   type PrecoDeReferencia,
 } from "@/components/admin/preco-da-steam";
@@ -50,6 +54,7 @@ import {
 import {
   SeletorDeSkin,
   type SkinDoCatalogo,
+  nomeComDesgaste,
 } from "@/components/admin/seletor-de-skin";
 import { RaffleDangerZone } from "@/components/admin/raffle-danger-zone";
 import { StickySaveBar } from "@/components/admin/sticky-save-bar";
@@ -116,6 +121,8 @@ interface PromotionData {
 
 interface RaffleFormProps {
   mode: Mode;
+  /** O nome do painel, para a descrição padrão não trazer marca fixa. */
+  nomeDoSite?: string;
   /**
    * A situação atual da campanha, no modo edição. É ela que decide o que a
    * seção de destino oferece: rascunho escolhe para onde vai, campanha na fila
@@ -289,6 +296,7 @@ const ROTULOS_DE_RANK: Record<string, string> = {
 };
 
 export function RaffleForm({
+  nomeDoSite = "",
   mode,
   statusAtual,
   noCronograma = null,
@@ -421,6 +429,22 @@ export function RaffleForm({
   // acabou de escrever não é ajuda, é briga.
   const [precoEditadoAMao, setPrecoEditadoAMao] = useState(false);
 
+  // A DESCRIÇÃO PADRÃO, E COMO SE SABE QUE ELA AINDA É PADRÃO.
+  //
+  // `descricaoGerada` guarda o último texto que ESTE formulário escreveu no
+  // campo. Enquanto o conteúdo do campo for exatamente igual a ele, ninguém
+  // mexeu e dá para reescrever à vontade quando a skin ou o preço mudarem.
+  // Assim que uma letra diferir, o texto passou a ser de quem digitou, e a
+  // atualização vira oferta em vez de substituição.
+  //
+  // Comparação de texto e não uma bandeira "editado": a bandeira erra quando
+  // alguém digita e desfaz, e não sobrevive a nada. O texto é a própria
+  // verdade, e a função que o gera é determinística de propósito.
+  const descricaoGerada = useRef<string>("");
+  const [descricaoOferecida, setDescricaoOferecida] = useState<string | null>(
+    null,
+  );
+
   /** Aplica valor ÷ cotas no campo de preço, se a sugestão ainda for bem-vinda. */
   /**
    * Preenche o preço da cota, e só enquanto ninguém digitou nada.
@@ -461,6 +485,74 @@ export function RaffleForm({
     if (brl != null && brl > 0) {
       aplicarSugestao(brl, form.getValues("totalNumbers"));
     }
+  }
+
+  /**
+   * Escreve a descrição padrão, ou oferece a nova quando já mexeram nela.
+   *
+   * Chamada quando a skin muda, o desgaste muda ou o preço da Steam chega:
+   * são os três dados que o texto usa. Sem skin escolhida não faz nada, e o
+   * campo continua como estava.
+   */
+  function atualizarDescricaoPadrao(opcoes?: {
+    skinId?: string | null;
+    wear?: SkinWear | null;
+    precoBrl?: number | null;
+  }) {
+    // Só na criação. Numa campanha que já existe, a descrição é conteúdo
+    // publicado: reescrevê-la porque alguém abriu a tela seria editar o que
+    // o cliente já leu.
+    if (isEdit) return;
+
+    const skinId = opcoes?.skinId !== undefined ? opcoes.skinId : skinEscolhida;
+    const wear = opcoes?.wear !== undefined ? opcoes.wear : desgasteEscolhido;
+    const skin = skinId ? skins.find((sk) => sk.id === skinId) : null;
+    if (!skin) return;
+
+    // O MESMO valor de referência que o resto do formulário usa: a Steam
+    // quando ela respondeu, o catálogo como reserva. Duas fontes de preço na
+    // mesma tela dariam uma descrição que discorda do preço da cota.
+    //
+    // O valor do catálogo sai da própria skin, e não de `valorDaSkin`: no
+    // clique que troca a skin, o estado ainda guarda o valor da skin
+    // anterior, e a descrição nasceria com o preço errado ou sem preço.
+    const doCatalogo =
+      skin.skinValueBrl != null && skin.skinValueBrl > 0
+        ? skin.skinValueBrl
+        : null;
+    const preco =
+      opcoes?.precoBrl !== undefined
+        ? opcoes.precoBrl
+        : (precoDaSteam?.brl ?? doCatalogo);
+
+    const texto = montarDescricaoPadrao({
+      nomeDaSkin: nomeComDesgaste(skin.name, wear),
+      precoBrl: preco,
+      nomeDoSite,
+    });
+    if (!texto) return;
+
+    const decisao = decidirAtualizacaoDaDescricao({
+      atual: form.getValues("description") ?? "",
+      ultimaGerada: descricaoGerada.current,
+      nova: texto,
+    });
+    if (decisao === "aplicar") {
+      form.setValue("description", texto, { shouldDirty: true });
+      descricaoGerada.current = texto;
+      setDescricaoOferecida(null);
+    } else if (decisao === "oferecer") {
+      // Já é texto de quem escreveu. Oferece, e deixa a decisão com ele.
+      setDescricaoOferecida(texto);
+    }
+  }
+
+  /** Aplica a descrição oferecida, quando quem escreveu aceita a troca. */
+  function usarDescricaoOferecida() {
+    if (!descricaoOferecida) return;
+    form.setValue("description", descricaoOferecida, { shouldDirty: true });
+    descricaoGerada.current = descricaoOferecida;
+    setDescricaoOferecida(null);
   }
 
   /**
@@ -518,6 +610,8 @@ export function RaffleForm({
       // Não sobrescreve quem digitou, nem no clique: a sugestão nova aparece
       // no painel como oferta, e aplicar é outra decisão.
       aplicarSugestao(r.brl, form.getValues("totalNumbers"));
+      // Agora com o preço da Steam no lugar do valor do catálogo.
+      atualizarDescricaoPadrao({ skinId, wear, precoBrl: r.brl });
     } catch {
       setPrecoDaSteam(null);
       setErroDoPreco(
@@ -756,6 +850,10 @@ export function RaffleForm({
                     usarValorDoCatalogo(id);
                     setPrecoDaSteam(null);
                     setErroDoPreco(null);
+                    // A descrição nasce junto com a escolha. Com o valor do
+                    // catálogo por enquanto; quando a Steam responder, ela é
+                    // reescrita com o preço de lá.
+                    atualizarDescricaoPadrao({ skinId: id, wear: null });
                   }}
                   desgaste={desgasteEscolhido}
                   aoEscolherDesgaste={(w) => {
@@ -765,6 +863,8 @@ export function RaffleForm({
                     // anterior deixa de valer. Não busca de novo sozinho: só
                     // descarta e espera o clique.
                     setPrecoDaSteam(null);
+                    // O desgaste entra no nome do prêmio, então o texto muda.
+                    atualizarDescricaoPadrao({ wear: w });
                   }}
                   aoPreencherTitulo={(nome) => {
                     form.setValue("title", nome, { shouldDirty: true });
@@ -987,10 +1087,49 @@ export function RaffleForm({
                         <Textarea
                           {...field}
                           value={field.value ?? ""}
-                          rows={8}
+                          rows={10}
                           placeholder="Detalhes da rifa, regulamento, etc..."
                         />
                       </FormControl>
+
+                      {/* A OFERTA, EM VEZ DA SUBSTITUIÇÃO.
+                          Quem já escreveu não perde o texto porque trocou a
+                          skin ou porque o preço da Steam chegou. A versão
+                          nova fica aqui, com um botão, e trocar é decisão de
+                          quem escreveu. */}
+                      {descricaoOferecida && (
+                        <div className="mt-2 rounded-lg border border-primary/25 bg-primary/[0.06] p-3">
+                          <p className="text-[11px] leading-relaxed">
+                            A skin ou o preço mudaram, e o seu texto foi
+                            mantido. A descrição padrão atualizada ficaria
+                            assim:
+                          </p>
+                          <pre className="mt-2 max-h-32 overflow-auto rounded-md bg-black/25 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
+                            {descricaoOferecida}
+                          </pre>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[11px]"
+                              onClick={usarDescricaoOferecida}
+                            >
+                              Usar esta descrição
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-[11px]"
+                              onClick={() => setDescricaoOferecida(null)}
+                            >
+                              Manter o meu texto
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                       <FormMessage />
                     </FormItem>
                   )}
