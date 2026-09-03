@@ -46,7 +46,7 @@ function Ficha({ description }: { description: string }) {
         {ficha.valor && (
           <div className="shrink-0 sm:text-right">
             <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Valor Steam
+              Preço Steam
             </dt>
             <dd className="mt-1 text-sm leading-snug font-semibold tabular-nums">
               {ficha.valor}

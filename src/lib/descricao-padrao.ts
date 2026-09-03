@@ -21,6 +21,24 @@
 
 import { formatBRL } from "@/lib/format";
 
+// OS RÓTULOS SÃO O CONTRATO ENTRE QUEM GERA E QUEM LÊ.
+//
+// A página do sorteio mostra prêmio e preço como ficha, e não como duas
+// linhas de parágrafo. Para isso ela reconhece o texto que saiu daqui, e
+// reconhecer é comparar com estas mesmas constantes: rótulo escrito à mão
+// nos dois lugares vira ficha que some no dia em que um dos dois muda.
+const ROTULO_DO_PREMIO = "PRÊMIO";
+const ROTULO_DO_PRECO = "PREÇO STEAM:";
+
+// OS RÓTULOS DE ANTES, QUE CONTINUAM NO BANCO.
+//
+// Campanha publicada guarda o texto com que foi publicada, e ele não é
+// reescrito por causa de uma mudança de template. Sem reconhecer a forma
+// antiga, toda campanha já no ar perderia a ficha e voltaria a ser parágrafo
+// corrido. Só a LEITURA conhece estes; nada novo é gerado com eles.
+const ROTULO_ANTIGO_DO_PREMIO = "PRÊMIO:";
+const ROTULO_ANTIGO_DO_VALOR = "VALOR STEAM:";
+
 export interface DadosDaDescricaoPadrao {
   /**
    * O nome como a página vai mostrar, já com o desgaste entre parênteses:
@@ -59,9 +77,11 @@ export function montarDescricaoPadrao({
     typeof precoBrl === "number" && Number.isFinite(precoBrl) && precoBrl > 0;
 
   const blocos = [
-    `PRÊMIO:\n${nome}`,
-    ...(temPreco ? [`VALOR STEAM: ${formatBRL(precoBrl!)}`] : []),
-    `O sorteio acontece diretamente na ${site} após o encerramento da rifa.\nO resultado e o vencedor ficam disponíveis no próprio site.`,
+    ROTULO_DO_PREMIO,
+    nome,
+    ...(temPreco ? [`${ROTULO_DO_PRECO} ${formatBRL(precoBrl!)}`] : []),
+    `O sorteio acontece diretamente na ${site}, de forma automática após o encerramento da campanha.`,
+    "O resultado e o vencedor ficam disponíveis no próprio site.",
     "Boa sorte! 🍀",
   ];
 
@@ -106,8 +126,6 @@ export function decidirAtualizacaoDaDescricao({
 // linhas de parágrafo. Para isso ela precisa reconhecer o texto que saiu
 // daqui, e reconhecer é comparar com estas mesmas constantes: rótulo escrito
 // à mão nos dois lugares vira ficha que some no dia em que um dos dois muda.
-const ROTULO_DO_PREMIO = "PRÊMIO:";
-const ROTULO_DO_VALOR = "VALOR STEAM:";
 
 export interface FichaDaDescricao {
   /** O nome do prêmio, já com o desgaste. */
@@ -130,20 +148,42 @@ export interface FichaDaDescricao {
  * continua mostrando o valor com que foi publicada, mesmo que o preço de
  * referência tenha mudado depois.
  */
-export function lerFichaDaDescricao(texto: string | null | undefined): FichaDaDescricao | null {
+export function lerFichaDaDescricao(
+  texto: string | null | undefined,
+): FichaDaDescricao | null {
   const limpo = (texto ?? "").trim();
-  if (!limpo.startsWith(`${ROTULO_DO_PREMIO}\n`)) return null;
+  if (!limpo) return null;
 
   const blocos = limpo.split("\n\n");
-  const premio = blocos[0].slice(ROTULO_DO_PREMIO.length).trim();
-  if (!premio) return null;
 
-  let resto = blocos.slice(1);
-  let valor: string | null = null;
-  if (resto[0]?.startsWith(`${ROTULO_DO_VALOR} `)) {
-    valor = resto[0].slice(ROTULO_DO_VALOR.length).trim() || null;
-    resto = resto.slice(1);
+  // Forma nova: "PRÊMIO" sozinho num bloco, o nome no bloco seguinte.
+  if (blocos[0].trim() === ROTULO_DO_PREMIO) {
+    const premio = (blocos[1] ?? "").trim();
+    if (!premio) return null;
+    return montarFicha(premio, blocos.slice(2), ROTULO_DO_PRECO);
   }
 
+  // Forma antiga: "PRÊMIO:" e o nome na linha de baixo, no mesmo bloco.
+  if (blocos[0].startsWith(`${ROTULO_ANTIGO_DO_PREMIO}\n`)) {
+    const premio = blocos[0].slice(ROTULO_ANTIGO_DO_PREMIO.length).trim();
+    if (!premio) return null;
+    return montarFicha(premio, blocos.slice(1), ROTULO_ANTIGO_DO_VALOR);
+  }
+
+  return null;
+}
+
+/** O preço, quando ele abre o que sobrou; o resto vira corpo. */
+function montarFicha(
+  premio: string,
+  resto: string[],
+  rotuloDoPreco: string,
+): FichaDaDescricao {
+  let valor: string | null = null;
+  if (resto[0]?.startsWith(`${rotuloDoPreco} `)) {
+    valor = resto[0].slice(rotuloDoPreco.length).trim() || null;
+    resto = resto.slice(1);
+  }
   return { premio, valor, corpo: resto.join("\n\n").trim() };
 }
+

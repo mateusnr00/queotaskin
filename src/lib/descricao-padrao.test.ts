@@ -28,12 +28,14 @@ describe("montarDescricaoPadrao", () => {
 
     expect(semNbsp(texto)).toBe(
       [
-        "PRÊMIO:",
+        "PRÊMIO",
+        "",
         "★ Sport Gloves | Amphibious (Field-Tested)",
         "",
-        "VALOR STEAM: R$ 2.139,27",
+        "PREÇO STEAM: R$ 2.139,27",
         "",
-        "O sorteio acontece diretamente na Qué Ota? Skin após o encerramento da rifa.",
+        "O sorteio acontece diretamente na Qué Ota? Skin, de forma automática após o encerramento da campanha.",
+        "",
         "O resultado e o vencedor ficam disponíveis no próprio site.",
         "",
         "Boa sorte! 🍀",
@@ -49,7 +51,7 @@ describe("montarDescricaoPadrao", () => {
       precoBrl: 2139.27,
       nomeDoSite: SITE,
     });
-    expect(semNbsp(texto)).toContain("VALOR STEAM: R$ 2.139,27");
+    expect(semNbsp(texto)).toContain("PREÇO STEAM: R$ 2.139,27");
     expect(texto).not.toContain("2139.27");
   });
 
@@ -101,7 +103,7 @@ describe("montarDescricaoPadrao", () => {
         nomeDoSite: SITE,
       });
       expect(texto).toContain("★ Bayonet | Lore (Field-Tested)");
-      expect(texto).not.toMatch(/VALOR STEAM/);
+      expect(texto).not.toMatch(/PREÇO STEAM/);
       expect(semNbsp(texto)).not.toMatch(/null|undefined|NaN|R\$ 0,00/);
     }
   });
@@ -119,7 +121,7 @@ describe("montarDescricaoPadrao", () => {
       precoBrl: 50,
       nomeDoSite: "Outra Loja",
     });
-    expect(texto).toContain("diretamente na Outra Loja após");
+    expect(texto).toContain("diretamente na Outra Loja, de forma automática");
     expect(texto).not.toContain("Qué Ota");
   });
 
@@ -149,7 +151,7 @@ describe("montarDescricaoPadrao", () => {
       precoBrl: 100,
       nomeDoSite: SITE,
     });
-    expect(texto.split("\n\n")).toHaveLength(4);
+    expect(texto.split("\n\n")).toHaveLength(6);
   });
 });
 
@@ -253,7 +255,7 @@ describe("ler a ficha da descrição", () => {
     expect(ficha!.premio).toBe("AK-47 | Redline (Field-Tested)");
     expect(semNbsp(ficha!.valor ?? "")).toBe("R$ 128,45");
     expect(ficha!.corpo).toBe(
-      "O sorteio acontece diretamente na Qué Ota? Skin após o encerramento da rifa.\nO resultado e o vencedor ficam disponíveis no próprio site.\n\nBoa sorte! 🍀",
+      "O sorteio acontece diretamente na Qué Ota? Skin, de forma automática após o encerramento da campanha.\n\nO resultado e o vencedor ficam disponíveis no próprio site.\n\nBoa sorte! 🍀",
     );
   });
 
@@ -280,7 +282,7 @@ describe("ler a ficha da descrição", () => {
   });
 
   it("quem trocou só o final continua com prêmio e valor em destaque", () => {
-    const meu = `PRÊMIO:\n★ Karambit | Doppler\n\nVALOR STEAM: R$ 4.800,00\n\nEntrego em até 24h, e o pagamento é só via Pix.`;
+    const meu = `PRÊMIO\n\n★ Karambit | Doppler\n\nPREÇO STEAM: R$ 4.800,00\n\nEntrego em até 24h, e o pagamento é só via Pix.`;
     const ficha = lerFichaDaDescricao(meu);
     expect(ficha!.premio).toBe("★ Karambit | Doppler");
     expect(ficha!.corpo).toBe("Entrego em até 24h, e o pagamento é só via Pix.");
@@ -300,7 +302,124 @@ describe("ler a ficha da descrição", () => {
 
   it("o valor lido é o que foi GRAVADO, e não um preço recalculado", () => {
     // Campanha publicada com um preço não muda de valor quando a Steam muda.
-    const antiga = `PRÊMIO:\nAWP | Asiimov\n\nVALOR STEAM: R$ 1,00\n\nBoa sorte! 🍀`;
+    const antiga = `PRÊMIO\n\nAWP | Asiimov\n\nPREÇO STEAM: R$ 1,00\n\nBoa sorte! 🍀`;
     expect(lerFichaDaDescricao(antiga)!.valor).toBe("R$ 1,00");
+  });
+
+  // As campanhas que já estão no ar guardam o texto do template anterior. Sem
+  // isto, todas elas perderiam a ficha e voltariam a ser parágrafo corrido.
+  it("a forma antiga, que está gravada nas campanhas publicadas, continua sendo lida", () => {
+    const antes = [
+      "PRÊMIO:",
+      "M4A4 | Buzz Kill (Field-Tested)",
+      "",
+      "VALOR STEAM: R$ 1.940,60",
+      "",
+      "O sorteio acontece diretamente na Qué Ota? Skin após o encerramento da rifa.",
+      "O resultado e o vencedor ficam disponíveis no próprio site.",
+      "",
+      "Boa sorte! 🍀",
+    ].join("\n");
+    const ficha = lerFichaDaDescricao(antes);
+    expect(ficha!.premio).toBe("M4A4 | Buzz Kill (Field-Tested)");
+    expect(ficha!.valor).toBe("R$ 1.940,60");
+    expect(ficha!.corpo).toContain("Boa sorte!");
+  });
+});
+
+describe("o preço da Steam chegando no texto", () => {
+  const NOME = "M4A4 | Buzz Kill (Field-Tested)";
+  const daBusca = (preco: number | null) =>
+    montarDescricaoPadrao({ nomeDaSkin: NOME, precoBrl: preco, nomeDoSite: SITE });
+
+  it('o template fala em "campanha", e a palavra "rifa" não aparece', () => {
+    const comPreco = daBusca(1940.6);
+    const semPreco = daBusca(null);
+    for (const texto of [comPreco, semPreco]) {
+      expect(texto).toContain("encerramento da campanha");
+      expect(texto.toLowerCase()).not.toContain("rifa");
+    }
+  });
+
+  it("o nome da skin aparece inteiro, com o desgaste", () => {
+    expect(daBusca(1940.6)).toContain(NOME);
+  });
+
+  it("o preço da busca aparece formatado em real", () => {
+    // 1940.60 é o número que a ação devolve; R$ 1.940,60 é o que a descrição
+    // mostra.
+    expect(semNbsp(daBusca(1940.6))).toContain("PREÇO STEAM: R$ 1.940,60");
+    expect(daBusca(1940.6)).not.toContain("1940.60");
+  });
+
+  // O caso 4 e o 5 do pedido, na mesma passagem: o texto ainda é o que o
+  // formulário gerou, então ele é reescrito, e o preço velho sai junto.
+  it("descrição ainda automática recebe o preço novo, e perde o antigo", () => {
+    const comCatalogo = daBusca(128.45);
+    const comSteam = daBusca(1940.6);
+
+    expect(
+      decidirAtualizacaoDaDescricao({
+        atual: comCatalogo,
+        ultimaGerada: comCatalogo,
+        nova: comSteam,
+      }),
+    ).toBe("aplicar");
+
+    expect(semNbsp(comSteam)).toContain("R$ 1.940,60");
+    expect(semNbsp(comSteam)).not.toContain("R$ 128,45");
+  });
+
+  it("a linha do preço nasce quando o preço chega, se antes não havia", () => {
+    const semNada = daBusca(null);
+    expect(semNada).not.toContain("PREÇO STEAM");
+    expect(
+      decidirAtualizacaoDaDescricao({
+        atual: semNada,
+        ultimaGerada: semNada,
+        nova: daBusca(1940.6),
+      }),
+    ).toBe("aplicar");
+  });
+
+  it("texto personalizado não é sobrescrito pelo preço que chegou", () => {
+    const meu = "Sorteio da M4! Entrego no mesmo dia, chama no direct.";
+    expect(
+      decidirAtualizacaoDaDescricao({
+        atual: meu,
+        ultimaGerada: daBusca(128.45),
+        nova: daBusca(1940.6),
+      }),
+    ).toBe("oferecer");
+  });
+
+  it("nenhum undefined, null ou NaN atravessa, com preço ou sem", () => {
+    for (const preco of [1940.6, 0, -1, NaN, null, undefined]) {
+      const texto = daBusca(preco as number | null);
+      expect(semNbsp(texto)).not.toMatch(/undefined|null|NaN|R\$ 0,00/);
+    }
+  });
+
+  // O caso 8: montar o texto é aritmética sobre o número que a ação já
+  // devolveu. Se um dia alguém puser uma busca aqui dentro, isto quebra.
+  it("montar a descrição não busca preço nenhum", async () => {
+    const buscaOriginal = globalThis.fetch;
+    let chamadas = 0;
+    globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+      chamadas++;
+      return buscaOriginal(...args);
+    }) as typeof fetch;
+    try {
+      daBusca(1940.6);
+      lerFichaDaDescricao(daBusca(1940.6));
+      decidirAtualizacaoDaDescricao({
+        atual: "",
+        ultimaGerada: "",
+        nova: daBusca(1940.6),
+      });
+    } finally {
+      globalThis.fetch = buscaOriginal;
+    }
+    expect(chamadas).toBe(0);
   });
 });
