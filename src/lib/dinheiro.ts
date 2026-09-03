@@ -27,3 +27,19 @@ export function lerReais(texto: string): number | null {
   const n = Number(normalizado);
   return Number.isFinite(n) ? n : null;
 }
+
+/**
+ * O preço de cada número, a partir do valor da skin.
+ *
+ * Arredonda o centavo para cima de propósito. Para baixo, cem números a
+ * R$ 12,3456 arrecadariam menos do que a skin custa, e a rifa nasceria no
+ * prejuízo por causa de um arredondamento. Para cima, a sobra é de no máximo
+ * um centavo por número.
+ */
+export function precoPorNumero(
+  valorDaSkin: number,
+  totalDeNumeros: number,
+): number | null {
+  if (!(valorDaSkin > 0) || !(totalDeNumeros > 0)) return null;
+  return Math.ceil((valorDaSkin / totalDeNumeros) * 100) / 100;
+}

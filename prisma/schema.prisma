@@ -919,62 +919,10 @@ model SkinTemplate {
   /// A arte de campanha desta skin, por desgaste.
   artes SkinArt[]
 
-  /// O preço da Steam, guardado por desgaste.
-  precos SkinPreco[]
-
   /// Nome único por tenant: cadastrar a mesma skin duas vezes só cria dúvida
   /// na hora de escolher.
   @@unique([tenantId, name])
   @@index([tenantId])
-}
-
-/// O preço de uma skin no Mercado da Comunidade Steam, em real.
-///
-/// Uma linha por desgaste, e nao uma por skin: a mesma AWP custa milhares a
-/// mais Factory New do que Battle-Scarred, e um valor unico por skin daria um
-/// preco por numero errado em quatro dos cinco casos.
-///
-/// Existe por causa do limite da Steam. A rota nao e oficial e passa a
-/// responder 429 depois de algumas dezenas de chamadas por minuto, entao o
-/// preco e buscado uma vez e reaproveitado. `buscadoEm` e o que diz se o valor
-/// ainda serve ou se vale perguntar de novo.
-model SkinPreco {
-  id             String       @id @default(cuid())
-  skinTemplateId String
-  skin           SkinTemplate @relation(fields: [skinTemplateId], references: [id], onDelete: Cascade)
-
-  /// Nulo para item sem desgaste, como agente.
-  wear SkinWear?
-
-  /// Em reais. Da Steam vem assim (currency=7); da SteamAnalyst vem em dolar
-  /// e e convertido com a mesma cotacao que a tela de Entregas usa.
-  brl Decimal @db.Decimal(10, 2)
-
-  /// De onde saiu este preco: "steam" (consulta direta, mediana de agora) ou
-  /// "despejo" (mediana de 7 dias do Mercado da Steam, vinda do arquivo em
-  /// lote e convertida do dolar). Os dois sao da Steam e mesmo assim nao sao o
-  /// mesmo numero, e a tela diz qual esta mostrando.
-  fonte String @default("steam")
-
-  /// O valor em dolar, quando a fonte cobra em dolar. Guardado para dar para
-  /// conferir a conversao depois sem refazer a consulta.
-  usd Decimal? @db.Decimal(10, 2)
-
-  /// O nome exato que a Steam reconheceu. Guardado porque para faca sem
-  /// pintura ele difere do nome do catalogo, e sem isso a diferenca viraria
-  /// mistério na hora de conferir um preco estranho.
-  nomeConsultado String
-
-  /// Quantas unidades venderam nas ultimas 24h, quando a Steam informa.
-  /// Volume baixo quer dizer preco pouco confiavel.
-  volume Int?
-
-  buscadoEm DateTime @default(now())
-
-  /// Um preco por desgaste. O do desgaste nulo tem indice parcial proprio na
-  /// migration: em Postgres, NULL nao e igual a NULL.
-  @@unique([skinTemplateId, wear])
-  @@index([skinTemplateId])
 }
 
 /// Quantas vezes cada link de campanha de um sorteio foi aberto.

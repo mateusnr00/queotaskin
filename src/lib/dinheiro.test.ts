@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lerReais } from "@/lib/dinheiro";
+import { lerReais, precoPorNumero } from "@/lib/dinheiro";
 
 describe("lerReais", () => {
   it("lê o formato brasileiro", () => {
@@ -34,5 +34,25 @@ describe("lerReais", () => {
 
   it("texto sem número nenhum é nulo", () => {
     expect(lerReais("abc")).toBeNull();
+  });
+});
+
+describe("precoPorNumero", () => {
+  it("divide o valor da skin pela quantidade de números", () => {
+    expect(precoPorNumero(500, 100)).toBe(5);
+    expect(precoPorNumero(1000, 200)).toBe(5);
+  });
+
+  it("arredonda o centavo para cima, para a rifa não nascer no prejuízo", () => {
+    // 1234.56 / 100 = 12.3456. Para baixo, cem números arrecadariam
+    // R$ 1.234,00 por uma skin de R$ 1.234,56.
+    expect(precoPorNumero(1234.56, 100)).toBe(12.35);
+    expect(precoPorNumero(10, 3)).toBe(3.34);
+  });
+
+  it("devolve null quando não dá para dividir", () => {
+    expect(precoPorNumero(0, 100)).toBeNull();
+    expect(precoPorNumero(500, 0)).toBeNull();
+    expect(precoPorNumero(-5, 100)).toBeNull();
   });
 });

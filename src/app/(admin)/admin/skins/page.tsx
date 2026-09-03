@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { SkinCatalogo } from "@/components/admin/skin-catalogo";
-import { AtualizarPrecos } from "@/components/admin/atualizar-precos";
 
 export const metadata: Metadata = { title: "Catálogo de skins" };
 export const dynamic = "force-dynamic";
@@ -30,7 +29,6 @@ export default async function SkinsPage() {
         titulo="Catálogo de skins"
         descricao="Cadastre a skin uma vez com a ficha e a foto. Ao criar um sorteio, escolher ela do catálogo já preenche o prêmio e a capa, sem redigitar nada nem reenviar a imagem."
         migalha={[{ rotulo: "Admin", href: "/admin" }, { rotulo: "Catálogo" }]}
-        acoes={<AtualizarPrecos />}
       />
 
       <SkinCatalogo
