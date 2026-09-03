@@ -16,7 +16,7 @@
 // qualquer um levanta ou derruba sozinho; a mediana é o meio das vendas
 // recentes, que é o que responde "quanto essa skin vale".
 
-import { WEAR_STEAM } from "@/lib/cs2";
+import { separarFaseDaDoppler, WEAR_STEAM } from "@/lib/cs2";
 import type { SkinWear } from "@prisma/client";
 
 const BASE = "https://steamcommunity.com/market/priceoverview";
@@ -47,12 +47,25 @@ export interface SkinParaConsulta {
  * A ordem dos prefixos não é arbitrária: na Steam o StatTrak vem DEPOIS da
  * estrela ("★ StatTrak™ Karambit | Doppler"), e Souvenir vem antes de tudo,
  * porque item souvenir não é faca nem luva e nunca tem estrela.
+ *
+ * A FASE DA DOPPLER SAI DAQUI.
+ *
+ * O catálogo guarda "★ Stiletto Knife | Doppler Phase 1"; a Steam não tem esse
+ * item. Lá a Phase 1 e a Ruby moram na mesma linha, "★ Stiletto Knife |
+ * Doppler (Factory New)", e a fase só aparece na inspeção. Perguntar com a
+ * fase no nome recebia "não tenho anúncio", o painel caía no valor padrão, e a
+ * cota nascia em R$ 1,00. Eram 182 das 865 skins do catálogo, um quinto delas,
+ * e o sintoma parecia limite de IP quando era nome inexistente.
+ *
+ * O preço que volta é o da faixa toda, não o da fase. Para uma Ruby ele erra
+ * para baixo, e é uma sugestão que o painel deixa editar: preço aproximado com
+ * procedência é outra coisa que preço nenhum.
  */
 export function nomeDeMercado(
   skin: SkinParaConsulta,
   wear: SkinWear | null,
 ): string {
-  let nome = skin.name;
+  let nome = separarFaseDaDoppler(skin.name).base;
 
   if (skin.skinStatTrak) {
     nome = nome.startsWith("★ ")

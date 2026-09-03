@@ -81,6 +81,54 @@ export const WEAR_LABEL: Record<SkinWear, string> = {
  * quem administra e para o título da campanha, que segue o nome de mercado
  * da skin, e é assim que ele foi pedido.
  */
+/**
+ * As fases da Doppler e da Gamma Doppler.
+ *
+ * A FASE NÃO EXISTE NO NOME DE MERCADO DA STEAM.
+ *
+ * Lá uma Ruby e uma Phase 4 moram na mesma linha, "★ Karambit | Doppler
+ * (Factory New)", e a diferença só aparece na inspeção do item. O catálogo
+ * daqui guarda a fase no nome, porque para quem sorteia ela é parte do prêmio,
+ * e 182 das 865 skins cadastradas são assim.
+ *
+ * As duas convenções precisam conversar. Quem faz a ponte é
+ * `separarFaseDaDoppler`: sem ela o painel pergunta à Steam por um item que
+ * não existe, recebe "não tenho anúncio", e a cota nasce no valor padrão.
+ */
+export const FASES_DA_DOPPLER = [
+  "Phase 1",
+  "Phase 2",
+  "Phase 3",
+  "Phase 4",
+  "Ruby",
+  "Sapphire",
+  "Black Pearl",
+  "Emerald",
+] as const;
+
+export type FaseDaDoppler = (typeof FASES_DA_DOPPLER)[number];
+
+/**
+ * Separa "★ Bowie Knife | Gamma Doppler Emerald" do nome e da fase.
+ *
+ * A fase só sai quando o que sobra termina em "Doppler". Sem essa trava, uma
+ * skin que por acaso terminasse em "Emerald" ou "Ruby" perderia a última
+ * palavra e deixaria de casar com coisa nenhuma.
+ */
+export function separarFaseDaDoppler(nome: string): {
+  base: string;
+  fase: FaseDaDoppler | null;
+} {
+  const limpo = nome.trim();
+  for (const fase of FASES_DA_DOPPLER) {
+    if (!limpo.endsWith(` ${fase}`)) continue;
+    const base = limpo.slice(0, -fase.length - 1).trim();
+    if (!base.endsWith("Doppler")) continue;
+    return { base, fase };
+  }
+  return { base: limpo, fase: null };
+}
+
 export const WEAR_STEAM: Record<SkinWear, string> = {
   FACTORY_NEW: "Factory New",
   MINIMAL_WEAR: "Minimal Wear",

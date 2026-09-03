@@ -10,6 +10,33 @@ import {
 } from "./steam-market";
 
 describe("nomeDeMercado", () => {
+  it("tira a fase da Doppler, que não existe no nome de mercado da Steam", () => {
+    // Este era o bug: o painel perguntava por um item inexistente, recebia
+    // "não tenho anúncio", e a cota nascia em R$ 1,00. Eram 182 das 865 skins
+    // do catálogo.
+    expect(
+      nomeDeMercado({ name: "★ Stiletto Knife | Doppler Phase 1" }, "FACTORY_NEW"),
+    ).toBe("★ Stiletto Knife | Doppler (Factory New)");
+    expect(
+      nomeDeMercado({ name: "★ Bowie Knife | Gamma Doppler Emerald" }, "MINIMAL_WEAR"),
+    ).toBe("★ Bowie Knife | Gamma Doppler (Minimal Wear)");
+  });
+
+  it("a fase sai antes do StatTrak entrar, e a estrela continua na frente", () => {
+    expect(
+      nomeDeMercado(
+        { name: "★ Karambit | Doppler Ruby", skinStatTrak: true },
+        "FACTORY_NEW",
+      ),
+    ).toBe("★ StatTrak™ Karambit | Doppler (Factory New)");
+  });
+
+  it("nome que termina em palavra de fase sem ser Doppler fica inteiro", () => {
+    expect(nomeDeMercado({ name: "AK-47 | Emerald Pinstripe" }, "FIELD_TESTED")).toBe(
+      "AK-47 | Emerald Pinstripe (Field-Tested)",
+    );
+  });
+
   it("gruda o desgaste no nome do catálogo", () => {
     expect(nomeDeMercado({ name: "AK-47 | Redline" }, "FIELD_TESTED")).toBe(
       "AK-47 | Redline (Field-Tested)",

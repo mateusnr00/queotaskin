@@ -1,6 +1,6 @@
 import type { SkinWear } from "@prisma/client";
 
-import { WEAR_STEAM } from "@/lib/cs2";
+import { separarFaseDaDoppler, WEAR_STEAM } from "@/lib/cs2";
 
 // A leitura do despejo de preços de mercado.
 //
@@ -50,26 +50,6 @@ export interface PrecoEmLote {
   /** A fase da Doppler, quando a fonte separa. */
   fase: string | null;
 }
-
-/**
- * As fases da Doppler e da Gamma Doppler.
- *
- * A Steam não coloca a fase no nome de mercado: uma Karambit Doppler Ruby e
- * uma Phase 4 moram na mesma linha, "★ Karambit | Doppler (Factory New)", e a
- * diferença aparece só na inspeção. O catálogo daqui coloca ("★ Karambit |
- * Doppler Phase 1"), e são 182 das 865 skins cadastradas, um quinto do
- * catálogo. Sem entender esse sufixo, um quinto ficaria sem preço.
- */
-export const FASES_DA_DOPPLER = [
-  "Phase 1",
-  "Phase 2",
-  "Phase 3",
-  "Phase 4",
-  "Ruby",
-  "Sapphire",
-  "Black Pearl",
-  "Emerald",
-] as const;
 
 function numero(valor: unknown): number | null {
   if (valor == null) return null;
@@ -332,15 +312,9 @@ export function lerNomeDeMercado(marketName: string): NomeDeMercado | null {
     }
   }
 
-  let fase: string | null = null;
-  for (const candidata of FASES_DA_DOPPLER) {
-    if (!nome.endsWith(` ${candidata}`)) continue;
-    const semFase = nome.slice(0, -candidata.length - 1).trim();
-    if (!semFase.endsWith("Doppler")) continue;
-    fase = candidata;
-    nome = semFase;
-    break;
-  }
+  const comFase = separarFaseDaDoppler(nome);
+  const fase: string | null = comFase.fase;
+  nome = comFase.base;
 
   if (!nome) return null;
   return { base: nome, wear, statTrak, souvenir, fase };

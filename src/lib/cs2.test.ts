@@ -6,6 +6,7 @@ import {
   headlineSkin,
   isValidTradeUrl,
   rarityColor,
+  separarFaseDaDoppler,
   steamIdFromTradeUrl,
   wearFromFloat,
 } from "@/lib/cs2";
@@ -192,5 +193,34 @@ describe("rarityColor", () => {
 
   it("cai num cinza neutro quando a raridade não foi informada", () => {
     expect(rarityColor(null)).toBe("#64748b");
+  });
+});
+
+describe("separarFaseDaDoppler", () => {
+  it("separa a fase do nome", () => {
+    expect(separarFaseDaDoppler("★ Karambit | Doppler Phase 4")).toEqual({
+      base: "★ Karambit | Doppler",
+      fase: "Phase 4",
+    });
+    expect(separarFaseDaDoppler("★ Bowie Knife | Gamma Doppler Emerald")).toEqual({
+      base: "★ Bowie Knife | Gamma Doppler",
+      fase: "Emerald",
+    });
+  });
+
+  it("só separa quando o que sobra é Doppler", () => {
+    // A trava existe para nome que termina em palavra de fase por acaso não
+    // perder a última palavra.
+    expect(separarFaseDaDoppler("AK-47 | Emerald Pinstripe")).toEqual({
+      base: "AK-47 | Emerald Pinstripe",
+      fase: null,
+    });
+  });
+
+  it("nome sem fase atravessa inteiro", () => {
+    expect(separarFaseDaDoppler("★ Karambit | Fade")).toEqual({
+      base: "★ Karambit | Fade",
+      fase: null,
+    });
   });
 });
