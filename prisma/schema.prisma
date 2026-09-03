@@ -1183,6 +1183,26 @@ model Prize {
   skinSouvenir   Boolean     @default(false)
   /// Valor de mercado em reais, exibido como "avaliada em".
   skinValueBrl   Decimal?    @db.Decimal(10, 2)
+
+  /// O nome EXATO consultado no Mercado da Comunidade Steam, que não é o
+  /// mesmo do catálogo: a fase da Doppler sai, StatTrak e Souvenir viram
+  /// prefixo e o desgaste entra entre parênteses. Guardado para dar para
+  /// conferir depois de onde o valor veio, sem remontar a regra de cabeça.
+  steamMarketHashName String?
+
+  /// A mediana das vendas recentes na Steam, quando ela informa.
+  /// `skinValueBrl` guarda o menor anúncio, que é a referência escolhida;
+  /// esta coluna existe porque os dois números contam histórias diferentes e
+  /// um deles sozinho esconde item com anúncio fora da curva.
+  steamMedianPriceBrl Decimal? @db.Decimal(10, 2)
+
+  /// Quando o preço da Steam foi buscado. NULO em prêmio antigo e em prêmio
+  /// cujo valor foi digitado à mão, e é assim que se sabe a diferença entre
+  /// "a Steam cobrava isso naquele dia" e "alguém digitou isso".
+  ///
+  /// O valor NÃO se atualiza sozinho depois que a campanha existe: preço de
+  /// cota de rifa em venda não pode mudar porque o mercado mexeu.
+  steamPriceUpdatedAt DateTime?
   skinCollection String?
   /// Link `steam://rungame/730/...` para inspecionar o item no jogo.
   skinInspectUrl String?
