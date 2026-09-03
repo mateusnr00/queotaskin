@@ -2,6 +2,8 @@ import Link from "next/link";
 import { TicketCheck, Trophy } from "lucide-react";
 
 import { apenasComGanhador } from "@/lib/ganhadores";
+import { boostAtivoAgora } from "@/server/services/caixa-de-level-up";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { statusDaCampanha } from "@/lib/campanha-status";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
@@ -112,6 +114,14 @@ export default async function HomePage() {
     activeRaffles.map((r) => r.id)
   );
   const statusConfig = await getConfiguracaoDeStatus();
+
+  // O boost ativo, para o selo do celular no cartão principal. A leitura é
+  // memorizada por requisição, então o cabeçalho e esta página consultam uma
+  // vez só. Falhar aqui não pode derrubar a home.
+  const sessao = await auth().catch(() => null);
+  const boostAtivo = sessao?.user?.id
+    ? await boostAtivoAgora(sessao.user.id, tenant.id).catch(() => null)
+    : null;
 
   // Os ganhadores do SORTEIO principal.
   //
@@ -299,6 +309,7 @@ export default async function HomePage() {
                 raffle={featured}
                 sold={vendidosPorRifa.get(featured.id) ?? 0}
                 statusBadge={selo(featured)}
+                boostAtivo={boostAtivo}
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 {rest.map((r) => (

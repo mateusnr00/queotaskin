@@ -23,6 +23,7 @@
 // condicional que confere a contagem de linhas afetadas, porque garantia de
 // dinheiro não se apoia numa camada só. Um boost, uma compra.
 
+import { cache } from "react";
 import { randomInt } from "node:crypto";
 
 import type { LevelUpBoxRarity, Prisma } from "@prisma/client";
@@ -459,3 +460,21 @@ export async function recompensasDoUsuario(params: {
     })),
   };
 }
+
+/**
+ * Só o boost ativo, memorizado por requisição.
+ *
+ * O cabeçalho e a home mostram o mesmo selo na mesma renderização, e sem isto
+ * seriam duas idas ao banco para responder a mesma pergunta. Os argumentos são
+ * primitivos de propósito: `cache` do React compara por identidade, e um
+ * objeto novo a cada chamada não bateria com o anterior.
+ *
+ * Compartilha a varredura preguiçosa de `recompensasDoUsuario`: o que passou do
+ * prazo é marcado como expirado de passagem.
+ */
+export const boostAtivoAgora = cache(
+  async (userId: string, tenantId: string): Promise<BoostAtivo | null> => {
+    const r = await recompensasDoUsuario({ userId, tenantId });
+    return r.ativo;
+  },
+);

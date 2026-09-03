@@ -4,7 +4,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { SeloDoBoost } from "@/components/public/selo-do-boost";
-import { recompensasDoUsuario } from "@/server/services/caixa-de-level-up";
+import { boostAtivoAgora } from "@/server/services/caixa-de-level-up";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { signOut } from "@/auth";
 import { cn } from "@/lib/utils";
@@ -86,12 +86,7 @@ export async function SiteHeader() {
   // acaba. Falhar não pode derrubar o cabeçalho do site inteiro.
   const boostAtivo =
     session?.user?.id && tenantCtx && tenantVisual?.rankEnabled
-      ? await recompensasDoUsuario({
-          userId: session.user.id,
-          tenantId: tenantCtx.id,
-        })
-          .then((r) => r.ativo)
-          .catch(() => null)
+      ? await boostAtivoAgora(session.user.id, tenantCtx.id).catch(() => null)
       : null;
   // Em produção (host split ativo), o site público nunca mostra o link
   // Admin: quem é admin acessa via admin.<dominio>. Só liga o link em

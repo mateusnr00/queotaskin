@@ -12,6 +12,8 @@
 
 import Link from "next/link";
 
+import { SeloDoBoost } from "@/components/public/selo-do-boost";
+import type { BoostNaTela } from "@/components/public/caixas-de-level-up";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { SeloDeExclusiva } from "@/components/rank/selo-de-exclusiva";
@@ -88,10 +90,13 @@ export function FeaturedRaffleCard({
   raffle,
   sold,
   statusBadge,
+  boostAtivo,
 }: {
   raffle: RaffleCardData;
   sold: number;
   statusBadge: string;
+  /** O boost de XP ativo, para o selo do celular. Nulo esconde o selo. */
+  boostAtivo?: BoostNaTela | null;
 }) {
   const prize = raffle.prizes[0];
   // Fechada para o sorteio, o card leva para a transmissão: é para lá que a
@@ -131,6 +136,21 @@ export function FeaturedRaffleCard({
 
         {raffle.showProgressBar && (
           <SalesBar sold={sold} total={raffle.totalNumbers} />
+        )}
+
+        {/* O SELO DO BOOST FICA AQUI, E SÓ NO CELULAR.
+            O boost vale para a PRÓXIMA compra, então o lugar dele é onde a
+            pessoa decide comprar, e não numa pílula no topo por onde ela
+            passa rolando. No desktop ele já mora no cabeçalho, que fica
+            sempre à vista; no celular o cabeçalho é estreito e o selo não
+            cabia lá sem disputar espaço com a logo e o menu.
+
+            Aparece só no cartão principal: repetido em cada campanha, o mesmo
+            aviso viraria ruído em vez de lembrete. */}
+        {boostAtivo && vendendo && (
+          <div className="md:hidden">
+            <SeloDoBoost boost={boostAtivo} className="w-full justify-center" />
+          </div>
         )}
 
         <div className="flex items-end justify-between gap-3 border-t pt-3">
