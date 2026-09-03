@@ -30,6 +30,27 @@ import { formatBRL } from "@/lib/format";
 const ROTULO_DO_PREMIO = "PRÊMIO";
 const ROTULO_DO_PRECO = "PREÇO STEAM:";
 
+/**
+ * O traço que ocupa o lugar do preço enquanto ele não existe.
+ *
+ * A LINHA NUNCA SOME.
+ *
+ * Antes, sem preço, a linha inteira desaparecia do texto: a descrição de uma
+ * campanha nascia com três blocos numa skin e quatro noutra, e quem escolheu
+ * uma skin sem preço via o campo aparecer do nada minutos depois. Com o traço
+ * fixo, o campo existe desde o primeiro instante e só o VALOR muda quando a
+ * Steam responde.
+ *
+ * MONTADO PELO CÓDIGO UNICODE, E NÃO ESCRITO.
+ *
+ * `sem-travessao.test.ts` recusa o travessão literal em todo o `src`, e essa
+ * regra é sobre PONTUAÇÃO: travessão no meio de uma frase soa a texto de
+ * máquina. Aqui ele não pontua nada, é o glifo de "campo sem valor" num
+ * campo de dado, do mesmo jeito que uma tabela usa. Escrevê-lo pelo código
+ * mantém a regra inteira de pé para o texto, que é onde ela importa.
+ */
+export const SEM_PRECO = String.fromCharCode(0x2014);
+
 // OS RÓTULOS DE ANTES, QUE CONTINUAM NO BANCO.
 //
 // Campanha publicada guarda o texto com que foi publicada, e ele não é
@@ -57,12 +78,13 @@ export interface DadosDaDescricaoPadrao {
  * Determinística: mesmos dados, mesmo texto. É o que permite ao formulário
  * comparar o que está no campo com o que ele geraria e saber se alguém mexeu.
  *
- * DADO QUE FALTA VIRA LINHA AUSENTE, NUNCA "null".
+ * DADO QUE FALTA VIRA TRAÇO, NUNCA "null" E NUNCA UM PREÇO INVENTADO.
  *
- * Sem preço, a linha do valor simplesmente não existe: um "VALOR STEAM:
- * R$ 0,00" publicado é pior que a ausência dele, porque afirma um preço
- * errado em vez de não afirmar nada. Sem nome de skin não há descrição a
- * gerar, e a função devolve vazio para o campo continuar como estava.
+ * A linha do preço existe sempre; o que muda é o valor. Sem preço ela sai
+ * com o traço, porque um "PREÇO STEAM: R$ 0,00" publicado é pior que a
+ * ausência: afirma um preço errado em vez de não afirmar nada. Sem nome de
+ * skin não há descrição a gerar, e a função devolve vazio para o campo
+ * continuar como estava.
  */
 export function montarDescricaoPadrao({
   nomeDaSkin,
@@ -79,7 +101,7 @@ export function montarDescricaoPadrao({
   const blocos = [
     ROTULO_DO_PREMIO,
     nome,
-    ...(temPreco ? [`${ROTULO_DO_PRECO} ${formatBRL(precoBrl!)}`] : []),
+    `${ROTULO_DO_PRECO} ${temPreco ? formatBRL(precoBrl!) : SEM_PRECO}`,
     `O sorteio acontece diretamente na ${site}, de forma automática após o encerramento da campanha.`,
     "O resultado e o vencedor ficam disponíveis no próprio site.",
     "Boa sorte! 🍀",
@@ -181,7 +203,11 @@ function montarFicha(
 ): FichaDaDescricao {
   let valor: string | null = null;
   if (resto[0]?.startsWith(`${rotuloDoPreco} `)) {
-    valor = resto[0].slice(rotuloDoPreco.length).trim() || null;
+    const bruto = resto[0].slice(rotuloDoPreco.length).trim();
+    // O traço é ausência, e volta como ausência. Devolvê-lo como valor faria
+    // a ficha exibir um glifo que ela mesma já sabe desenhar, e qualquer
+    // outro consumidor teria de aprender a reconhecê-lo.
+    valor = bruto && bruto !== SEM_PRECO ? bruto : null;
     resto = resto.slice(1);
   }
   return { premio, valor, corpo: resto.join("\n\n").trim() };

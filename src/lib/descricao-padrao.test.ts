@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SEM_PRECO,
   decidirAtualizacaoDaDescricao,
   lerFichaDaDescricao,
   montarDescricaoPadrao,
@@ -93,9 +94,9 @@ describe("montarDescricaoPadrao", () => {
     expect(texto).toContain("AWP | Asiimov (Battle-Scarred)");
   });
 
-  it("sem preço, a linha do valor não existe, e não vira null nem R$ 0,00", () => {
-    // Publicar "VALOR STEAM: R$ 0,00" afirma um preço errado; não dizer nada
-    // apenas não afirma.
+  it("sem preço, a linha existe com o traço, e nunca com null nem R$ 0,00", () => {
+    // Publicar "PREÇO STEAM: R$ 0,00" afirma um preço errado; o traço não
+    // afirma nada, e mantém o campo de pé até a Steam responder.
     for (const preco of [null, undefined, 0, -1, NaN]) {
       const texto = montarDescricaoPadrao({
         nomeDaSkin: "★ Bayonet | Lore (Field-Tested)",
@@ -103,8 +104,21 @@ describe("montarDescricaoPadrao", () => {
         nomeDoSite: SITE,
       });
       expect(texto).toContain("★ Bayonet | Lore (Field-Tested)");
-      expect(texto).not.toMatch(/PREÇO STEAM/);
+      expect(texto).toContain(`PREÇO STEAM: ${SEM_PRECO}`);
       expect(semNbsp(texto)).not.toMatch(/null|undefined|NaN|R\$ 0,00/);
+      // Nem dois-pontos soltos: o campo tem sempre alguma coisa depois.
+      expect(texto).not.toMatch(/PREÇO STEAM:\s*$/m);
+    }
+  });
+
+  it("a linha do preço nunca é omitida, com preço ou sem", () => {
+    for (const preco of [1940.6, null]) {
+      const linhas = montarDescricaoPadrao({
+        nomeDaSkin: "M4A4 | Desolate Space (Field-Tested)",
+        precoBrl: preco,
+        nomeDoSite: SITE,
+      }).split("\n\n");
+      expect(linhas.filter((l) => l.startsWith("PREÇO STEAM:"))).toHaveLength(1);
     }
   });
 
@@ -370,16 +384,46 @@ describe("o preço da Steam chegando no texto", () => {
     expect(semNbsp(comSteam)).not.toContain("R$ 128,45");
   });
 
-  it("a linha do preço nasce quando o preço chega, se antes não havia", () => {
+  it("o traço dá lugar ao valor quando o preço chega", () => {
     const semNada = daBusca(null);
-    expect(semNada).not.toContain("PREÇO STEAM");
+    expect(semNada).toContain(`PREÇO STEAM: ${SEM_PRECO}`);
+
+    const comPreco = daBusca(1940.6);
+    expect(semNbsp(comPreco)).toContain("PREÇO STEAM: R$ 1.940,60");
+    expect(comPreco).not.toContain(SEM_PRECO);
+
+    // Descrição ainda automática: a troca é aplicada sozinha.
     expect(
       decidirAtualizacaoDaDescricao({
         atual: semNada,
         ultimaGerada: semNada,
-        nova: daBusca(1940.6),
+        nova: comPreco,
       }),
     ).toBe("aplicar");
+  });
+
+  // O caso da Steam fora do ar: sem preço novo, nada muda, e o traço fica.
+  it("busca que falha deixa o traço onde estava", () => {
+    const semNada = daBusca(null);
+    expect(
+      decidirAtualizacaoDaDescricao({
+        atual: semNada,
+        ultimaGerada: semNada,
+        nova: daBusca(null),
+      }),
+    ).toBe("nada");
+    expect(semNada).toContain(`PREÇO STEAM: ${SEM_PRECO}`);
+  });
+
+  it("texto personalizado não perde o traço nem ganha o preço em silêncio", () => {
+    const meu = "Sorteio da M4! Entrego no mesmo dia.";
+    expect(
+      decidirAtualizacaoDaDescricao({
+        atual: meu,
+        ultimaGerada: daBusca(null),
+        nova: daBusca(1940.6),
+      }),
+    ).toBe("oferecer");
   });
 
   it("texto personalizado não é sobrescrito pelo preço que chegou", () => {
@@ -421,5 +465,54 @@ describe("o preço da Steam chegando no texto", () => {
       globalThis.fetch = buscaOriginal;
     }
     expect(chamadas).toBe(0);
+  });
+});
+
+describe("o traço atravessa até a ficha pública", () => {
+  const semPreco = montarDescricaoPadrao({
+    nomeDaSkin: "M4A4 | Desolate Space (Field-Tested)",
+    precoBrl: null,
+    nomeDoSite: SITE,
+  });
+
+  // O parser reconhece o campo estruturado mesmo sem valor: é o que dispensa
+  // digitar "PREÇO STEAM" à mão no painel para o layout aparecer.
+  it("reconhece a linha com traço como campo de preço sem valor", () => {
+    const ficha = lerFichaDaDescricao(semPreco);
+    expect(ficha).not.toBeNull();
+    expect(ficha!.premio).toBe("M4A4 | Desolate Space (Field-Tested)");
+    expect(ficha!.valor).toBeNull();
+    // O traço não vaza para o corpo: ele foi consumido como o campo do preço.
+    expect(ficha!.corpo).not.toContain(SEM_PRECO);
+    expect(ficha!.corpo).toContain("Boa sorte!");
+  });
+
+  it("com preço, o valor volta formatado e sem traço nenhum", () => {
+    const ficha = lerFichaDaDescricao(
+      montarDescricaoPadrao({
+        nomeDaSkin: "M4A4 | Desolate Space (Field-Tested)",
+        precoBrl: 1940.6,
+        nomeDoSite: SITE,
+      }),
+    );
+    expect(semNbsp(ficha!.valor ?? "")).toBe("R$ 1.940,60");
+  });
+
+  it("dois-pontos sem nada depois também conta como ausência", () => {
+    // Descrição escrita à mão pode chegar assim, e a ficha não pode exibir
+    // um campo vazio nem um "null".
+    const ficha = lerFichaDaDescricao(
+      `PRÊMIO\n\nAWP | Asiimov\n\nPREÇO STEAM: \n\nBoa sorte! 🍀`,
+    );
+    expect(ficha!.valor).toBeNull();
+  });
+
+  // Campanha publicada antes desta mudança não tem a linha, e continua sendo
+  // ficha: a coluna do preço é desenhada pela ficha, não pelo texto.
+  it("descrição antiga sem a linha continua virando ficha", () => {
+    const antiga = `PRÊMIO\n\nAK-47 | Redline\n\nBoa sorte! 🍀`;
+    const ficha = lerFichaDaDescricao(antiga);
+    expect(ficha!.premio).toBe("AK-47 | Redline");
+    expect(ficha!.valor).toBeNull();
   });
 });

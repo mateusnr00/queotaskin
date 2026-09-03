@@ -17,7 +17,7 @@
 // Descrição escrita à mão não vira ficha inventada.
 
 import { IconeDoWhatsapp } from "@/components/icones/whatsapp";
-import { lerFichaDaDescricao } from "@/lib/descricao-padrao";
+import { lerFichaDaDescricao, SEM_PRECO } from "@/lib/descricao-padrao";
 
 function Ficha({ description }: { description: string }) {
   const ficha = lerFichaDaDescricao(description);
@@ -58,8 +58,11 @@ function Ficha({ description }: { description: string }) {
           </dt>
           <dd className="mt-1 text-sm leading-snug font-semibold tabular-nums">
             {ficha.valor ?? (
+              // O MESMO traço que o gerador escreve no texto. Um hífen aqui e
+              // um travessão lá seriam dois jeitos de dizer a mesma ausência,
+              // e a ficha pareceria discordar da descrição logo abaixo dela.
               <span aria-label="sem preço" className="text-muted-foreground">
-                -
+                {SEM_PRECO}
               </span>
             )}
           </dd>
