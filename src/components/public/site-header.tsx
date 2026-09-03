@@ -3,6 +3,8 @@ import { BrandMark } from "@/components/brand/brand-mark";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { SeloDoBoost } from "@/components/public/selo-do-boost";
+import { recompensasDoUsuario } from "@/server/services/caixa-de-level-up";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { signOut } from "@/auth";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,19 @@ export async function SiteHeader() {
             select: { xp: true },
           })
           .then((p) => ({ xp: p?.xp ?? 0, xpPerBrl: tenantVisual.xpPerBrl }))
+          .catch(() => null)
+      : null;
+
+  // O boost de level up ativo, ao lado do rank. Fica aqui porque é onde a
+  // pessoa já olha para ver o próprio nível, e some sozinho quando o prazo
+  // acaba. Falhar não pode derrubar o cabeçalho do site inteiro.
+  const boostAtivo =
+    session?.user?.id && tenantCtx && tenantVisual?.rankEnabled
+      ? await recompensasDoUsuario({
+          userId: session.user.id,
+          tenantId: tenantCtx.id,
+        })
+          .then((r) => r.ativo)
           .catch(() => null)
       : null;
   // Em produção (host split ativo), o site público nunca mostra o link
@@ -191,6 +206,15 @@ export async function SiteHeader() {
             </>
           )}
         </nav>
+
+        {/* O boost ativo, discreto, ao lado do rank. Pílula do tamanho de um
+            botão do cabeçalho: quinze minutos de prazo pedem lembrete, não
+            anúncio, e uma faixa grande viraria ruído no terceiro minuto. */}
+        {boostAtivo && (
+          <div className="ml-auto hidden md:block">
+            <SeloDoBoost boost={boostAtivo} />
+          </div>
+        )}
 
         {/* Rank no celular. O nav inteiro é hidden md:flex, então sem isto o
             cliente não vê o próprio nível no aparelho de onde vem a maior

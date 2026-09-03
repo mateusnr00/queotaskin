@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/table";
 import { formatBRL, formatDate } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
+import { ConfigDaCaixaDeLevelUp } from "@/components/admin/config-da-caixa-de-level-up";
+import { dropsDoPainel } from "@/server/services/caixa-de-level-up";
 
 export const metadata: Metadata = { title: "Ranking" };
 export const dynamic = "force-dynamic";
@@ -38,9 +40,17 @@ export default async function AdminRankingPage() {
     leaderboard(tenantId, 100),
     prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { rankEnabled: true, xpPerBrl: true },
+      select: {
+        rankEnabled: true,
+        xpPerBrl: true,
+        levelUpBoxesEnabled: true,
+        levelUpBoostMinutes: true,
+      },
     }),
   ]);
+
+  // Os drops configurados, ou a tabela de fábrica enquanto ninguém mexeu.
+  const drops = await dropsDoPainel(tenantId);
 
   const totalXp = rows.reduce((sum, row) => sum + row.xp, 0);
   const totalSpent = rows.reduce((sum, row) => sum + row.spent, 0);
@@ -62,6 +72,17 @@ export default async function AdminRankingPage() {
             )}
           </p>
         }
+      />
+
+      <ConfigDaCaixaDeLevelUp
+        ligadoInicial={settings?.levelUpBoxesEnabled ?? false}
+        minutosInicial={settings?.levelUpBoostMinutes ?? 15}
+        dropsIniciais={drops.map((d) => ({
+          multiplier: d.multiplier,
+          rarity: d.rarity,
+          chance: d.chance,
+          ativo: true,
+        }))}
       />
 
       {rows.length > 0 && (

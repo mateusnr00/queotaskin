@@ -276,6 +276,7 @@ model User {
   sessions       Session[]
   reservations   Reservation[]
   xpEntries      XpEntry[]
+  levelUpBoxes   LevelUpBox[]
   boostEntries   BoostEntry[]
   progress       UserProgress[]
   affiliate      Affiliate?
@@ -378,12 +379,12 @@ model Tenant {
   /// de marca e não de campanha: quem assiste vê a mesma cena toda semana.
   /// `Raffle.trofeuUrl` continua existindo e ganha de quem quiser variar numa
   /// campanha específica; vazio nos dois lugares não desenha nada.
-  trofeuUrl         String?
+  trofeuUrl String?
 
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
-  logoShape         LogoShape @default(RECTANGLE)
-  siteDescription   String?
+  logoShape       LogoShape @default(RECTANGLE)
+  siteDescription String?
   /// Câmbio usado para converter o custo da entrega, digitado pelo painel.
   ///
   /// A skin é comprada do fornecedor em YUAN, e é isso que fica gravado em
@@ -394,9 +395,9 @@ model Tenant {
   /// de certo. Sem taxa cadastrada, a tela mostra só yuan e diz por quê.
   ///
   /// Quantos REAIS vale 1 yuan.
-  cnyToBrl          Decimal?  @db.Decimal(12, 6)
+  cnyToBrl        Decimal?  @db.Decimal(12, 6)
   /// Quantos REAIS vale 1 dólar.
-  usdToBrl          Decimal?  @db.Decimal(12, 6)
+  usdToBrl        Decimal?  @db.Decimal(12, 6)
 
   supportPhone                      String?
   supportEmail                      String?
@@ -463,6 +464,23 @@ model Tenant {
   rankEnabled                       Boolean   @default(true)
   rankShowOnHome                    Boolean   @default(true)
 
+  /// CAIXA DE LEVEL UP: liga e desliga o recurso inteiro.
+  ///
+  /// Desligado, nenhuma caixa nova é concedida. As já concedidas continuam
+  /// abríveis: tirar da mão de quem já ganhou seria quebrar promessa feita.
+  levelUpBoxesEnabled Boolean @default(false)
+
+  /// QUANDO O RECURSO FOI LIGADO. É o que impede caixa retroativa.
+  ///
+  /// Só ganha caixa quem sobe de nível DEPOIS deste instante. Sem esta marca,
+  /// bastaria alguém já estar no nível 15 para a primeira compra depois da
+  /// estreia parecer quinze subidas de uma vez.
+  levelUpBoxesEnabledAt DateTime?
+
+  /// Por quantos minutos o boost aberto vale. A contagem começa na ABERTURA
+  /// da caixa, não na concessão dela.
+  levelUpBoostMinutes Int @default(15)
+
   /// SOM DA TRANSMISSÃO DO SORTEIO.
   ///
   /// Desligado aqui, o botão de som some da transmissão e nada toca. Ligado,
@@ -504,6 +522,8 @@ model Tenant {
   googleAnalyticsId String?
   /// Pixel do TikTok Ads. Vazio desliga.
   tiktokPixelId     String?
+  levelUpBoxes      LevelUpBox[]
+  levelUpBoxDrops   LevelUpBoxDrop[]
 }
 
 // Domínios apontados pra esse tenant. Um tenant pode ter múltiplos hosts
@@ -896,8 +916,8 @@ model SkinTemplate {
 
   /// Ficha técnica, espelhando os campos de Prize. Todos opcionais: dá para
   /// cadastrar só o nome e completar depois.
-  skinRarity     SkinRarity?
-  skinWear       SkinWear?
+  skinRarity   SkinRarity?
+  skinWear     SkinWear?
   /// Em quais desgastes esta skin existe. Vem da fonte de itens do CS2, e
   /// não é decorativo: 504 das 2126 skins não existem nos cinco. A M4A4 Howl
   /// para em Well-Worn porque o float dela não passa de 0,4, e oferecer
@@ -905,11 +925,11 @@ model SkinTemplate {
   /// Lista vazia quer dizer "não tem desgaste": agente é personagem e faca
   /// sem pintura não tem acabamento. Skin cadastrada à mão nasce com os
   /// cinco, então não existe estado de "não sei" para representar aqui.
-  skinWears      SkinWear[]
-  skinFloat      Float?
-  skinStatTrak   Boolean     @default(false)
-  skinSouvenir   Boolean     @default(false)
-  skinValueBrl   Decimal?    @db.Decimal(10, 2)
+  skinWears    SkinWear[]
+  skinFloat    Float?
+  skinStatTrak Boolean     @default(false)
+  skinSouvenir Boolean     @default(false)
+  skinValueBrl Decimal?    @db.Decimal(10, 2)
 
   /// O nome EXATO usado na última consulta de preço externo.
   ///
@@ -935,8 +955,8 @@ model SkinTemplate {
   /// à mão, e é assim que se sabe a diferença entre "a fonte cobrava isso
   /// naquele dia" e "alguém digitou isso".
   externalPriceUpdatedAt DateTime?
-  skinCollection String?
-  skinInspectUrl String?
+  skinCollection         String?
+  skinInspectUrl         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1059,6 +1079,114 @@ enum XpReason {
   ADMIN_ADJUST
   /// Bônus de campanha, evento ou compensação.
   BONUS
+}
+
+/// A situação de uma Caixa de Level Up.
+///
+/// FECHADA nunca expira: ela espera o dono, e pode esperar meses. Quem tem
+/// prazo é o BOOST, e o relógio dele só começa quando alguém abre a caixa.
+enum LevelUpBoxStatus {
+  /// Concedida e fechada. Sem multiplicador sorteado ainda.
+  FECHADA
+  /// Aberta, com multiplicador definido e prazo correndo.
+  ATIVA
+  /// Usada numa compra confirmada. Fim de linha.
+  CONSUMIDA
+  /// Aberta e não usada dentro do prazo.
+  EXPIRADA
+}
+
+/// A raridade do multiplicador. Existe para a tela: o servidor decide pelo
+/// número, e a raridade é como ele é apresentado.
+enum LevelUpBoxRarity {
+  COMUM
+  RARO
+  EPICO
+  LENDARIO
+  ULTRA_RARO
+}
+
+/// Uma Caixa de Boost de XP ganha ao subir de nível.
+///
+/// UMA POR NÍVEL, PARA SEMPRE
+///
+/// O índice único por (usuário, painel, nível) é a idempotência de verdade:
+/// webhook reentregue, retry, duas confirmações simultâneas ou reprocessamento
+/// esbarram no banco, não numa checagem em memória. Subir três níveis de uma
+/// vez cria três linhas, uma por nível conquistado.
+///
+/// O NÍVEL NÃO É GUARDADO EM LUGAR NENHUM
+///
+/// Ele é derivado do XP (`levelFromXp`), então `sourceLevel` aqui é o registro
+/// histórico do nível que gerou a caixa, não uma segunda fonte de verdade
+/// sobre em que nível a pessoa está.
+model LevelUpBox {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+
+  /// O nível conquistado que gerou esta caixa.
+  sourceLevel Int
+
+  status LevelUpBoxStatus @default(FECHADA)
+
+  /// Sorteado no servidor na ABERTURA, nunca antes e nunca de novo. Nulo
+  /// enquanto a caixa está fechada.
+  multiplier Decimal?          @db.Decimal(4, 2)
+  rarity     LevelUpBoxRarity?
+
+  createdAt  DateTime  @default(now())
+  openedAt   DateTime?
+  /// `openedAt` mais a duração configurada. O relógio do navegador não decide
+  /// nada: ele só desenha a contagem a partir desta data.
+  expiresAt  DateTime?
+  consumedAt DateTime?
+  expiredAt  DateTime?
+
+  /// A compra que consumiu o boost, e o que ela rendeu. Guardado aqui para a
+  /// auditoria responder "o que aconteceu com esta caixa" sem cruzar tabelas.
+  consumedByReservationId String?
+  baseXp                  Int?
+  bonusXp                 Int?
+  finalXp                 Int?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reservation Reservation? @relation(fields: [consumedByReservationId], references: [id], onDelete: SetNull)
+
+  /// A trava contra caixa duplicada do mesmo nível.
+  @@unique([userId, tenantId, sourceLevel])
+  /// A busca do boost ativo e a listagem das fechadas passam por aqui.
+  @@index([userId, tenantId, status])
+  @@index([tenantId])
+}
+
+/// Um multiplicador possível e a chance dele, configurável no painel.
+///
+/// Tabela e não constante no código porque quem opera precisa mexer na
+/// economia sem esperar deploy. A soma das chances ATIVAS tem de dar 100%, e
+/// quem garante isso é a action que salva.
+model LevelUpBoxDrop {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// O multiplicador aplicado ao XP da compra. 2.50 é "2,5x".
+  multiplier Decimal          @db.Decimal(4, 2)
+  rarity     LevelUpBoxRarity
+  /// A chance em pontos percentuais inteiros. 30 é 30%.
+  chance     Int
+  ativo      Boolean          @default(true)
+  ordem      Int              @default(0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// O mesmo multiplicador duas vezes no mesmo painel seria duas linhas
+  /// disputando a mesma faixa do sorteio.
+  @@unique([tenantId, multiplier])
+  @@index([tenantId, ativo])
 }
 
 /// Extrato de XP. É a fonte da verdade: `UserProgress.xp` é apenas o total
@@ -1199,15 +1327,15 @@ model Prize {
   // um item que não é skin (saldo, periférico) e aí é só `description`.
   // Quando skinRarity está preenchida, o card do prêmio ganha a cor oficial
   // da raridade e a página pública exibe a ficha técnica completa.
-  skinName       String?
-  skinRarity     SkinRarity?
-  skinWear       SkinWear?
+  skinName     String?
+  skinRarity   SkinRarity?
+  skinWear     SkinWear?
   /// Float exato do item (0.0000 a 1.0000), como aparece no inspecionar.
-  skinFloat      Float?
-  skinStatTrak   Boolean     @default(false)
-  skinSouvenir   Boolean     @default(false)
+  skinFloat    Float?
+  skinStatTrak Boolean     @default(false)
+  skinSouvenir Boolean     @default(false)
   /// Valor de mercado em reais, exibido como "avaliada em".
-  skinValueBrl   Decimal?    @db.Decimal(10, 2)
+  skinValueBrl Decimal?    @db.Decimal(10, 2)
 
   skinCollection String?
   /// Link `steam://rungame/730/...` para inspecionar o item no jogo.
@@ -1671,9 +1799,10 @@ model Reservation {
   surpriseBoxes  SurpriseBox[]
   entradasGratis EntradaGratis[]
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  raspadinhas Raspadinha[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  raspadinhas  Raspadinha[]
+  levelUpBoxes LevelUpBox[]
 
   @@index([raffleId, status])
   @@index([userId])
@@ -2361,10 +2490,10 @@ model DrawScheduleItem {
   /// fila da noite morreria a meia-noite.
   dia DateTime? @db.Date
 
-  ativadoEm    DateTime?
-  concluidoEm  DateTime?
-  puladoEm     DateTime?
-  removidoEm   DateTime?
+  ativadoEm   DateTime?
+  concluidoEm DateTime?
+  puladoEm    DateTime?
+  removidoEm  DateTime?
 
   /// Quem ativou: "AUTOMATICO" quando veio do fim do sorteio anterior,
   /// "MANUAL" quando alguem clicou. Nulo enquanto nao foi ativado.

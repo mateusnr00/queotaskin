@@ -24,6 +24,12 @@ import {
   podeGanharBoostDeSorte,
 } from "@/lib/xp/regras";
 import { registrarParticipacao } from "@/server/services/boost";
+import {
+  concederCaixasPorLevelUp,
+  registrarRendimentoDoBoost,
+  reservarBoostParaCompra,
+} from "@/server/services/caixa-de-level-up";
+import { aplicarBoost } from "@/lib/xp/caixa-de-level-up";
 
 // Idempotência é resolvida com "consulta antes de inserir", nunca capturando
 // a violação do índice único: no Postgres, um statement que falha aborta a
@@ -144,8 +150,15 @@ export async function awardXpForReservation(
       // primeiro faria a própria compra pagar o boost que ela mesma gerou.
       const progresso = await tx.userProgress.findUnique({
         where: { userId_tenantId: { userId, tenantId } },
-        select: { boostPoints: true, lastWinAt: true, lastParticipationAt: true, createdAt: true },
+        select: {
+          xp: true,
+          boostPoints: true,
+          lastWinAt: true,
+          lastParticipationAt: true,
+          createdAt: true,
+        },
       });
+      const xpAntes = progresso?.xp ?? 0;
 
       const hoje = diaOficial(quando);
       const desdeVitoria = progresso?.lastWinAt ?? progresso?.createdAt ?? quando;
@@ -170,26 +183,70 @@ export async function awardXpForReservation(
       });
       if (composicao.earnedXp <= 0) return { credited: false, amount: 0, totalXp: 0 };
 
+      // O BOOST DE LEVEL UP É UM ESTÁGIO À PARTE, DEPOIS DO CÁLCULO ACIMA.
+      //
+      // `calculatePurchaseXp` SOMA os multiplicadores existentes e limita o
+      // total em MAX_XP_MULTIPLIER, hoje 2,5. Um boost de 3,5x jogado naquela
+      // soma seria cortado em 2,5 sem ninguém perceber, e ainda mudaria o
+      // efeito das regras que já existem. Então ele multiplica o XP já
+      // calculado, e o extrato guarda as duas coisas separadas.
+      //
+      // A reserva acontece ANTES de creditar: ou a caixa vira CONSUMIDA
+      // agora, ou esta compra não tem boost. O contrário deixaria uma compra
+      // creditada com um multiplicador que ninguém pagou.
+      const boost = await reservarBoostParaCompra(tx, {
+        userId,
+        tenantId,
+        reservationId,
+        quando,
+      });
+      const comBoost = boost
+        ? aplicarBoost(composicao.earnedXp, boost.multiplicador)
+        : { finalXp: composicao.earnedXp, bonusXp: 0 };
+
       await tx.xpEntry.create({
         data: {
           userId,
           tenantId,
-          amount: composicao.earnedXp,
+          amount: comBoost.finalXp,
           reason: "PURCHASE",
           reservationId,
           description: reservation.raffle.title,
           baseXp: composicao.baseXp,
           multiplier: composicao.finalMultiplier,
-          bonusXp: composicao.bonusXp,
+          // O bônus somado: o das regras de sempre mais o do boost.
+          bonusXp: comBoost.finalXp - composicao.baseXp,
           metadata: {
             faixaDaCompra: compra.faixa,
             rotuloDaCompra: compra.rotulo,
             activityMultiplier: composicao.activityMultiplier,
             purchaseBonus: composicao.purchaseBonus,
             luckBonus: composicao.luckBonus,
+            // Cada parte fica separada, para a auditoria conseguir dizer de
+            // onde veio cada pedaço do XP.
+            ...(boost
+              ? {
+                  levelUpBoost: {
+                    boxId: boost.boxId,
+                    sourceLevel: boost.sourceLevel,
+                    multiplicador: boost.multiplicador,
+                    xpAntesDoBoost: composicao.earnedXp,
+                    xpDoBoost: comBoost.bonusXp,
+                  },
+                }
+              : {}),
           },
         },
       });
+
+      if (boost) {
+        await registrarRendimentoDoBoost(tx, {
+          boxId: boost.boxId,
+          baseXp: composicao.earnedXp,
+          bonusXp: comBoost.bonusXp,
+          finalXp: comBoost.finalXp,
+        });
+      }
 
       // O gasto acumulado sobe junto, na mesma transação: é ele que o GOAT
       // exige, e somar fora daqui abriria a janela para os dois divergirem.
@@ -207,7 +264,20 @@ export async function awardXpForReservation(
       });
 
       const totalXp = await recomputeTotal(tx, userId, tenantId);
-      return { credited: true, amount: composicao.earnedXp, totalXp };
+
+      // A CAIXA VEM DEPOIS DO TOTAL, e não podia ser antes: é a comparação
+      // entre o nível de antes e o de agora que diz o que foi conquistado.
+      // Uma compra turbinada pelo próprio boost pode atravessar vários
+      // degraus, e cada um gera a sua caixa, fechada.
+      await concederCaixasPorLevelUp(tx, {
+        userId,
+        tenantId,
+        xpAntes,
+        xpDepois: totalXp,
+        quando,
+      });
+
+      return { credited: true, amount: comBoost.finalXp, totalXp };
     });
   } catch (err) {
     console.error("[awardXpForReservation]", err);

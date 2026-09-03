@@ -21,6 +21,8 @@ import { STEAM_DELIVERY_NOTICE } from "@/lib/cs2";
 import { formatPhone } from "@/lib/cpf";
 import { SteamTradeUrlForm } from "@/components/forms/steam-trade-url-form";
 import { RankCard, RankLadder } from "@/components/rank/rank-card";
+import { CaixasDeLevelUp } from "@/components/public/caixas-de-level-up";
+import { recompensasDoUsuario } from "@/server/services/caixa-de-level-up";
 import { XpHistory } from "@/components/rank/xp-history";
 import { getUserXp, xpHistory } from "@/server/services/xp";
 import { TETO_DE_BOOST, estadoDoBoost } from "@/server/services/boost";
@@ -70,6 +72,13 @@ export default async function MyAccountPage() {
   if (!user) notFound();
 
   const ehAfiliado = user.affiliate?.status === "ACTIVE";
+
+  // As caixas e o boost ativo. A consulta também marca como expirado o que
+  // passou do prazo, o que evita uma tarefa agendada só para isso.
+  const recompensas = await recompensasDoUsuario({
+    userId: session.user.id,
+    tenantId: tenant.id,
+  });
 
   const times = await listarTimesAtivos();
   const timeDoCoracao = times.find((t) => t.id === user.favoriteTeamId) ?? null;
@@ -161,6 +170,14 @@ export default async function MyAccountPage() {
                   tetoDePontos={TETO_DE_BOOST}
                 />
               )}
+              {/* As caixas ficam logo abaixo do rank, que é onde a pessoa
+                  acabou de ler o nível dela: a recompensa aparece junto do
+                  motivo dela existir. A seção some sozinha quando não há
+                  caixa nem boost. */}
+              <CaixasDeLevelUp
+                caixas={recompensas.fechadas}
+                boostAtivo={recompensas.ativo}
+              />
             </>
           )}
         </div>

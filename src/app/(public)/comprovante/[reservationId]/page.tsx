@@ -11,6 +11,11 @@ import { PixPayment } from "@/components/public/pix-payment";
 import { PixError } from "@/components/public/pix-error";
 import { PaidCelebration } from "@/components/public/paid-celebration";
 import { XpGanho } from "@/components/public/xp-ganho";
+import {
+  BoostPendenteNoCheckout,
+  BoostUsadoNaCompra,
+} from "@/components/public/boost-no-comprovante";
+import { recompensasDoUsuario } from "@/server/services/caixa-de-level-up";
 import { SurpriseBoxesClaim } from "@/components/public/surprise-boxes-claim";
 import { TitulosPremiadosGanhos } from "@/components/public/titulos-premiados-ganhos";
 import { ColecaoDeRaspadinhas } from "@/components/public/raspadinha/colecao";
@@ -257,6 +262,21 @@ export default async function ReservationReceiptPage({
           }))
         : null;
 
+    // O BOOST DE LEVEL UP QUE ESTA COMPRA CONSUMIU, se houve.
+    //
+    // Lido da caixa e não recalculado aqui: quem gravou foi a confirmação do
+    // pagamento, e refazer a conta nesta tela criaria uma segunda regra que
+    // pode divergir da que creditou.
+    const boostUsado = reservation.userId
+      ? await prisma.levelUpBox.findFirst({
+          where: {
+            consumedByReservationId: reservation.id,
+            userId: reservation.userId,
+          },
+          select: { multiplier: true, baseXp: true, finalXp: true },
+        })
+      : null;
+
     // O PRÊMIO SÓ VIAJA DEPOIS DE RASPADA, pelo mesmo motivo da caixa: ele
     // passou a ser decidido na confirmação do pagamento, então o bilhete
     // fechado já sabe o que tem dentro. Mandar isso para o navegador
@@ -353,6 +373,16 @@ export default async function ReservationReceiptPage({
             />
           )}
 
+          {boostUsado?.multiplier &&
+            boostUsado.baseXp != null &&
+            boostUsado.finalXp != null && (
+              <BoostUsadoNaCompra
+                multiplicador={Number(boostUsado.multiplier)}
+                xpBase={boostUsado.baseXp}
+                xpFinal={boostUsado.finalXp}
+              />
+            )}
+
           {xp && (
             <XpGanho
               ganho={xp.ganho}
@@ -410,6 +440,21 @@ export default async function ReservationReceiptPage({
 
   const quantidade = reservation.tickets.length;
 
+  // O BOOST ATIVO, ENQUANTO O PAGAMENTO NÃO SAI.
+  //
+  // Aviso, não reserva: nada aqui consome o boost. Ele é consumido na
+  // confirmação do pagamento, e um PIX que expira devolve a pessoa à tela
+  // com o boost ainda guardado.
+  const boostAtivo =
+    reservation.status === "PENDING" && reservation.userId
+      ? (
+          await recompensasDoUsuario({
+            userId: reservation.userId,
+            tenantId: tenant.id,
+          })
+        ).ativo
+      : null;
+
   return (
     // Tela de pagamento pendente. A ordem segue o que a pessoa precisa
     // fazer agora: quanto pagar, quanto tempo resta, e como pagar. Antes,
@@ -418,6 +463,13 @@ export default async function ReservationReceiptPage({
     // estava paga.
     <ContainerPublico largura="foco" className="space-y-4">
       <TrilhaDoPedido estado="aguardando" titulo={reservation.raffle.title} />
+
+      {boostAtivo && (
+        <BoostPendenteNoCheckout
+          multiplicador={boostAtivo.multiplicador}
+          raridade={boostAtivo.raridade}
+        />
+      )}
 
       {/* Valor e prazo no mesmo cartão. Eram dois quadros grandes e
           coloridos empilhados, e o olho não tinha onde pousar primeiro;
