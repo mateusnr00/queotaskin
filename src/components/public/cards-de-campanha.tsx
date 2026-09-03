@@ -167,13 +167,26 @@ export function FeaturedRaffleCard({
 
         <div className="flex items-end justify-between gap-3 border-t pt-3">
           <span>
-            <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
-              {vendendo ? "Por número" : "Títulos vendidos"}
-            </span>
+            {/* GRÁTIS NÃO PRECISA DE RÓTULO.
+                "Por número" existe para dizer que aquele valor é o de UMA
+                cota, e não o total: com preço, a distinção importa. Grátis
+                não tem essa ambiguidade, e o rótulo em cima só empurrava a
+                palavra que interessa para baixo e para longe do botão.
+
+                E ela cresce em vez de encolher. Antes o "GRÁTIS" saía MENOR
+                que um preço qualquer, o que é o contrário do que ele vale:
+                é o argumento mais forte que o cartão tem para oferecer. */}
+            {!(raffle.isFree && vendendo) && (
+              <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
+                {vendendo ? "Por número" : "Títulos vendidos"}
+              </span>
+            )}
             <span
               className={cn(
                 "text-xl leading-none font-bold text-primary",
-                raffle.isFree && vendendo && "text-base tracking-wider uppercase",
+                raffle.isFree &&
+                  vendendo &&
+                  "text-2xl tracking-[0.08em] uppercase drop-shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary)_45%,transparent)]",
               )}
             >
               {vendendo
@@ -236,8 +249,11 @@ export function CompactRaffleCard({
           <span
             className={cn(
               "font-bold text-primary",
+              // Aqui o mesmo desacerto: grátis saía em text-xs contra o
+              // text-base de um preço. Ele passa a ter pelo menos o mesmo
+              // peso, com o espaçamento de letras que a palavra pede.
               raffle.isFree && vendendo
-                ? "text-xs tracking-wider uppercase"
+                ? "text-base tracking-[0.06em] uppercase"
                 : "text-base",
               // Fechada, o preço sai: ele convida a comprar uma coisa que não
               // está mais à venda.
