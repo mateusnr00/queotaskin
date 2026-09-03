@@ -90,6 +90,9 @@ export function RoletaDeBoost({
   const janela = useRef<HTMLDivElement>(null);
   const [deslocamento, setDeslocamento] = useState(0);
   const [correndo, setCorrendo] = useState(false);
+  // Só depois que a fita para. Durante a corrida o marcador fica neutro:
+  // pintado da cor do prêmio, ele entregaria o resultado antes da hora.
+  const [parou, setParou] = useState(false);
   // A corrida acontece UMA VEZ, e a trava é esta.
   //
   // Sem ela o efeito reiniciava a cada render, e havia um render por segundo:
@@ -136,6 +139,7 @@ export function RoletaDeBoost({
     if (semMovimento) {
       // Sem animação: vai direto ao resultado. O prêmio é o mesmo.
       setDeslocamento(alvo);
+      setParou(true);
       const t0 = setTimeout(aoTerminar, 400);
       return () => clearTimeout(t0);
     }
@@ -146,9 +150,11 @@ export function RoletaDeBoost({
       setCorrendo(true);
       setDeslocamento(alvo);
     });
-    const fim = setTimeout(aoTerminar, DURACAO_MS + 250);
+    const parada = setTimeout(() => setParou(true), DURACAO_MS - 120);
+    const fim = setTimeout(aoTerminar, DURACAO_MS + 420);
     return () => {
       cancelAnimationFrame(inicio);
+      clearTimeout(parada);
       clearTimeout(fim);
     };
     // Roda na montagem e só. As dependências ficam de fora de propósito: a
@@ -164,17 +170,23 @@ export function RoletaDeBoost({
           fita. */}
       <div
         ref={janela}
-        className="relative overflow-hidden py-4"
+        className="relative overflow-hidden py-6"
         style={{
+          // O DESVANECIMENTO É PROPOSITAL, E MAIS LARGO QUE ANTES.
+          //
+          // Corte reto faz o badge sumir de repente e chama atenção para a
+          // moldura em vez da fita. Com a passagem longa, o item das pontas
+          // parece entrar e sair da luz, e não ser cortado por falta de
+          // espaço. As paradas intermediárias suavizam o meio do caminho.
           maskImage:
-            "linear-gradient(to right, transparent, black 12%, black 88%, transparent)",
+            "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 8%, black 26%, black 74%, rgba(0,0,0,0.35) 92%, transparent 100%)",
           WebkitMaskImage:
-            "linear-gradient(to right, transparent, black 12%, black 88%, transparent)",
+            "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 8%, black 26%, black 74%, rgba(0,0,0,0.35) 92%, transparent 100%)",
         }}
       >
         <div
           ref={trilho}
-          className="flex items-center gap-3 will-change-transform sm:gap-4"
+          className="flex items-center gap-5 will-change-transform sm:gap-6 lg:gap-7"
           style={{
             transform: `translate3d(${deslocamento}px, 0, 0)`,
             // Desaceleração longa: arranca rápido e chega devagar, que é o
@@ -184,15 +196,30 @@ export function RoletaDeBoost({
               : undefined,
           }}
         >
-          {fita.map((item, i) => (
+          {fita.map((item, i) => {
+            const ehVencedor = i === POSICAO_DO_VENCEDOR;
+            return (
             <div
               key={i}
-              // A largura é escolhida pela QUANTIDADE VISÍVEL, não pelo que
-              // parece bonito isolado: cerca de três badges no celular e
-              // cinco ou seis no desktop. Menos que isso e a fita não parece
-              // uma fita; mais e o vencedor fica pequeno demais para ler.
-              className="shrink-0 [--w:70px] sm:[--w:86px] lg:[--w:96px]"
-              style={{ width: "var(--w)" }}
+              // O FOCO ACONTECE UMA VEZ, NA PARADA.
+              //
+              // Não é animação por quadro: é uma troca de estilo única quando
+              // a fita para. O vencedor cresce um fio e o resto recua em
+              // opacidade, o suficiente para o olho saber onde pousar sem
+              // desfoque, 3D nem perspectiva.
+              style={{
+                width: "var(--w)",
+                transform: parou && ehVencedor ? "scale(1.07)" : undefined,
+                opacity: parou && !ehVencedor ? 0.4 : 1,
+                transition:
+                  "transform 420ms cubic-bezier(0.32,0.72,0,1), opacity 420ms ease-out",
+              }}
+              // A largura sai da QUANTIDADE VISÍVEL, não do que parece bonito
+              // isolado: três badges no celular, seis no desktop. Menos e a
+              // fita não parece fita; mais e o multiplicador deixa de ser
+              // legível enquanto os itens desaceleram, que é justamente
+              // quando alguém está tentando ler.
+              className="shrink-0 [--w:80px] sm:[--w:98px] lg:[--w:110px]"
             >
               <XpBoostBadge
                 multiplier={item.multiplier}
@@ -202,29 +229,40 @@ export function RoletaDeBoost({
                 className="h-auto w-full"
               />
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* O MARCADOR. Dois triângulos pequenos, em cima e embaixo, e uma linha
-          fina no meio. Fixo: quem se move é a fita. */}
+      {/* O MARCADOR.
+          Um fio de cabelo e dois indicadores pequenos, e nada mais. A versão
+          anterior era uma linha cheia atravessando a área inteira, que num
+          fundo escuro lia como elemento de depuração e brigava com a fita
+          pela atenção.
+
+          Neutro durante a corrida: pintado da cor do prêmio, ele entregaria
+          o resultado antes da hora. A cor entra quando a fita para. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 flex-col items-center justify-between"
+        className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 flex-col items-center"
       >
         <span
-          className="h-0 w-0 border-x-[7px] border-t-[9px] border-x-transparent"
-          style={{ borderTopColor: vencedor.color }}
+          className="h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent transition-colors duration-500"
+          style={{ borderTopColor: parou ? vencedor.color : "rgba(255,255,255,0.55)" }}
         />
         <span
-          className="w-px flex-1 opacity-25"
-          style={{ backgroundColor: vencedor.color }}
+          className="w-px flex-1 transition-all duration-500"
+          style={{
+            backgroundColor: parou ? vencedor.color : "rgba(255,255,255,0.5)",
+            opacity: parou ? 0.35 : 0.14,
+          }}
         />
         <span
-          className="h-0 w-0 border-x-[7px] border-b-[9px] border-x-transparent"
-          style={{ borderBottomColor: vencedor.color }}
+          className="h-0 w-0 border-x-[5px] border-b-[7px] border-x-transparent transition-colors duration-500"
+          style={{ borderBottomColor: parou ? vencedor.color : "rgba(255,255,255,0.55)" }}
         />
       </div>
+
     </div>
   );
 }

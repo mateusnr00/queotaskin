@@ -23,6 +23,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Moldura } from "@/components/ui/moldura";
+import { cn } from "@/lib/utils";
 import { XpBoostBadge } from "@/components/public/xp-boost-badge";
 import { RoletaDeBoost } from "@/components/public/roleta-de-boost";
 import { ROTULO_DA_RARIDADE } from "@/lib/xp/caixa-de-level-up";
@@ -296,69 +297,89 @@ function Revelacao({
       aria-label="Resultado da caixa de level up"
     >
       <div
-        // Mais largo durante a corrida, para caber fita; a revelação não
-        // precisa de tanto, mas mudar a largura no meio daria um solavanco
-        // bem no instante em que o olho está no resultado.
-        className="w-full max-w-2xl rounded-[1.75rem] border bg-[#0e1013] p-4 text-center transition-shadow duration-700 sm:p-6"
+        className={cn(
+          // A ABERTURA PEDE LARGURA; A REVELAÇÃO, NÃO.
+          //
+          // A fita precisa de espaço para caber seis badges e ainda ter
+          // margem para o desvanecimento das pontas. O resultado precisa do
+          // contrário: um bloco compacto onde badge, raridade, frase e prazo
+          // se leem de uma vez. A largura muda entre as duas fases, com
+          // transição, porque um salto seco bem no instante do resultado
+          // roubaria a atenção do prêmio.
+          "w-full rounded-[1.75rem] border bg-[#0e1013] text-center",
+          "transition-[max-width,box-shadow] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+          fase === "roleta"
+            ? "max-w-3xl px-3 py-5 sm:px-5 sm:py-6"
+            : "max-w-md px-6 py-6 sm:px-8",
+        )}
         style={{
           borderColor: `color-mix(in srgb, ${boost.cor} 40%, transparent)`,
-          // Halo discreto, e só depois de revelar: brilho durante a corrida
-          // rouba a atenção da fita, que é onde ela deve estar.
           boxShadow:
             fase === "revelado"
-              ? `0 0 44px -12px color-mix(in srgb, ${boost.cor} 70%, transparent)`
+              ? `0 0 52px -14px color-mix(in srgb, ${boost.cor} 75%, transparent)`
               : undefined,
         }}
       >
-        <p className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground uppercase">
+        {/* O cabeçalho é etiqueta, não título: menor, com o espaçamento de
+            letras contido, e sem consumir altura acima da fita. */}
+        <p className="text-[9px] font-bold tracking-[0.16em] text-muted-foreground/70 uppercase">
           Caixa de Level Up · Level {boost.sourceLevel}
         </p>
 
         {fase === "roleta" ? (
-          <RoletaDeBoost
-            className="mt-4"
-            vencedor={vencedor}
-            possiveis={possiveis}
-            aoTerminar={aoTerminar}
-          />
+          <>
+            <RoletaDeBoost
+              className="mt-2"
+              vencedor={vencedor}
+              possiveis={possiveis}
+              aoTerminar={aoTerminar}
+            />
+            {/* Texto, e não uma barra laranja de botão desabilitado: aquilo
+                competia com a fita e parecia um controle quebrado. */}
+            <p className="text-[10px] font-bold tracking-[0.22em] text-muted-foreground/60 uppercase">
+              Abrindo caixa
+              <span className="motion-safe:animate-pulse">...</span>
+            </p>
+          </>
         ) : (
           <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-500">
-            <div className="flex justify-center py-4">
+            {/* O BADGE É O HERÓI. Grande, e colado no que o explica: raridade
+                logo abaixo, frase e prazo em seguida, tudo num bloco só.
+                Antes havia respiro demais entre eles e o prêmio parecia
+                pequeno dentro de um modal grande. */}
+            <div className="flex justify-center pt-3 pb-1">
               <XpBoostBadge
                 multiplier={boost.multiplicador}
                 color={boost.cor}
                 size="lg"
-                className="w-40 sm:w-48"
+                className="w-52 sm:w-60"
               />
             </div>
             <p
-              className="text-xs font-bold tracking-[0.18em] uppercase"
+              className="text-[11px] font-bold tracking-[0.2em] uppercase"
               style={{ color: boost.cor }}
             >
               {ROTULO_DA_RARIDADE[boost.raridade]}
             </p>
-            <p className="mt-3 text-sm">
+            <p className="mt-2.5 text-sm">
               Seu próximo XP vem com{" "}
               <b className="font-bold">{boost.multiplicador}x</b>.
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Use na próxima compra em até{" "}
               <b className="font-mono font-semibold tabular-nums text-foreground">
                 {contagem.texto}
               </b>
               .
             </p>
+
+            {/* O botão do projeto, no tamanho do projeto. Faixa de largura
+                total parecia um bloco pesado embaixo do prêmio. */}
+            <Button type="button" size="lg" className="mt-5 px-8" onClick={aoFechar}>
+              Continuar
+            </Button>
           </div>
         )}
-
-        <Button
-          type="button"
-          className="mt-5 w-full"
-          disabled={fase === "roleta"}
-          onClick={aoFechar}
-        >
-          {fase === "roleta" ? "Sorteando..." : "Continuar"}
-        </Button>
       </div>
     </div>
   );

@@ -89,6 +89,11 @@ export function ConfigDaCaixaDeLevelUp({
     [drops],
   );
   const fecha = soma === TOTAL_EM_BPS;
+  // A régua da barra de proporção: a maior chance ativa vira largura cheia.
+  const maiorChance = useMemo(
+    () => Math.max(1, ...drops.filter((d) => d.ativo).map((d) => d.probabilityBps)),
+    [drops],
+  );
   const coresOk = drops.every((d) => corValida(d.color));
   const podeSalvar = fecha && coresOk;
 
@@ -196,107 +201,105 @@ export function ConfigDaCaixaDeLevelUp({
         </p>
       </div>
 
-      <ul className="space-y-2">
+      {/* UMA LINHA POR RESULTADO.
+          Cada drop ocupava um cartão inteiro, com os controles numa segunda
+          área embaixo: nove resultados viravam uma página de rolagem e era
+          impossível comparar as chances entre si, que é justamente o que se
+          faz ao ajustar economia. Agora cabe tudo numa linha no desktop, e
+          quebra em duas no celular sem virar tabela rolando de lado.
+
+          O badge NÃO é repetido em texto ao lado. Ele já diz "1.5x XP"; o que
+          o texto acrescenta é a raridade, e só. */}
+      <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/10">
         {drops.map((drop, i) => (
           <li
             key={drop.multiplier}
             className={cn(
-              "rounded-xl border p-3 transition-opacity",
-              drop.ativo
-                ? "border-white/10 bg-white/[0.03]"
-                : "border-white/[0.06] bg-transparent opacity-55",
+              "flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 transition-colors sm:flex-nowrap sm:gap-x-4",
+              drop.ativo ? "bg-white/[0.02]" : "bg-transparent opacity-50",
             )}
           >
-            <div className="flex items-center gap-3">
-              {/* A INSÍGNIA DE VERDADE. É o que o cliente vê, e a cor é o que
-                  se está escolhendo: preview falso aqui seria mentira. */}
-              <XpBoostBadge
-                multiplier={drop.multiplier}
-                color={drop.color}
-                size="sm"
-                decorativo
-                className="w-11 shrink-0 sm:w-12"
+            <XpBoostBadge
+              multiplier={drop.multiplier}
+              color={drop.color}
+              size="sm"
+              decorativo
+              className="w-10 shrink-0"
+            />
+
+            {/* Uma identificação compacta, não a repetição do badge. Ele já
+                desenha o multiplicador; o que falta para percorrer a lista de
+                olho é o número em texto alinhado e a raridade. */}
+            <span className="w-10 shrink-0 font-mono text-xs font-bold tabular-nums">
+              {drop.multiplier}x
+            </span>
+            <span className="w-20 shrink-0 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              {ROTULO_DA_RARIDADE[drop.rarity]}
+            </span>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <input
+                type="color"
+                value={corValida(drop.color) ? drop.color : "#A1A1AA"}
+                onChange={(e) => mudar(i, "color", e.target.value.toUpperCase())}
+                className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-white/15 bg-transparent p-0.5"
+                aria-label={`Cor do multiplicador ${drop.multiplier}x`}
               />
+              <Input
+                value={drop.color}
+                onChange={(e) => mudar(i, "color", e.target.value.toUpperCase())}
+                className={cn(
+                  "h-7 w-[5.5rem] px-2 font-mono text-[11px] uppercase",
+                  !corValida(drop.color) && "border-red-500/60",
+                )}
+                maxLength={7}
+                aria-label={`Código hexadecimal de ${drop.multiplier}x`}
+                aria-invalid={!corValida(drop.color)}
+              />
+            </div>
 
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold tabular-nums">
-                  {drop.multiplier}x XP
-                </p>
-                <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
-                  {ROTULO_DA_RARIDADE[drop.rarity]}
-                </p>
-              </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Input
+                id={`chance-${i}`}
+                value={chanceEmTexto[i] ?? bpsParaTexto(drop.probabilityBps)}
+                onChange={(e) => mudarChance(i, e.target.value)}
+                inputMode="decimal"
+                className="h-7 w-16 px-2 text-right font-mono text-[11px]"
+                aria-label={`Chance de ${drop.multiplier}x em porcento`}
+              />
+              <span className="text-[11px] text-muted-foreground">%</span>
+            </div>
 
-              {/* No celular o interruptor sobe para a primeira fileira: é a
-                  ação mais provável e a que precisa do polegar mais perto. */}
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="hidden text-[11px] text-muted-foreground sm:inline">
-                  {drop.ativo ? "ativo" : "fora"}
-                </span>
-                <Switch
-                  checked={drop.ativo}
-                  onCheckedChange={(v) => mudar(i, "ativo", v)}
-                  aria-label={`Ativar o multiplicador ${drop.multiplier}x`}
+            {/* A BARRA DE PROPORÇÃO OCUPA O VÃO COM INFORMAÇÃO.
+                Sobrava meia linha vazia entre a chance e o interruptor. Em
+                vez de espaço morto, a fatia de cada resultado em relação ao
+                maior: é o que se está de fato ajustando, e ler nove números
+                soltos não diz se a curva está íngreme ou achatada.
+
+                Some no celular, onde a largura é do controle. */}
+            <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
+              <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full transition-[width] duration-300"
+                  style={{
+                    width: `${maiorChance > 0 ? (drop.probabilityBps / maiorChance) * 100 : 0}%`,
+                    backgroundColor: drop.ativo
+                      ? `color-mix(in srgb, ${corValida(drop.color) ? drop.color : "#A1A1AA"} 70%, transparent)`
+                      : "rgba(255,255,255,0.12)",
+                  }}
                 />
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-end gap-4">
-              <div className="min-w-0">
-                <label
-                  className="mb-1 block text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
-                  htmlFor={`cor-${i}`}
-                >
-                  Cor
-                </label>
-                <div className="flex items-center gap-2">
-                  {/* O seletor nativo, e não um de biblioteca: já é acessível,
-                      já funciona no celular e não custa dependência nova. */}
-                  <input
-                    id={`cor-${i}`}
-                    type="color"
-                    value={corValida(drop.color) ? drop.color : "#A1A1AA"}
-                    onChange={(e) => mudar(i, "color", e.target.value.toUpperCase())}
-                    className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-white/15 bg-transparent p-0.5"
-                    aria-label={`Cor do multiplicador ${drop.multiplier}x`}
-                  />
-                  <Input
-                    value={drop.color}
-                    onChange={(e) => mudar(i, "color", e.target.value.toUpperCase())}
-                    className={cn(
-                      "h-9 w-28 font-mono text-xs uppercase",
-                      !corValida(drop.color) && "border-red-500/60",
-                    )}
-                    maxLength={7}
-                    aria-label={`Código hexadecimal de ${drop.multiplier}x`}
-                    aria-invalid={!corValida(drop.color)}
-                  />
-                </div>
-                {!corValida(drop.color) && (
-                  <p className="mt-1 text-[11px] text-red-400">
-                    Use um hexadecimal, como #FF4655.
-                  </p>
-                )}
-              </div>
-
-              <div className="min-w-0">
-                <label
-                  className="mb-1 block text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
-                  htmlFor={`chance-${i}`}
-                >
-                  Chance
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    id={`chance-${i}`}
-                    value={chanceEmTexto[i] ?? bpsParaTexto(drop.probabilityBps)}
-                    onChange={(e) => mudarChance(i, e.target.value)}
-                    inputMode="decimal"
-                    className="h-9 w-24 font-mono"
-                  />
-                  <span className="text-xs text-muted-foreground">%</span>
-                </div>
-              </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
+              {!corValida(drop.color) && (
+                <span className="text-[10px] text-red-400">HEX inválido</span>
+              )}
+              <Switch
+                checked={drop.ativo}
+                onCheckedChange={(v) => mudar(i, "ativo", v)}
+                aria-label={`Ativar o multiplicador ${drop.multiplier}x`}
+              />
             </div>
           </li>
         ))}

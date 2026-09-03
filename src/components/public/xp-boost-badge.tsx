@@ -86,7 +86,13 @@ export function XpBoostBadge({
       viewBox="0 0 320 360"
       width={largura}
       height={(largura * 360) / 320}
-      className={cn("block shrink-0 overflow-visible", className)}
+      // `h-auto` no componente, e não em cada uso: os atributos width e
+      // height do SVG dão a proporção, mas quem escreve `className="w-9"` de
+      // fora sobrescreve só a largura e a altura continua a do atributo. O
+      // badge saía 36 de largura por 94 de altura e inflava a linha inteira.
+      // Com a altura automática, qualquer largura vinda de fora mantém a
+      // proporção do desenho.
+      className={cn("block h-auto shrink-0 overflow-visible", className)}
       style={{
         // A cor entra por variável para traço, preenchimento e texto lerem a
         // mesma fonte, e para o halo ser derivado dela em vez de fixo.
