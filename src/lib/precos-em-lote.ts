@@ -223,6 +223,30 @@ export interface FonteDeDespejo {
 }
 
 /**
+ * Os cabeçalhos de quem não é robô.
+ *
+ * A primeira tentativa levou 403 de uma fonte e uma página HTML da outra, as
+ * duas assinaturas de proteção anti-bot: o desafio do Cloudflare responde 200
+ * com HTML, não 403, e é por isso que as duas falhas diferentes têm a mesma
+ * causa. O `fetch` do Node se anuncia como "node" e é barrado na porta.
+ *
+ * Não é disfarce para furar limite: são arquivos públicos, um pedido por
+ * clique, e a identificação é a de um navegador comum porque é o que esses
+ * servidores aceitam.
+ */
+const COMO_NAVEGADOR = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+} as const;
+
+/** Os cabeçalhos de uma ida à rede, iguais para todas as fontes. */
+export function cabecalhosDoDespejo(): Record<string, string> {
+  return { ...COMO_NAVEGADOR };
+}
+
+/**
  * As fontes tentadas, em ordem, até uma responder.
  *
  * `PRECOS_DESPEJO_URL` entra na frente de todas quando existe, com o leitor do

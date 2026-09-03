@@ -46,9 +46,15 @@ interface Resposta {
  * A cotação e o despejo saem da mesma função, então o roteamento é por pedaço
  * da URL: sem isso, a cotação receberia o despejo e a conta sairia errada.
  */
+const cabecalhosVistos: Record<string, unknown>[] = [];
+
 function rede(respostas: { csgotrader?: Resposta; csgobackpack?: Resposta }) {
-  vi.stubGlobal("fetch", async (url: unknown) => {
+  cabecalhosVistos.length = 0;
+  vi.stubGlobal("fetch", async (url: unknown, opcoes?: { headers?: unknown }) => {
     const endereco = String(url);
+    if (!endereco.includes("awesomeapi")) {
+      cabecalhosVistos.push((opcoes?.headers ?? {}) as Record<string, unknown>);
+    }
 
     if (endereco.includes("awesomeapi")) {
       return {
@@ -248,6 +254,38 @@ suite("sincronizar preços do catálogo (integração)", () => {
       // O endereço nunca entra na mensagem: a válvula do ambiente pode
       // carregar uma chave dentro da URL.
       expect(r.erro).not.toMatch(/https?:\/\//);
+    }
+  });
+
+  it("desafio anti-bot não vira \"endereço mudou\": o conserto de cada um é outro", async () => {
+    // Os dois chegam como HTML com status 200. Confundir os dois manda a
+    // gente procurar endereço novo quando o problema é cabeçalho.
+    await novaSkin(`USP-S ${marca} | Kill Confirmed`);
+
+    rede({
+      csgotrader: {
+        ok: true,
+        status: 200,
+        corpo:
+          "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>",
+      },
+    });
+
+    const r = await sincronizarPrecosDoCatalogo({ tenantId });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toMatch(/csgotrader: barrou o acesso com desafio anti-bot/i);
+  });
+
+  it("a ida à rede se identifica como navegador", async () => {
+    // Sem isto foram 403 de uma fonte e desafio da outra: o fetch do Node se
+    // anuncia como robô e é barrado na porta.
+    await novaSkin(`P90 ${marca} | Asiimov`);
+    rede({ csgotrader: json({}) });
+
+    await sincronizarPrecosDoCatalogo({ tenantId });
+    expect(cabecalhosVistos.length).toBeGreaterThan(0);
+    for (const cabecalhos of cabecalhosVistos) {
+      expect(String(cabecalhos["User-Agent"])).toMatch(/Mozilla\/5\.0/);
     }
   });
 

@@ -43,6 +43,7 @@ import type { Prisma, SkinWear } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import {
+  cabecalhosDoDespejo,
   chaveDoNome,
   fontesDeDespejo,
   lerNomeDeMercado,
@@ -317,7 +318,7 @@ async function baixar(url: string): Promise<unknown> {
   const relogio = setTimeout(() => controle.abort(), TIMEOUT_EM_MS);
   try {
     const res = await fetch(url, {
-      headers: { Accept: "application/json" },
+      headers: cabecalhosDoDespejo(),
       cache: "no-store",
       signal: controle.signal,
       redirect: "follow",
@@ -326,13 +327,7 @@ async function baixar(url: string): Promise<unknown> {
 
     const texto = await res.text();
     const inicio = texto.trimStart().slice(0, 1);
-    if (inicio !== "{" && inicio !== "[") {
-      throw new Error(
-        inicio === "<"
-          ? "respondeu uma página HTML em vez do arquivo, o endereço mudou"
-          : "respondeu algo que não é JSON",
-      );
-    }
+    if (inicio !== "{" && inicio !== "[") throw new Error(motivoDoNaoJson(texto));
     return JSON.parse(texto);
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
@@ -342,4 +337,26 @@ async function baixar(url: string): Promise<unknown> {
   } finally {
     clearTimeout(relogio);
   }
+}
+
+/**
+ * O que dizer quando a resposta não é JSON.
+ *
+ * Separar o desafio anti-bot do endereço morto importa: os dois chegam como
+ * uma página HTML com status 200, e o conserto de cada um é outro. Um pede
+ * cabeçalho de navegador, o outro pede endereço novo.
+ */
+function motivoDoNaoJson(texto: string): string {
+  const inicio = texto.trimStart().slice(0, 1);
+  if (inicio !== "<") return "respondeu algo que não é JSON";
+
+  const amostra = texto.slice(0, 4000).toLowerCase();
+  const desafio =
+    amostra.includes("just a moment") ||
+    amostra.includes("cf-browser-verification") ||
+    amostra.includes("challenge-platform") ||
+    amostra.includes("attention required");
+  return desafio
+    ? "barrou o acesso com desafio anti-bot"
+    : "respondeu uma página HTML em vez do arquivo, o endereço mudou";
 }
