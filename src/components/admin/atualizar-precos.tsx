@@ -38,10 +38,10 @@ export function AtualizarPrecos() {
               setResumo(r.error);
               return;
             }
-            const { skinsComPreco, atualizados, dolar } = r.data;
+            const { skinsComPreco, atualizados, dolar, fonte } = r.data;
             toast.success(`${skinsComPreco} skins com preço atualizado`);
             setResumo(
-              `${skinsComPreco} skins e ${atualizados} desgastes, com o dólar a ${dolar.toLocaleString(
+              `${skinsComPreco} skins e ${atualizados} desgastes pela fonte ${fonte}, com o dólar a ${dolar.toLocaleString(
                 "pt-BR",
                 { style: "currency", currency: "BRL", minimumFractionDigits: 4 },
               )}.`,

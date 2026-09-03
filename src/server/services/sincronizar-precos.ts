@@ -1,10 +1,11 @@
 // Enche o catálogo de preços a partir do despejo público de mercado.
 //
-// O painel precisa do preço de centenas de skins. Perguntar uma por uma ao
-// Mercado da Comunidade Steam é o que já não funciona: a rota deles é por
-// item, não é documentada e é limitada por IP, e um IP de datacenter (que é de
-// onde a Vercel fala) é o primeiro a apanhar. Foi assim que a primeira
-// campanha criada com skin do catálogo nasceu com o preço no padrão.
+// O painel precisa do preço de centenas de skins, 865 no catálogo de hoje.
+// Perguntar uma por uma ao Mercado da Comunidade Steam é o que já não funciona:
+// a rota deles é por item, não é documentada e é limitada por IP, e um IP de
+// datacenter (que é de onde a Vercel fala) é o primeiro a apanhar. Foi assim
+// que a primeira campanha criada com skin do catálogo nasceu com o preço no
+// padrão.
 //
 // A saída é o despejo: uma resposta com o mercado inteiro, cruzada com o
 // catálogo de uma vez. Depois disso o painel pergunta o preço de UMA skin e a
@@ -24,6 +25,14 @@
 // operação, não de arquitetura: a fonte paga chegou a ser considerada e ficou
 // de fora.
 //
+// UMA FONTE SÓ ERA POUCO
+//
+// A primeira versão apostou num endereço e ele respondeu uma página HTML em vez
+// do arquivo, o que virou um erro de JSON na cara de quem clicou. Fonte
+// gratuita de terceiro sai do ar e muda de caminho sem avisar. Agora a lista é
+// tentada em ordem, a resposta é conferida ANTES de virar JSON, e quando todas
+// falham a tela recebe o motivo de cada uma em vez de um erro de sintaxe.
+//
 // O DÓLAR VIRA REAL NA MESMA COTAÇÃO DO RESTO DO SITE
 //
 // O despejo cobra em dólar. A conversão usa o mesmo serviço da tela de
@@ -35,9 +44,8 @@ import type { Prisma, SkinWear } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
   chaveDoNome,
-  lerDespejoDoCsgotrader,
+  fontesDeDespejo,
   lerNomeDeMercado,
-  URL_CSGOTRADER,
   type PrecoEmLote,
 } from "@/lib/precos-em-lote";
 import { cambioDoDia } from "@/server/services/cotacao";
@@ -57,6 +65,8 @@ export type ResultadoDaSincronizacao =
       skinsComPreco: number;
       /** Quantos itens vieram no despejo. */
       itensNoDespejo: number;
+      /** Qual fonte respondeu, porque elas são tentadas em ordem. */
+      fonte: string;
       /** A cotação usada, para a tela poder mostrar. */
       dolar: number;
       fonteDoDolar: string;
@@ -83,20 +93,9 @@ export async function sincronizarPrecosDoCatalogo(input: {
   }
   const dolar = cambio.cambio.taxa;
 
-  let precos: PrecoEmLote[];
-  try {
-    precos = lerDespejoDoCsgotrader(await baixar(URL_CSGOTRADER));
-  } catch (err) {
-    const motivo = err instanceof Error ? err.message : String(err);
-    console.error("[precos] falha ao baixar o despejo:", motivo);
-    return { ok: false, erro: `Não foi possível baixar os preços: ${motivo}` };
-  }
-  if (precos.length === 0) {
-    return {
-      ok: false,
-      erro: "O despejo de preços veio vazio ou em formato inesperado. Tente de novo em alguns minutos.",
-    };
-  }
+  const tentativa = await baixarDeAlgumaFonte();
+  if (!tentativa.ok) return tentativa;
+  const { precos, fonte } = tentativa;
 
   const catalogo = await prisma.skinTemplate.findMany({
     where: { tenantId: input.tenantId },
@@ -107,43 +106,95 @@ export async function sincronizarPrecosDoCatalogo(input: {
       skinSouvenir: true,
     },
   });
-  const porNome = new Map(catalogo.map((s) => [chaveDoNome(s.name), s]));
 
-  /** Um preço por (skin, desgaste), já em real. */
-  const encontrados = new Map<
+  /** O catálogo indexado pelo nome sem fase, que é como o despejo escreve. */
+  const porBase = new Map<
     string,
-    {
-      skinTemplateId: string;
-      wear: SkinWear | null;
-      brl: number;
-      usd: number;
-      nome: string;
-      volume: number | null;
-    }
+    { id: string; statTrak: boolean; souvenir: boolean; fase: string | null }[]
   >();
+  for (const skin of catalogo) {
+    const nome = lerNomeDeMercado(skin.name);
+    if (!nome) continue;
+    const chave = chaveDoNome(nome.base);
+    const lista = porBase.get(chave) ?? [];
+    lista.push({
+      id: skin.id,
+      statTrak: skin.skinStatTrak,
+      souvenir: skin.skinSouvenir,
+      fase: nome.fase,
+    });
+    porBase.set(chave, lista);
+  }
+
+  interface Achado {
+    skinTemplateId: string;
+    wear: SkinWear | null;
+    brl: number;
+    usd: number;
+    nome: string;
+    volume: number | null;
+    /** 1 é preço da fase certa, 2 é o preço sem fase servindo de reserva. */
+    prioridade: 1 | 2;
+  }
+  const encontrados = new Map<string, Achado>();
+
+  function registrar(achado: Achado) {
+    const chave = `${achado.skinTemplateId}|${achado.wear ?? ""}`;
+    const atual = encontrados.get(chave);
+    // O preço da fase certa manda sobre o preço sem fase, sempre. Uma Doppler
+    // Ruby e uma Phase 4 moram na mesma linha da Steam e não custam a mesma
+    // coisa.
+    if (atual && atual.prioridade <= achado.prioridade) return;
+    encontrados.set(chave, achado);
+  }
 
   for (const item of precos) {
     const nome = lerNomeDeMercado(item.marketName);
     if (!nome) continue;
 
-    const skin = porNome.get(chaveDoNome(nome.base));
-    if (!skin) continue;
-    // StatTrak e Souvenir são outra skin para efeito de preço. Só entram
-    // quando o catálogo diz que aquela linha é dessa versão.
-    if (nome.statTrak !== skin.skinStatTrak) continue;
-    if (nome.souvenir !== skin.skinSouvenir) continue;
+    const candidatas = porBase.get(chaveDoNome(nome.base));
+    if (!candidatas) continue;
 
-    encontrados.set(`${skin.id}|${nome.wear ?? ""}`, {
-      skinTemplateId: skin.id,
-      wear: nome.wear,
-      brl: Math.round(item.usd * dolar * 100) / 100,
-      usd: Math.round(item.usd * 100) / 100,
-      nome: item.marketName,
-      volume: item.volume,
-    });
+    // A fase pode vir no nome (raro) ou à parte (é como o despejo separa).
+    const faseDoItem = item.fase ?? nome.fase;
+
+    for (const skin of candidatas) {
+      // StatTrak e Souvenir são outra skin para efeito de preço. Só entram
+      // quando o catálogo diz que aquela linha é dessa versão.
+      if (nome.statTrak !== skin.statTrak) continue;
+      if (nome.souvenir !== skin.souvenir) continue;
+
+      let prioridade: 1 | 2;
+      if (faseDoItem) {
+        // Linha de fase só serve para a skin daquela fase.
+        if (skin.fase !== faseDoItem) continue;
+        prioridade = 1;
+      } else {
+        // Linha sem fase serve direto para a skin sem fase, e de reserva para
+        // as com fase: preço da faixa toda é melhor que preço nenhum.
+        prioridade = skin.fase ? 2 : 1;
+      }
+
+      registrar({
+        skinTemplateId: skin.id,
+        wear: nome.wear,
+        brl: Math.round(item.usd * dolar * 100) / 100,
+        usd: Math.round(item.usd * 100) / 100,
+        nome: item.marketName,
+        volume: item.volume,
+        prioridade,
+      });
+    }
   }
 
   const linhas = [...encontrados.values()];
+  if (linhas.length === 0) {
+    return {
+      ok: false,
+      erro: `A fonte ${fonte} respondeu com ${precos.length} itens, mas nenhum casou com as skins do catálogo. Confira como os nomes estão escritos no catálogo.`,
+    };
+  }
+
   const agora = new Date();
 
   // Grava em lotes: são milhares de linhas, e uma transação só seguraria a
@@ -208,17 +259,58 @@ export async function sincronizarPrecosDoCatalogo(input: {
     atualizados: linhas.length,
     skinsComPreco: porSkin.size,
     itensNoDespejo: precos.length,
+    fonte,
     dolar,
     fonteDoDolar: cambio.cambio.fonte,
   };
 }
 
 /**
- * A ida à rede, com fim.
+ * Tenta as fontes em ordem e para na primeira que entregar preço.
+ *
+ * "Respondeu" não basta: a fonte que quebrou o recurso respondeu 200 com uma
+ * página HTML. Só conta a que devolve JSON com pelo menos um preço dentro.
+ */
+async function baixarDeAlgumaFonte(): Promise<
+  { ok: true; precos: PrecoEmLote[]; fonte: string } | { ok: false; erro: string }
+> {
+  const fontes = fontesDeDespejo(process.env.PRECOS_DESPEJO_URL);
+  const falhas: string[] = [];
+
+  for (const fonte of fontes) {
+    try {
+      const precos = fonte.ler(await baixar(fonte.url));
+      if (precos.length === 0) {
+        falhas.push(`${fonte.nome}: respondeu em formato inesperado`);
+        console.warn(`[precos] ${fonte.nome} respondeu sem preço nenhum`);
+        continue;
+      }
+      console.info(`[precos] ${fonte.nome} respondeu ${precos.length} itens`);
+      return { ok: true, precos, fonte: fonte.nome };
+    } catch (err) {
+      const motivo = err instanceof Error ? err.message : String(err);
+      falhas.push(`${fonte.nome}: ${motivo}`);
+      console.error(`[precos] falha em ${fonte.nome}: ${motivo}`);
+    }
+  }
+
+  return {
+    ok: false,
+    erro: `Nenhuma fonte de preços respondeu. ${falhas.join("; ")}.`,
+  };
+}
+
+/**
+ * A ida à rede, com fim e com conferência.
  *
  * O arquivo é grande e a função tem tempo limitado: sem o relógio, uma fonte
  * lenta seguraria a requisição até a plataforma derrubar, e a tela mostraria
  * um erro genérico em vez do motivo.
+ *
+ * O corpo é lido como texto antes de virar JSON de propósito. Fonte que mudou
+ * de endereço costuma responder 200 com uma página de erro, e `res.json()`
+ * nessa página estoura um "Unexpected token '<'" que não diz nada a quem
+ * clicou. Aqui ela vira "respondeu HTML", que diz.
  */
 async function baixar(url: string): Promise<unknown> {
   const controle = new AbortController();
@@ -228,9 +320,25 @@ async function baixar(url: string): Promise<unknown> {
       headers: { Accept: "application/json" },
       cache: "no-store",
       signal: controle.signal,
+      redirect: "follow",
     });
-    if (!res.ok) throw new Error(`a fonte respondeu ${res.status}.`);
-    return await res.json();
+    if (!res.ok) throw new Error(`respondeu ${res.status}`);
+
+    const texto = await res.text();
+    const inicio = texto.trimStart().slice(0, 1);
+    if (inicio !== "{" && inicio !== "[") {
+      throw new Error(
+        inicio === "<"
+          ? "respondeu uma página HTML em vez do arquivo, o endereço mudou"
+          : "respondeu algo que não é JSON",
+      );
+    }
+    return JSON.parse(texto);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("demorou demais para responder");
+    }
+    throw err;
   } finally {
     clearTimeout(relogio);
   }

@@ -15,7 +15,12 @@ import { sincronizarPrecosDoCatalogo } from "@/server/services/sincronizar-preco
 import type { ActionResult } from "@/server/actions/auth";
 
 export async function atualizarPrecosDoCatalogoAction(): Promise<
-  ActionResult<{ skinsComPreco: number; atualizados: number; dolar: number }>
+  ActionResult<{
+    skinsComPreco: number;
+    atualizados: number;
+    dolar: number;
+    fonte: string;
+  }>
 > {
   try {
     const session = await getAdminOrThrow();
@@ -32,6 +37,7 @@ export async function atualizarPrecosDoCatalogoAction(): Promise<
         skins: r.skinsComPreco,
         desgastes: r.atualizados,
         itensNoDespejo: r.itensNoDespejo,
+        fonte: r.fonte,
         dolar: r.dolar,
         fonteDoDolar: r.fonteDoDolar,
       },
@@ -44,6 +50,7 @@ export async function atualizarPrecosDoCatalogoAction(): Promise<
         skinsComPreco: r.skinsComPreco,
         atualizados: r.atualizados,
         dolar: r.dolar,
+        fonte: r.fonte,
       },
     };
   } catch (err) {
