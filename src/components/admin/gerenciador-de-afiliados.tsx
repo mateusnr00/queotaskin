@@ -7,6 +7,27 @@
 // serve aos dois lados: filtra a lista de afiliados e, ao mesmo tempo,
 // oferece as contas que ainda não são afiliadas com o mesmo nome.
 //
+// CADA AFILIADO É UMA LINHA QUE ABRE
+//
+// Antes, todo cartão vinha aberto: nome, código, cinco placas de número, o
+// painel de recompensa e o de ajuste, tudo de uma vez. Com dois afiliados
+// passava; com trinta, a tela vira um paredão e achar alguém exige rolar por
+// tudo o que não interessa. Agora a linha fechada mostra o que se procura
+// (nome, situação, código, indicados e entradas disponíveis) e o resto abre
+// no clique. Mexer em afiliado é raro; olhar a lista é o que se faz sempre, e
+// quem manda no desenho é o caso frequente.
+//
+// A ABERTURA É UMA SÓ
+//
+// Abrir um fecha o outro. Dois painéis de ajuste abertos ao mesmo tempo é
+// como se digita o motivo no cartão errado, e ajuste de entrada mexe em
+// dinheiro.
+//
+// O TOPO RESPONDE ANTES DE ROLAR
+//
+// As placas de resumo saem de agregação do programa inteiro, não da página
+// listada: somar o que está na tela daria um total que muda com a busca.
+//
 // O ajuste manual exige motivo. Não é burocracia: entrada vale uma cota em
 // qualquer campanha, e um saldo que muda sem explicação é a coisa que
 // ninguém consegue reconstruir três meses depois.
@@ -16,12 +37,16 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Check,
+  ChevronDown,
+  Link2,
   Minus,
   Percent,
   Plus,
   Search,
   Ticket,
+  TrendingUp,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 
@@ -47,7 +72,7 @@ import { formatBRL } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Moldura } from "@/components/ui/moldura";
+import { Moldura, Placa } from "@/components/ui/moldura";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -76,11 +101,24 @@ export interface AfiliadoNaLista {
   desde: string;
 }
 
+const FOCO =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 const ROTULO_DO_STATUS: Record<AfiliadoNaLista["status"], string> = {
   ACTIVE: "Ativo",
   SUSPENDED: "Suspenso",
   INACTIVE: "Inativo",
 };
+
+export interface ResumoDoPrograma {
+  total: number;
+  ativos: number;
+  suspensos: number;
+  indicados: number;
+  disponiveis: number;
+  reservadas: number;
+  usadas: number;
+}
 
 export function GerenciadorDeAfiliados({
   afiliados,
@@ -88,6 +126,7 @@ export function GerenciadorDeAfiliados({
   busca,
   total,
   porPagina,
+  resumo,
 }: {
   afiliados: AfiliadoNaLista[];
   candidatos: { id: string; name: string; phone: string | null }[];
@@ -95,6 +134,7 @@ export function GerenciadorDeAfiliados({
   /** Quantos afiliados existem no total, para o aviso de lista cortada. */
   total: number;
   porPagina: number;
+  resumo: ResumoDoPrograma;
   /** Só para deixar claro de qual tenant é a tela; a action confere de novo. */
   tenantId?: string;
 }) {
@@ -102,6 +142,9 @@ export function GerenciadorDeAfiliados({
   const parametros = useSearchParams();
   const [termo, setTermo] = useState(busca);
   const [isPending, startTransition] = useTransition();
+  // Um aberto por vez. Dois painéis de ajuste abertos é como se digita o
+  // motivo no cartão errado.
+  const [aberto, setAberto] = useState<string | null>(null);
 
   function buscar() {
     const url = new URLSearchParams(parametros.toString());
@@ -124,6 +167,52 @@ export function GerenciadorDeAfiliados({
 
   return (
     <div className="space-y-5">
+      {/* O RESUMO VEM ANTES DA LISTA.
+          "Quantos afiliados eu tenho e quantas entradas estão soltas por aí"
+          é a pergunta que se faz ao abrir a tela, e antes dela a resposta
+          exigia somar cinco cartões de cabeça. Entradas disponíveis ganha
+          destaque porque é a única que custa dinheiro: cada uma vale uma cota
+          em qualquer campanha. */}
+      {resumo.total > 0 && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Placa
+            rotulo="Afiliados"
+            valor={String(resumo.total)}
+            nota={
+              resumo.suspensos > 0
+                ? `${resumo.ativos} ativos, ${resumo.suspensos} suspensos`
+                : `${resumo.ativos} ativos`
+            }
+            icone={<Link2 aria-hidden className="h-3 w-3" />}
+          />
+          <Placa
+            rotulo="Indicados"
+            valor={String(resumo.indicados)}
+            nota="contas que chegaram por um link"
+            icone={<Users aria-hidden className="h-3 w-3" />}
+            tom="marca"
+          />
+          <Placa
+            rotulo="Entradas disponíveis"
+            valor={String(resumo.disponiveis)}
+            nota="cada uma vale uma cota"
+            icone={<Ticket aria-hidden className="h-3 w-3" />}
+            tom="bom"
+            destaque
+          />
+          <Placa
+            rotulo="Já usadas"
+            valor={String(resumo.usadas)}
+            nota={
+              resumo.reservadas > 0
+                ? `${resumo.reservadas} reservadas agora`
+                : "nenhuma reservada agora"
+            }
+            icone={<TrendingUp aria-hidden className="h-3 w-3" />}
+          />
+        </div>
+      )}
+
       <Moldura>
         <section className="space-y-3 p-4 md:p-5">
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -143,6 +232,14 @@ export function GerenciadorDeAfiliados({
               Buscar
             </Button>
           </div>
+
+          {/* A busca faz dois trabalhos: filtra quem já é afiliado e oferece
+              quem ainda não é. Sem esta linha, a mesma digitação parecia não
+              ter achado ninguém. */}
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            A mesma busca filtra os afiliados e procura contas para tornar
+            afiliadas. Digite pelo menos duas letras do nome ou o telefone.
+          </p>
 
           {candidatos.length > 0 && (
             <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
@@ -183,13 +280,7 @@ export function GerenciadorDeAfiliados({
       </Moldura>
 
       {afiliados.length === 0 ? (
-        <Moldura>
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            {busca
-              ? "Nenhum afiliado com esse nome ou código."
-              : "Nenhum afiliado ainda. Busque uma conta acima para começar."}
-          </p>
-        </Moldura>
+        <ListaVazia busca={busca} />
       ) : (
         <div className="space-y-3">
           {!busca && total > porPagina && (
@@ -199,7 +290,12 @@ export function GerenciadorDeAfiliados({
             </p>
           )}
           {afiliados.map((a) => (
-            <CartaoDoAfiliado key={a.id} afiliado={a} />
+            <CartaoDoAfiliado
+              key={a.id}
+              afiliado={a}
+              aberto={aberto === a.id}
+              aoAlternar={() => setAberto((atual) => (atual === a.id ? null : a.id))}
+            />
           ))}
         </div>
       )}
@@ -207,7 +303,61 @@ export function GerenciadorDeAfiliados({
   );
 }
 
-function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
+/**
+ * A tela sem ninguém na lista.
+ *
+ * Dois vazios diferentes, e eles pedem respostas diferentes: "a busca não
+ * achou" quer que você mude o termo, e "o programa não começou" quer que você
+ * entenda o que o programa é antes de ativar a primeira pessoa. Uma frase só
+ * para os dois deixava quem chega pela primeira vez sem saber o que a tela
+ * queria dele.
+ */
+function ListaVazia({ busca }: { busca: string }) {
+  return (
+    <Moldura>
+      <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+          <Link2 aria-hidden className="h-5 w-5 text-muted-foreground" />
+        </span>
+        {busca ? (
+          <>
+            <p className="text-sm font-semibold">
+              Nenhum afiliado com esse nome ou código.
+            </p>
+            <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+              Se a pessoa ainda não é afiliada, ela aparece logo acima em
+              &ldquo;contas que ainda não são afiliadas&rdquo;, com o botão
+              para ativar.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold">
+              O programa de afiliados ainda não tem ninguém.
+            </p>
+            <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+              Não existe autoinscrição: quem entra é decisão sua. Cada afiliado
+              ganha um código de indicação e acumula entradas grátis conforme
+              quem ele indica compra, e cada entrada vale uma cota em qualquer
+              campanha. Busque uma conta pelo nome ou telefone no campo acima
+              para ativar a primeira.
+            </p>
+          </>
+        )}
+      </div>
+    </Moldura>
+  );
+}
+
+function CartaoDoAfiliado({
+  afiliado,
+  aberto,
+  aoAlternar,
+}: {
+  afiliado: AfiliadoNaLista;
+  aberto: boolean;
+  aoAlternar: () => void;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [codigo, setCodigo] = useState(afiliado.codigo);
@@ -280,11 +430,28 @@ function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
     });
   }
 
+  const emDivida = afiliado.progressoEmCentavos < 0;
+
   return (
     <Moldura>
-      <section className="space-y-4 p-4 md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+      <section>
+        {/* O CABEÇALHO INTEIRO É O BOTÃO.
+            Alvo grande, e não uma setinha de 16px: quem usa o painel no
+            celular acerta a linha, não acerta a seta. Só texto aqui dentro,
+            porque botão dentro de botão não é HTML válido e o teclado se
+            perde; o código vira campo editável só quando o cartão abre. */}
+        <button
+          type="button"
+          onClick={aoAlternar}
+          aria-expanded={aberto}
+          aria-controls={`afiliado-${afiliado.id}`}
+          className={cn(
+            "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors md:px-5",
+            "hover:bg-white/[0.02]",
+            FOCO,
+          )}
+        >
+          <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-base font-bold">
               {afiliado.nome}
               <span
@@ -300,41 +467,117 @@ function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
               >
                 {ROTULO_DO_STATUS[afiliado.status]}
               </span>
+              <span className="rounded-md border border-primary/30 bg-primary/[0.07] px-2 py-0.5 font-mono text-[11px] font-bold tracking-widest text-primary">
+                {afiliado.codigo}
+              </span>
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-              {afiliado.telefone ? formatPhone(afiliado.telefone) : "sem telefone"}
-              {" · desde "}
-              {new Date(afiliado.desde).toLocaleDateString("pt-BR")}
+
+            {/* FECHADO, A LINHA JÁ RESPONDE.
+                Indicados e entradas disponíveis são o que se procura ao
+                percorrer a lista; o resto (progresso, reservadas, usadas,
+                configuração) é trabalho de quando você já escolheu a pessoa. */}
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
+              <span>
+                <b className="font-semibold text-foreground">
+                  {afiliado.indicados}
+                </b>{" "}
+                indicado{afiliado.indicados === 1 ? "" : "s"}
+              </span>
+              <span aria-hidden className="opacity-40">
+                ·
+              </span>
+              <span>
+                <b
+                  className={cn(
+                    "font-semibold",
+                    afiliado.disponiveis > 0
+                      ? "text-emerald-400"
+                      : "text-foreground",
+                  )}
+                >
+                  {afiliado.disponiveis}
+                </b>{" "}
+                disponíve{afiliado.disponiveis === 1 ? "l" : "is"}
+              </span>
+              {emDivida && (
+                <>
+                  <span aria-hidden className="opacity-40">
+                    ·
+                  </span>
+                  {/* Dívida de estorno some se ficar só na placa lá dentro, e
+                      é justamente o número que alguém precisa ver de fora. */}
+                  <span className="font-semibold text-red-400">
+                    progresso negativo
+                  </span>
+                </>
+              )}
+              {/* Sem ponto antes do telefone: ele é o item que quebra linha
+                  no celular, e o separador ficava sozinho no fim da anterior.
+                  O respiro do gap já separa. */}
+              <span>
+                {afiliado.telefone
+                  ? formatPhone(afiliado.telefone)
+                  : "sem telefone"}
+              </span>
             </p>
           </div>
 
-          <div className="flex shrink-0 gap-1.5">
-            {afiliado.status === "ACTIVE" ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={isPending}
-                onClick={() => trocarStatus("SUSPENDED")}
-                className="h-8"
-              >
-                Suspender
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                disabled={isPending}
-                onClick={() => trocarStatus("ACTIVE")}
-                className="h-8"
-              >
-                Reativar
-              </Button>
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+              aberto && "rotate-180",
             )}
-          </div>
-        </div>
+          />
+        </button>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* A altura anima por grid, e não por max-height chutado: 0fr para 1fr
+            fecha exatamente na altura do conteúdo, sem cortar cartão alto nem
+            deixar sobra em cartão baixo. */}
+        <div
+          id={`afiliado-${afiliado.id}`}
+          className={cn(
+            "grid transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+            aberto
+              ? "grid-rows-[1fr] opacity-100"
+              : "grid-rows-[0fr] opacity-0",
+          )}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-4 border-t border-white/[0.06] p-4 md:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Afiliado desde{" "}
+                  {new Date(afiliado.desde).toLocaleDateString("pt-BR")}
+                </p>
+                <div className="flex shrink-0 gap-1.5">
+                  {afiliado.status === "ACTIVE" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={() => trocarStatus("SUSPENDED")}
+                      className="h-8"
+                    >
+                      Suspender
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => trocarStatus("ACTIVE")}
+                      className="h-8"
+                    >
+                      Reativar
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
           {editandoCodigo ? (
             <>
               <Input
@@ -366,36 +609,59 @@ function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
               </Button>
             </>
           ) : (
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant="outline"
+              className="h-8"
               onClick={() => setEditandoCodigo(true)}
-              title="Alterar o código"
-              className="rounded-lg border border-primary/30 bg-primary/[0.07] px-3 py-1.5 font-mono text-sm font-bold tracking-widest text-primary transition-colors hover:bg-primary/15"
             >
-              {afiliado.codigo}
-            </button>
+              <Link2 aria-hidden className="mr-1.5 h-3.5 w-3.5" />
+              Trocar o código
+            </Button>
           )}
-        </div>
+                </div>
+                {editandoCodigo && (
+                  <p className="text-[11px] text-muted-foreground">
+                    O link de indicação usa este código. Trocar não invalida
+                    quem já foi indicado.
+                  </p>
+                )}
+              </div>
 
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <Metrica rotulo="Indicados" valor={String(afiliado.indicados)} />
-          <Metrica
-            rotulo="Progresso"
-            valor={`${formatBRL(afiliado.progressoEmCentavos / 100)} / ${formatBRL(
-              afiliado.config.limiarEmCentavos / 100,
-            )}`}
-            alerta={afiliado.progressoEmCentavos < 0}
-          />
-          <Metrica
-            rotulo="Disponíveis"
-            valor={String(afiliado.disponiveis)}
-            destaque
-          />
-          <Metrica rotulo="Reservadas" valor={String(afiliado.reservadas)} />
-          <Metrica rotulo="Usadas" valor={String(afiliado.usadas)} />
-        </dl>
+              {/* As mesmas placas do resto do painel, e não uma caixinha só
+                  desta tela: cinco números do mesmo tamanho obrigavam a ler os
+                  cinco para achar o que importa. Disponíveis é a que custa
+                  dinheiro, progresso negativo é dívida de estorno. */}
+              <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <Placa
+                  rotulo="Indicados"
+                  valor={String(afiliado.indicados)}
+                  icone={<Users aria-hidden className="h-3 w-3" />}
+                />
+                <Placa
+                  rotulo="Progresso"
+                  valor={formatBRL(afiliado.progressoEmCentavos / 100)}
+                  nota={`de ${formatBRL(afiliado.config.limiarEmCentavos / 100)} para a próxima entrada`}
+                  icone={<TrendingUp aria-hidden className="h-3 w-3" />}
+                  tom={emDivida ? "ruim" : "neutro"}
+                />
+                <Placa
+                  rotulo="Disponíveis"
+                  valor={String(afiliado.disponiveis)}
+                  nota="prontas para usar"
+                  icone={<Ticket aria-hidden className="h-3 w-3" />}
+                  tom={afiliado.disponiveis > 0 ? "bom" : "neutro"}
+                />
+                <Placa
+                  rotulo="Reservadas e usadas"
+                  valor={`${afiliado.reservadas} / ${afiliado.usadas}`}
+                  nota="em carrinho aberto / já gastas"
+                  icone={<Check aria-hidden className="h-3 w-3" />}
+                />
+              </dl>
 
-        <ConfigDeRecompensa afiliado={afiliado} />
+              <ConfigDeRecompensa afiliado={afiliado} />
 
         {ajustando ? (
           <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
@@ -462,40 +728,14 @@ function CartaoDoAfiliado({ afiliado }: { afiliado: AfiliadoNaLista }) {
             Ajustar entradas
           </Button>
         )}
+            </div>
+          </div>
+        </div>
       </section>
     </Moldura>
   );
 }
 
-function Metrica({
-  rotulo,
-  valor,
-  destaque,
-  alerta,
-}: {
-  rotulo: string;
-  valor: string;
-  destaque?: boolean;
-  /** Dívida de progresso: número que precisa ser visto, não escondido. */
-  alerta?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-      <dt className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-        {rotulo}
-      </dt>
-      <dd
-        className={cn(
-          "mt-0.5 text-sm font-bold tabular-nums",
-          destaque && "text-emerald-400",
-          alerta && "text-red-400",
-        )}
-      >
-        {valor}
-      </dd>
-    </div>
-  );
-}
 
 
 /**

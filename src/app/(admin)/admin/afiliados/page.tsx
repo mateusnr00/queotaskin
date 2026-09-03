@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 import {
   AFILIADOS_POR_PAGINA,
   listarAfiliados,
+  resumoDoProgramaDeAfiliados,
 } from "@/server/services/afiliados";
 import { CabecalhoDeAdmin } from "@/components/admin/cabecalho";
 import { GerenciadorDeAfiliados } from "@/components/admin/gerenciador-de-afiliados";
@@ -29,9 +30,10 @@ export default async function AdminAfiliadosPage({
   const { q } = await searchParams;
   const busca = (q ?? "").trim();
 
-  const [afiliados, totalDeAfiliados] = await Promise.all([
+  const [afiliados, totalDeAfiliados, resumo] = await Promise.all([
     listarAfiliados(busca),
     prisma.affiliate.count(),
+    resumoDoProgramaDeAfiliados(),
   ]);
 
   // Candidatos: contas do tenant que ainda não são afiliadas. Só busca por
@@ -71,6 +73,7 @@ export default async function AdminAfiliadosPage({
         busca={busca}
         total={totalDeAfiliados}
         porPagina={AFILIADOS_POR_PAGINA}
+        resumo={resumo}
         tenantId={tenantId}
       />
     </div>

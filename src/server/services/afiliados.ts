@@ -1190,6 +1190,44 @@ export async function ajustarEntradas({
  */
 export const AFILIADOS_POR_PAGINA = 20;
 
+/**
+ * O programa inteiro em números, para o topo da tela de gestão.
+ *
+ * A lista responde "quem são"; isto responde "como está", que é a pergunta
+ * que se faz antes de rolar. Sai de agregação e não da página listada de
+ * propósito: a lista mostra os mais recentes, e somar o que está na tela daria
+ * um total que muda conforme a busca.
+ */
+export async function resumoDoProgramaDeAfiliados() {
+  const [porStatus, indicados, porEstado] = await Promise.all([
+    prisma.affiliate.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.user.count({ where: { referredByAffiliateId: { not: null } } }),
+    prisma.entradaGratis.groupBy({ by: ["estado"], _count: { _all: true } }),
+  ]);
+
+  const contar = <T extends string>(
+    linhas: { _count: { _all: number } }[],
+    chave: T,
+    campo: string,
+  ) =>
+    linhas.find((l) => (l as unknown as Record<string, string>)[campo] === chave)
+      ?._count._all ?? 0;
+
+  return {
+    total: porStatus.reduce((s, l) => s + l._count._all, 0),
+    ativos: contar(porStatus, "ACTIVE", "status"),
+    suspensos: contar(porStatus, "SUSPENDED", "status"),
+    indicados,
+    disponiveis: contar(porEstado, "DISPONIVEL", "estado"),
+    reservadas: contar(porEstado, "RESERVADA", "estado"),
+    usadas: contar(porEstado, "USADA", "estado"),
+  };
+}
+
+export type ResumoDoPrograma = Awaited<
+  ReturnType<typeof resumoDoProgramaDeAfiliados>
+>;
+
 export async function listarAfiliados(termo?: string) {
   const busca = (termo ?? "").trim();
   const afiliados = await prisma.affiliate.findMany({
