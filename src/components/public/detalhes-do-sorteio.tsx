@@ -43,16 +43,27 @@ function Ficha({ description }: { description: string }) {
             {ficha.premio}
           </dd>
         </div>
-        {ficha.valor && (
-          <div className="shrink-0 sm:text-right">
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Preço Steam
-            </dt>
-            <dd className="mt-1 text-sm leading-snug font-semibold tabular-nums">
-              {ficha.valor}
-            </dd>
-          </div>
-        )}
+        {/* A COLUNA DO PREÇO É DA FICHA, NÃO DO TEXTO.
+            Ela aparece sempre que o texto tem a forma da ficha, com preço ou
+            sem. Antes ela sumia quando o valor faltava, e o jeito de
+            trazê-la de volta era digitar "PREÇO STEAM" à mão no painel: o
+            layout dependia de alguém escrever o rótulo certo.
+
+            Sem valor, um traço. Não "carregando", não "indisponível", não
+            "erro": numa campanha publicada essas palavras contam sobre a
+            nossa consulta, e quem lê veio saber da skin. */}
+        <div className="shrink-0 sm:text-right">
+          <dt className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Preço Steam
+          </dt>
+          <dd className="mt-1 text-sm leading-snug font-semibold tabular-nums">
+            {ficha.valor ?? (
+              <span aria-label="sem preço" className="text-muted-foreground">
+                -
+              </span>
+            )}
+          </dd>
+        </div>
       </dl>
 
       {ficha.corpo && (
@@ -93,7 +104,7 @@ function ConviteDoGrupo({ link, nomeDoSite }: { link: string; nomeDoSite: string
         rel="noopener noreferrer"
         className="botao-de-whatsapp botao-de-whatsapp--faixa mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-700 sm:w-auto dark:text-emerald-400"
       >
-        <IconeDoWhatsapp className="h-4 w-4" strokeWidth={4} />
+        <IconeDoWhatsapp className="h-4 w-4" />
         Entrar no grupo do WhatsApp
       </a>
     </div>

@@ -48,6 +48,11 @@ export interface SkinDoCatalogo {
   skinWear: Desgaste | null;
   skinValueBrl: number | null;
   /**
+   * Quando o preço acima veio da Steam. Nulo quer dizer que ele foi digitado
+   * à mão ou nunca foi consultado, e nos dois casos vale perguntar.
+   */
+  precoAtualizadoEm: string | null;
+  /**
    * Em quais desgastes a skin existe. Vazio quer dizer "não tem desgaste",
    * que é o caso do agente e da faca sem pintura.
    */

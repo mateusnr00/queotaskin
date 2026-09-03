@@ -57,6 +57,7 @@ export default async function NewRafflePage({
       skinWear: true,
       skinValueBrl: true,
       skinWears: true,
+      externalPriceUpdatedAt: true,
     },
   });
 
@@ -123,6 +124,9 @@ export default async function NewRafflePage({
         skins={skins.map((sk) => ({
           ...sk,
           skinValueBrl: sk.skinValueBrl ? Number(sk.skinValueBrl) : null,
+          // Serializado: o componente do seletor roda no navegador, e Date
+          // não atravessa a fronteira de servidor para cliente.
+          precoAtualizadoEm: sk.externalPriceUpdatedAt?.toISOString() ?? null,
           desgastesDisponiveis: sk.skinWears,
         }))}
       />

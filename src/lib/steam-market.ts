@@ -83,3 +83,36 @@ export function volumeDaSteam(texto: string | null | undefined): number | null {
   const n = Number(texto.replace(/\D/g, ""));
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+/**
+ * Quanto tempo um preço já consultado continua servindo.
+ *
+ * Mora aqui, e não no serviço que faz a rede, porque quem PERGUNTA também
+ * precisa da resposta: o formulário decide se vale consultar a Steam de novo
+ * ao escolher uma skin, e o serviço decide o cache da própria consulta. Dois
+ * números para a mesma pergunta dariam um formulário que pede o que o
+ * servidor já ia devolver de cache, ou pior, que deixa de pedir o que já
+ * venceu.
+ */
+export const PRECO_VALE_POR_SEGUNDOS = 600;
+
+/**
+ * O preço guardado ainda serve, ou vale perguntar de novo?
+ *
+ * Sem data, não serve: preço sem procedência é palpite, e a consulta é
+ * barata perto de publicar uma campanha com valor errado.
+ */
+export function precoAindaVale(
+  atualizadoEm: Date | string | null | undefined,
+  agora: Date = new Date(),
+): boolean {
+  if (!atualizadoEm) return false;
+  const quando =
+    atualizadoEm instanceof Date ? atualizadoEm : new Date(atualizadoEm);
+  const ms = quando.getTime();
+  if (!Number.isFinite(ms)) return false;
+  const idadeEmSegundos = (agora.getTime() - ms) / 1000;
+  // Data no futuro é relógio torto, não preço fresco.
+  if (idadeEmSegundos < 0) return false;
+  return idadeEmSegundos <= PRECO_VALE_POR_SEGUNDOS;
+}

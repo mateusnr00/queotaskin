@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  PRECO_VALE_POR_SEGUNDOS,
   ehSemPintura,
   nomeDeMercado,
+  precoAindaVale,
   precoDaSteamEmReais,
   volumeDaSteam,
 } from "./steam-market";
@@ -114,5 +116,47 @@ describe("a conta da cota", () => {
     expect(precoExatoPorNumero(0, 100)).toBeNull();
     expect(precoPorNumero(100, 0)).toBeNull();
     expect(arrecadacaoPrevista(-1, 100)).toBeNull();
+  });
+});
+
+describe("quando vale consultar a Steam de novo", () => {
+  const agora = new Date("2026-03-10T12:00:00Z");
+  const segundosAtras = (s: number) =>
+    new Date(agora.getTime() - s * 1000).toISOString();
+
+  it("preço recém-consultado serve, e não gera consulta nenhuma", () => {
+    expect(precoAindaVale(segundosAtras(0), agora)).toBe(true);
+    expect(precoAindaVale(segundosAtras(60), agora)).toBe(true);
+    expect(precoAindaVale(segundosAtras(PRECO_VALE_POR_SEGUNDOS), agora)).toBe(
+      true,
+    );
+  });
+
+  it("passou da janela, vale perguntar de novo", () => {
+    expect(
+      precoAindaVale(segundosAtras(PRECO_VALE_POR_SEGUNDOS + 1), agora),
+    ).toBe(false);
+    expect(precoAindaVale(segundosAtras(86_400), agora)).toBe(false);
+  });
+
+  // Preço sem procedência é palpite: o valor pode ter sido digitado à mão no
+  // catálogo, e publicar campanha com ele seria afirmar um preço da Steam que
+  // a Steam nunca disse.
+  it("sem data, não serve", () => {
+    expect(precoAindaVale(null, agora)).toBe(false);
+    expect(precoAindaVale(undefined, agora)).toBe(false);
+    expect(precoAindaVale("", agora)).toBe(false);
+    expect(precoAindaVale("data quebrada", agora)).toBe(false);
+  });
+
+  it("data no futuro é relógio torto, não preço fresco", () => {
+    expect(precoAindaVale(new Date(agora.getTime() + 60_000), agora)).toBe(
+      false,
+    );
+  });
+
+  it("aceita Date e string, porque o servidor manda uma e o navegador outra", () => {
+    const d = new Date(agora.getTime() - 30_000);
+    expect(precoAindaVale(d, agora)).toBe(precoAindaVale(d.toISOString(), agora));
   });
 });

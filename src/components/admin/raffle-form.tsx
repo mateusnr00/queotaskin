@@ -13,6 +13,10 @@ import type { PaymentProvider as PaymentProviderEnum } from "@prisma/client";
 
 import { precoPorNumero } from "@/lib/dinheiro";
 import {
+  deveConsultarPreco,
+  respostaAindaVale,
+} from "@/lib/busca-automatica-de-preco";
+import {
   decidirAtualizacaoDaDescricao,
   montarDescricaoPadrao,
 } from "@/lib/descricao-padrao";
@@ -440,6 +444,20 @@ export function RaffleForm({
   // Comparação de texto e não uma bandeira "editado": a bandeira erra quando
   // alguém digita e desfaz, e não sobrevive a nada. O texto é a própria
   // verdade, e a função que o gera é determinística de propósito.
+  // A BUSCA AUTOMÁTICA, E AS DUAS COISAS QUE ELA PRECISA GARANTIR.
+  //
+  // `pedidoDoPreco` numera cada consulta. A resposta só é aplicada quando o
+  // número dela ainda é o último pedido: escolher a AWP e logo em seguida a
+  // AK fazia a resposta atrasada da AWP cair em cima da AK, com preço e
+  // descrição de uma skin que não está mais selecionada.
+  //
+  // `jaBuscadas` guarda skin+desgaste já consultados NESTE formulário, para
+  // ir e voltar entre duas skins não render uma consulta por clique. O botão
+  // manual não olha para este conjunto: ele existe justamente para furar
+  // qualquer cache.
+  const pedidoDoPreco = useRef(0);
+  const jaBuscadas = useRef<Set<string>>(new Set());
+
   const descricaoGerada = useRef<string>("");
   const [descricaoOferecida, setDescricaoOferecida] = useState<string | null>(
     null,
@@ -485,6 +503,38 @@ export function RaffleForm({
     if (brl != null && brl > 0) {
       aplicarSugestao(brl, form.getValues("totalNumbers"));
     }
+  }
+
+  /**
+   * Consulta a Steam sozinho quando a skin escolhida não traz preço servível.
+   *
+   * POR QUE NO CLIQUE, E NÃO NUM EFFECT.
+   *
+   * Um effect que olha a skin escolhida dispara também em re-render, em
+   * remontagem e em qualquer mudança de dependência que alguém acrescente
+   * depois. Aqui, uma escolha é uma consulta, no máximo: quem chama é a ação
+   * de quem clicou.
+   *
+   * E SÓ QUANDO PRECISA.
+   *
+   * O catálogo guarda o último preço vindo da Steam e a hora dele. Dentro da
+   * janela em que esse preço ainda vale, não há o que perguntar: o valor já
+   * está na tela e já entrou na descrição. Fora dela, ou sem data nenhuma,
+   * consulta. Skin já consultada neste formulário também não repete.
+   *
+   * Sem `forcar`: o botão "Atualizar preço" é que existe para furar o cache
+   * do servidor. Esta consulta aceita o cache de bom grado.
+   */
+  function buscarSeVierSemPreco(skinId: string | null, wear: SkinWear | null) {
+    // Campanha que já existe não consulta sozinha: a descrição dela está
+    // publicada, e abrir a tela de edição não é motivo para mexer em preço.
+    if (!skinId) return;
+    const precisa = deveConsultarPreco({
+      skin: skins.find((sk) => sk.id === skinId) ?? null,
+      ehEdicao: isEdit,
+      jaConsultada: jaBuscadas.current.has(`${skinId}|${wear ?? ""}`),
+    });
+    if (precisa) void buscarPrecoNaSteam({ skinId, wear });
   }
 
   /**
@@ -581,6 +631,9 @@ export function RaffleForm({
       return;
     }
 
+    const meuPedido = ++pedidoDoPreco.current;
+    if (skinId) jaBuscadas.current.add(`${skinId}|${wear ?? ""}`);
+
     setBuscandoPreco(true);
     setErroDoPreco(null);
     try {
@@ -595,7 +648,15 @@ export function RaffleForm({
             forcar: opcoes?.forcar,
           });
 
+      // A resposta chegou depois de outra consulta ter começado: ela é de uma
+      // skin que não está mais escolhida, e aplicar qualquer coisa daqui
+      // sobrescreveria a seleção atual.
+      if (!respostaAindaVale(meuPedido, pedidoDoPreco.current)) return;
+
       if (!r.ok) {
+        // A campanha não fica bloqueada porque a Steam não respondeu: a skin
+        // segue escolhida, a descrição segue como está, e o botão manual
+        // continua ali para tentar de novo.
         setPrecoDaSteam(null);
         setErroDoPreco(r.erro);
         return;
@@ -613,12 +674,16 @@ export function RaffleForm({
       // Agora com o preço da Steam no lugar do valor do catálogo.
       atualizarDescricaoPadrao({ skinId, wear, precoBrl: r.brl });
     } catch {
+      if (!respostaAindaVale(meuPedido, pedidoDoPreco.current)) return;
       setPrecoDaSteam(null);
       setErroDoPreco(
         "Não foi possível falar com a Steam agora. Preencha o preço à mão.",
       );
     } finally {
-      setBuscandoPreco(false);
+      // O rodinha de "buscando" só é desligado pelo pedido mais recente: o
+      // atrasado desligaria o aviso de uma consulta que ainda está em pé.
+      if (respostaAindaVale(meuPedido, pedidoDoPreco.current))
+        setBuscandoPreco(false);
     }
   }
 
@@ -854,6 +919,7 @@ export function RaffleForm({
                     // catálogo por enquanto; quando a Steam responder, ela é
                     // reescrita com o preço de lá.
                     atualizarDescricaoPadrao({ skinId: id, wear: null });
+                    buscarSeVierSemPreco(id, null);
                   }}
                   desgaste={desgasteEscolhido}
                   aoEscolherDesgaste={(w) => {
@@ -865,6 +931,10 @@ export function RaffleForm({
                     setPrecoDaSteam(null);
                     // O desgaste entra no nome do prêmio, então o texto muda.
                     atualizarDescricaoPadrao({ wear: w });
+                    // O desgaste muda o item na Steam: a mesma AWP custa
+                    // milhares a mais Factory New. O preço anterior já foi
+                    // descartado acima, e este é o preço do item novo.
+                    buscarSeVierSemPreco(skinEscolhida, w);
                   }}
                   aoPreencherTitulo={(nome) => {
                     form.setValue("title", nome, { shouldDirty: true });

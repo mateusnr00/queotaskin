@@ -28,14 +28,21 @@
 import {
   ehSemPintura,
   nomeDeMercado,
+  PRECO_VALE_POR_SEGUNDOS,
   precoDaSteamEmReais,
   volumeDaSteam,
   type SkinParaConsulta,
 } from "@/lib/steam-market";
 import type { SkinWear } from "@prisma/client";
 
-/** Quanto tempo um preço serve antes de valer perguntar de novo. */
-export const CACHE_EM_SEGUNDOS = 600;
+/**
+ * Quanto tempo um preço serve antes de valer perguntar de novo.
+ *
+ * O número mora em `lib/steam-market`, junto das outras regras puras da
+ * Steam, porque o formulário também precisa dele para decidir se consulta ao
+ * escolher uma skin. Aqui é só o nome pelo qual este arquivo já o conhecia.
+ */
+export const CACHE_EM_SEGUNDOS = PRECO_VALE_POR_SEGUNDOS;
 
 /** A rede tem de ter fim: ninguém segura o formulário esperando a Steam. */
 const TIMEOUT_EM_MS = 8000;
