@@ -5,8 +5,46 @@
 // cliente sem cuidado: as faixas de compra e a régua de XP por real são
 // informação interna, e a interface não pode revelá-las.
 
-/** XP por real. INTERNO: nunca escrever este número na interface. */
-export const BASE_XP_PER_REAL = 10;
+/**
+ * A régua de XP por real quando o painel não tem uma válida.
+ *
+ * DEFAULT, E NÃO A RÉGUA.
+ *
+ * Quem manda é `Tenant.xpPerBrl`. Esta constante existe só para o caso de a
+ * coluna vir nula, zerada ou corrompida, e para os cálculos fora de um painel
+ * (a tabela de níveis do `rank.ts` foi escrita nesta régua).
+ *
+ * Ela já foi `BASE_XP_PER_REAL` e era usada direto no crédito, enquanto a
+ * barra de progresso usava `Tenant.xpPerBrl`: dois números para a mesma
+ * pergunta. Com os dois valendo 10 ninguém notava, e no dia em que o painel
+ * mudasse a régua a barra prometeria um "quanto falta" que o crédito não
+ * cumpriria.
+ */
+export const DEFAULT_XP_PER_BRL = 10;
+
+/**
+ * A régua efetiva a partir do que está guardado no painel.
+ *
+ * Passa por aqui TODO mundo que converte dinheiro em XP, crédito e tela, para
+ * que um valor estragado no banco não produza uma conta na tela e outra no
+ * extrato. Régua não positiva, não finita ou fracionária não é corrigida pela
+ * metade: vira o default.
+ */
+export function xpPorReal(valor: number | null | undefined): number {
+  if (typeof valor !== "number") return DEFAULT_XP_PER_BRL;
+  if (!Number.isFinite(valor) || !Number.isInteger(valor)) return DEFAULT_XP_PER_BRL;
+  if (valor <= 0) return DEFAULT_XP_PER_BRL;
+  return valor;
+}
+
+/**
+ * O teto da régua configurável.
+ *
+ * Existe porque a escada de níveis é uma tabela fixa em XP: uma régua de mil
+ * XP por real levaria alguém ao nível 21 com R$ 300, e a progressão inteira
+ * perderia sentido sem que nada no sistema reclamasse.
+ */
+export const MAX_XP_PER_BRL = 100;
 
 /** Teto do multiplicador somado. Nenhuma combinação de bônus passa disto. */
 export const MAX_XP_MULTIPLIER = 2.5;

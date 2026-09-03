@@ -175,11 +175,17 @@ export async function awardXpForReservation(
         ? getLuckXpBonus(diasSemPremio)
         : 0;
 
+      // A RÉGUA DO PAINEL, E NÃO UMA CONSTANTE.
+      //
+      // O mesmo número que a barra de progresso usa para dizer "faltam R$ X".
+      // Enquanto o crédito tinha régua própria, mudar isto no painel movia a
+      // promessa da tela sem mover o que era pago.
       const composicao = calculatePurchaseXp({
         purchaseAmount: valorEmReais,
         activityMultiplier: getActivityMultiplier(progresso?.boostPoints ?? 0),
         purchaseBonus: compra.bonus,
         luckBonus,
+        xpPerBrl: tenant.xpPerBrl,
       });
       if (composicao.earnedXp <= 0) return { credited: false, amount: 0, totalXp: 0 };
 
@@ -217,6 +223,11 @@ export async function awardXpForReservation(
           // O bônus somado: o das regras de sempre mais o do boost.
           bonusXp: comBoost.finalXp - composicao.baseXp,
           metadata: {
+            // A régua vigente no instante do crédito. Mudar o painel amanhã
+            // não reescreve o que foi pago hoje, e sem isto gravado não
+            // haveria como explicar por que uma compra antiga rendeu o que
+            // rendeu.
+            xpPerBrlUsed: composicao.xpPerBrl,
             faixaDaCompra: compra.faixa,
             rotuloDaCompra: compra.rotulo,
             activityMultiplier: composicao.activityMultiplier,

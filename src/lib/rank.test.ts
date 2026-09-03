@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { calculatePurchaseXp } from "./xp/regras";
+
 import {
   MAX_LEVEL,
   PRESTIGE_RANKS,
@@ -353,5 +355,52 @@ describe("rankDoPrestigio", () => {
     // E a regra de gasto continua de pé onde ela importa, que é avaliar
     // alguém de verdade: só XP não faz ninguém GOAT.
     expect(rankFromXp(goat.xp).prestige?.key).not.toBe("GOAT");
+  });
+});
+
+describe("a barra e o crédito usam a mesma régua", () => {
+  // O DESENCONTRO QUE ISTO FECHA.
+  //
+  // A barra dizia "faltam R$ X" convertendo XP pela régua do painel, enquanto
+  // o crédito convertia real em XP por uma constante fixa. Com as duas em 10
+  // ninguém via; com o painel em 12, a barra prometia um valor que a compra
+  // não cumpria. O que amarra as duas pontas é este ida-e-volta: o que a
+  // barra pede em reais é exatamente o que uma compra desse tamanho credita.
+  for (const regua of [10, 12, 25]) {
+    it(`fecha o ida-e-volta com a régua em ${regua}`, () => {
+      const xp = 400; // meio do caminho para o nível 1.
+      const barra = rankProgress(xp, regua);
+
+      // O que a barra pede em reais.
+      expect(barra.brlToNext).toBe(Math.ceil(barra.xpToNext / regua));
+
+      // Gastar exatamente isso, na mesma régua, cobre o que faltava.
+      const gerado = calculatePurchaseXp({
+        purchaseAmount: barra.brlToNext,
+        activityMultiplier: 1,
+        purchaseBonus: 0,
+        luckBonus: 0,
+        xpPerBrl: regua,
+      });
+      expect(gerado.baseXp).toBeGreaterThanOrEqual(barra.xpToNext);
+      expect(rankProgress(xp + gerado.baseXp, regua).rank.level).toBe(1);
+    });
+  }
+
+  it("régua estragada cai no mesmo padrão nos dois lados", () => {
+    for (const ruim of [0, -1, 10.5, NaN]) {
+      expect(rankProgress(400, ruim).brlToNext).toBe(
+        rankProgress(400, 10).brlToNext,
+      );
+      expect(
+        calculatePurchaseXp({
+          purchaseAmount: 100,
+          activityMultiplier: 1,
+          purchaseBonus: 0,
+          luckBonus: 0,
+          xpPerBrl: ruim,
+        }).baseXp,
+      ).toBe(1_000);
+    }
   });
 });

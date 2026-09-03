@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { formatBRL, formatDate } from "@/lib/format";
 import { formatPhone } from "@/lib/cpf";
+import { ReguaDeXp } from "@/components/admin/regua-de-xp";
 import { ConfigDaCaixaDeLevelUp } from "@/components/admin/config-da-caixa-de-level-up";
 import { dropsDoPainel } from "@/server/services/caixa-de-level-up";
 
@@ -73,6 +74,8 @@ export default async function AdminRankingPage() {
           </p>
         }
       />
+
+      <ReguaDeXp inicial={settings?.xpPerBrl ?? 10} />
 
       <ConfigDaCaixaDeLevelUp
         ligadoInicial={settings?.levelUpBoxesEnabled ?? false}

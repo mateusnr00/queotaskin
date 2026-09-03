@@ -7,7 +7,7 @@
 
 import {
   BOOST_DE_SORTE,
-  BASE_XP_PER_REAL,
+  xpPorReal,
   DECAIMENTO,
   FAIXAS_DE_COMPRA,
   FUSO_OFICIAL,
@@ -232,6 +232,8 @@ export function aplicarParticipacao(
 
 export interface ComposicaoDoXp {
   baseXp: number;
+  /** A régua usada nesta conta, em XP por real. Vai para a auditoria. */
+  xpPerBrl: number;
   activityMultiplier: number;
   purchaseBonus: number;
   luckBonus: number;
@@ -254,6 +256,7 @@ export function calculatePurchaseXp({
   purchaseBonus,
   luckBonus,
   eventBonus = 0,
+  xpPerBrl,
 }: {
   /** Valor pago, em reais. */
   purchaseAmount: number;
@@ -261,13 +264,25 @@ export function calculatePurchaseXp({
   purchaseBonus: number;
   luckBonus: number;
   eventBonus?: number;
+  /**
+   * A régua do painel, em XP por real. Ausente vale o default do projeto,
+   * que é o mesmo que a barra de progresso usa quando não há painel.
+   *
+   * Entra por parâmetro, e não por importação de constante: é o que faz esta
+   * função ter UMA régua, a que quem chama resolveu, em vez de uma régua
+   * própria discordando da tela.
+   */
+  xpPerBrl?: number | null;
 }): ComposicaoDoXp {
   // Trunca no real cheio, como o projeto já fazia: R$ 19,90 rende o mesmo que
   // R$ 19,00, o que evita XP fracionado e mantém a conta legível.
-  const baseXp = Math.max(
-    0,
-    Math.floor(Math.floor(purchaseAmount) * BASE_XP_PER_REAL),
-  );
+  // O TRUNCAMENTO NO REAL CHEIO É REGRA, E CONTINUA SENDO.
+  //
+  // R$ 19,90 rende o mesmo que R$ 19,00. Está aqui desde antes, é o que
+  // mantém o XP inteiro e a conta explicável para quem compra, e não muda
+  // por causa da régua: o que a régua troca é o quanto cada real vale.
+  const porReal = xpPorReal(xpPerBrl);
+  const baseXp = Math.max(0, Math.floor(Math.floor(purchaseAmount) * porReal));
 
   const finalMultiplier = Math.min(
     activityMultiplier + purchaseBonus + luckBonus + eventBonus,
@@ -278,6 +293,7 @@ export function calculatePurchaseXp({
 
   return {
     baseXp,
+    xpPerBrl: porReal,
     activityMultiplier,
     purchaseBonus,
     luckBonus,

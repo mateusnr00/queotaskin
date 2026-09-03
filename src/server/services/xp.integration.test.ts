@@ -282,4 +282,120 @@ suite("serviço de XP (integração)", () => {
       adjustXp({ userId, tenantId, amount: 0, description: "nada" }),
     ).rejects.toThrow();
   });
+  // ------------------------------------------------ a régua do painel
+
+  describe("a régua de XP do painel manda no crédito", () => {
+    // Cada caso devolve a régua ao padrão: as outras suítes deste arquivo
+    // contam com 10, e teste que deixa configuração pendurada quebra vizinho.
+    async function comRegua<T>(valor: number, corpo: () => Promise<T>): Promise<T> {
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { xpPerBrl: valor },
+      });
+      try {
+        return await corpo();
+      } finally {
+        await prisma.tenant.update({
+          where: { id: tenantId },
+          data: { xpPerBrl: 10 },
+        });
+      }
+    }
+
+    it("régua 10 credita 1.000 XP por R$ 100, como sempre creditou", async () => {
+      await comRegua(10, async () => {
+        const id = await paidReservation(100);
+        const r = await awardXpForReservation(id);
+        // R$ 100 cai na faixa "compra relevante", que soma 10%: a régua
+        // manda na BASE, e os multiplicadores de sempre agem sobre ela.
+        expect(r?.amount).toBe(1_100);
+        const l = await prisma.xpEntry.findFirst({
+          where: { reservationId: id, reason: "PURCHASE" },
+          select: { baseXp: true, metadata: true },
+        });
+        expect(l?.baseXp).toBe(1_000);
+        expect((l?.metadata as { xpPerBrlUsed?: number })?.xpPerBrlUsed).toBe(10);
+      });
+    });
+
+    it("régua 12 credita 1.200 XP pelos mesmos R$ 100", async () => {
+      await comRegua(12, async () => {
+        const id = await paidReservation(100);
+        const r = await awardXpForReservation(id);
+        // 1.200 de base, e os mesmos 10% da faixa por cima.
+        expect(r?.amount).toBe(1_320);
+        const l = await prisma.xpEntry.findFirst({
+          where: { reservationId: id, reason: "PURCHASE" },
+          select: { baseXp: true, metadata: true },
+        });
+        expect(l?.baseXp).toBe(1_200);
+        expect((l?.metadata as { xpPerBrlUsed?: number })?.xpPerBrlUsed).toBe(12);
+      });
+    });
+
+    // O ponto que faz a auditoria valer: mudar a régua não reescreve nada.
+    it("mudar a régua depois não mexe no que já foi creditado", async () => {
+      const id = await comRegua(10, async () => {
+        const r = await paidReservation(100);
+        await awardXpForReservation(r);
+        return r;
+      });
+
+      const antes = await prisma.xpEntry.findFirst({
+        where: { reservationId: id, reason: "PURCHASE" },
+        select: { baseXp: true, amount: true, metadata: true },
+      });
+
+      await comRegua(12, async () => {
+        // Uma compra nova na régua nova, para provar que a troca valeu.
+        const nova = await paidReservation(100);
+        const r = await awardXpForReservation(nova);
+        expect(r?.amount).toBe(1_320);
+      });
+
+      const depois = await prisma.xpEntry.findFirst({
+        where: { reservationId: id, reason: "PURCHASE" },
+        select: { baseXp: true, amount: true, metadata: true },
+      });
+      expect(depois).toEqual(antes);
+      expect((depois?.metadata as { xpPerBrlUsed?: number })?.xpPerBrlUsed).toBe(10);
+    });
+
+    it("a idempotência continua de pé com a régua trocada no meio", async () => {
+      const id = await comRegua(12, async () => {
+        const r = await paidReservation(100);
+        expect((await awardXpForReservation(r))?.amount).toBe(1_320);
+        return r;
+      });
+
+      // Segunda chamada, régua já de volta em 10: nada de novo é creditado, e
+      // o lançamento original continua com a régua dele.
+      const total = await getUserXp(userId, tenantId);
+      const repetida = await awardXpForReservation(id);
+      expect(repetida?.credited).toBe(false);
+      expect(await getUserXp(userId, tenantId)).toBe(total);
+
+      const lancamentos = await prisma.xpEntry.count({
+        where: { reservationId: id, reason: "PURCHASE" },
+      });
+      expect(lancamentos).toBe(1);
+    });
+
+    it("régua estragada no banco não estraga o crédito", async () => {
+      // A coluna é inteira e a action recusa zero, mas o crédito não confia
+      // nisso: banco tocado à mão é o caso que sobra.
+      await comRegua(0, async () => {
+        const id = await paidReservation(100);
+        const r = await awardXpForReservation(id);
+        expect(r?.amount).toBe(1_100);
+        const l = await prisma.xpEntry.findFirst({
+          where: { reservationId: id, reason: "PURCHASE" },
+          select: { baseXp: true, metadata: true },
+        });
+        expect(l?.baseXp).toBe(1_000);
+        expect((l?.metadata as { xpPerBrlUsed?: number })?.xpPerBrlUsed).toBe(10);
+      });
+    });
+  });
+
 });

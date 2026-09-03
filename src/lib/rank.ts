@@ -8,9 +8,15 @@
 // é gasto nem expira: o nível é permanente. Isso é proposital, um rank que
 // pode cair pune quem parou de comprar, e o objetivo é o contrário.
 
-import { GOAT_MIN_TOTAL_SPENT } from "@/lib/xp/config";
+import { DEFAULT_XP_PER_BRL, GOAT_MIN_TOTAL_SPENT, xpPorReal } from "@/lib/xp/config";
 
-export const XP_PER_BRL_DEFAULT = 10;
+/**
+ * Reexportado com o nome antigo por conveniência de quem já importava daqui.
+ * O valor mora em `xp/config.ts`, junto do resto da economia de XP: duas
+ * constantes de 10 em arquivos diferentes foi exatamente o que criou a
+ * divergência entre o que a barra prometia e o que o crédito pagava.
+ */
+export const XP_PER_BRL_DEFAULT = DEFAULT_XP_PER_BRL;
 
 /** Último nível numérico. Acima disso começam as patentes de prestígio. */
 export const MAX_LEVEL = 21;
@@ -371,7 +377,7 @@ export function rankProgress(
   const span = ceilXp - floorXp;
   const into = Math.max(0, total - floorXp);
   const xpToNext = Math.max(0, ceilXp - total);
-  const perBrl = xpPerBrl > 0 ? xpPerBrl : XP_PER_BRL_DEFAULT;
+  const perBrl = xpPorReal(xpPerBrl);
 
   return {
     rank,
@@ -435,7 +441,7 @@ export function xpForPurchase(
   xpPerBrl: number = XP_PER_BRL_DEFAULT,
 ): number {
   if (!Number.isFinite(amountBrl) || amountBrl <= 0) return 0;
-  const perBrl = xpPerBrl > 0 ? xpPerBrl : XP_PER_BRL_DEFAULT;
+  const perBrl = xpPorReal(xpPerBrl);
   return Math.floor(amountBrl) * perBrl;
 }
 

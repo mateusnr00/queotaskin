@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_XP_MULTIPLIER, XP_MULTIPLIER_TIERS } from "./config";
+import { aplicarBoost } from "./caixa-de-level-up";
+import {
+  DEFAULT_XP_PER_BRL,
+  MAX_XP_MULTIPLIER,
+  XP_MULTIPLIER_TIERS,
+} from "./config";
 import {
   aplicarParticipacao,
   calculateDecayedBoostPoints,
@@ -314,5 +319,126 @@ describe("datas no fuso oficial", () => {
 
   it("o ciclo é o mês-calendário", () => {
     expect(cicloDe(new Date("2026-08-28T12:00:00.000Z"))).toBe("2026-08");
+  });
+});
+
+describe("a régua de XP por real", () => {
+  // A régua padrão continua sendo 10, e é isso que mantém o comportamento de
+  // hoje idêntico enquanto ninguém mexer no painel.
+  const semRegua = {
+    activityMultiplier: 1,
+    purchaseBonus: 0,
+    luckBonus: 0,
+  };
+
+  it("sem configuração nenhuma, R$ 100 rendem 1.000 XP base", () => {
+    expect(
+      calculatePurchaseXp({ ...semRegua, purchaseAmount: 100 }).baseXp,
+    ).toBe(1_000);
+    expect(DEFAULT_XP_PER_BRL).toBe(10);
+  });
+
+  it("com a régua em 10, o resultado é o mesmo de sempre", () => {
+    const comRegua = calculatePurchaseXp({
+      ...semRegua,
+      purchaseAmount: 100,
+      xpPerBrl: 10,
+    });
+    const sem = calculatePurchaseXp({ ...semRegua, purchaseAmount: 100 });
+    expect(comRegua).toEqual(sem);
+  });
+
+  it("com a régua em 12, R$ 100 rendem 1.200 XP base", () => {
+    const c = calculatePurchaseXp({
+      ...semRegua,
+      purchaseAmount: 100,
+      xpPerBrl: 12,
+    });
+    expect(c.baseXp).toBe(1_200);
+    expect(c.earnedXp).toBe(1_200);
+    expect(c.xpPerBrl).toBe(12);
+  });
+
+  // A regra de truncar no real cheio é anterior a tudo isto e continua de pé:
+  // o que a régua troca é quanto cada real vale, não o que conta como real.
+  it("R$ 19,90 continua valendo R$ 19 inteiros, em qualquer régua", () => {
+    expect(
+      calculatePurchaseXp({ ...semRegua, purchaseAmount: 19.9, xpPerBrl: 10 })
+        .baseXp,
+    ).toBe(190);
+    expect(
+      calculatePurchaseXp({ ...semRegua, purchaseAmount: 19.9, xpPerBrl: 12 })
+        .baseXp,
+    ).toBe(228);
+    expect(
+      calculatePurchaseXp({ ...semRegua, purchaseAmount: 19.99, xpPerBrl: 10 })
+        .baseXp,
+    ).toBe(
+      calculatePurchaseXp({ ...semRegua, purchaseAmount: 19, xpPerBrl: 10 })
+        .baseXp,
+    );
+  });
+
+  it("régua estragada não vira conta estragada: cai no padrão", () => {
+    // Zero faria toda compra render nada; negativa, XP negativo; fracionária,
+    // XP quebrado numa coluna de inteiro.
+    for (const ruim of [0, -5, NaN, Infinity, 10.5, null, undefined]) {
+      const c = calculatePurchaseXp({
+        ...semRegua,
+        purchaseAmount: 100,
+        xpPerBrl: ruim as number | null,
+      });
+      expect(c.baseXp).toBe(1_000);
+      expect(c.xpPerBrl).toBe(10);
+    }
+  });
+
+  it("os multiplicadores continuam agindo sobre a base da régua nova", () => {
+    const c = calculatePurchaseXp({
+      purchaseAmount: 100,
+      activityMultiplier: 1.5,
+      purchaseBonus: 0.1,
+      luckBonus: 0,
+      xpPerBrl: 12,
+    });
+    expect(c.baseXp).toBe(1_200);
+    expect(c.finalMultiplier).toBeCloseTo(1.6, 5);
+    expect(c.earnedXp).toBe(1_920);
+  });
+
+  it("o teto de 2,5 continua valendo, e continua sendo 2,5", () => {
+    expect(MAX_XP_MULTIPLIER).toBe(2.5);
+    const c = calculatePurchaseXp({
+      purchaseAmount: 100,
+      activityMultiplier: 2.5,
+      purchaseBonus: 0.5,
+      luckBonus: 0.3,
+      xpPerBrl: 12,
+    });
+    expect(c.finalMultiplier).toBe(2.5);
+    expect(c.earnedXp).toBe(3_000);
+  });
+
+  it("a régua usada fica no resultado, para virar auditoria", () => {
+    expect(
+      calculatePurchaseXp({ ...semRegua, purchaseAmount: 10, xpPerBrl: 7 })
+        .xpPerBrl,
+    ).toBe(7);
+  });
+
+  // O boost de level up é estágio à parte, DEPOIS do teto: um 3,5x continua
+  // multiplicando por 3,5 o XP já calculado, e não é cortado em 2,5.
+  it("o boost de level up multiplica o XP já calculado, fora do teto", () => {
+    const c = calculatePurchaseXp({
+      purchaseAmount: 100,
+      activityMultiplier: 2.5,
+      purchaseBonus: 0.5,
+      luckBonus: 0,
+      xpPerBrl: 12,
+    });
+    expect(c.earnedXp).toBe(3_000);
+    const comBoost = aplicarBoost(c.earnedXp, 3.5);
+    expect(comBoost.finalXp).toBe(10_500);
+    expect(comBoost.finalXp / c.earnedXp).toBeCloseTo(3.5, 5);
   });
 });
