@@ -7,7 +7,7 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Gift, Minus, Plus, X } from "lucide-react";
+import { Gift, Minus, Plus } from "lucide-react";
 
 import { createReservationAction } from "@/server/actions/reservations";
 import { guardarOuRecuperarMarcas } from "@/lib/utm";
@@ -18,6 +18,11 @@ import {
   type EntradaNoCheckout,
 } from "@/components/public/cartao-de-entrada-gratis";
 import { formatBRL } from "@/lib/format";
+import {
+  aparaQuantidade,
+  limitesDaQuantidade,
+  type LimitesDaQuantidade,
+} from "@/lib/quantidade";
 import { onlyDigits, formatCpf, formatPhone, isValidCpf } from "@/lib/cpf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,10 +209,12 @@ export function ReservationForm({
     : 0;
   const totalACobrar = Math.max(0, effectiveQty * pricePerNumber - desconto);
 
+  // A MESMA regra que o seletor usa para desabilitar os botões. Escrita duas
+  // vezes, ela viraria um "-" clicável num valor que este apara de volta.
+  const limites = limitesDaQuantidade(minPurchase, maxPurchase);
+
   function clampQty(v: number) {
-    const min = Math.max(1, minPurchase);
-    const max = maxPurchase ?? 10_000;
-    return Math.max(min, Math.min(max, v));
+    return aparaQuantidade(v, limites);
   }
 
   function onSubmit(values: Values) {
@@ -322,7 +329,7 @@ export function ReservationForm({
           <QuantityPicker
             quantity={quantity}
             onChange={(v) => setQuantity(clampQty(v))}
-            minPurchase={minPurchase}
+            limites={limites}
             maxPurchase={maxPurchase}
             pricePerNumber={pricePerNumber}
             selectionCards={selectionCards}
@@ -444,16 +451,18 @@ export function ReservationForm({
 function QuantityPicker({
   quantity,
   onChange,
-  minPurchase,
   maxPurchase,
+  limites,
   pricePerNumber,
   selectionCards,
   selectionCardsBestseller,
 }: {
   quantity: number;
   onChange: (v: number) => void;
-  minPurchase: number;
+  /** Só filtra os cards de atalho: card maior que o teto seria sempre aparado. */
   maxPurchase?: number;
+  /** Piso e teto já resolvidos, os mesmos que o formulário apara. */
+  limites: LimitesDaQuantidade;
   pricePerNumber: number;
   selectionCards: number[];
   selectionCardsBestseller: number;
@@ -521,47 +530,51 @@ function QuantityPicker({
         </div>
       )}
 
+      {/* O SELETOR: MENOS, VALOR, MAIS. NADA MAIS.
+          Saiu o "X" de limpar seleção. Ele existia porque quem clicasse em
+          +1000 por engano teria de apertar "-" mil vezes, mas isso é o que os
+          cards de cima resolvem: clicar em qualquer um deles refaz a escolha.
+          Um botão vermelho de apagar ao lado de dois de ajustar é uma
+          terceira decisão num lugar que só tem duas.
+
+          E saiu o campo de tipo numérico. Nenhum código deste projeto
+          ouvia a roda do mouse: quem mexia no valor era o navegador, que
+          incrementa e decrementa um campo desse tipo quando ele está focado e
+          a página rola por cima dele. No telefone, rolar a página com o dedo sobre o campo mudava a
+          quantidade sem ninguém pedir. `text` com `inputMode="numeric"`
+          mantém o teclado numérico e o poder de digitar 250 de uma vez, e
+          tira a roda e as setinhas nativas junto. */}
       <div className="flex items-center gap-2">
-        {/* Zerar a escolha. Com os cards somando, quem clicou em +1000 por
-            engano teria de apertar "−" mil vezes para voltar. Só aparece
-            quando há o que desfazer. */}
-        {quantity > minPurchase && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onChange(minPurchase)}
-            aria-label="Limpar seleção"
-            title="Limpar seleção"
-            className="text-destructive hover:text-destructive"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
         <Button
           type="button"
           variant="outline"
           size="icon"
+          className="h-11 w-11 shrink-0"
           onClick={() => onChange(quantity - 1)}
-          aria-label="Diminuir"
+          disabled={quantity <= limites.min}
+          aria-label="Diminuir quantidade"
         >
           <Minus className="h-4 w-4" />
         </Button>
         <Input
-          type="number"
+          type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
           value={quantity}
-          onChange={(e) => onChange(Number(e.target.value) || minPurchase)}
-          className="text-center text-lg font-semibold tabular-nums h-11"
-          min={minPurchase}
-          max={maxPurchase ?? undefined}
+          onChange={(e) =>
+            onChange(Number(e.target.value.replace(/\D/g, "")) || limites.min)
+          }
+          className="h-11 text-center text-lg font-semibold tabular-nums"
+          aria-label="Quantidade"
         />
         <Button
           type="button"
           variant="outline"
           size="icon"
+          className="h-11 w-11 shrink-0"
           onClick={() => onChange(quantity + 1)}
-          aria-label="Aumentar"
+          disabled={quantity >= limites.max}
+          aria-label="Aumentar quantidade"
         >
           <Plus className="h-4 w-4" />
         </Button>
