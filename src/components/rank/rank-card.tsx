@@ -2,6 +2,7 @@ import { Medal } from "lucide-react";
 
 import { Moldura } from "@/components/ui/moldura";
 import { RankBadge, RankMeter } from "@/components/rank/rank-badge";
+import { GOAT_MIN_TOTAL_SPENT } from "@/lib/xp/config";
 import {
   MAX_LEVEL,
   PRESTIGE_RANKS,
@@ -58,16 +59,24 @@ function Panel({
  */
 export function RankCard({
   xp,
+  xpPerBrl,
   totalSpent = 0,
   multiplicador,
 }: {
   xp: number;
+  /**
+   * A régua do painel, que a página já carrega junto do resto das
+   * configurações. Vem por prop, e não por consulta aqui dentro: o cartão é
+   * um entre vários na mesma tela, e cada um buscando o próprio painel seria
+   * uma ida ao banco por componente para ler a mesma linha.
+   */
+  xpPerBrl: number;
   /** Só para resolver o GOAT. Nunca é exibido. */
   totalSpent?: number;
   /** Boost atual, para a linha de baixo. */
   multiplicador?: number;
 }) {
-  const progress = rankProgress(xp);
+  const progress = rankProgress(xp, xpPerBrl);
   // rankProgress ainda não conhece a exigência de gasto do GOAT, então o
   // selo sai daqui: os dois precisam concordar, senão a página mostra GOAT
   // num usuário que o servidor não reconhece como GOAT.
@@ -186,7 +195,11 @@ export function RankCard({
 
 /** A escada completa: as faixas de nível e as patentes acima delas. */
 export function RankLadder({ xp }: { xp: number }) {
-  const current = rankProgress(xp).rank;
+  // `rankFromXp` direto, e não `rankProgress(...).rank`: a escada não
+  // converte XP em reais, então pedir uma régua aqui seria carregar um
+  // parâmetro que nada nesta função usa. O piso de gasto é o mesmo que
+  // `rankProgress` aplica, para a escada e o cartão concordarem sobre o GOAT.
+  const current = rankFromXp(xp, GOAT_MIN_TOTAL_SPENT);
 
   return (
     <Moldura>

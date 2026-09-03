@@ -30,7 +30,7 @@ import { XpHistory } from "@/components/rank/xp-history";
 import { getUserXp, xpHistory } from "@/server/services/xp";
 import { TETO_DE_BOOST, estadoDoBoost } from "@/server/services/boost";
 import { CardDeBoost } from "@/components/rank/card-de-boost";
-import { XP_MULTIPLIER_TIERS } from "@/lib/xp/config";
+import { DEFAULT_XP_PER_BRL, XP_MULTIPLIER_TIERS } from "@/lib/xp/config";
 import { cn } from "@/lib/utils";
 import { Etiqueta, Moldura } from "@/components/ui/moldura";
 import { SeletorDeTime } from "@/components/times/seletor-de-time";
@@ -163,6 +163,7 @@ export default async function MyAccountPage() {
             <>
               <RankCard
                 xp={xp}
+                xpPerBrl={settings?.xpPerBrl ?? DEFAULT_XP_PER_BRL}
                 totalSpent={Number(progresso?.totalSpent ?? 0)}
                 multiplicador={boost?.multiplicador}
               />

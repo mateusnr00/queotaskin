@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_XP_PER_BRL } from "./xp/config";
 import { calculatePurchaseXp } from "./xp/regras";
 
 import {
@@ -17,7 +18,6 @@ import {
   tierForLevel,
   xpForLevel,
   XP_POR_NIVEL,
-  xpForPurchase,
 } from "@/lib/rank";
 import {
   CONTORNOS,
@@ -26,33 +26,6 @@ import {
   LADOS_DO_OCTOGONO,
   type FormaDoSelo,
 } from "@/lib/rank-badges";
-
-describe("xpForPurchase", () => {
-  it("credita 10 XP por real", () => {
-    expect(xpForPurchase(1)).toBe(10);
-    expect(xpForPurchase(150)).toBe(1500);
-  });
-
-  it("trunca centavos para o real cheio", () => {
-    expect(xpForPurchase(19.9)).toBe(190);
-    expect(xpForPurchase(19.99)).toBe(190);
-    expect(xpForPurchase(0.99)).toBe(0);
-  });
-
-  it("respeita um xpPerBrl customizado do tenant", () => {
-    expect(xpForPurchase(10, 25)).toBe(250);
-  });
-
-  it("não credita nada por valor inválido ou negativo", () => {
-    expect(xpForPurchase(0)).toBe(0);
-    expect(xpForPurchase(-50)).toBe(0);
-    expect(xpForPurchase(Number.NaN)).toBe(0);
-  });
-
-  it("cai no padrão quando o tenant configura xpPerBrl zerado", () => {
-    expect(xpForPurchase(10, 0)).toBe(100);
-  });
-});
 
 describe("xpForLevel / levelFromXp", () => {
   it("nível 0 não custa nada, todo mundo começa ranqueado", () => {
@@ -182,7 +155,7 @@ describe("rankFromXp", () => {
 describe("rankProgress", () => {
   it("aponta o próximo nível e quanto falta em reais", () => {
     // Nível 1 custa 1.000 XP (R$ 100); o nível 2 exige 2.500 (R$ 250).
-    const p = rankProgress(1_750);
+    const p = rankProgress(1_750, 10);
     expect(p.rank.level).toBe(1);
     expect(p.nextLabel).toBe("Nível 2");
     expect(p.xpToNext).toBe(750);
@@ -191,13 +164,13 @@ describe("rankProgress", () => {
   });
 
   it("no nível 21 o próximo degrau é a primeira patente", () => {
-    const p = rankProgress(xpForLevel(MAX_LEVEL));
+    const p = rankProgress(xpForLevel(MAX_LEVEL), 10);
     expect(p.nextLabel).toBe("MVP");
     expect(p.atMax).toBe(false);
   });
 
   it("dentro do prestígio aponta a patente seguinte", () => {
-    const p = rankProgress(350_000); // MVP
+    const p = rankProgress(350_000, 10); // MVP
     expect(p.rank.label).toBe("MVP");
     expect(p.nextLabel).toBe("PRO");
     expect(p.xpToNext).toBe(75_000); // 425.000 − 350.000
@@ -208,7 +181,7 @@ describe("rankProgress", () => {
   // Separar os dois é o que permite a barra continuar dizendo "chegou ao topo
   // do XP" sem a página precisar revelar o requisito financeiro.
   it("no topo da escada de XP não há próximo degrau", () => {
-    const p = rankProgress(500_000);
+    const p = rankProgress(500_000, 10);
     expect(p.atMax).toBe(true);
     expect(p.nextLabel).toBeNull();
     expect(p.percent).toBe(100);
@@ -217,7 +190,7 @@ describe("rankProgress", () => {
 
   it("arredonda os reais que faltam pra cima, R$ 0,50 não sobe nível", () => {
     // Faltando 5 XP, meio real não basta: precisa gastar R$ 1.
-    const p = rankProgress(xpForLevel(1) - 5);
+    const p = rankProgress(xpForLevel(1) - 5, 10);
     expect(p.brlToNext).toBe(1);
   });
 
@@ -402,5 +375,47 @@ describe("a barra e o crédito usam a mesma régua", () => {
         }).baseXp,
       ).toBe(1_000);
     }
+  });
+});
+
+describe("nenhuma conversão cai no padrão por esquecimento", () => {
+  // A PONTA QUE ISTO FECHA.
+  //
+  // `rankProgress` tinha régua opcional com padrão 10, e `rank-card` chamava
+  // sem passar nada: `brlToNext` saía na régua errada e ninguém via, porque
+  // esquecer argumento opcional não gera erro. A régua virou obrigatória, e
+  // estes casos travam o comportamento dela.
+  it("cada régua produz o seu próprio valor em reais", () => {
+    const xp = 0; // faltam 1.000 XP para o nível 1.
+    expect(rankProgress(xp, 10).xpToNext).toBe(1_000);
+    expect(rankProgress(xp, 10).brlToNext).toBe(100);
+    expect(rankProgress(xp, 12).brlToNext).toBe(Math.ceil(1_000 / 12));
+    expect(rankProgress(xp, 25).brlToNext).toBe(40);
+  });
+
+  it("o XP que falta não muda com a régua: só a conversão muda", () => {
+    const faltando = rankProgress(500, 10).xpToNext;
+    for (const regua of [10, 12, 25]) {
+      expect(rankProgress(500, regua).xpToNext).toBe(faltando);
+      expect(rankProgress(500, regua).percent).toBe(
+        rankProgress(500, 10).percent,
+      );
+    }
+  });
+
+  it("o fallback continua existindo para régua inválida", () => {
+    // Ele não sumiu: sumiu o ESQUECIMENTO. Régua estragada ainda cai em 10,
+    // que é o que impede um banco tocado à mão de zerar a conversão.
+    for (const ruim of [0, -1, 10.5, NaN, Infinity]) {
+      expect(rankProgress(0, ruim).brlToNext).toBe(
+        rankProgress(0, DEFAULT_XP_PER_BRL).brlToNext,
+      );
+    }
+  });
+
+  it("no topo não há conversão nenhuma a errar", () => {
+    const p = rankProgress(500_000, 25);
+    expect(p.atMax).toBe(true);
+    expect(p.brlToNext).toBe(0);
   });
 });

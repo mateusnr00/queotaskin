@@ -347,10 +347,16 @@ export interface RankProgress {
  * Progresso até o próximo degrau, seja o próximo nível numérico ou a
  * próxima patente de prestígio.
  */
-export function rankProgress(
-  xp: number,
-  xpPerBrl: number = XP_PER_BRL_DEFAULT,
-): RankProgress {
+/**
+ * A régua é OBRIGATÓRIA aqui, e isso é a correção.
+ *
+ * Ela já foi opcional com padrão 10, e foi assim que `rank-card` passou a
+ * calcular `brlToNext` na régua errada sem ninguém perceber: esquecer um
+ * argumento opcional não dá erro nenhum. Sem valor padrão, todo lugar que
+ * converte XP em reais precisa DIZER em que régua está, e onde não houver
+ * painel o `DEFAULT_XP_PER_BRL` aparece escrito, não escondido.
+ */
+export function rankProgress(xp: number, xpPerBrl: number): RankProgress {
   const total = Math.max(0, Math.floor(xp));
   // A BARRA MEDE SÓ A ESCADA DE XP.
   //
@@ -427,22 +433,6 @@ function nextStep(
     ceilXp: xpForLevel(rank.level + 1),
     nextLabel: `Nível ${rank.level + 1}`,
   };
-}
-
-// ---------------------------------------------------------------- créditos
-
-/**
- * XP ganho por uma compra. Trunca para o real cheio: R$ 19,90 rende os
- * mesmos 190 XP que R$ 19,00. Mesma regra do SKNRS, evita que centavos
- * virem XP fracionado e mantém a conta legível pro comprador.
- */
-export function xpForPurchase(
-  amountBrl: number,
-  xpPerBrl: number = XP_PER_BRL_DEFAULT,
-): number {
-  if (!Number.isFinite(amountBrl) || amountBrl <= 0) return 0;
-  const perBrl = xpPorReal(xpPerBrl);
-  return Math.floor(amountBrl) * perBrl;
 }
 
 // ------------------------------------------------- escada de exigência
