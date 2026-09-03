@@ -93,6 +93,9 @@ export function RoletaDeBoost({
   // Só depois que a fita para. Durante a corrida o marcador fica neutro:
   // pintado da cor do prêmio, ele entregaria o resultado antes da hora.
   const [parou, setParou] = useState(false);
+  // A reta final: os últimos instantes antes de a fita encostar. O destaque
+  // do vencedor começa aqui, de leve, em vez de aparecer de uma vez no fim.
+  const [retaFinal, setRetaFinal] = useState(false);
   // A corrida acontece UMA VEZ, e a trava é esta.
   //
   // Sem ela o efeito reiniciava a cada render, e havia um render por segundo:
@@ -139,6 +142,7 @@ export function RoletaDeBoost({
     if (semMovimento) {
       // Sem animação: vai direto ao resultado. O prêmio é o mesmo.
       setDeslocamento(alvo);
+      setRetaFinal(true);
       setParou(true);
       const t0 = setTimeout(aoTerminar, 400);
       return () => clearTimeout(t0);
@@ -150,10 +154,12 @@ export function RoletaDeBoost({
       setCorrendo(true);
       setDeslocamento(alvo);
     });
+    const reta = setTimeout(() => setRetaFinal(true), DURACAO_MS - 600);
     const parada = setTimeout(() => setParou(true), DURACAO_MS - 120);
     const fim = setTimeout(aoTerminar, DURACAO_MS + 420);
     return () => {
       cancelAnimationFrame(inicio);
+      clearTimeout(reta);
       clearTimeout(parada);
       clearTimeout(fim);
     };
@@ -170,7 +176,7 @@ export function RoletaDeBoost({
           fita. */}
       <div
         ref={janela}
-        className="relative overflow-hidden py-6"
+        className="relative overflow-hidden py-4"
         style={{
           // O DESVANECIMENTO É PROPOSITAL, E MAIS LARGO QUE ANTES.
           //
@@ -209,10 +215,20 @@ export function RoletaDeBoost({
               // desfoque, 3D nem perspectiva.
               style={{
                 width: "var(--w)",
-                transform: parou && ehVencedor ? "scale(1.07)" : undefined,
-                opacity: parou && !ehVencedor ? 0.4 : 1,
+                // Dois tempos: um fio de destaque nos últimos 600ms, e o
+                // resto quando a fita encosta. Subir tudo de uma vez no fim
+                // parecia um estalo; assim o olho já está no lugar certo
+                // quando o vencedor para.
+                transform: ehVencedor
+                  ? parou
+                    ? "scale(1.07)"
+                    : retaFinal
+                      ? "scale(1.03)"
+                      : undefined
+                  : undefined,
+                opacity: ehVencedor ? 1 : parou ? 0.4 : retaFinal ? 0.72 : 1,
                 transition:
-                  "transform 420ms cubic-bezier(0.32,0.72,0,1), opacity 420ms ease-out",
+                  "transform 600ms cubic-bezier(0.32,0.72,0,1), opacity 600ms ease-out",
               }}
               // A largura sai da QUANTIDADE VISÍVEL, não do que parece bonito
               // isolado: três badges no celular, seis no desktop. Menos e a
@@ -247,19 +263,19 @@ export function RoletaDeBoost({
         className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 flex-col items-center"
       >
         <span
-          className="h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent transition-colors duration-500"
-          style={{ borderTopColor: parou ? vencedor.color : "rgba(255,255,255,0.55)" }}
+          className="h-0 w-0 border-x-[4px] border-t-[5px] border-x-transparent transition-colors duration-500"
+          style={{ borderTopColor: parou ? vencedor.color : "rgba(255,255,255,0.38)" }}
         />
         <span
           className="w-px flex-1 transition-all duration-500"
           style={{
             backgroundColor: parou ? vencedor.color : "rgba(255,255,255,0.5)",
-            opacity: parou ? 0.35 : 0.14,
+            opacity: parou ? 0.28 : 0.09,
           }}
         />
         <span
-          className="h-0 w-0 border-x-[5px] border-b-[7px] border-x-transparent transition-colors duration-500"
-          style={{ borderBottomColor: parou ? vencedor.color : "rgba(255,255,255,0.55)" }}
+          className="h-0 w-0 border-x-[4px] border-b-[5px] border-x-transparent transition-colors duration-500"
+          style={{ borderBottomColor: parou ? vencedor.color : "rgba(255,255,255,0.38)" }}
         />
       </div>
 

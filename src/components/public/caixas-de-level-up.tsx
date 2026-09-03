@@ -306,10 +306,10 @@ function Revelacao({
           // se leem de uma vez. A largura muda entre as duas fases, com
           // transição, porque um salto seco bem no instante do resultado
           // roubaria a atenção do prêmio.
-          "w-full rounded-[1.75rem] border bg-[#0e1013] text-center",
+          "relative w-full overflow-hidden rounded-[1.75rem] border bg-[#0e1013] text-center",
           "transition-[max-width,box-shadow] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
           fase === "roleta"
-            ? "max-w-3xl px-3 py-5 sm:px-5 sm:py-6"
+            ? "max-w-3xl px-3 py-3.5 sm:px-5 sm:py-4"
             : "max-w-md px-6 py-6 sm:px-8",
         )}
         style={{
@@ -329,7 +329,7 @@ function Revelacao({
         {fase === "roleta" ? (
           <>
             <RoletaDeBoost
-              className="mt-2"
+              className="mt-1"
               vencedor={vencedor}
               possiveis={possiveis}
               aoTerminar={aoTerminar}
@@ -343,11 +343,23 @@ function Revelacao({
           </>
         ) : (
           <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-500">
+            {/* O HALO DA ENTRADA.
+                Um brilho curto atrás do badge, na cor do retrato, que aparece
+                junto com ele e assenta. Fica ATRÁS e em opacidade baixa: o
+                objetivo é dar peso ao instante da revelação, não pintar o
+                modal. `pointer-events-none` porque é enfeite. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-10 mx-auto h-40 w-40 rounded-full blur-3xl motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${boost.cor} 26%, transparent)`,
+              }}
+            />
             {/* O BADGE É O HERÓI. Grande, e colado no que o explica: raridade
                 logo abaixo, frase e prazo em seguida, tudo num bloco só.
                 Antes havia respiro demais entre eles e o prêmio parecia
                 pequeno dentro de um modal grande. */}
-            <div className="flex justify-center pt-3 pb-1">
+            <div className="relative flex justify-center pt-3 pb-1">
               <XpBoostBadge
                 multiplier={boost.multiplicador}
                 color={boost.cor}

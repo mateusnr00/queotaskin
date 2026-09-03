@@ -144,13 +144,17 @@ export function XpBoostBadge({
       </text>
 
       {/* "XP" na base, encostado na abertura do contorno, como no desenho. */}
+      {/* O "XP" é rótulo, não manchete: um corpo um pouco menor e uma
+          opacidade levemente abaixo do resto tiram o peso que ele tinha sem
+          mexer na geometria. Quem precisa saltar é o multiplicador. */}
       <text
         x={162}
-        y={346}
+        y={344}
         textAnchor="middle"
         fill="var(--xp-color)"
+        fillOpacity={0.88}
         style={{
-          fontSize: 74,
+          fontSize: 68,
           fontWeight: 900,
           letterSpacing: "-0.085em",
           fontFamily: "inherit",

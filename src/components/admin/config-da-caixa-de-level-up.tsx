@@ -215,7 +215,10 @@ export function ConfigDaCaixaDeLevelUp({
           <li
             key={drop.multiplier}
             className={cn(
-              "flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 transition-colors sm:flex-nowrap sm:gap-x-4",
+              // Um respiro só entre todas as colunas, e altura mínima fixa:
+              // com gaps diferentes por grupo, raridade, cor, chance, barra e
+              // interruptor liam como blocos separados em vez de uma linha.
+              "flex min-h-[3.25rem] flex-wrap items-center gap-x-3 gap-y-2 px-3 py-1.5 transition-colors sm:flex-nowrap",
               drop.ativo ? "bg-white/[0.02]" : "bg-transparent opacity-50",
             )}
           >
@@ -230,10 +233,10 @@ export function ConfigDaCaixaDeLevelUp({
             {/* Uma identificação compacta, não a repetição do badge. Ele já
                 desenha o multiplicador; o que falta para percorrer a lista de
                 olho é o número em texto alinhado e a raridade. */}
-            <span className="w-10 shrink-0 font-mono text-xs font-bold tabular-nums">
+            <span className="w-9 shrink-0 font-mono text-xs font-bold tabular-nums">
               {drop.multiplier}x
             </span>
-            <span className="w-20 shrink-0 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <span className="w-[4.75rem] shrink-0 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
               {ROTULO_DA_RARIDADE[drop.rarity]}
             </span>
 
@@ -258,7 +261,7 @@ export function ConfigDaCaixaDeLevelUp({
               />
             </div>
 
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5">
               <Input
                 id={`chance-${i}`}
                 value={chanceEmTexto[i] ?? bpsParaTexto(drop.probabilityBps)}
@@ -277,7 +280,7 @@ export function ConfigDaCaixaDeLevelUp({
                 soltos não diz se a curva está íngreme ou achatada.
 
                 Some no celular, onde a largura é do controle. */}
-            <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
+            <div className="hidden min-w-0 flex-1 items-center sm:flex">
               <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
                 <div
                   className="h-full rounded-full transition-[width] duration-300"
