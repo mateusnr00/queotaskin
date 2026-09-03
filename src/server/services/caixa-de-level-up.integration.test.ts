@@ -489,6 +489,100 @@ suite("Caixa de Level Up (integração)", () => {
     expect(lista.every((c) => c.sourceLevel > nivelAntes)).toBe(true);
   });
 
+  it("14 e 15. o teto de 2,5 do cálculo normal NÃO limita o boost de 3,5x", async () => {
+    // A prova de que o boost é estágio separado. Dentro da soma existente ele
+    // seria cortado em MAX_XP_MULTIPLIER e ninguém veria.
+    await prisma.levelUpBoxDrop.deleteMany({ where: { tenantId } });
+    await prisma.levelUpBoxDrop.create({
+      data: {
+        tenantId,
+        multiplier: 3.5,
+        rarity: "ULTRA_RARO",
+        probabilityBps: 10_000,
+        color: "#FF4655",
+        ativo: true,
+      },
+    });
+
+    await awardXpForReservation(await compraPaga(100));
+    const [caixa] = await caixas();
+    const aberta = await abrirCaixa({ boxId: caixa!.id, userId, tenantId });
+    if (!aberta.ok) throw new Error("não abriu");
+    expect(aberta.multiplicador).toBe(3.5);
+
+    const compra = await compraPaga(50);
+    await awardXpForReservation(compra);
+    const lanc = await prisma.xpEntry.findFirstOrThrow({
+      where: { reservationId: compra },
+      select: { amount: true, multiplier: true, metadata: true },
+    });
+    const meta = lanc.metadata as {
+      levelUpBoost: { multiplicador: number; xpAntesDoBoost: number };
+    };
+    expect(meta.levelUpBoost.multiplicador).toBe(3.5);
+    expect(lanc.amount).toBe(Math.floor(meta.levelUpBoost.xpAntesDoBoost * 3.5));
+    // E o multiplicador do extrato continua sendo o das regras de sempre,
+    // dentro do teto: a semântica do campo não foi sequestrada.
+    expect(Number(lanc.multiplier)).toBeLessThanOrEqual(2.5);
+
+    await prisma.levelUpBoxDrop.deleteMany({ where: { tenantId } });
+  });
+
+  it("19. drop desativado nunca é sorteado", async () => {
+    await prisma.levelUpBoxDrop.deleteMany({ where: { tenantId } });
+    await prisma.levelUpBoxDrop.createMany({
+      data: [
+        { tenantId, multiplier: 1.5, rarity: "COMUM", probabilityBps: 10_000, color: "#A1A1AA", ativo: true },
+        { tenantId, multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 10_000, color: "#FF4655", ativo: false },
+      ],
+    });
+
+    for (let i = 0; i < 20; i++) {
+      const dono = await novoUsuario();
+      await awardXpForReservation(await compraPaga(100, dono));
+      const c = await prisma.levelUpBox.findFirstOrThrow({
+        where: { userId: dono, tenantId },
+        select: { id: true },
+      });
+      const r = await abrirCaixa({ boxId: c.id, userId: dono, tenantId });
+      if (!r.ok) throw new Error(r.erro);
+      expect(r.multiplicador).toBe(1.5);
+    }
+
+    await prisma.levelUpBoxDrop.deleteMany({ where: { tenantId } });
+  });
+
+  it("25b. o retrato do drop é imutável: repintar depois não muda o prêmio", async () => {
+    await prisma.levelUpBoxDrop.deleteMany({ where: { tenantId } });
+    const drop = await prisma.levelUpBoxDrop.create({
+      data: { tenantId, multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 10_000, color: "#FF4655", ativo: true },
+      select: { id: true },
+    });
+
+    await awardXpForReservation(await compraPaga(100));
+    const [caixa] = await caixas();
+    const aberta = await abrirCaixa({ boxId: caixa!.id, userId, tenantId });
+    if (!aberta.ok) throw new Error("não abriu");
+    expect(aberta.cor).toBe("#FF4655");
+
+    // O painel repinta e baixa a chance DEPOIS do prêmio ganho.
+    await prisma.levelUpBoxDrop.update({
+      where: { id: drop.id },
+      data: { color: "#FFD700", probabilityBps: 50 },
+    });
+
+    const depois = await prisma.levelUpBox.findUniqueOrThrow({
+      where: { id: caixa!.id },
+      select: { color: true, probabilityBps: true, dropId: true },
+    });
+    expect(depois.color).toBe("#FF4655");
+    expect(depois.probabilityBps).toBe(10_000);
+    expect(depois.dropId).toBe(drop.id);
+
+    await prisma.levelUpBoxDrop.deleteMany({ where: { tenantId } });
+  });
+
+
   it("a subida não pode passar do teto da tabela de níveis", async () => {
     // Guarda contra caixa de nível inexistente se alguém gastar uma fortuna.
     expect(XP_POR_NIVEL.length - 1).toBeGreaterThan(0);

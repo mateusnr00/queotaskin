@@ -17,15 +17,16 @@
 // encurta o boost de verdade: quem decide se o prazo passou é a confirmação
 // do pagamento, no servidor.
 
-import { useEffect, useState, useTransition } from "react";
-import { Gift, Sparkles, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { Gift } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Moldura } from "@/components/ui/moldura";
+import { XpBoostBadge } from "@/components/public/xp-boost-badge";
+import { RoletaDeBoost } from "@/components/public/roleta-de-boost";
 import { ROTULO_DA_RARIDADE } from "@/lib/xp/caixa-de-level-up";
 import { abrirCaixaAction } from "@/server/actions/caixa-de-level-up";
-import { cn } from "@/lib/utils";
 
 type Raridade = keyof typeof ROTULO_DA_RARIDADE;
 
@@ -39,48 +40,11 @@ export interface BoostNaTela {
   boxId: string;
   multiplicador: number;
   raridade: Raridade;
+  /** A cor do retrato do drop, gravada na abertura. */
+  cor: string;
   sourceLevel: number;
   expiraEm: string;
 }
-
-/**
- * A cor de cada raridade.
- *
- * Sobe de neutro a quente conforme fica raro, e o ultra raro é o único com
- * brilho: se todos brilhassem, nenhum brilharia.
- */
-const TOM: Record<Raridade, { texto: string; borda: string; fundo: string; halo: string }> = {
-  COMUM: {
-    texto: "text-zinc-300",
-    borda: "border-white/15",
-    fundo: "bg-white/[0.05]",
-    halo: "",
-  },
-  RARO: {
-    texto: "text-sky-300",
-    borda: "border-sky-400/35",
-    fundo: "bg-sky-400/[0.08]",
-    halo: "",
-  },
-  EPICO: {
-    texto: "text-violet-300",
-    borda: "border-violet-400/40",
-    fundo: "bg-violet-400/[0.09]",
-    halo: "",
-  },
-  LENDARIO: {
-    texto: "text-amber-300",
-    borda: "border-amber-400/45",
-    fundo: "bg-amber-400/[0.10]",
-    halo: "shadow-[0_0_30px_-8px_rgba(251,191,36,0.5)]",
-  },
-  ULTRA_RARO: {
-    texto: "text-red-300",
-    borda: "border-red-400/50",
-    fundo: "bg-red-400/[0.10]",
-    halo: "shadow-[0_0_36px_-6px_rgba(248,113,113,0.65)]",
-  },
-};
 
 /**
  * Quanto falta, em mm:ss, a partir da data que o servidor mandou.
@@ -131,9 +95,12 @@ export function useContagem(expiraEm: string | null): {
 export function CaixasDeLevelUp({
   caixas,
   boostAtivo,
+  possiveis,
 }: {
   caixas: CaixaNaTela[];
   boostAtivo: BoostNaTela | null;
+  /** Os resultados possíveis, só para compor a fita decorativa da roleta. */
+  possiveis: { multiplier: number; color: string }[];
 }) {
   const [pendentes, setPendentes] = useState(caixas);
   const [ativo, setAtivo] = useState(boostAtivo);
@@ -157,6 +124,7 @@ export function CaixasDeLevelUp({
         boxId: r.boxId,
         multiplicador: r.multiplicador,
         raridade: r.raridade,
+        cor: r.cor,
         sourceLevel: r.sourceLevel,
         expiraEm: r.expiraEm,
       };
@@ -231,13 +199,24 @@ export function CaixasDeLevelUp({
       </Moldura>
 
       {revelando && (
-        <Revelacao boost={revelando} aoFechar={() => setRevelando(null)} />
+        <Revelacao
+          boost={revelando}
+          possiveis={possiveis}
+          aoFechar={() => setRevelando(null)}
+        />
       )}
     </>
   );
 }
 
-/** O boost ativo, dentro da seção de recompensas. */
+/**
+ * O boost ativo, dentro da seção de recompensas.
+ *
+ * A insígnia à esquerda, o prazo à direita, e o texto no meio. A cor é a do
+ * retrato, aplicada em traço e número; o fundo fica quase neutro de propósito,
+ * porque um bloco inteiro pintado na cor do drop briga com o resto da página
+ * e some quando a cor escolhida for clara.
+ */
 function BoostEmDestaque({
   boost,
   contagem,
@@ -245,25 +224,28 @@ function BoostEmDestaque({
   boost: BoostNaTela;
   contagem: string;
 }) {
-  const tom = TOM[boost.raridade];
   return (
     <div
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3",
-        tom.borda,
-        tom.fundo,
-      )}
+      className="flex flex-wrap items-center gap-3 rounded-xl border p-3"
+      style={{
+        borderColor: `color-mix(in srgb, ${boost.cor} 35%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${boost.cor} 7%, transparent)`,
+      }}
     >
-      <div className="flex items-center gap-2.5">
-        <Zap aria-hidden className={cn("h-5 w-5", tom.texto)} />
-        <div>
-          <p className={cn("text-lg font-black tabular-nums", tom.texto)}>
-            {boost.multiplicador}x XP
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {ROTULO_DA_RARIDADE[boost.raridade]} · vale na próxima compra
-          </p>
-        </div>
+      <XpBoostBadge
+        multiplier={boost.multiplicador}
+        color={boost.cor}
+        size="sm"
+        decorativo
+        className="w-14 sm:w-16"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-lg font-black tabular-nums" style={{ color: boost.cor }}>
+          {boost.multiplicador}x XP
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          {ROTULO_DA_RARIDADE[boost.raridade]} · vale na próxima compra
+        </p>
       </div>
       <div className="text-right">
         <p className="font-mono text-lg font-bold tabular-nums">{contagem}</p>
@@ -276,84 +258,106 @@ function BoostEmDestaque({
 }
 
 /**
- * A revelação.
+ * A revelação: a roleta corre e o resultado fica.
  *
- * Um suspense curto e o resultado. A animação é enfeite sobre um número que o
- * servidor já decidiu e gravou: ela não sorteia nada, e por isso não tem como
- * mostrar um prêmio diferente do que ficou no banco.
+ * A ANIMAÇÃO NÃO DECIDE NADA. O prêmio veio do servidor antes desta tela
+ * existir; a fita é enfeite montado em volta dele. Fechar no meio, recarregar
+ * ou ter `prefers-reduced-motion` ligado dá exatamente o mesmo prêmio.
+ *
+ * O PRAZO JÁ ESTÁ CORRENDO. Ele começou quando o servidor abriu a caixa, não
+ * quando a animação acaba: por isso o contador mostra catorze e pouco quando
+ * a fita para, e está certo.
  */
 function Revelacao({
   boost,
+  possiveis,
   aoFechar,
 }: {
   boost: BoostNaTela;
+  possiveis: { multiplier: number; color: string }[];
   aoFechar: () => void;
 }) {
-  const [fase, setFase] = useState<"suspense" | "revelado">("suspense");
-  const tom = TOM[boost.raridade];
-
-  useEffect(() => {
-    const t = setTimeout(() => setFase("revelado"), 1400);
-    return () => clearTimeout(t);
-  }, []);
+  const [fase, setFase] = useState<"roleta" | "revelado">("roleta");
+  const contagem = useContagem(boost.expiraEm);
+  const aoTerminar = useCallback(() => setFase("revelado"), []);
+  // O vencedor precisa ser o MESMO objeto entre renders: o contador acima
+  // re-renderiza este modal a cada segundo, e um objeto novo a cada vez
+  // remontaria a fita da roleta no meio da corrida.
+  const vencedor = useMemo(
+    () => ({ multiplier: boost.multiplicador, color: boost.cor }),
+    [boost.multiplicador, boost.cor],
+  );
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Resultado da caixa de level up"
     >
       <div
-        className={cn(
-          "w-full max-w-sm rounded-[1.75rem] border p-6 text-center transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]",
-          tom.borda,
-          "bg-[#0e1013]",
-          fase === "revelado" && tom.halo,
-        )}
+        // Mais largo durante a corrida, para caber fita; a revelação não
+        // precisa de tanto, mas mudar a largura no meio daria um solavanco
+        // bem no instante em que o olho está no resultado.
+        className="w-full max-w-2xl rounded-[1.75rem] border bg-[#0e1013] p-4 text-center transition-shadow duration-700 sm:p-6"
+        style={{
+          borderColor: `color-mix(in srgb, ${boost.cor} 40%, transparent)`,
+          // Halo discreto, e só depois de revelar: brilho durante a corrida
+          // rouba a atenção da fita, que é onde ela deve estar.
+          boxShadow:
+            fase === "revelado"
+              ? `0 0 44px -12px color-mix(in srgb, ${boost.cor} 70%, transparent)`
+              : undefined,
+        }}
       >
         <p className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground uppercase">
-          Caixa de Level Up
+          Caixa de Level Up · Level {boost.sourceLevel}
         </p>
 
-        {fase === "suspense" ? (
-          <div className="py-10">
-            <span className="inline-block text-6xl motion-safe:animate-bounce">
-              🎁
-            </span>
-            <p className="mt-4 text-sm text-muted-foreground">Abrindo...</p>
-          </div>
+        {fase === "roleta" ? (
+          <RoletaDeBoost
+            className="mt-4"
+            vencedor={vencedor}
+            possiveis={possiveis}
+            aoTerminar={aoTerminar}
+          />
         ) : (
-          <div className="py-6 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-500">
-            <Sparkles aria-hidden className={cn("mx-auto h-8 w-8", tom.texto)} />
-            <p className={cn("mt-3 text-5xl font-black tabular-nums", tom.texto)}>
-              {boost.multiplicador}x
-            </p>
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-500">
+            <div className="flex justify-center py-4">
+              <XpBoostBadge
+                multiplier={boost.multiplicador}
+                color={boost.cor}
+                size="lg"
+                className="w-40 sm:w-48"
+              />
+            </div>
             <p
-              className={cn(
-                "mt-1 text-xs font-bold tracking-[0.18em] uppercase",
-                tom.texto,
-              )}
+              className="text-xs font-bold tracking-[0.18em] uppercase"
+              style={{ color: boost.cor }}
             >
               {ROTULO_DA_RARIDADE[boost.raridade]}
             </p>
-            <p className="mt-4 text-sm">
+            <p className="mt-3 text-sm">
               Seu próximo XP vem com{" "}
               <b className="font-bold">{boost.multiplicador}x</b>.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Use na próxima compra. O prazo já começou.
+              Use na próxima compra em até{" "}
+              <b className="font-mono font-semibold tabular-nums text-foreground">
+                {contagem.texto}
+              </b>
+              .
             </p>
           </div>
         )}
 
         <Button
           type="button"
-          className="mt-2 w-full"
-          disabled={fase === "suspense"}
+          className="mt-5 w-full"
+          disabled={fase === "roleta"}
           onClick={aoFechar}
         >
-          Continuar
+          {fase === "roleta" ? "Sorteando..." : "Continuar"}
         </Button>
       </div>
     </div>

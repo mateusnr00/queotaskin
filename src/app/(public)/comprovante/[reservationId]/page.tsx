@@ -468,6 +468,7 @@ export default async function ReservationReceiptPage({
         <BoostPendenteNoCheckout
           multiplicador={boostAtivo.multiplicador}
           raridade={boostAtivo.raridade}
+          cor={boostAtivo.cor}
         />
       )}
 

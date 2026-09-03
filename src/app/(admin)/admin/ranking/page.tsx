@@ -80,7 +80,8 @@ export default async function AdminRankingPage() {
         dropsIniciais={drops.map((d) => ({
           multiplier: d.multiplier,
           rarity: d.rarity,
-          chance: d.chance,
+          probabilityBps: d.probabilityBps,
+          color: d.color,
           ativo: true,
         }))}
       />

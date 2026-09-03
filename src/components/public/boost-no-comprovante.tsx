@@ -20,13 +20,24 @@ type Raridade = keyof typeof ROTULO_DA_RARIDADE;
 export function BoostPendenteNoCheckout({
   multiplicador,
   raridade,
+  cor,
 }: {
   multiplicador: number;
   raridade: Raridade;
+  cor: string;
 }) {
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary/[0.07] p-3">
-      <p className="flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] text-primary uppercase">
+    <div
+      className="rounded-xl border p-3"
+      style={{
+        borderColor: `color-mix(in srgb, ${cor} 38%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${cor} 7%, transparent)`,
+      }}
+    >
+      <p
+        className="flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] uppercase"
+        style={{ color: cor }}
+      >
         <Zap aria-hidden className="h-3.5 w-3.5" />
         Boost de level ativo
       </p>

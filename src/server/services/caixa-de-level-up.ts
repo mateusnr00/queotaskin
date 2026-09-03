@@ -73,17 +73,25 @@ async function configDoPainel(
 export async function dropsDoPainel(
   tenantId: string,
   cliente: Prisma.TransactionClient | typeof prisma = prisma,
-): Promise<DropDaCaixa[]> {
+): Promise<(DropDaCaixa & { id?: string })[]> {
   const linhas = await cliente.levelUpBoxDrop.findMany({
     where: { tenantId, ativo: true },
     orderBy: { ordem: "asc" },
-    select: { multiplier: true, rarity: true, chance: true },
+    select: {
+      id: true,
+      multiplier: true,
+      rarity: true,
+      probabilityBps: true,
+      color: true,
+    },
   });
   if (linhas.length === 0) return [...DROPS_PADRAO];
   return linhas.map((l) => ({
+    id: l.id,
     multiplier: Number(l.multiplier),
     rarity: l.rarity,
-    chance: l.chance,
+    probabilityBps: l.probabilityBps,
+    color: l.color,
   }));
 }
 
@@ -227,6 +235,8 @@ export type ResultadoDaAbertura =
       sourceLevel: number;
       multiplicador: number;
       raridade: LevelUpBoxRarity;
+      /** A cor do retrato, para o badge e a revelação. */
+      cor: string;
       expiraEm: string;
     }
   | { ok: false; erro: string };
@@ -271,19 +281,22 @@ export async function abrirCaixa(params: {
         sourceLevel: true,
         multiplier: true,
         rarity: true,
+        color: true,
         expiresAt: true,
       },
     });
     if (!caixa) return { ok: false as const, erro: "Caixa não encontrada." };
 
     if (caixa.status === "ATIVA" && caixa.multiplier && caixa.rarity) {
-      // Já aberta. Devolve o MESMO resultado, sem sortear de novo.
+      // Já aberta. Devolve o MESMO resultado, sem sortear de novo. É o que
+      // faz recarregar a página mostrar o mesmo prêmio.
       return {
         ok: true as const,
         boxId: caixa.id,
         sourceLevel: caixa.sourceLevel,
         multiplicador: Number(caixa.multiplier),
         raridade: caixa.rarity,
+        cor: caixa.color ?? "#A1A1AA",
         expiraEm: (caixa.expiresAt ?? new Date()).toISOString(),
       };
     }
@@ -335,6 +348,11 @@ export async function abrirCaixa(params: {
         status: "ATIVA",
         multiplier: drop.multiplier,
         rarity: drop.rarity,
+        // O RETRATO. Copiado, não referenciado: repintar o drop amanhã não
+        // pode mudar o prêmio ganho hoje.
+        color: drop.color,
+        dropId: (drop as { id?: string }).id ?? null,
+        probabilityBps: drop.probabilityBps,
         openedAt: agora,
         expiresAt: expiraEm,
       },
@@ -349,6 +367,7 @@ export async function abrirCaixa(params: {
       sourceLevel: caixa.sourceLevel,
       multiplicador: drop.multiplier,
       raridade: drop.rarity,
+      cor: drop.color,
       expiraEm: expiraEm.toISOString(),
     };
   });
@@ -358,6 +377,7 @@ export interface BoostAtivo {
   boxId: string;
   multiplicador: number;
   raridade: LevelUpBoxRarity;
+  cor: string;
   sourceLevel: number;
   expiraEm: string;
 }
@@ -404,6 +424,7 @@ export async function recompensasDoUsuario(params: {
         id: true,
         multiplier: true,
         rarity: true,
+        color: true,
         sourceLevel: true,
         expiresAt: true,
       },
@@ -426,6 +447,7 @@ export async function recompensasDoUsuario(params: {
             boxId: ativa.id,
             multiplicador: Number(ativa.multiplier),
             raridade: ativa.rarity,
+            cor: ativa.color ?? "#A1A1AA",
             sourceLevel: ativa.sourceLevel,
             expiraEm: ativa.expiresAt.toISOString(),
           }

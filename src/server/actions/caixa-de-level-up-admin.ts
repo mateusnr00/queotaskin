@@ -29,7 +29,11 @@ import type { ActionResult } from "@/server/actions/auth";
 const dropSchema = z.object({
   multiplier: z.coerce.number().min(1.01).max(99.99),
   rarity: z.nativeEnum(LevelUpBoxRarity),
-  chance: z.coerce.number().int().min(0).max(100),
+  /** Em pontos-base: 3000 é 30%, 125 é 1,25%. */
+  probabilityBps: z.coerce.number().int().min(0).max(10_000),
+  // A cor é conferida de novo pela régua compartilhada, mas recusar aqui
+  // devolve mensagem melhor que "dados inválidos".
+  color: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Cor inválida"),
   ativo: z.coerce.boolean(),
 });
 
@@ -52,10 +56,9 @@ export async function salvarConfigDaCaixaAction(
     }
     const { ligado, minutos, drops } = parsed.data;
 
-    // A régua é a mesma do sorteio: se não fecha em 100, não salva.
-    const conferencia = conferirDrops(
-      drops.filter((d) => d.ativo).map((d) => ({ ...d, chance: d.chance })),
-    );
+    // A régua é a MESMA do sorteio, e não uma cópia: divergir aqui deixaria
+    // passar uma configuração que o sorteador depois não sabe usar.
+    const conferencia = conferirDrops(drops.filter((d) => d.ativo));
     if (!conferencia.ok) return { ok: false, error: conferencia.erro };
 
     const tenant = await prisma.tenant.findUniqueOrThrow({
@@ -85,7 +88,8 @@ export async function salvarConfigDaCaixaAction(
           tenantId,
           multiplier: d.multiplier,
           rarity: d.rarity,
-          chance: d.chance,
+          probabilityBps: d.probabilityBps,
+          color: d.color,
           ativo: d.ativo,
           ordem: i,
         })),
@@ -127,7 +131,8 @@ export async function restaurarDropsPadraoAction(): Promise<
           tenantId,
           multiplier: d.multiplier,
           rarity: d.rarity,
-          chance: d.chance,
+          probabilityBps: d.probabilityBps,
+          color: d.color,
           ativo: true,
           ordem: i,
         })),

@@ -34,7 +34,15 @@ async function novaConta(nome: string) {
   return prisma.user.create({
     data: {
       name: nome,
-      phone: `6299${String(Date.now()).slice(-6)}${contador}`.slice(0, 11),
+      // O contador vem ANTES do relógio, e não depois.
+      //
+      // Era `...${Date.now()}${contador}`.slice(0, 11): o corte de onze
+      // caracteres comia o contador a partir da décima conta, e duas contas
+      // criadas no mesmo milissegundo caíam no mesmo telefone. O índice único
+      // derrubava a suíte de vez em quando, sempre com a carga de outro
+      // arquivo rodando em paralelo. Com o contador na frente, ele nunca é
+      // cortado e a unicidade não depende do relógio.
+      phone: `62${String(contador).padStart(3, "0")}${String(Date.now()).slice(-6)}`,
       tenantId,
     },
     select: { id: true, name: true },

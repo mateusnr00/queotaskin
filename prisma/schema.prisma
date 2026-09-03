@@ -1135,6 +1135,16 @@ model LevelUpBox {
   multiplier Decimal?          @db.Decimal(4, 2)
   rarity     LevelUpBoxRarity?
 
+  /// O RETRATO DO DROP NO INSTANTE DA ABERTURA.
+  ///
+  /// A cor é copiada, não referenciada. Amanhã o painel pode repintar o 3.5x
+  /// de dourado e baixar a chance dele para 0,5%: o prêmio ganho hoje continua
+  /// exatamente como foi ganho. `dropId` liga ao drop de origem para a
+  /// auditoria, e sobrevive a ele ser apagado porque não é chave estrangeira.
+  color          String?
+  dropId         String?
+  probabilityBps Int?
+
   createdAt  DateTime  @default(now())
   openedAt   DateTime?
   /// `openedAt` mais a duração configurada. O relógio do navegador não decide
@@ -1173,8 +1183,22 @@ model LevelUpBoxDrop {
   /// O multiplicador aplicado ao XP da compra. 2.50 é "2,5x".
   multiplier Decimal          @db.Decimal(4, 2)
   rarity     LevelUpBoxRarity
-  /// A chance em pontos percentuais inteiros. 30 é 30%.
-  chance     Int
+
+  /// A COR DESTE RESULTADO, escolhida no painel.
+  ///
+  /// Não vem da raridade. Amarrar cor a raridade obrigaria a mexer em código
+  /// para pintar o 3.5x de azul, e a paleta é decisão de quem opera, não de
+  /// quem programa. A raridade continua existindo para o rótulo escrito.
+  color String @default("#A1A1A1")
+
+  /// A chance em PONTOS-BASE: 3000 é 30%, 125 é 1,25%.
+  ///
+  /// Inteiro, e não decimal: probabilidade somada em ponto flutuante não fecha
+  /// em 100 de forma confiável, e "a soma precisa dar exatamente 100%" é a
+  /// regra que o painel recusa salvar quando falha. Em pontos-base a soma é
+  /// aritmética de inteiro e o total é 10000, sem margem de erro.
+  probabilityBps Int @default(0)
+
   ativo      Boolean          @default(true)
   ordem      Int              @default(0)
 

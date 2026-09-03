@@ -28,13 +28,17 @@ export function SeloDoBoost({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1",
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1",
         className,
       )}
+      style={{
+        borderColor: `color-mix(in srgb, ${boost.cor} 40%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${boost.cor} 8%, transparent)`,
+      }}
       title={`Boost ${ROTULO_DA_RARIDADE[boost.raridade]} de ${boost.multiplicador}x XP na próxima compra`}
     >
-      <Zap aria-hidden className="h-3.5 w-3.5 text-primary" />
-      <span className="text-xs font-bold tabular-nums text-primary">
+      <Zap aria-hidden className="h-3.5 w-3.5" style={{ color: boost.cor }} />
+      <span className="text-xs font-bold tabular-nums" style={{ color: boost.cor }}>
         {boost.multiplicador}x XP
       </span>
       <span className="hidden text-[10px] text-muted-foreground sm:inline">

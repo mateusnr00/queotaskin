@@ -2,18 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import {
   aplicarBoost,
+  bpsParaPorcento,
   conferirDrops,
+  corValida,
   DROPS_PADRAO,
   niveisConquistados,
+  porcentoParaBps,
   somaDasChances,
   sortearDrop,
+  TOTAL_EM_BPS,
   type DropDaCaixa,
 } from "./caixa-de-level-up";
 
 describe("a tabela padrão", () => {
   it("soma exatamente 100%", () => {
     // Se não somasse, uma faixa do sorteio ficaria sem dono.
-    expect(somaDasChances(DROPS_PADRAO)).toBe(100);
+    expect(somaDasChances(DROPS_PADRAO)).toBe(10_000);
   });
 
   it("passa na própria validação", () => {
@@ -35,37 +39,37 @@ describe("a tabela padrão", () => {
 
 describe("conferirDrops", () => {
   it("recusa tabela que não soma 100 e diz quanto deu", () => {
-    const r = conferirDrops([{ multiplier: 2, rarity: "RARO", chance: 98 }]);
+    const r = conferirDrops([{ multiplier: 2, rarity: "RARO", probabilityBps: 9800, color: "#A1A1AA" }]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.erro).toMatch(/somam 98%/);
   });
 
   it("recusa multiplicador menor ou igual a 1", () => {
     // Abaixo de 1 a caixa TIRARIA XP de quem ganhou.
-    const r = conferirDrops([{ multiplier: 0.5, rarity: "COMUM", chance: 100 }]);
+    const r = conferirDrops([{ multiplier: 0.5, rarity: "COMUM", probabilityBps: 10000, color: "#A1A1AA" }]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.erro).toMatch(/maior que 1/i);
   });
 
   it("recusa o mesmo multiplicador duas vezes", () => {
     const r = conferirDrops([
-      { multiplier: 2, rarity: "RARO", chance: 50 },
-      { multiplier: 2, rarity: "RARO", chance: 50 },
+      { multiplier: 2, rarity: "RARO", probabilityBps: 5000, color: "#A1A1AA" },
+      { multiplier: 2, rarity: "RARO", probabilityBps: 5000, color: "#A1A1AA" },
     ]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.erro).toMatch(/duas vezes/);
   });
 
   it("recusa tabela sem nenhum ativo", () => {
-    const r = conferirDrops([{ multiplier: 2, rarity: "RARO", chance: 0 }]);
+    const r = conferirDrops([{ multiplier: 2, rarity: "RARO", probabilityBps: 0, color: "#A1A1AA" }]);
     expect(r.ok).toBe(false);
   });
 
   it("drop desligado não conta para os 100%", () => {
     // Ele fica na tabela para poder ser religado sem redigitar.
     const r = conferirDrops([
-      { multiplier: 1.5, rarity: "COMUM", chance: 100 },
-      { multiplier: 3.5, rarity: "ULTRA_RARO", chance: 0 },
+      { multiplier: 1.5, rarity: "COMUM", probabilityBps: 10000, color: "#A1A1AA" },
+      { multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 0, color: "#A1A1AA" },
     ]);
     expect(r).toEqual({ ok: true });
   });
@@ -73,9 +77,9 @@ describe("conferirDrops", () => {
 
 describe("sortearDrop", () => {
   const drops: DropDaCaixa[] = [
-    { multiplier: 1.5, rarity: "COMUM", chance: 30 },
-    { multiplier: 2.0, rarity: "RARO", chance: 60 },
-    { multiplier: 3.5, rarity: "ULTRA_RARO", chance: 10 },
+    { multiplier: 1.5, rarity: "COMUM", probabilityBps: 3000, color: "#A1A1AA" },
+    { multiplier: 2.0, rarity: "RARO", probabilityBps: 6000, color: "#A1A1AA" },
+    { multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 1000, color: "#A1A1AA" },
   ];
 
   it("respeita as faixas nas bordas", () => {
@@ -96,8 +100,8 @@ describe("sortearDrop", () => {
 
   it("ignora drop desligado", () => {
     const comDesligado: DropDaCaixa[] = [
-      { multiplier: 1.5, rarity: "COMUM", chance: 100 },
-      { multiplier: 3.5, rarity: "ULTRA_RARO", chance: 0 },
+      { multiplier: 1.5, rarity: "COMUM", probabilityBps: 10000, color: "#A1A1AA" },
+      { multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 0, color: "#A1A1AA" },
     ];
     for (const s of [0, 0.5, 0.999]) {
       expect(sortearDrop(comDesligado, s)?.multiplier).toBe(1.5);
@@ -106,7 +110,7 @@ describe("sortearDrop", () => {
 
   it("tabela vazia devolve nulo em vez de inventar prêmio", () => {
     expect(sortearDrop([], 0.5)).toBeNull();
-    expect(sortearDrop([{ multiplier: 2, rarity: "RARO", chance: 0 }], 0.5)).toBeNull();
+    expect(sortearDrop([{ multiplier: 2, rarity: "RARO", probabilityBps: 0, color: "#A1A1AA" }], 0.5)).toBeNull();
   });
 
   it("na tabela padrão, a distribuição bate com as chances", () => {
@@ -121,7 +125,7 @@ describe("sortearDrop", () => {
     }
     for (const drop of DROPS_PADRAO) {
       const fatia = ((contagem.get(drop.multiplier) ?? 0) / passos) * 100;
-      expect(fatia).toBeCloseTo(drop.chance, 1);
+      expect(fatia).toBeCloseTo(drop.probabilityBps / 100, 1);
     }
   });
 });
@@ -173,5 +177,75 @@ describe("aplicarBoost", () => {
     // O boost é estágio separado justamente para isto: dentro da soma
     // existente, um 3,5x seria cortado em 2,5 sem ninguém perceber.
     expect(aplicarBoost(1000, 3.5).finalXp).toBe(3500);
+  });
+});
+
+describe("chance com casa decimal", () => {
+  it("0,5% e 1,25% atravessam a conversão sem perder valor", () => {
+    // Em pontos-base isso é aritmética de inteiro: 0,5% é 50, 1,25% é 125.
+    // Somar isso em ponto flutuante é o que não fecharia em 100.
+    expect(porcentoParaBps(0.5)).toBe(50);
+    expect(porcentoParaBps(1.25)).toBe(125);
+    expect(porcentoParaBps(2.75)).toBe(275);
+    expect(bpsParaPorcento(50)).toBe(0.5);
+    expect(bpsParaPorcento(125)).toBe(1.25);
+  });
+
+  it("uma tabela com decimais fecha em 100% exato", () => {
+    const drops: DropDaCaixa[] = [
+      { multiplier: 1.5, rarity: "COMUM", probabilityBps: 9875, color: "#FFF" },
+      { multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 125, color: "#F00" },
+    ];
+    expect(somaDasChances(drops)).toBe(TOTAL_EM_BPS);
+    expect(conferirDrops(drops)).toEqual({ ok: true });
+  });
+
+  it("sorteia respeitando uma faixa de 1,25%", () => {
+    const drops: DropDaCaixa[] = [
+      { multiplier: 1.5, rarity: "COMUM", probabilityBps: 9875, color: "#FFF" },
+      { multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 125, color: "#F00" },
+    ];
+    expect(sortearDrop(drops, 0.9874)?.multiplier).toBe(1.5);
+    expect(sortearDrop(drops, 0.9876)?.multiplier).toBe(3.5);
+  });
+});
+
+describe("a cor é do drop, não da raridade", () => {
+  it("aceita hexadecimal de três e de seis dígitos", () => {
+    expect(corValida("#FF4655")).toBe(true);
+    expect(corValida("#fff")).toBe(true);
+    expect(corValida(" #A1A1AA ")).toBe(true);
+  });
+
+  it("recusa o que o seletor nativo não entende", () => {
+    // Nome de cor do CSS fica de fora: o input type=color só fala hexadecimal.
+    expect(corValida("red")).toBe(false);
+    expect(corValida("#GGGGGG")).toBe(false);
+    expect(corValida("")).toBe(false);
+    expect(corValida("rgb(1,2,3)")).toBe(false);
+  });
+
+  it("a validação recusa salvar cor inválida, dizendo qual", () => {
+    const r = conferirDrops([
+      { multiplier: 2, rarity: "RARO", probabilityBps: 10_000, color: "azul" },
+    ]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toMatch(/2x não é um hexadecimal/i);
+  });
+
+  it("dois drops da mesma raridade podem ter cores diferentes", () => {
+    // É o ponto: nada amarra cor a raridade.
+    const drops: DropDaCaixa[] = [
+      { multiplier: 3.0, rarity: "LENDARIO", probabilityBps: 5000, color: "#0000FF" },
+      { multiplier: 3.2, rarity: "LENDARIO", probabilityBps: 5000, color: "#FF0000" },
+    ];
+    expect(conferirDrops(drops)).toEqual({ ok: true });
+    expect(sortearDrop(drops, 0.1)?.color).toBe("#0000FF");
+    expect(sortearDrop(drops, 0.9)?.color).toBe("#FF0000");
+  });
+
+  it("a tabela padrão traz uma cor por multiplicador, todas válidas", () => {
+    expect(DROPS_PADRAO.every((d) => corValida(d.color))).toBe(true);
+    expect(new Set(DROPS_PADRAO.map((d) => d.color)).size).toBe(DROPS_PADRAO.length);
   });
 });

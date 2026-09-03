@@ -13,11 +13,44 @@
 
 import type { LevelUpBoxRarity } from "@prisma/client";
 
-/** Um multiplicador possível e a chance dele, em pontos percentuais. */
+/**
+ * Um resultado possível da caixa.
+ *
+ * A chance é em PONTOS-BASE: 3000 é 30%, 125 é 1,25%. Inteiro de propósito,
+ * porque probabilidade somada em ponto flutuante não fecha em 100 de forma
+ * confiável, e a regra deste sistema é que ela feche exatamente.
+ *
+ * A cor é do drop, não da raridade: a paleta é decisão de quem opera.
+ */
 export interface DropDaCaixa {
   multiplier: number;
   rarity: LevelUpBoxRarity;
-  chance: number;
+  probabilityBps: number;
+  color: string;
+}
+
+/** Cem por cento, em pontos-base. */
+export const TOTAL_EM_BPS = 10_000;
+
+/** Pontos-base para o percentual que a tela mostra: 3000 vira "30". */
+export function bpsParaPorcento(bps: number): number {
+  return Math.round((bps / 100) * 100) / 100;
+}
+
+/** O caminho de volta: "1,25" vira 125. */
+export function porcentoParaBps(porcento: number): number {
+  return Math.round(porcento * 100);
+}
+
+/**
+ * Uma cor HEX aceitável.
+ *
+ * Só #RGB e #RRGGBB. Nomes de cor do CSS ficam de fora porque a mesma string
+ * precisa servir ao seletor nativo do navegador, que só entende hexadecimal
+ * de seis dígitos.
+ */
+export function corValida(cor: string): boolean {
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(cor.trim());
 }
 
 /**
@@ -28,15 +61,15 @@ export interface DropDaCaixa {
  * inventada na hora.
  */
 export const DROPS_PADRAO: readonly DropDaCaixa[] = [
-  { multiplier: 1.5, rarity: "COMUM", chance: 30 },
-  { multiplier: 1.7, rarity: "COMUM", chance: 22 },
-  { multiplier: 2.0, rarity: "RARO", chance: 18 },
-  { multiplier: 2.2, rarity: "RARO", chance: 11 },
-  { multiplier: 2.5, rarity: "EPICO", chance: 8 },
-  { multiplier: 2.7, rarity: "EPICO", chance: 5 },
-  { multiplier: 3.0, rarity: "LENDARIO", chance: 3 },
-  { multiplier: 3.2, rarity: "LENDARIO", chance: 2 },
-  { multiplier: 3.5, rarity: "ULTRA_RARO", chance: 1 },
+  { multiplier: 1.5, rarity: "COMUM", probabilityBps: 3000, color: "#A1A1AA" },
+  { multiplier: 1.7, rarity: "COMUM", probabilityBps: 2200, color: "#D4D4D8" },
+  { multiplier: 2.0, rarity: "RARO", probabilityBps: 1800, color: "#38BDF8" },
+  { multiplier: 2.2, rarity: "RARO", probabilityBps: 1100, color: "#22D3EE" },
+  { multiplier: 2.5, rarity: "EPICO", probabilityBps: 800, color: "#A78BFA" },
+  { multiplier: 2.7, rarity: "EPICO", probabilityBps: 500, color: "#C084FC" },
+  { multiplier: 3.0, rarity: "LENDARIO", probabilityBps: 300, color: "#FBBF24" },
+  { multiplier: 3.2, rarity: "LENDARIO", probabilityBps: 200, color: "#FB923C" },
+  { multiplier: 3.5, rarity: "ULTRA_RARO", probabilityBps: 100, color: "#FF4655" },
 ] as const;
 
 /** Quantos minutos o boost vale depois de aberto, quando nada foi configurado. */
@@ -57,7 +90,7 @@ export const ROTULO_DA_RARIDADE: Record<LevelUpBoxRarity, string> = {
  * religá-lo sem redigitar, e não participa do sorteio enquanto está fora.
  */
 export function somaDasChances(drops: readonly DropDaCaixa[]): number {
-  return drops.reduce((s, d) => s + (d.chance || 0), 0);
+  return drops.reduce((s, d) => s + (d.probabilityBps || 0), 0);
 }
 
 export type ConfiguracaoInvalida =
@@ -72,7 +105,7 @@ export type ConfiguracaoInvalida =
  * numa regra secreta de economia.
  */
 export function conferirDrops(drops: readonly DropDaCaixa[]): ConfiguracaoInvalida {
-  const ativos = drops.filter((d) => d.chance > 0);
+  const ativos = drops.filter((d) => d.probabilityBps > 0);
   if (ativos.length === 0) {
     return { ok: false, erro: "Deixe pelo menos um multiplicador ativo." };
   }
@@ -82,14 +115,21 @@ export function conferirDrops(drops: readonly DropDaCaixa[]): ConfiguracaoInvali
       erro: "Todo multiplicador precisa ser maior que 1: abaixo disso a caixa tiraria XP de quem ganhou.",
     };
   }
-  if (drops.some((d) => !Number.isInteger(d.chance) || d.chance < 0)) {
-    return { ok: false, erro: "As chances precisam ser números inteiros de 0 para cima." };
+  if (drops.some((d) => !Number.isInteger(d.probabilityBps) || d.probabilityBps < 0)) {
+    return { ok: false, erro: "As chances precisam ser positivas." };
   }
-  const soma = somaDasChances(ativos);
-  if (soma !== 100) {
+  const semCor = drops.find((d) => !corValida(d.color));
+  if (semCor) {
     return {
       ok: false,
-      erro: `As chances dos multiplicadores ativos somam ${soma}%, e precisam somar exatamente 100%.`,
+      erro: `A cor de ${semCor.multiplier}x não é um hexadecimal válido. Use algo como #FF4655.`,
+    };
+  }
+  const soma = somaDasChances(ativos);
+  if (soma !== TOTAL_EM_BPS) {
+    return {
+      ok: false,
+      erro: `As chances dos multiplicadores ativos somam ${bpsParaPorcento(soma)}%, e precisam somar exatamente 100%.`,
     };
   }
   const vistos = new Set<number>();
@@ -120,7 +160,7 @@ export function sortearDrop(
   drops: readonly DropDaCaixa[],
   sorteio: number,
 ): DropDaCaixa | null {
-  const ativos = drops.filter((d) => d.chance > 0);
+  const ativos = drops.filter((d) => d.probabilityBps > 0);
   if (ativos.length === 0) return null;
 
   const total = somaDasChances(ativos);
@@ -132,7 +172,7 @@ export function sortearDrop(
 
   let acumulado = 0;
   for (const drop of ativos) {
-    acumulado += drop.chance;
+    acumulado += drop.probabilityBps;
     if (posicao < acumulado) return drop;
   }
   // Só chega aqui por erro de ponto flutuante na última fatia.
