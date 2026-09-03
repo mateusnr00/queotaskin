@@ -116,9 +116,14 @@ export function FeaturedRaffleCard({
           className={cn("w-full", MOLDURA_DO_DESTAQUE)}
           priority
         />
+        {/* Só o selo de situação fica sobre a arte.
+            O de nível mínimo saiu daqui: em 350px os dois juntos não cabiam
+            na largura e o "PRATA ELITE" era engolido pela logo desenhada na
+            própria capa da skin. E ele não é rótulo de vitrine, é CONDIÇÃO DE
+            COMPRA: o lugar dele é junto do preço, que é onde o cartão
+            compacto já o colocava. */}
         <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5">
           <SeloDeStatus texto={statusBadge} />
-          <SeloDeExclusiva minLevel={raffle.minLevel} />
         </div>
       </div>
 
@@ -147,9 +152,16 @@ export function FeaturedRaffleCard({
 
             Aparece só no cartão principal: repetido em cada campanha, o mesmo
             aviso viraria ruído em vez de lembrete. */}
-        {boostAtivo && vendendo && (
-          <div className="md:hidden">
-            <SeloDoBoost boost={boostAtivo} className="w-full justify-center" />
+        {/* A FAIXA DE CONDIÇÕES, logo acima do preço.
+            Nível mínimo e boost ativo dizem quem pode comprar e com o que a
+            compra vai render: as duas coisas pertencem ao momento da decisão,
+            não ao topo da arte. Uma linha só, que quebra sozinha em 320px. */}
+        {(raffle.minLevel || (boostAtivo && vendendo)) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <SeloDeExclusiva minLevel={raffle.minLevel} />
+            {boostAtivo && vendendo && (
+              <SeloDoBoost boost={boostAtivo} className="md:hidden" />
+            )}
           </div>
         )}
 
