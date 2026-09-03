@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TicketCheck, Trophy } from "lucide-react";
 
+import { apenasComGanhador } from "@/lib/ganhadores";
 import { prisma } from "@/lib/db";
 import { statusDaCampanha } from "@/lib/campanha-status";
 import { getConfiguracaoDeStatus } from "@/lib/campanha-status-server";
@@ -221,7 +222,7 @@ export default async function HomePage() {
   // MAX_WINNERS. Antes elas eram desenhadas em sequência, sorteios e depois
   // premiados, e o resultado era uma página com o dobro dos cartões e uma
   // ordem que não era cronológica nem nada.
-  const ganhadores = [
+  const candidatos = [
     ...sorteados.map((d) => ({
       chave: `sorteio-${d.id}`,
       drawDate: d.drawExecutedAt,
@@ -236,7 +237,7 @@ export default async function HomePage() {
       winnerName:
         d.winnerName ??
         winnerByKey.get(`${d.raffle.id}:${d.winningNumber}`)?.name ??
-        "Ganhador",
+        null,
       winnerPhone:
         winnerByKey.get(`${d.raffle.id}:${d.winningNumber}`)?.phone ?? null,
       selo: "Sorteio da campanha",
@@ -251,16 +252,26 @@ export default async function HomePage() {
       prizeDescription: a.prizeDescription,
       number: a.number,
       totalNumbers: a.raffle.totalNumbers,
-      winnerName: winnerByKey.get(`${a.raffleId}:${a.number}`)?.name ?? "Ganhador",
+      // NÚMERO PREMIADO SEM DONO NÃO É GANHADOR.
+      //
+      // Aqui havia `?? "Ganhador"`. Título premiado é configuração: o admin
+      // escolhe quais números pagam prêmio ANTES de vender, e enquanto
+      // ninguém compra aquele número não existe ganhador nenhum. O literal
+      // enchia a home com cartões de "Ganhador" sem telefone e sem premiação,
+      // anunciando prêmio que ninguém levou. Num site de sorteio isso não é
+      // cartão feio, é informação falsa. A página da campanha sempre tratou
+      // certo, mostrando o número como disponível; era só a home.
+      winnerName: winnerByKey.get(`${a.raffleId}:${a.number}`)?.name ?? null,
       winnerPhone: winnerByKey.get(`${a.raffleId}:${a.number}`)?.phone ?? null,
       selo: "Título premiado",
       href: undefined as string | undefined,
     })),
-  ]
-    // Sem data vai para o fim, e não para o topo: `null` comparado com número
-    // daria NaN e embaralharia a lista inteira.
-    .sort((a, b) => (b.drawDate?.getTime() ?? 0) - (a.drawDate?.getTime() ?? 0))
-    .slice(0, MAX_WINNERS);
+  ];
+
+  // A regra de quem entra mora em lib/ganhadores, com teste: "número premiado
+  // sem dono não é ganhador" é o tipo de coisa que volta sozinha quando fica
+  // solta no meio de uma página.
+  const ganhadores = apenasComGanhador(candidatos, MAX_WINNERS);
 
   const temGanhador = ganhadores.length > 0;
   const mostrarGanhadores = showWinners && temGanhador;
