@@ -65,6 +65,9 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export const adminLoginSchema = z.object({
   email: z.string().email("E-mail inválido"),
   password: z.string().min(1, "Informe a senha"),
+  // 2o fator: TOTP (6 dígitos) OU recovery code (>=8). Opcional no schema; o
+  // provider decide se é obrigatório (quando a conta tem MFA ativa).
+  totp: z.string().trim().optional(),
 });
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 

@@ -25,3 +25,5 @@ estruturados / `AdminSecurityEvent` / `PAYMENT_*` logs. Nenhum dado sensível.
 | ROLE_CHANGE denied | HIGH | qualquer | tentativa de escalação |
 | LEGACY_RECOVERY_APPROVAL | HIGH | qualquer | revisar caso + ator |
 | abuso de OTP participante | MEDIUM | rate estourado | rate-limit já atua |
+| OTP_SEND_FAILURE (spike) | HIGH | pico | provider degradado; auth fail-closed |
+| OTP provider unavailable | HIGH | sustentado | login participante indisponível |

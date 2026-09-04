@@ -2,6 +2,8 @@
 // fala com esta interface. Em produção um adaptador real (WhatsApp/SMS/email);
 // nos testes o FakeOtpProvider, que só guarda o último código em memória e
 // não envia nada para fora.
+import { resolverProviderDeOtp } from "@/server/services/otp/provider-registry";
+
 export interface DestinoDeEntrega {
   phoneCountry: string;
   phoneDigits: string;
@@ -32,7 +34,26 @@ export class FakeOtpProvider implements OtpDeliveryProvider {
 /// "envie" sem um canal real. Os testes injetam o FakeOtpProvider direto nos
 /// serviços, sem passar por aqui.
 export function provedorDeOtp(): OtpDeliveryProvider {
-  throw new Error(
-    "OTP delivery provider não configurado: integração real (WhatsApp/SMS/email) é etapa seguinte do P1-A",
-  );
+  // Delega ao registry (seleção por OTP_PROVIDER, fail-closed). Ciclo ESM
+  // resolvido em call-time (resolverProviderDeOtp só é chamada aqui, no runtime).
+  return resolverProviderDeOtp();
+}
+
+/// Mock determinístico para testes (igual ao Fake, nome distinto). Sem rede.
+export class MockOtpProvider extends FakeOtpProvider {}
+
+/// baseUrl de provider de OTP: HTTPS obrigatória; sem localhost em produção;
+/// allowlist de hosts oficiais (vazia enquanto nenhum vendor é escolhido).
+const HOSTS_OTP_PERMITIDOS = new Set<string>([
+  // adicionar o host oficial do vendor quando escolhido, ex.: "api.vendor.com"
+]);
+export function baseUrlDeOtpConfiavel(url: string | undefined, ehProd: boolean): boolean {
+  if (!url) return !ehProd; // sem baseUrl: ok fora de prod
+  let u: URL;
+  try { u = new URL(url); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  if (ehProd && (u.hostname === "localhost" || u.hostname.startsWith("127."))) return false;
+  if (ehProd && HOSTS_OTP_PERMITIDOS.size > 0) return HOSTS_OTP_PERMITIDOS.has(u.hostname);
+  // Em prod, sem allowlist populada (vendor não escolhido), nenhuma baseUrl passa.
+  return !ehProd;
 }

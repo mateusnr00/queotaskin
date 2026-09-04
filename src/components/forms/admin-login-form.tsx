@@ -36,7 +36,7 @@ export function AdminLoginForm() {
 
   const form = useForm<AdminLoginInput>({
     resolver: zodResolver(adminLoginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "", totp: "" },
   });
 
   function onSubmit(values: AdminLoginInput) {
@@ -88,6 +88,26 @@ export function AdminLoginForm() {
                   type="password"
                   autoComplete="current-password"
                   placeholder="••••••••••"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="totp"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Código de verificação (MFA)</FormLabel>
+              <FormControl>
+                <Input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="000000 (ou código de recuperação)"
+                  className="tabular-nums tracking-[0.3em]"
                   {...field}
                 />
               </FormControl>

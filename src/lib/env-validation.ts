@@ -39,6 +39,20 @@ export function coletarProblemasDeProducao(env: NodeJS.ProcessEnv = process.env)
   // A chave do MFA NAO pode ser igual a de pagamento (dominio separado).
   if (mfaKey && key && mfaKey === key) p.push({ variavel: "ADMIN_MFA_ENCRYPTION_KEY", problema: "deve ser diferente de PAYMENT_SECRET_ENCRYPTION_KEY (dominio separado)" });
 
+  // OTP provider (§37/§62/§63): em producao, provider real obrigatorio, fake
+  // proibido, api key obrigatoria, baseUrl HTTPS/allowlist se configurada.
+  const otpProv = (env.OTP_PROVIDER ?? "").trim().toLowerCase();
+  if (otpProv === "" ) p.push({ variavel: "OTP_PROVIDER", problema: "obrigatorio em producao (auth participante depende dele)" });
+  else if (otpProv === "fake" || otpProv === "mock") p.push({ variavel: "OTP_PROVIDER", problema: "provider fake/mock proibido em producao" });
+  else if (!env.OTP_PROVIDER_API_KEY) p.push({ variavel: "OTP_PROVIDER_API_KEY", problema: "obrigatoria quando OTP_PROVIDER esta setado" });
+  if (env.OTP_PROVIDER_BASE_URL) {
+    try {
+      const u = new URL(env.OTP_PROVIDER_BASE_URL);
+      if (u.protocol !== "https:") p.push({ variavel: "OTP_PROVIDER_BASE_URL", problema: "precisa ser HTTPS em producao" });
+    } catch { p.push({ variavel: "OTP_PROVIDER_BASE_URL", problema: "URL invalida" }); }
+  }
+  // Nenhum segredo de OTP em NEXT_PUBLIC (checado no loop abaixo tambem).
+
   // Flags inseguras NAO podem estar ligadas em producao.
   if (env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL === "true") p.push({ variavel: "PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL", problema: "STATUS_ONLY autoaprovar e proibido em producao" });
   if (env.ALLOW_DESTRUCTIVE_TESTS === "true") p.push({ variavel: "ALLOW_DESTRUCTIVE_TESTS", problema: "barreira de teste destrutivo nao pode estar ligada em producao" });

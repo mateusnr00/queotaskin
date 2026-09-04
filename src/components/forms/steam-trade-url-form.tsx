@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 
 import { updateSteamTradeUrlAction } from "@/server/actions/steam";
+import { solicitarOtpDeAcaoCriticaAction } from "@/server/actions/auth";
 import {
   steamTradeUrlSchema,
   type SteamTradeUrlInput,
@@ -34,27 +35,68 @@ export function SteamTradeUrlForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(Boolean(current));
+  // Reauth (§20): guardamos a URL pendente e o desafio; o codigo prova a acao.
+  const [reauth, setReauth] = useState<{ challengeId: string; urlPendente: string } | null>(null);
+  const [codigo, setCodigo] = useState("");
 
   const form = useForm<SteamTradeUrlInput>({
     resolver: zodResolver(steamTradeUrlSchema),
     defaultValues: { steamTradeUrl: current ?? "" },
   });
 
+  // Passo 1: pede o codigo de seguranca ao telefone e guarda a URL.
   function onSubmit(values: SteamTradeUrlInput) {
     startTransition(async () => {
-      const result = await updateSteamTradeUrlAction(values);
+      const r = await solicitarOtpDeAcaoCriticaAction();
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setReauth({ challengeId: r.data.challengeId, urlPendente: values.steamTradeUrl });
+      toast.success("Enviamos um código ao seu telefone para confirmar a alteração.");
+    });
+  }
+
+  // Passo 2: confirma com o codigo (reauth single-use) e salva.
+  function confirmar() {
+    if (!reauth) return;
+    startTransition(async () => {
+      const result = await updateSteamTradeUrlAction({ steamTradeUrl: reauth.urlPendente, challengeId: reauth.challengeId, codigo });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
+      setReauth(null);
+      setCodigo("");
       setSaved(Boolean(result.data.steamTradeUrl));
-      toast.success(
-        result.data.steamTradeUrl
-          ? "Link de troca salvo! Você já pode receber skins."
-          : "Link de troca removido.",
-      );
+      toast.success(result.data.steamTradeUrl ? "Link de troca salvo!" : "Link de troca removido.");
       router.refresh();
     });
+  }
+
+  if (reauth) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Digite o código enviado ao seu telefone para confirmar a alteração do link de troca.
+        </p>
+        <Input
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          placeholder="000000"
+          className="h-12 tabular-nums tracking-[0.4em]"
+          value={codigo}
+          onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
+        <div className="flex gap-3">
+          <Button onClick={confirmar} disabled={isPending || codigo.length !== 6}>
+            {isPending ? "Confirmando..." : "Confirmar e salvar"}
+          </Button>
+          <Button variant="ghost" onClick={() => { setReauth(null); setCodigo(""); }}>Cancelar</Button>
+        </div>
+      </div>
+    );
   }
 
   return (

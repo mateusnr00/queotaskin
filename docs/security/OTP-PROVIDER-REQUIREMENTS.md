@@ -31,3 +31,20 @@ rate limits; preço; anti-abuso; tratamento de dados (LGPD); SLA.
 test mode (FakeOtpProvider, atual) → staging (provider real, números de teste)
 → prod canary → prod. **Sem provider real → fail-closed** (bloqueia abertura ao
 público, nunca destrava login fraco).
+
+
+## Arquitetura implementada (FASE 10)
+- `provedorDeOtp()` -> `resolverProviderDeOtp()` (provider-registry): seleciona
+  por `OTP_PROVIDER`. **fail-closed**: sem env=erro; fake/mock so fora de prod;
+  nome real sem adapter registrado=desconhecido=erro.
+- `providers/http.ts` (`HttpOtpProvider`): adapter S2S generico com timeout (8s),
+  `redirect:"error"`, mapeamento de status->enum (`tipos.ts`:
+  SUCCESS/TIMEOUT/TEMPORARY/PERMANENT/RATE_LIMITED), sem logar codigo/telefone/
+  response. O **corpo especifico do vendor** (`montarRequisicao`) e o unico
+  ponto pendente: sem vendor, fail-closed (nao inventamos API).
+- `baseUrlDeOtpConfiavel`: HTTPS + allowlist (vazia ate escolher vendor) -> em
+  prod, nenhuma baseUrl arbitraria passa (anti-SSRF).
+- env-validation (prod): OTP_PROVIDER obrigatorio != fake, API key obrigatoria,
+  baseUrl HTTPS.
+- **REAL PROVIDER INTEGRATION = BLOCKED BY PROVIDER SELECTION**: registrar o
+  adapter do vendor em `REAIS` no provider-registry quando escolhido.

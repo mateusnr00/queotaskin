@@ -154,6 +154,30 @@ export async function trocarTelefoneAction(
   return { ok: true, data: undefined };
 }
 
+/// Reauth de acao critica do participante (§20): dispara um OTP CRITICAL_ACTION
+/// ao telefone VERIFICADO da conta. O codigo prova a acao (single-use), sem
+/// cookie de "recent auth". Sem telefone verificado -> fail-closed (sem envio).
+export async function solicitarOtpDeAcaoCriticaAction(): Promise<ActionResult<{ challengeId: string }>> {
+  const sessao = await auth();
+  if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
+  const user = await prisma.user.findUnique({
+    where: { id: sessao.user.id },
+    select: { phone: true, phoneCountry: true, phoneVerifiedAt: true },
+  });
+  if (!user?.phone || !user.phoneVerifiedAt) {
+    return { ok: false, error: "Telefone nao verificado." };
+  }
+  try {
+    const d = await criarDesafio(
+      { userId: sessao.user.id, purpose: "CRITICAL_ACTION", destino: { phoneCountry: user.phoneCountry, phoneDigits: user.phone } },
+      provedorDeOtp(),
+    );
+    return { ok: true, data: { challengeId: d.challengeId } };
+  } catch {
+    return { ok: false, error: "Envio de codigo indisponivel no momento." };
+  }
+}
+
 // Login passwordless via nome + celular. O provider Credentials no auth.ts
 // busca pelo celular e confere o nome, sem senha.
 export async function loginAction(
@@ -238,6 +262,7 @@ export async function adminLoginAction(raw: unknown): Promise<ActionResult> {
     await signIn("admin-password", {
       email: parsed.data.email,
       password: parsed.data.password,
+      totp: parsed.data.totp ?? "",
       redirect: false,
     });
     return { ok: true, data: undefined };

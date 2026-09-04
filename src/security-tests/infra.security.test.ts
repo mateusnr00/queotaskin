@@ -21,6 +21,8 @@ const envProdBase = {
   DATABASE_URL: "postgresql://app@host/db",
   DIRECT_URL: "postgresql://mig@host/db",
   ADMIN_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+  OTP_PROVIDER: "vendorx",
+  OTP_PROVIDER_API_KEY: "k",
 } as unknown as NodeJS.ProcessEnv;
 
 describe("INFRA-4 build nao executa migration", () => {

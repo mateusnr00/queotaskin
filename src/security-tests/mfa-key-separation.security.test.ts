@@ -45,6 +45,8 @@ describe("KEY-3 producao exige ADMIN_MFA_ENCRYPTION_KEY (sem fallback)", () => {
     PAYMENT_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
     DATABASE_URL: "postgresql://a@h/d",
     DIRECT_URL: "postgresql://m@h/d",
+    OTP_PROVIDER: "vendorx",
+    OTP_PROVIDER_API_KEY: "k",
   } as unknown as NodeJS.ProcessEnv;
 
   it("sem a chave MFA em prod = problema (fail-fast)", () => {
