@@ -216,6 +216,18 @@ describe("consultarDeposito", () => {
     expect(c.endToEnd).toBe("E1");
   });
 
+  // REGRESSÃO: a HorsePay devolve o depósito PAGO como "approved" (não só
+  // "paid"). Antes isso caía em PENDING e o pagamento nunca era confirmado sob
+  // STRONG. Agora é reconhecido como pago, e value+id continuam sendo extraídos
+  // para a verificação forte.
+  it('status "approved" (sinônimo de pago) => APPROVED, com value e id', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: 1.01, tax: 0.02, status: "approved", end_to_end: "E9" } }]);
+    const c = await consultarDeposito(creds, "8123456");
+    expect(c.status).toBe("APPROVED");
+    expect(c.amountBrl).toBe(1.01);
+    expect(c.identity.id).toBe("8123456");
+  });
+
   it("parsing fail-closed: value não-numérico e id malformado viram null", async () => {
     for (const corpo of [
       { id: 12345, value: "1.01", status: "paid" }, // value string -> null
@@ -239,8 +251,14 @@ describe("consultarDeposito", () => {
 describe("traduzirStatus", () => {
   it("mapeia o vocabulário deles para o nosso", () => {
     expect(traduzirStatus("pending")).toBe("PENDING");
+    expect(traduzirStatus("waiting_payment")).toBe("PENDING");
     expect(traduzirStatus("paid")).toBe("APPROVED");
+    // REGRESSÃO: "approved" é sinônimo de pago na HorsePay (doc de rastreamento).
+    expect(traduzirStatus("approved")).toBe("APPROVED");
+    expect(traduzirStatus("PAID")).toBe("APPROVED"); // case-insensitive
+    expect(traduzirStatus("Approved")).toBe("APPROVED");
     expect(traduzirStatus("refunded")).toBe("REJECTED");
+    expect(traduzirStatus("chargedback")).toBe("REJECTED");
     expect(traduzirStatus("inventado")).toBeNull();
   });
 });

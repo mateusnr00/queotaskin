@@ -312,12 +312,21 @@ export type StatusDePagamento = "PENDING" | "APPROVED" | "REJECTED";
 export function traduzirStatus(status: string): StatusDePagamento | null {
   switch (status.toLowerCase()) {
     case "pending":
+    case "waiting_payment": // vocabulário de rastreamento (Utmify) para "aguardando"
       return "PENDING";
+    // A HorsePay reporta um depósito PAGO como "paid" OU "approved" (a própria
+    // doc de rastreamento diz "Status paid ou approved" quando o PIX é pago). O
+    // GET /api/orders/deposit devolve um desses; tratar só "paid" fazia um
+    // depósito "approved" cair em PENDING e NUNCA virar VERIFIED_APPROVED - a
+    // regressão que segurou os pagamentos após o STRONG. Continua sendo prova de
+    // status server-to-server: valor e identidade ainda são conferidos depois.
     case "paid":
+    case "approved":
       return "APPROVED";
     case "refunded":
     case "canceled":
     case "cancelled":
+    case "chargedback": // estorno reportado pela HorsePay
       return "REJECTED";
     default:
       return null;
@@ -383,6 +392,27 @@ export async function consultarDeposito(
     }
     return null;
   })();
+  // DIAGNÓSTICO REDIGIDO da regressão HorsePay: expõe a FORMA real da resposta
+  // S2S (não o conteúdo sensível) para confirmar por que um depósito pago não
+  // vira VERIFIED_APPROVED. NÃO loga id/value/nome/documento/end_to_end
+  // completos nem qualquer segredo - só tipos, presença e o rótulo de status.
+  console.info(
+    JSON.stringify({
+      evento: "HORSEPAY_S2S_DIAGNOSTICO",
+      endpoint: "/api/orders/deposit/{id}",
+      keys: Object.keys(corpo).sort(),
+      status_tipo: typeof corpo.status,
+      status_valor:
+        typeof corpo.status === "string" ? corpo.status.toLowerCase() : String(corpo.status),
+      status_mapeado:
+        (typeof corpo.status === "string" && traduzirStatus(corpo.status)) || "PENDING",
+      value_tipo: typeof corpo.value,
+      id_tipo: typeof corpo.id,
+      id_presente: corpo.id != null,
+      end_to_end_presente: corpo.end_to_end != null,
+      ts: new Date().toISOString(),
+    }),
+  );
   return {
     status:
       (typeof corpo.status === "string" && traduzirStatus(corpo.status)) ||
