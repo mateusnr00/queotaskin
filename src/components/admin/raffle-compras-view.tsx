@@ -3335,8 +3335,14 @@ function RowActions({
     }
     if (!confirm(`Marcar a reserva de ${row.participantName} como paga?`))
       return;
+    // Override manual e CRITICAL: pede o codigo do app (MFA/step-up). O backend
+    // recusa sem step-up; este prompt so coleta a prova.
+    const totp = (window.prompt("Codigo de seguranca (app autenticador ou recuperacao):") ?? "").trim();
+    if (!totp) return;
+    const motivo = (window.prompt("Motivo do pagamento manual:") ?? "").trim();
+    if (motivo.length < 3) { toast.error("Informe o motivo."); return; }
     startTransition(async () => {
-      const result = await markReservationPaidAction({ reservationId: row.id, motivo: "override manual", totp: "" });
+      const result = await markReservationPaidAction({ reservationId: row.id, motivo, totp });
       if (!result.ok) {
         toast.error(result.error);
         return;

@@ -28,3 +28,24 @@ export async function aprovarRecuperacaoLegadoAction(
   await registrarEventoDeSeguranca({ action: "LEGACY_RECOVERY_APPROVAL", actorAdminId: session.user.id, targetType: "LegacyRecoveryCase", targetId: caseId });
   return { ok: true, data: { grant: r.grant } };
 }
+
+import { resetarMfa } from "@/server/services/admin/mfa";
+
+/// Reset de MFA de um admin-alvo (§19): exige admin com MFA ativa + step-up +
+/// SUPER_ADMIN (concede/revoga MFA de outra conta e o dono). Revoga sessoes,
+/// invalida recovery codes, forca novo enrollment. Audit MFA_RESET.
+export async function resetarMfaDeAdminAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const session = await getAdminOrThrow();
+  const targetUserId = typeof (raw as { targetUserId?: unknown })?.targetUserId === "string" ? (raw as { targetUserId: string }).targetUserId : "";
+  const totp = typeof (raw as { totp?: unknown })?.totp === "string" ? (raw as { totp: string }).totp : "";
+  if (!targetUserId) return { ok: false, error: "Alvo invalido" };
+  const guarda = await guardarAcaoCritica({
+    sessao: { userId: session.user.id, sessionVersion: session.user.sessionVersion },
+    totp, exigeSuperAdmin: true,
+  });
+  if (!guarda.ok) return { ok: false, error: "Confirmacao de seguranca (MFA) necessaria." };
+  await resetarMfa(targetUserId, session.user.id);
+  return { ok: true, data: undefined };
+}

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { AdminStepUp } from "@/components/admin/admin-step-up";
 import {
   Form,
   FormControl,
@@ -29,6 +30,7 @@ export function ChangePasswordForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
+  const [pendente, setPendente] = useState<ChangePasswordInput | null>(null);
 
   const form = useForm<ChangePasswordInput>({
     resolver: zodResolver(changePasswordSchema),
@@ -37,19 +39,39 @@ export function ChangePasswordForm() {
 
   function onSubmit(values: ChangePasswordInput) {
     setErro(null);
+    executar(values, "");
+  }
+
+  // Tenta sem step-up; se o backend exigir reauth (MFA ativa), abre o modal.
+  function executar(values: ChangePasswordInput, totp: string) {
     startTransition(async () => {
-      const result = await changeOwnPasswordAction(values);
+      const result = await changeOwnPasswordAction({ ...values, totp });
       if (!result.ok) {
+        if (/seguranca \(MFA\)/i.test(result.error) && !totp) {
+          setPendente(values);
+          return;
+        }
         setErro(result.error);
         return;
       }
+      setPendente(null);
       form.reset();
-      toast.success("Senha alterada");
-      // O bloqueio de senha temporária é decidido no servidor a cada página;
-      // sem recarregar, quem veio do primeiro acesso continuaria preso aqui.
+      toast.success("Senha alterada. Entre novamente por seguranca.");
       router.refresh();
       router.push("/admin");
     });
+  }
+
+  if (pendente) {
+    const vals = pendente;
+    return (
+      <AdminStepUp
+        titulo="Confirmar troca de senha"
+        pending={isPending}
+        onConfirmar={(totp) => { setPendente(null); executar(vals, totp); }}
+        onCancelar={() => setPendente(null)}
+      />
+    );
   }
 
   return (

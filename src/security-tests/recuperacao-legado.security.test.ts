@@ -8,7 +8,7 @@ import { verificarDesafio } from "@/server/services/otp/otp-service";
 import { classificarConta } from "@/server/services/otp/conta";
 import { solicitarOtpDeLogin, autenticarPorDesafioDeLogin } from "@/server/services/otp/login";
 import {
-  abrirCasoDeRecuperacao, aprovarCaso, solicitarOtpDeRecuperacao, concluirRecuperacao,
+  abrirCasoDeRecuperacao, aprovarCaso, solicitarOtpDeRecuperacao, concluirRecuperacao, listarCasosDeRecuperacao,
 } from "@/server/services/otp/recuperacao";
 
 function cpfValido(): string {
@@ -178,4 +178,30 @@ suiteDeIntegracao("FASE 5.3 · recuperacao assistida (DB)", () => {
     expect(trilha.map((a) => a.action)).toContain("APROVAR");
     expect(trilha.some((a) => a.actor === "op-1")).toBe(true);
   });
+
+  it("SUPPORT-1/2 §9 listagem scoped por tenant: ADMIN vê global/próprio, não de outro tenant", async () => {
+    const tenants = await prisma.tenant.findMany({ take: 2, select: { id: true } });
+    const tA = tenants[0]!.id;
+    const tB = tenants[1]?.id ?? tA;
+    // titular ligado ao tenant A
+    const cpfA = cpfValido();
+    const uA = await prisma.user.create({ data: { name: "Alfa Silva", cpf: cpfA, phone: telUnico(), phoneCountry: "BR", tenantId: tA, role: "PARTICIPANT" }, select: { id: true } });
+    users.push(uA.id);
+    const cA = await abrirCasoDeRecuperacao(uA.id); cases.push(cA.caseId);
+    // ADMIN do tenant A vê; ADMIN do tenant B (se distinto) não vê
+    const comoAdminA = await listarCasosDeRecuperacao({ role: "ADMIN", tenantId: tA });
+    expect(comoAdminA.some((c) => c.id === cA.caseId)).toBe(true);
+    if (tB !== tA) {
+      const comoAdminB = await listarCasosDeRecuperacao({ role: "ADMIN", tenantId: tB });
+      expect(comoAdminB.some((c) => c.id === cA.caseId)).toBe(false); // isolado
+    }
+    // SUPER_ADMIN vê
+    const comoSuper = await listarCasosDeRecuperacao({ role: "SUPER_ADMIN", tenantId: null });
+    expect(comoSuper.some((c) => c.id === cA.caseId)).toBe(true);
+    // §12 mascaramento: nunca CPF/telefone completos
+    const caso = comoSuper.find((c) => c.id === cA.caseId)!;
+    expect(caso.cpfMascarado).not.toContain(cpfA);
+    expect(caso.nomeMascarado).not.toBe("Alfa Silva");
+  });
+
 });

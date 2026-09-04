@@ -21,6 +21,7 @@ import { updatePaymentSettingsAction } from "@/server/actions/payment-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { AdminStepUp } from "@/components/admin/admin-step-up";
 import {
   Form,
   FormControl,
@@ -81,6 +82,7 @@ interface Props {
 export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [pendente, setPendente] = useState<FormValues | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as unknown as Resolver<FormValues>,
@@ -101,15 +103,23 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
 
   const provider = form.watch("provider");
 
+  // CRITICAL (§16): abre step-up antes de persistir config de gateway.
   function onSubmit(values: FormValues) {
     setServerError(null);
+    setPendente(values);
+  }
+
+  function executar(totp: string) {
+    if (!pendente) return;
+    const values = pendente;
     startTransition(async () => {
-      const result = await updatePaymentSettingsAction(values);
+      const result = await updatePaymentSettingsAction({ ...values, totp });
       if (!result.ok) {
         setServerError(result.error);
         toast.error(result.error);
         return;
       }
+      setPendente(null);
       toast.success("Configuração de pagamento salva");
       // Reseta os campos de secret (o servidor não devolve eles).
       form.reset({
@@ -122,6 +132,17 @@ export function PaymentSettingsForm({ initial, webhookUrls }: Props) {
         horsepayWebhookSecret: "",
       });
     });
+  }
+
+  if (pendente) {
+    return (
+      <AdminStepUp
+        titulo="Confirmar alteração do gateway"
+        pending={isPending}
+        onConfirmar={executar}
+        onCancelar={() => setPendente(null)}
+      />
+    );
   }
 
   return (

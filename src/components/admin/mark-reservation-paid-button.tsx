@@ -1,9 +1,8 @@
 "use client";
 
-// Botão "Marcar como paga" no admin, usado quando o webhook do gateway
-// falhou e o admin precisa confirmar manualmente. Pede confirmação com
-// dialog do browser pra evitar clique acidental.
-
+// Override manual de pagamento. CRITICAL: exige motivo + step-up (MFA). O
+// backend (markReservationPaidAction) recusa sem step-up; esta UI apenas
+// coleta a prova. Pular a UI e chamar a action sem step-up FALHA.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -11,65 +10,56 @@ import { CheckCircle2 } from "lucide-react";
 
 import { markReservationPaidAction } from "@/server/actions/reservations";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { AdminStepUp } from "@/components/admin/admin-step-up";
 
 interface Props {
   reservationId: string;
   participantName: string;
 }
 
-export function MarkReservationPaidButton({
-  reservationId,
-  participantName,
-}: Props) {
+export function MarkReservationPaidButton({ reservationId, participantName }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [confirming, setConfirming] = useState(false);
+  const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState("");
 
-  function onClick() {
-    if (!confirming) {
-      setConfirming(true);
-      // Auto-reset após 4s caso o admin desista.
-      setTimeout(() => setConfirming(false), 4000);
-      return;
-    }
+  function executar(totp: string) {
     startTransition(async () => {
-      const result = await markReservationPaidAction({ reservationId, motivo: "override manual", totp: "" });
-      if (!result.ok) {
-        toast.error(result.error);
-        setConfirming(false);
-        return;
-      }
-      const recreated = result.data?.recreatedTickets;
-      if (recreated && recreated.length > 0) {
-        toast.success(
-          `${participantName}: marcada como paga. Números recriados: ${recreated
-            .map((n) => String(n).padStart(2, "0"))
-            .join(", ")}`,
-          { duration: 8000 }
-        );
-      } else {
-        toast.success(`Reserva de ${participantName} marcada como paga`);
-      }
-      setConfirming(false);
+      const result = await markReservationPaidAction({ reservationId, motivo, totp });
+      if (!result.ok) { toast.error(result.error); return; }
+      const recriados = result.data?.recreatedTickets;
+      toast.success(
+        recriados && recriados.length > 0
+          ? `${participantName}: marcada como paga. Números recriados: ${recriados.map((n) => String(n).padStart(2, "0")).join(", ")}`
+          : `Reserva de ${participantName} marcada como paga`,
+        { duration: 6000 },
+      );
+      setAberto(false); setMotivo("");
       router.refresh();
     });
   }
 
+  if (aberto) {
+    return (
+      <div className="space-y-3">
+        <Input placeholder="Motivo do pagamento manual (obrigatório)" value={motivo}
+          onChange={(e) => setMotivo(e.target.value)} className="h-10" />
+        <AdminStepUp
+          titulo="Confirmar pagamento manual"
+          pending={isPending}
+          onConfirmar={(totp) => { if (motivo.trim().length < 3) { toast.error("Informe o motivo."); return; } executar(totp); }}
+          onCancelar={() => { setAberto(false); setMotivo(""); }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <Button
-      type="button"
-      variant={confirming ? "default" : "outline"}
-      size="sm"
-      onClick={onClick}
-      disabled={isPending}
-      title="Marcar como paga manualmente"
-    >
+    <Button type="button" variant="outline" size="sm" onClick={() => setAberto(true)} disabled={isPending}
+      title="Marcar como paga manualmente">
       <CheckCircle2 className="h-4 w-4 mr-1.5" />
-      {isPending
-        ? "Marcando..."
-        : confirming
-        ? "Confirmar?"
-        : "Marcar paga"}
+      Marcar paga
     </Button>
   );
 }

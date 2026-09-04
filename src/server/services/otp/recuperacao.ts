@@ -138,3 +138,68 @@ export async function concluirRecuperacao(entrada: {
   await auditar({ caseId: c.id, userId: c.userId, action: "CONCLUIR", fromStatus: "APPROVED", toStatus: "APPROVED", reason: "telefone verificado por OTP" });
   return { ok: true, userId: c.userId };
 }
+
+export interface CasoResumo {
+  id: string;
+  userId: string;
+  status: string;
+  riskLevel: string;
+  reason: string | null;
+  openedAt: Date;
+  resolvedAt: Date | null;
+  resolvedBy: string | null;
+  // Dados do titular, MASCARADOS (§12): nunca CPF/telefone completos.
+  nomeMascarado: string;
+  cpfMascarado: string | null;
+  telefoneMascarado: string | null;
+}
+
+function mascararNome(n: string): string {
+  const p = n.trim().split(/\s+/);
+  return p.map((x, i) => (i === 0 ? x : (x[0] ?? "") + ".")).join(" ");
+}
+function mascararCpf(c: string | null): string | null {
+  if (!c) return null;
+  const d = c.replace(/\D/g, "");
+  return d.length === 11 ? `***.***.${d.slice(6, 9)}-**` : "***";
+}
+function mascararTel(t: string | null): string | null {
+  if (!t) return null;
+  const d = t.replace(/\D/g, "");
+  return d.length <= 2 ? "*".repeat(d.length) : "*".repeat(d.length - 2) + d.slice(-2);
+}
+
+/// Lista casos para o painel de suporte, SCOPED por tenant (§9). ADMIN vê só o
+/// tenant informado (resolvido no backend, nunca do request); SUPER_ADMIN vê
+/// todos. Dados do titular vêm MASCARADOS.
+export async function listarCasosDeRecuperacao(
+  contexto: { role: string; tenantId: string | null },
+  filtro: { status?: string } = {},
+): Promise<CasoResumo[]> {
+  const ehSuper = contexto.role === "SUPER_ADMIN";
+  const casos = await prisma.legacyRecoveryCase.findMany({
+    where: { ...(filtro.status ? { status: filtro.status } : {}) },
+    orderBy: { openedAt: "desc" },
+    take: 100,
+    select: { id: true, userId: true, status: true, riskLevel: true, reason: true, openedAt: true, resolvedAt: true, resolvedBy: true },
+  });
+  const userIds = [...new Set(casos.map((c) => c.userId))];
+  const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, cpf: true, phone: true, tenantId: true } });
+  const porId = new Map(users.map((u) => [u.id, u]));
+  return casos
+    .filter((c) => {
+      if (ehSuper) return true;
+      const u = porId.get(c.userId);
+      // ADMIN: só casos de titulares ligados ao seu tenant (ou globais).
+      return !u?.tenantId || u.tenantId === contexto.tenantId;
+    })
+    .map((c) => {
+      const u = porId.get(c.userId);
+      return {
+        ...c,
+        nomeMascarado: u ? mascararNome(u.name) : "?",
+        cpfMascarado: mascararCpf(u?.cpf ?? null),
+        telefoneMascarado: mascararTel(u?.phone ?? null),
+      };
+    });
+}

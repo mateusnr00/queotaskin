@@ -14,6 +14,13 @@ infra. **16 commits** sobre `main` (`143691b..2e2c423`), todos de segurança.
   telefone verificado; sessionVersion/reauth; migração assistida de legado.
 - **P1-B admin (COMPLETE)**: MFA TOTP (RFC 6238); step-up em ações críticas;
   winner lock; gateway secret write-only; auditoria privilegiada; recovery codes.
+- **Security UI (FASE 10/10.1)**: login/registro/troca-de-telefone/reauth-Steam
+  por OTP; admin MFA login/enrollment/step-up (modal reutilizavel) conectado em
+  TODAS as acoes criticas (payment override, gateway, role, senha, legacy
+  approval, MFA reset); recuperacao de legado (participante + painel de suporte
+  admin, tenant-scoped, dados mascarados). Provider de OTP: abstracao fail-closed
+  (registry + HttpOtpProvider); vendor real = BLOCKED BY PROVIDER SELECTION
+  (docs/security/OTP-PROVIDER-SELECTION.md).
 - **P1-C infra (CODE COMPLETE)**: separação de roles do Postgres (app_runtime
   sem DDL); audit append-only; lockdown financeiro no banco (DML não fabrica
   aprovação); chave de MFA separada da de pagamento; env-validation fail-fast;

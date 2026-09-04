@@ -17,6 +17,7 @@ import { formatCpf, formatPhone } from "@/lib/cpf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { AdminStepUp } from "@/components/admin/admin-step-up";
 import {
   Form,
   FormControl,
@@ -63,6 +64,7 @@ export function UserEditForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [gerando, setGerando] = useState(false);
+  const [pendente, setPendente] = useState<UserEditInput | null>(null);
 
   // Sem ser dono, "Dono da plataforma" só aparece se a conta já for, para não
   // sumir do select e parecer que o papel dela mudou.
@@ -98,10 +100,19 @@ export function UserEditForm({
     });
   }
 
+  // §17 role change e CRITICAL: pede step-up SO quando o papel muda.
   function onSubmit(values: UserEditInput) {
+    if (values.role !== defaultValues.role) {
+      setPendente(values);
+      return;
+    }
+    executar(values, "");
+  }
+
+  function executar(values: UserEditInput, totp: string) {
     setServerError(null);
     startTransition(async () => {
-      const result = await updateUserAction(values);
+      const result = await updateUserAction({ ...values, totp });
       if (!result.ok) {
         setServerError(result.error);
         toast.error(result.error);
@@ -111,6 +122,18 @@ export function UserEditForm({
       router.refresh();
       router.push("/admin/usuarios");
     });
+  }
+
+  if (pendente) {
+    const vals = pendente;
+    return (
+      <AdminStepUp
+        titulo="Confirmar mudança de papel"
+        pending={isPending}
+        onConfirmar={(totp) => { setPendente(null); executar(vals, totp); }}
+        onCancelar={() => setPendente(null)}
+      />
+    );
   }
 
   return (

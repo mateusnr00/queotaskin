@@ -76,6 +76,7 @@ export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Informe a senha atual"),
+    totp: z.string().trim().optional(),
     newPassword: z
       .string()
       .min(10, "A senha precisa de pelo menos 10 caracteres")

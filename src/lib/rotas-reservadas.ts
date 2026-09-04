@@ -29,6 +29,7 @@ const ROTAS_DO_SITE = [
   "sorteios",
   "trocar-senha",
   "configurar-mfa",
+  "recuperar-conta",
 ] as const;
 
 // Nomes que o site ainda não usa, mas que são candidatos naturais a virar

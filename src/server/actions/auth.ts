@@ -22,6 +22,8 @@ import { solicitarOtpDeLogin } from "@/server/services/otp/login";
 import { provedorDeOtp } from "@/server/services/otp/provider";
 import { solicitarCadastro, concluirCadastro } from "@/server/services/otp/registro";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
+import { mfaAtivo } from "@/server/services/admin/mfa";
+import { exigirStepUpAdmin } from "@/server/services/admin/sessao";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 import { criarDesafio } from "@/server/services/otp/otp-service";
 import { trocarTelefoneVerificado } from "@/server/services/otp/conta";
@@ -306,6 +308,14 @@ export async function changeOwnPasswordAction(
     user.passwordHash
   );
   if (!confere) return { ok: false, error: "Senha atual incorreta" };
+
+  // §18 troca de senha e CRITICAL: exige step-up quando a conta tem MFA ativa.
+  if (await mfaAtivo(user.id)) {
+    const totp = typeof (parsed.data as { totp?: string }).totp === "string" ? (parsed.data as { totp: string }).totp : "";
+    if (!(await exigirStepUpAdmin(user.id, totp))) {
+      return { ok: false, error: "Confirmacao de seguranca (MFA) necessaria." };
+    }
+  }
 
   await prisma.user.update({
     where: { id: user.id },
