@@ -1,5 +1,5 @@
 // FASE 4.5 - testes ADVERSARIAIS: tentam QUEBRAR o P0.
-import { afterEach, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
 import { integracaoLiberada, suiteDeIntegracao } from "@/test/integration-setup";
@@ -20,6 +20,14 @@ function fakeProvider(status: "PENDING" | "APPROVED" | "REJECTED", opts: { valor
 }
 
 suiteDeIntegracao("ADVERSARIAL · quebrar o P0", () => {
+  // Estes provam o MECANISMO de aprovação (FSM, verificação, idempotência,
+  // concorrência, valor), usando um provider como veículo. A POLÍTICA de tier
+  // (STATUS_ONLY não autoaprova por default) é provada em
+  // kill-switch.security.test.ts. Aqui habilitamos o opt-in explícito para
+  // exercitar o caminho de aprovação de ponta a ponta.
+  beforeAll(() => { process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL = "true"; });
+  afterAll(() => { delete process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL; });
+
   let tenantId = "", donoId = "";
   beforeAll(async () => {
     if (!integracaoLiberada) return;

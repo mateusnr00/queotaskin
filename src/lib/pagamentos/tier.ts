@@ -4,9 +4,10 @@
 //   STRONG      = identidade + status + VALOR verificados server-to-server.
 //   STATUS_ONLY = status verificado, valor ainda não (doc oficial pendente).
 //
-// Não é enforcement de "alto valor" (isso é decisão comercial/config). É a
-// classificação que torna a diferença observável e auditável, e a base para
-// impedir, operacionalmente, que um STATUS_ONLY seja usado onde se exige forte.
+// NÃO existe "threshold de alto valor" no sistema. A política é binária e por
+// provider (ver aprovacaoAutomaticaPermitida): STRONG autoaprova; STATUS_ONLY
+// não autoaprova em produção sem opt-in explícito; DISABLED nunca. Isso evita
+// inventar um limiar comercial e evita o "metade seguro/metade vulnerável".
 
 export type TierDeSeguranca = "STRONG" | "STATUS_ONLY" | "DISABLED";
 
@@ -29,4 +30,22 @@ export function tierDoProvider(provider: string): TierDeSeguranca {
 // vulnerável. Nunca vira "comportamento legado" nem fallback fraco.
 export function aprovacaoAutomaticaDesligada(): boolean {
   return process.env.PAYMENTS_AUTO_APPROVAL_DISABLED === "true";
+}
+
+
+// POLÍTICA CENTRAL DE APROVAÇÃO AUTOMÁTICA, por provider (fail-closed).
+//
+// STRONG (valor conferido no gateway) pode autoaprovar. STATUS_ONLY confirma
+// o status server-to-server mas NÃO confere o valor, então em produção não
+// deve autoaprovar sozinho: o pagamento fica PENDING/reconciliável. Um
+// operador que aceite o risco habilita explicitamente por env; o default é
+// seguro. DISABLED nunca autoaprova. Superior a um "alto valor" não definido:
+// é uma regra técnica clara, testável e sem número mágico.
+export function aprovacaoAutomaticaPermitida(provider: string): boolean {
+  const tier = tierDoProvider(provider);
+  if (tier === "STRONG") return true;
+  if (tier === "STATUS_ONLY") {
+    return process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL === "true";
+  }
+  return false;
 }

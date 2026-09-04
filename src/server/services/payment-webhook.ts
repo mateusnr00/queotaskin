@@ -10,7 +10,7 @@ import type { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { chaveDeEvento, hashDoCorpo } from "@/lib/pagamentos/idempotencia";
-import { aprovacaoAutomaticaDesligada } from "@/lib/pagamentos/tier";
+import { aprovacaoAutomaticaDesligada, aprovacaoAutomaticaPermitida, tierDoProvider } from "@/lib/pagamentos/tier";
 import { transitionPaymentState } from "@/server/services/payment-state-machine";
 import {
   verifyPayment,
@@ -142,6 +142,20 @@ export async function processarWebhookDePagamento(
       processingError: "aprovação automática desligada (kill switch)",
     });
     logSeg("PAYMENT_AUTO_APPROVAL_DISABLED", { provider: evento.provider, paymentId: payment.id });
+    return { desfecho: "PENDENTE", verificacao: verif.resultado };
+  }
+
+  // POLÍTICA POR PROVIDER (fail-closed): só gateway STRONG (valor conferido)
+  // autoaprova. STATUS_ONLY confirma status mas não o valor, então sem opt-in
+  // explícito NÃO autoaprova: fica PENDING/reconciliável. Fecha a lacuna de um
+  // provider fraco aprovar sem prova de valor.
+  if (verif.resultado === "VERIFIED_APPROVED" && !aprovacaoAutomaticaPermitida(evento.provider)) {
+    await marcarEvento(eventId, {
+      verificationResult: verif.resultado,
+      previousStatus: payment.status,
+      processingError: `provider ${evento.provider} (${tierDoProvider(evento.provider)}) sem verificacao de valor: aprovacao automatica nao permitida`,
+    });
+    logSeg("PAYMENT_AUTO_APPROVAL_NOT_ALLOWED", { provider: evento.provider, paymentId: payment.id, tier: tierDoProvider(evento.provider) });
     return { desfecho: "PENDENTE", verificacao: verif.resultado };
   }
 
