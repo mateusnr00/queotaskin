@@ -78,8 +78,6 @@ export function RegisterForm({
       cpf: "",
       phone: "",
       phoneCountry: PAIS_PADRAO,
-      senha: "",
-      confirmarSenha: "",
       codigoDeIndicacao: codigoDaUrl,
     },
   });
@@ -93,9 +91,11 @@ export function RegisterForm({
         toast.error(result.error);
         return;
       }
-      const login = await loginParticipanteAction({ cpf: values.cpf, senha: values.senha });
+      // Preserva o comportamento anterior: entra automaticamente após criar a
+      // conta. O login normal é CPF + nome completo (sem senha).
+      const login = await loginParticipanteAction({ cpf: values.cpf, nome: values.name });
       if (!login.ok) {
-        toast.success("Conta criada. Entre com CPF e senha.");
+        toast.success("Conta criada. Entre com seu CPF e nome completo.");
         router.push(`/login?redirect=${encodeURIComponent(redirectTo)}`);
         return;
       }
@@ -170,34 +170,6 @@ export function RegisterForm({
         />
 
         <CampoDeTelefone form={form} classeDoRotulo={ROTULO} />
-        <p className="text-[11px] text-muted-foreground">
-          O telefone é para contato/cadastro; não substitui a senha.
-        </p>
-
-        <FormField control={form.control} name="senha" render={({ field }) => (
-          <FormItem>
-            <FormLabel className={ROTULO}>Senha</FormLabel>
-            <FormControl>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={CAMPO} {...field} />
-              </div>
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
-        <FormField control={form.control} name="confirmarSenha" render={({ field }) => (
-          <FormItem>
-            <FormLabel className={ROTULO}>Confirmar senha</FormLabel>
-            <FormControl>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input type="password" autoComplete="new-password" placeholder="Repita a senha" className={CAMPO} {...field} />
-              </div>
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
 
         {/* Opcional, e o último campo de propósito: cadastro é conversão, e
             um campo a mais no meio do caminho custa gente. Quem tem código
@@ -271,7 +243,7 @@ export function RegisterForm({
         )}
 
         <BotaoDeGrade disabled={isPending}>
-          {isPending ? "Criando conta..." : "Criar minha conta"}
+          {isPending ? "Criando conta..." : "Criar conta"}
         </BotaoDeGrade>
       </form>
     </Form>

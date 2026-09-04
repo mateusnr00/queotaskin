@@ -19,7 +19,8 @@ export type BucketDeAuth =
   | "MFA_SETUP_VERIFY"
   | "RECOVERY_CODE_VERIFY"
   | "ADMIN_STEP_UP"
-  | "PARTICIPANT_PASSWORD_ATTEMPT";
+  | "PARTICIPANT_PASSWORD_ATTEMPT"
+  | "PARTICIPANT_NAME_ATTEMPT";
 
 // Teto por bucket dentro da janela. Escolhas explícitas (documentadas), não
 // silenciosas.
@@ -38,6 +39,10 @@ const LIMITE: Record<BucketDeAuth, number> = {
   RECOVERY_CODE_VERIFY: 6, // usos de recovery code por admin/janela
   ADMIN_STEP_UP: 8,     // step-ups por admin/janela (independente do login)
   PARTICIPANT_PASSWORD_ATTEMPT: 10, // tentativas de login por identidade/janela
+  // Login passwordless (CPF + nome completo). CPF + nome são semipúblicos no
+  // Brasil, então o freio é o que separa um acerto de uma varredura de nomes.
+  // Teto por CPF e por IP (chaves em HMAC, nunca o CPF puro), fail-closed.
+  PARTICIPANT_NAME_ATTEMPT: 10,
 };
 
 const JANELA_MS = 15 * 60 * 1000;

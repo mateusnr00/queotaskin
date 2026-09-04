@@ -34,7 +34,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/auth.config";
 import { adminLoginSchema } from "@/lib/validations/auth";
-import { autenticarParticipantePorSenha } from "@/server/services/otp/senha-participante";
+import { autenticarParticipantePorNome } from "@/server/services/otp/nome-participante";
 import { isAdminHost } from "@/lib/host";
 import {
   chaveDeConta,
@@ -56,36 +56,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
   providers: [
-    // Participante: login por CPF + OTP. O provider recebe o desafio já
-    // verificado (challengeId + codigo). Nome/CPF NUNCA chegam aqui: quem
-    // localiza a conta e envia o código é a Server Action de passo 1
-    // (solicitarOtpDeLogin); este passo 2 só aceita um código válido, de uso
-    // único, ligado a esta conta. Conhecer nome + CPF não basta.
-    // Participante: login por CPF + SENHA. CPF e identificador; a senha e o
-    // segredo definido pelo usuario. Nome/telefone/challengeId/codigo NUNCA
-    // autenticam (nem como alternativa silenciosa).
+    // Participante: login por CPF + NOME COMPLETO, SEM senha. O CPF localiza a
+    // conta; o nome completo é conferido por cima (comparação determinística:
+    // trim + espaços + caixa, acentos preservados; ver normalizarNomeCompleto).
+    // Nome + CPF são semipúblicos no Brasil, então o freio anti-varredura
+    // (HMAC(CPF) + IP, fail-closed) e o tenant binding vivem no serviço
+    // autenticarParticipantePorNome. Senha/OTP/SMS NÃO autenticam aqui (nem
+    // como alternativa silenciosa): este caminho só conhece CPF + nome.
     Credentials({
       id: "credentials",
       credentials: {
         cpf: { label: "CPF", type: "text" },
-        senha: { label: "Senha", type: "password" },
+        nome: { label: "Nome completo", type: "text" },
       },
       async authorize(credentials, request) {
         const cpf = typeof credentials?.cpf === "string" ? credentials.cpf.replace(/\D/g, "") : "";
-        const senha = typeof credentials?.senha === "string" ? credentials.senha : "";
-        if (cpf.length !== 11 || senha.length < 1) return null;
+        const nome = typeof credentials?.nome === "string" ? credentials.nome : "";
+        if (cpf.length !== 11 || nome.trim().length < 2) return null;
 
-        const ip = ipDaRequisicao(request?.headers ?? new Headers());
-        const ident = await autenticarParticipantePorSenha({ cpf, senha, ip });
+        const headers = request?.headers ?? new Headers();
+        const ip = ipDaRequisicao(headers);
+        // Host da conexão (confiável, não é corpo controlado por quem chama):
+        // é o que amarra o login ao tenant certo, sem lookup cross-tenant.
+        const host = headers.get("host");
+        const ident = await autenticarParticipantePorNome({ cpf, nome, ip, host });
         if (!ident) return null;
 
         const user = await prisma.user.findUnique({ where: { id: ident.id } });
         if (!user) return null;
 
-        // No host do painel, conta de painel entra so com senha de admin.
+        // No host do painel, conta de painel NÃO entra pelo caminho do
+        // participante: senão a senha do painel seria decorativa (bastaria
+        // nome + CPF, semipúblicos, para sair com sessão de admin). Lá continua
+        // valendo e-mail + senha + MFA.
         if (PAPEIS_DE_PAINEL.has(user.role)) {
-          const host = request?.headers?.get("host") ?? "";
-          if (isAdminHost(host)) return null;
+          const h = headers.get("host") ?? "";
+          if (isAdminHost(h)) return null;
         }
 
         return {

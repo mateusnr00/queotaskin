@@ -5,8 +5,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import Link from "next/link";
-import { IdCard, Lock } from "lucide-react";
+import { IdCard, User } from "lucide-react";
 
 import { loginParticipanteAction } from "@/server/actions/auth";
 import { participantLoginSchema, type ParticipantLoginInput } from "@/lib/validations/auth";
@@ -20,7 +19,9 @@ import { caminhoDeRedirecionamentoSeguro } from "@/lib/host";
 const ROTULO = "text-[11px] font-semibold uppercase tracking-wider";
 const CAMPO = "h-12 pl-11";
 
-// Login do participante: CPF + senha. Nome/telefone nao sao credencial.
+// Login do participante: CPF + NOME COMPLETO, sem senha. O CPF localiza a
+// conta e o nome completo é conferido por cima. Sem senha, sem "esqueci minha
+// senha", sem OTP: o site público prioriza a entrada sem atrito.
 export function LoginForm({ aoConcluir }: { aoConcluir?: () => void } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,7 +33,7 @@ export function LoginForm({ aoConcluir }: { aoConcluir?: () => void } = {}) {
 
   const form = useForm<ParticipantLoginInput>({
     resolver: zodResolver(participantLoginSchema),
-    defaultValues: { cpf: "", senha: "" },
+    defaultValues: { cpf: "", nome: "" },
   });
 
   function onSubmit(values: ParticipantLoginInput) {
@@ -50,6 +51,18 @@ export function LoginForm({ aoConcluir }: { aoConcluir?: () => void } = {}) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField control={form.control} name="nome" render={({ field }) => (
+          <FormItem>
+            <FormLabel className={ROTULO}>Nome completo</FormLabel>
+            <FormControl>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input autoComplete="name" placeholder="Como no cadastro" className={CAMPO} {...field} />
+              </div>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
         <FormField control={form.control} name="cpf" render={({ field }) => (
           <FormItem>
             <FormLabel className={ROTULO}>CPF</FormLabel>
@@ -64,23 +77,10 @@ export function LoginForm({ aoConcluir }: { aoConcluir?: () => void } = {}) {
             <FormMessage />
           </FormItem>
         )} />
-        <FormField control={form.control} name="senha" render={({ field }) => (
-          <FormItem>
-            <FormLabel className={ROTULO}>Senha</FormLabel>
-            <FormControl>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input type="password" autoComplete="current-password" placeholder="Sua senha" className={CAMPO} {...field} />
-              </div>
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
         {serverError && (
           <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{serverError}</p>
         )}
-        <BotaoDeGrade disabled={isPending}>{isPending ? "Entrando..." : "Entrar na conta"}</BotaoDeGrade>
-        <Link href="/recuperar-conta" className="block text-center text-xs text-muted-foreground underline">Esqueci minha senha</Link>
+        <BotaoDeGrade disabled={isPending}>{isPending ? "Entrando..." : "Entrar"}</BotaoDeGrade>
       </form>
     </Form>
   );

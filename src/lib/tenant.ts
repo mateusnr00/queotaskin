@@ -88,6 +88,25 @@ export const getCurrentTenant = cache(async (): Promise<TenantContext | null> =>
   };
 });
 
+// Resolve o id do tenant a partir de um host CRU (string), sem depender de
+// next/headers. Serve dentro do authorize do Auth.js, onde só existe o header
+// Host da conexão (confiável, não é corpo controlado por quem chama) e não o
+// contexto de request do App Router.
+//
+// Dev/preview/teste (localhost, *.vercel.app, host vazio) devolve null: ali
+// não há TenantHost cadastrado, e o login por CPF+nome não deve ficar preso a
+// uma amarra de tenant que só existe em produção. Em produção, host sem
+// registro também devolve null (nenhum tenant a amarrar).
+export async function tenantIdDoHost(host: string | null | undefined): Promise<string | null> {
+  const limpo = (host ?? "").toLowerCase().trim().replace(/:\d+$/, "");
+  if (!limpo || isHostDeDesenvolvimento(limpo)) return null;
+  const th = await prisma.tenantHost.findUnique({
+    where: { host: limpo },
+    select: { tenantId: true },
+  });
+  return th?.tenantId ?? null;
+}
+
 // Mesma coisa, mas garante que existe, lança se não achou. Útil em
 // páginas que sabidamente só fazem sentido com tenant resolvido.
 export async function getCurrentTenantOrThrow(): Promise<TenantContext> {

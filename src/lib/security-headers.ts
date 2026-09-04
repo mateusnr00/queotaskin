@@ -19,7 +19,13 @@ export function securityHeaders(ehProd: boolean): { key: string; value: string }
     // das variantes cloudflare/fastly (*.steamstatic.com) e do legado
     // *.akamaihd.net. Sem liberá-las aqui, o CSP bloqueia TODAS as imagens de
     // skin no navegador e elas somem (a URL continua no banco).
-    `img-src 'self' data: blob: ${supabase} https://*.supabase.co https://*.steamstatic.com https://*.akamaihd.net`,
+    //
+    // HLTV CDN (img-cdn.hltv.org): é onde moram os escudos dos times de CS2
+    // (Team.escudo). Quase todos os 46 times apontam para lá; alguns escudos
+    // enviados pelo admin ficam no Storage do Supabase (já liberado acima).
+    // Sem este host, o navegador bloqueava TODO escudo e o emblema caía na
+    // TAG de reserva - foi assim que "os logos dos times sumiram".
+    `img-src 'self' data: blob: ${supabase} https://*.supabase.co https://*.steamstatic.com https://*.akamaihd.net https://img-cdn.hltv.org`,
     `font-src 'self' https://fonts.gstatic.com`,
     `connect-src 'self' ${supabase} https://*.supabase.co`,
     "frame-ancestors 'none'",

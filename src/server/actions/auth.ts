@@ -45,9 +45,10 @@ export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
-// Cadastro de PARTICIPANT (FASE 10.2): CPF + senha. O telefone e contato de
-// cadastro e NAO ganha phoneVerifiedAt (nao ha OTP automatico). NAO loga
-// automaticamente.
+// Cadastro simplificado de PARTICIPANT: nome + CPF + telefone + código de
+// afiliado (opcional). SEM senha, SEM OTP, SEM SMS, SEM e-mail. A conta nasce
+// sem passwordHash; o login normal é por CPF + nome completo. O telefone é
+// contato de cadastro e NAO ganha phoneVerifiedAt (não há OTP automático).
 export async function registerAction(
   raw: unknown
 ): Promise<ActionResult<{ userId: string }>> {
@@ -55,7 +56,7 @@ export async function registerAction(
   if (!parsed.success) {
     return { ok: false, error: "Dados invalidos", fieldErrors: parsed.error.flatten().fieldErrors };
   }
-  const { name, cpf, phone, phoneCountry, senha, codigoDeIndicacao } = parsed.data;
+  const { name, cpf, phone, phoneCountry, codigoDeIndicacao } = parsed.data;
   const ip = ipDaRequisicao(await headers());
   const chaveReg = `registro:${ip ?? "sem-ip"}`;
   if ((await estaBloqueado([chaveReg])).bloqueado) {
@@ -74,7 +75,8 @@ export async function registerAction(
       data: {
         name, cpf, phone, phoneCountry,
         phoneVerifiedAt: null, // §10 telefone NUNCA verificado sem processo explicito
-        passwordHash: await hashDeSenha(senha),
+        // Sem passwordHash: cadastro simplificado, conta passwordless. O login
+        // é por CPF + nome completo (ver autenticarParticipantePorNome).
         role: "PARTICIPANT",
         tenantId: tenant?.id ?? null,
       },
@@ -91,17 +93,18 @@ export async function registerAction(
   }
 }
 
-/// Login do participante: CPF + senha (§11/§12). Resposta neutra.
+/// Login do participante: CPF + NOME COMPLETO (sem senha). Resposta neutra:
+/// não revela se o CPF existe nem se foi o nome que errou.
 export async function loginParticipanteAction(
   raw: unknown
 ): Promise<ActionResult> {
   const parsed = participantLoginSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "CPF ou senha invalidos" };
+  if (!parsed.success) return { ok: false, error: "CPF ou nome completo incorretos." };
   try {
-    await signIn("credentials", { cpf: parsed.data.cpf, senha: parsed.data.senha, redirect: false });
+    await signIn("credentials", { cpf: parsed.data.cpf, nome: parsed.data.nome, redirect: false });
     return { ok: true, data: undefined };
   } catch {
-    return { ok: false, error: "CPF ou senha invalidos" };
+    return { ok: false, error: "CPF ou nome completo incorretos." };
   }
 }
 

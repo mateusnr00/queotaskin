@@ -96,6 +96,10 @@ describe("INFRA-11 security headers", () => {
     expect(csp).toContain("img-src");
     expect(csp).toContain("https://*.steamstatic.com");
     expect(csp).toContain("https://*.akamaihd.net");
+    // REGRESSÃO: os escudos dos times de CS2 (Team.escudo) vêm do CDN da HLTV.
+    // Sem este host no img-src o navegador bloqueia todo escudo e o emblema
+    // cai na TAG de reserva ("os logos dos times sumiram").
+    expect(csp).toContain("https://img-cdn.hltv.org");
     // fora de prod nao manda HSTS
     expect(securityHeaders(false).map((h) => h.key)).not.toContain("Strict-Transport-Security");
   });

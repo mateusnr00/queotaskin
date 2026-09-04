@@ -46,13 +46,6 @@ const phoneCountryField = z
 
 // CPF validado por dígito verificador. Aceita máscara, só os dígitos vão
 // para o banco, que é como estão gravados.
-// Senha de participante (§6): comprimento e o que importa; min 8, permite
-// letras/numeros/simbolos/espacos. Sem regras absurdas de composicao.
-const senhaField = z
-  .string()
-  .min(8, "A senha precisa de pelo menos 8 caracteres")
-  .max(200, "Senha longa demais");
-
 const cpfField = z
   .string()
   .transform(onlyDigits)
@@ -64,11 +57,14 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
-// Login novo do participante: CPF (identificador) + senha (segredo). Nome e
-// telefone NAO participam.
+// Login do participante: CPF (identificador) + NOME COMPLETO (verificado por
+// cima). SEM senha - o site público prioriza conversão, e a conta só guarda os
+// próprios títulos. O CPF localiza a conta; o nome completo é conferido de
+// forma determinística (trim + espaços + caixa; ver normalizeName em auth.ts).
+// É o padrão do mercado de rifa no Brasil.
 export const participantLoginSchema = z.object({
   cpf: cpfField,
-  senha: z.string().min(1, "Informe a senha"),
+  nome: nameField,
 });
 export type ParticipantLoginInput = z.infer<typeof participantLoginSchema>;
 
@@ -112,6 +108,10 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 // objeto e não no campo: nove dígitos é telefone válido em Portugal e número
 // curto no Brasil. Com a regra brasileira valendo para todo mundo, cliente
 // de fora não conseguia terminar o cadastro.
+// Cadastro simplificado (decisão de produto): nome + CPF + telefone + código
+// de afiliado (opcional). SEM senha, SEM confirmar senha, SEM OTP/SMS, SEM
+// e-mail. A conta nasce sem passwordHash e o login normal é por CPF + nome
+// completo (ver participantLoginSchema).
 export const registerSchema = z
   .object({
     name: nameField,
@@ -125,16 +125,11 @@ export const registerSchema = z
      * não pode impedir alguém de criar conta. Quem confere é o serviço, depois
      * da conta criada, e o cadastro segue de qualquer jeito.
      */
-    senha: senhaField,
-    confirmarSenha: z.string(),
     codigoDeIndicacao: z.string().trim().max(32).optional().or(z.literal("")),
   })
   .superRefine((dados, ctx) => {
     if (!telefoneValido(dados.phone, dados.phoneCountry)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["phone"], message: "Telefone inválido para o país escolhido" });
-    }
-    if (dados.senha !== dados.confirmarSenha) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["confirmarSenha"], message: "As senhas não conferem" });
     }
   });
 export type RegisterInput = z.infer<typeof registerSchema>;
