@@ -12,7 +12,8 @@ Estas suítes provam invariantes de segurança. Removê-las reabre vulnerabilida
 - src/security-tests/write-guard.security.test.ts
 
 ## P1-A — participante
-- src/security-tests/auth-otp.security.test.ts
+- src/security-tests/senha-participante.security.test.ts  (FASE 10.2: CPF+senha, reauth, legado sem senha)
+- src/security-tests/auth-otp.security.test.ts            (mecanismo de challenge; ações OTP de login mortas)
 - src/security-tests/registro-seguro.security.test.ts
 - src/security-tests/sessao-enforcement.security.test.ts
 - src/security-tests/recuperacao-legado.security.test.ts

@@ -1,8 +1,13 @@
-# PLANO DE RELEASE — HEAD `2e2c423` (P0+P1-A+P1-B+P1-C)
+# PLANO DE RELEASE — HEAD `48d4e58` (P0+P1-A+P1-B+P1-C + FASE 10/10.1/10.2)
 
-Consolida os passos de operador. **Nada aqui foi executado.** A sequência
+Consolida os passos de operador e a **autoridade** de ordem de release (§6):
+onde outro doc divergir, este vale. **Nada aqui foi executado.** A sequência
 substitui a versão pré-7.1 do RUNBOOK-release-rollback (que não tinha roles/
 FSM/lockdown/chave MFA).
+
+**Auth do participante (FASE 10.2): CPF + SENHA.** Não há mais dependência de
+provider externo de OTP/SMS/WhatsApp para abrir o site. O antigo item "OTP
+provider (participante)" deixou de ser blocker de release.
 
 ## A. Matriz de dependência de operador (§2)
 | Item | Code ready? | Prod config? | Human action | Failure mode | Rollback |
@@ -17,7 +22,8 @@ FSM/lockdown/chave MFA).
 | ADMIN_MFA_ENCRYPTION_KEY | ✓ | gerar+setar (≠payment) | operador | boot fail-fast | setar |
 | PAYMENT_SECRET_ENCRYPTION_KEY | ✓ | já existe | operador | boot fail-fast | — |
 | AUTH_SECRET / CRON_SECRET | ✓ | já existe | operador | boot/cron fail | setar |
-| OTP provider (participante) | interface só | integrar (BLOCKER) | operador | login fail-closed | — |
+| Participant password auth (CPF+senha) | ✓ (código) | — | — | login fail-closed p/ legado sem senha | — |
+| ~~OTP provider (participante)~~ | N/A | N/A (FASE 10.2) | — | não é mais blocker | — |
 | backup/PITR | — | habilitar+testar | operador | sem recuperação | — |
 | migrations | ✓ | job separado | operador | forward-fix | nunca reset |
 | Vercel build | ✓ (sem migrate) | pipeline | operador | — | redeploy |
@@ -51,7 +57,7 @@ FSM/lockdown/chave MFA).
 | A | migrations ok, deploy falha | NEW não sobe; OLD congelado (guard) | sem aprovação | redeploy NEW; guard segue ON |
 | B | lockdown ok, NEW falha | writers financeiros fail-closed | PENDING acumula | forward-fix; guard ON; reconciliar depois |
 | C | NEW sobe, MFA key ausente | boot fail-fast (env-validation) | app não sobe | setar chave; redeploy |
-| D | OTP provider indisponível | login participante fail-closed | ninguém loga fraco | corrigir provider; guard não afeta |
+| D | Participante legado sem senha | login fail-closed (LEGACY_NO_PASSWORD) | ninguém loga fraco | recuperação assistida (RUNBOOK-legacy-support) |
 | E | NexusPag indisponível | Payment PENDING (sem fallback) | reconciliável | reconciliar quando voltar |
 | F | reconciliation falha | backlog permanece PENDING | recuperável | rerun bounded; investigar |
 | G | guard não desativa | tudo segue PENDING | fail-closed | investigar flag; nunca forçar aprovação |
@@ -65,7 +71,7 @@ FSM/lockdown/chave MFA).
 | Gate | Status | Evidence | Owner | Blocking? |
 |---|---|---|---|---|
 | Code RC | PASS | FASE 8 | dev | — |
-| Tests | PASS | 1363/1363 x2 | dev | sim |
+| Tests | PASS | 1381/1381 (run limpo) | dev | sim |
 | Build | PASS | next build | dev | sim |
 | Secrets | PASS | scan limpo | dev | sim |
 | DB roles | PENDING | verify-roles.sql (prod) | operador | **sim** |
@@ -83,6 +89,13 @@ FSM/lockdown/chave MFA).
 ## F. GO rule (§38)
 PRODUCTION RELEASE só vira **READY FOR HUMAN EXECUTION** quando todos os gates
 PENDING que dependem de config (não-produção-local) estiverem documentados sem
-ambiguidade **e** o OTP provider estiver integrado. Enquanto o provider real
-não existir, o login participante fica fail-closed → **NO-GO** para abrir o site
-ao público, embora o restante possa ser preparado.
+ambiguidade e satisfeitos pelo operador: backup/PITR, roles, guard, FSM
+lockdown, chave MFA (≠ payment), migrations por job separado, alerting mínimo.
+
+**Não há mais dependência de OTP provider** (FASE 10.2 → CPF+senha). O login do
+participante é fail-closed apenas para contas **legado sem `passwordHash`**, que
+entram pela recuperação assistida (RUNBOOK-legacy-support) — isso não bloqueia
+abrir o site para as contas com senha e novos cadastros.
+
+Enquanto os gates de config do operador não forem satisfeitos e provados, o
+código está **CODE COMPLETE** mas a produção permanece **NO-GO / NOT EXECUTED**.

@@ -27,5 +27,8 @@ estruturados / `AdminSecurityEvent` / `PAYMENT_*` logs. Nenhum dado sensível.
 | participant password brute-force | HIGH | bucket estourado | possivel credential stuffing |
 | login failure spike (participante) | HIGH | pico | investigar |
 | password reset activity (recovery) | MEDIUM | pico | revisar casos |
-| OTP_SEND_FAILURE (spike) | HIGH | pico | provider degradado; auth fail-closed |
-| OTP provider unavailable | HIGH | sustentado | login participante indisponível |
+
+> Nota (FASE 10.2): removidos os alertas de OTP de entrega participante
+> (`OTP_SEND_FAILURE`, `OTP provider unavailable`) — o login é CPF+senha, sem
+> provider externo. A cobertura de auth participante fica nas linhas de
+> brute-force/login failure acima.

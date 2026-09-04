@@ -13,12 +13,11 @@ Supabase/Vercel e NÃO podem ser feitos localmente por esta fase:
 4. **CRON_SECRET, AUTH_SECRET, PAYMENT_SECRET_ENCRYPTION_KEY** definidos em prod
    (env-validation derruba o boot se faltarem).
 5. **Backup/PITR** (BACKUP-CHECKLIST) — habilitar e testar restore.
-6. **~~Provider real de OTP (participante)~~ — NAO REQUERIDO (FASE 10.2):** o
-   login do participante e por CPF+SENHA. Nenhum SMS/WhatsApp/OTP externo. O
-   antigo item de provider fica historico. Provider real de OTP (participante): escolher vendor, registrar o adapter
-   em `provider-registry.ts` (`REAIS`), setar `OTP_PROVIDER`/`OTP_PROVIDER_API_KEY`/
-   `OTP_PROVIDER_BASE_URL` (HTTPS, host oficial na allowlist). Arquitetura pronta;
-   falta a seleção do vendor + `montarRequisicao`.
+6. **Provider real de OTP (participante) — NAO REQUERIDO (FASE 10.2):** o login
+   do participante e por CPF+SENHA. Nenhum SMS/WhatsApp/OTP externo e necessario
+   para abrir o site. O antigo item de provider fica historico; a arquitetura de
+   `provider-registry.ts` permanece no codigo, dormente (`REAIS` vazio), e so
+   seria integrada se um recurso futuro exigir OTP - fora do escopo deste release.
 7. **Lockdown financeiro no banco** (prisma/roles/financial-fsm-lockdown.sql):
    aplicar pela migration_role, na mesma janela do guard (revoga UPDATE(status)
    de Payment da app_runtime; força INSERT PENDING; guarda Reservation PAID).

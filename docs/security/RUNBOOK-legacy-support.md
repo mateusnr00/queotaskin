@@ -1,7 +1,9 @@
 # Runbook de migração assistida de legado (suporte)
 
-Contas legadas (telefone não verificado ou sem telefone) não logam pelo fluxo
-novo (fail-closed). A migração é **assistida**, com audit, **sem bypass**.
+Contas legadas **sem `passwordHash`** (`LEGACY_NO_PASSWORD`) não logam pelo fluxo
+novo (fail-closed). A migração é **assistida**, com audit, **sem bypass**. Desde a
+FASE 10.2 o login do participante é **CPF+senha**; a recuperação assistida
+**define uma nova senha** para a conta (não verifica telefone).
 
 ## Fluxo (operador de suporte)
 1. **Abrir caso**: `abrirCasoDeRecuperacao(userId, motivo)` → status OPEN;
@@ -12,10 +14,12 @@ novo (fail-closed). A migração é **assistida**, com audit, **sem bypass**.
 3. **Aprovar**: `aprovarRecuperacaoLegadoAction({caseId, totp})` — exige admin
    com **MFA + step-up** + audit `LEGACY_RECOVERY_APPROVAL`. Emite um **grant**
    (single-use, expira 24h). **A aprovação NÃO verifica o telefone.**
-4. **Novo telefone + OTP**: o usuário informa o novo número; OTP `LEGACY_RECOVERY`
-   prova a posse. `solicitarOtpDeRecuperacao` → `concluirRecuperacao`.
-5. **Conclusão**: grava `phone` + `phoneVerifiedAt`, **revoga sessões antigas**,
-   consome o grant. A partir daí a conta loga por CPF+OTP.
+4. **Nova senha**: com o grant, o usuário define a nova senha
+   (`redefinirSenhaPorRecuperacaoAction` → `concluirRecuperacaoComSenha({caseId,
+   grant, novaSenha})`). Erros neutros (sem enumeration).
+5. **Conclusão**: grava `passwordHash`, **revoga sessões antigas**, consome o
+   grant (single-use) e fecha o caso. **O telefone NÃO é verificado** por este
+   fluxo. A partir daí a conta loga por **CPF+senha**.
 6. Rejeitar/cancelar: `decidirRejeitarOuCancelar` (audit).
 
 Contas HIGH RISK (patrimônio): exigir prova adicional; nunca reset trivial.

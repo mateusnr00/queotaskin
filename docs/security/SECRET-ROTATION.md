@@ -7,19 +7,22 @@
 | DB password (migration_role) | idem; atualizar DIRECT_URL | isolado do runtime |
 | Gateway key/secret | painel (write-only); revalida no gateway | antigo deixa de valer |
 | PAYMENT_SECRET_ENCRYPTION_KEY | ver abaixo — NÃO trivial | pode tornar cifrados ilegíveis |
-| OTP provider secret | quando o provider real existir | fail-closed enquanto ausente |
+| ~~OTP provider secret~~ | N/A (FASE 10.2: sem OTP externo) | - |
 
-## Rotação da encryption key — GAP declarado
-`PAYMENT_SECRET_ENCRYPTION_KEY` cifra **gateway secrets E TOTP de admin** com a
-MESMA chave (blast radius maior). O sistema **NÃO suporta rotação de chave** hoje:
-trocá-la torna ilegível tudo que já foi cifrado.
+## Rotação da encryption key — separação de domínio IMPLEMENTADA (7.1)
+Estado atual (pós P1-C 7.1): **domínios separados**. `PAYMENT_SECRET_ENCRYPTION_KEY`
+cifra **apenas os gateway secrets**; `ADMIN_MFA_ENCRYPTION_KEY` cifra **apenas os
+segredos TOTP do admin** (formato versionado v2). O boot faz fail-fast se a chave
+MFA faltar ou for **igual** à de payment (env-validation).
 
-**Recomendação (P2, migração aditiva versionada):**
-1. Introduzir versionamento no blob cifrado (`v2:<iv>:<ct>` com key-id).
-2. Chaves separadas por domínio: `PAYMENT_SECRET_ENCRYPTION_KEY` (gateways) e
-   `ADMIN_MFA_ENCRYPTION_KEY` (TOTP). Ver TOTP-KEY-SEPARATION abaixo.
-3. Re-cifrar em background lendo com a chave velha e gravando com a nova.
-Enquanto não implementado: **domínios compartilham a chave** — documentado.
+Migração de legado: os TOTP v1 (cifrados com a chave de payment antes da 7.1) são
+recifrados para v2 por `recifrarSegredosMfaLegados` (bounded, idempotente,
+rerunnable, sem plaintext em log) — rodar até 0 v1 restantes no rollout (GATE-9).
+
+**Rotação propriamente dita continua não-trivial** (trocar uma chave torna
+ilegível o que ela cifrou). Caminho recomendado por domínio: introduzir novo
+key-id no blob v2 e re-cifrar em background (ler com a chave velha, gravar com a
+nova), sem downtime. Blast radius já reduzido pela separação acima.
 
 ## Separação de domínio da chave do TOTP — IMPLEMENTADA (7.1)
 `ADMIN_MFA_ENCRYPTION_KEY` cifra os secrets TOTP de admin, **distinta** de

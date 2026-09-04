@@ -1,5 +1,9 @@
 # Seleção do provider de OTP (participante) — decisão humana
 
+> **NÃO REQUERIDO PARA ESTE RELEASE (FASE 10.2).** O participante autentica por
+> **CPF+senha**; nenhum OTP externo é necessário para abrir o site. Esta matriz
+> fica dormente, só como ponto de partida caso um recurso futuro exija OTP.
+
 **Nenhum vendor escolhido.** Esta matriz é para o time preencher/verificar antes
 de integrar. **Não preencher com palpite** — marcar `TBD / HUMAN VERIFY` quando
 não confirmado por documentação oficial. Nada aqui foi pesquisado na web.

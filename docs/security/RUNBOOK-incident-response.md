@@ -23,9 +23,13 @@ Para cada cenário: **contain → revoke → rotate → preserve evidence → re
 - Guard ON, investigar `PAYMENT_VERIFICATION`/`PAYMENT_REQUIRES_RECONCILIATION`.
 - Nunca aprovar manualmente sem step-up + motivo (auditado).
 
-## Comprometimento do provider de OTP (participante)
-- Contain: kill switch de login (fail-closed → participantes não logam).
-- Rotate o secret do provider; migração assistida se preciso.
+## Brute-force / credential-stuffing de senha (participante)
+- Detect: pico no bucket `PARTICIPANT_PASSWORD_ATTEMPT` (rate-limit fail-closed
+  já bloqueia por CPF; ver ALERTING-CONTRACT).
+- Contain: manter o rate-limit ligado; bloquear IP/CPF abusivo se necessário.
+- Recover: conta comprometida → `revogarTodasAsSessoes(userId)` (sobe
+  sessionVersion) + forçar troca de senha (recuperação assistida). Sem OTP
+  externo envolvido (FASE 10.2: CPF+senha).
 
 ## Regressão de deploy
 - Seguir a matriz de rollback; forward-fix preferido; nunca < floor.

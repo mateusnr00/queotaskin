@@ -6,7 +6,7 @@ NO CONTEXTO deste app:
 
 | Pacote | Sev | CVE/tema | Exploitável aqui? | Ação |
 |---|---|---|---|---|
-| @auth/core, next-auth, @auth/prisma-adapter | CRITICAL | homoglyph @ bypass no normalizador de **email** | **NÃO** — participante loga por CPF+OTP; admin por email+senha+MFA com match exato + bcrypt; sem magic-link/OAuth por email | monitorar; upgrade quando Auth.js v5 sair de beta |
+| @auth/core, next-auth, @auth/prisma-adapter | CRITICAL | homoglyph @ bypass no normalizador de **email** | **NÃO** — participante loga por CPF+senha (sem email); admin por email+senha+MFA com match exato + bcrypt; sem magic-link/OAuth por email | monitorar; upgrade quando Auth.js v5 sair de beta |
 | next | HIGH | bypass de middleware com **Turbopack + single locale** | verificar: proxy.ts é middleware; app não usa i18n single-locale via Turbopack em prod | aplicar patch de Next quando disponível |
 | sharp | HIGH | CVEs libvips (processamento de imagem) | parcial — next/image + upload de capa | upgrade de sharp (patch) recomendado |
 | ip-address, fast-uri, hono | HIGH | SSRF/trust-boundary/IP parsing | transitivos; SSRF de gateway já mitigado por baseUrlConfiavel (allowlist) | monitorar; sem uso direto |
@@ -16,7 +16,7 @@ NO CONTEXTO deste app:
 Versão: `next-auth ^5.0.0-beta.31`. Beta é risco declarado (API instável,
 advisories mais frequentes). **Não trocar de framework agora.** Recomendação:
 acompanhar o release estável e o advisory do @auth/core; o vetor de email não se
-aplica ao nosso fluxo (CPF+OTP / email+senha+MFA).
+aplica ao nosso fluxo (participante CPF+senha; admin email+senha+MFA).
 
 ## Política
 Upgrades de segurança devem ser **incrementais e testados** (rodar a suíte

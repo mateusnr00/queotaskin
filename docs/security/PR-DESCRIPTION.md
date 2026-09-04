@@ -3,15 +3,15 @@
 ## Objetivo
 Fechar as vulnerabilidades da auditoria (F-01 e correlatas) sem alterar o
 produto: verificação financeira real, login forte, MFA de admin e isolamento de
-infra. **16 commits** sobre `main` (`143691b..2e2c423`), todos de segurança.
+infra. **20 commits** sobre `main` (até `48d4e58`), todos de segurança (P0..P1-C + FASE 8-10.2).
 
 ## O que muda
 - **P0 financeiro (PASS)**: webhook deixa de ser prova; verificação S2S no
   gateway (NexusPag STRONG: status+amount+identity); FSM única escritora de
   status; idempotência forte; kill switch; tier por provider; financial
   maintenance guard (trigger no banco); reconciliador determinístico.
-- **P1-A participante (COMPLETE)**: login CPF+OTP (nome+CPF morto); cadastro com
-  telefone verificado; sessionVersion/reauth; migração assistida de legado.
+- **P1-A participante (COMPLETE)**: login CPF+senha (nome+CPF e OTP mortos); cadastro com senha e
+  telefone NÃO auto-verificado; sessionVersion/reauth; recuperação assistida (nova senha).
 - **P1-B admin (COMPLETE)**: MFA TOTP (RFC 6238); step-up em ações críticas;
   winner lock; gateway secret write-only; auditoria privilegiada; recovery codes.
 - **Security UI (FASE 10/10.1)**: login/registro/troca-de-telefone/reauth-Steam
@@ -38,7 +38,7 @@ CODE SAFE FLOOR `86fa00b`; **PROD ROLLBACK FLOOR pós-lockdown `2e2c423`** (abai
 disso, writers financeiros ficam fail-closed → forward-fix).
 
 ## Testes
-1363/1363 (2 runs); suítes de segurança permanentes (SECURITY-TEST-MANIFEST).
+1381/1381 (run limpo); suítes de segurança permanentes (SECURITY-TEST-MANIFEST).
 
 ## Produção = NO-GO
 Requer passos de operador (PRODUCTION-CONFIG-REQUIRED + RELEASE-PLAN):

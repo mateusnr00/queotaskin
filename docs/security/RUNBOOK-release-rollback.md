@@ -33,11 +33,16 @@ Ordem obrigatória — não altere:
 - [ ] monitoramento ligado
 - [ ] rollback floor registrado
 
-## SAFE ROLLBACK FLOOR (reavaliado pós P1-A/P1-B)
-> **NUNCA fazer deploy ou rollback abaixo de `86fa00b`** (primeiro commit com
-> P0 financeiro + P1-A completo + P1-B admin MFA). Abaixo dele reabre
-> nome+CPF, remove MFA de admin ou a verificação financeira. Baseline
-> recomendado: HEAD da FASE 7.
+## SAFE ROLLBACK FLOOR (reavaliado pós P1-A/P1-B/P1-C)
+> **CODE SAFE FLOOR = `86fa00b`** (primeiro commit com P0 financeiro + P1-A
+> completo + P1-B admin MFA). **NUNCA** fazer deploy ou rollback de código abaixo
+> dele: reabre nome+CPF, remove MFA de admin ou a verificação financeira.
+>
+> **PRODUCTION ROLLBACK FLOOR (pós-lockdown) = `2e2c423`.** Depois que o
+> `financial-fsm-lockdown.sql` for aplicado no banco (column-revoke de
+> `Payment.status`), os writers financeiros por Prisma cru ficam fail-closed
+> abaixo desse floor → **forward-fix é a política**; rollback abaixo só junto da
+> remoção do lockdown, **com guard ON**. HEAD candidato atual: `48d4e58`.
 
 ## Matriz de rollback
 | Camada | Rollback seguro | Rollback INSEGURO | Preferência |

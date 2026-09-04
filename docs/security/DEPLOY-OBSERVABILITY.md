@@ -20,5 +20,5 @@ da plataforma. Nunca por tempo fixo. `/api/health/ready` confirma o banco.
 ## Smoke (§58) — não executar automaticamente
 - Non-money: app sobe, schema, assinatura inválida rejeitada, kill switch, sem 500.
 - Admin MFA: enroll + login com TOTP.
-- Participant OTP: só quando houver provider real (fake nos testes).
+- Participant login: CPF+senha (cadastro + login + reauth por senha).
 - **NexusPag transação real mínima**: SOMENTE após autorização humana explícita.
