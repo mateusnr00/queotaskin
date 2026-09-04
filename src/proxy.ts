@@ -59,8 +59,18 @@ const { auth } = NextAuth(authConfig);
 // /login e /trocar-senha ficam porque são o caminho de entrada no painel.
 // /api segue porque o cron e os webhooks batem no mesmo deploy, e um
 // redirect no lugar de 200 quebraria os dois em silêncio.
+//
+// /configurar-mfa é o bootstrap de MFA: o layout (admin) manda pra cá o admin
+// que ainda não configurou o segundo fator (requireAdmin -> redirect). Ela
+// vive FORA do grupo (admin) de propósito (para não herdar aquele redirect),
+// mas ainda passa pelo proxy. Sem estar nesta lista, no host do painel ela era
+// tratada como endereço público e voltava pra /admin, que a mandava de volta
+// pra cá: "Redireções em excesso". A página faz seus próprios guards (auth +
+// role ADMIN/SUPER_ADMIN + senha não-temporária) e só NÃO exige MFA já ativa,
+// que é exatamente o ponto de existir.
 const CAMINHOS_DO_PAINEL = [
   "/admin",
+  "/configurar-mfa",
   "/login",
   "/trocar-senha",
   "/api",
