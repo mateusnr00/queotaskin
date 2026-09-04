@@ -1,0 +1,17 @@
+# CONFIGURAÇÃO DE PRODUÇÃO NECESSÁRIA (operador humano)
+
+O código está pronto (CODE COMPLETE). Estes passos dependem de mudança real em
+Supabase/Vercel e NÃO podem ser feitos localmente por esta fase:
+
+1. **Separação de roles do Postgres** (prisma/roles/roles.sql):
+   - Criar `app_runtime` (LOGIN + senha), `migration_role` (dona do schema).
+   - Aplicar os grants; apontar DATABASE_URL→app_runtime, DIRECT_URL→migration_role.
+   - Provado localmente em scratch (db-roles.security.test.ts); falta aplicar no real.
+2. **Guard financeiro instalado** (prisma/guard/*.sql) pela migration_role.
+3. **Migration fora do build**: configurar o pipeline de deploy para rodar
+   `npm run db:migrate:deploy` como passo separado (o build não migra mais).
+4. **CRON_SECRET, AUTH_SECRET, PAYMENT_SECRET_ENCRYPTION_KEY** definidos em prod
+   (env-validation derruba o boot se faltarem).
+5. **Backup/PITR** (BACKUP-CHECKLIST) — habilitar e testar restore.
+6. **Provider real de OTP** (participante) por trás de OtpDeliveryProvider.
+7. **Alerting** conforme ALERTING-CONTRACT (Sentry/Datadog).

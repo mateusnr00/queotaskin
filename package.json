@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/migrate-deploy.mjs && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -15,7 +15,10 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:migrate:preflight": "node scripts/migrate-preflight.mjs",
+    "security:test": "vitest run src/security-tests",
+    "release:verify": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -71,5 +74,5 @@
     "typescript": "^5",
     "vitest": "^2.1.9"
   },
-  "description": "QuéOta Skin — sorteios de skins de Counter-Strike 2"
+  "description": "Qu\u00e9Ota Skin \u2014 sorteios de skins de Counter-Strike 2"
 }

@@ -11,7 +11,8 @@
 // precisar consultar o banco.
 
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { estaBloqueado, registrarFalha, ipDaRequisicao } from "@/server/services/login-throttle";
 
 import { getCurrentTenant } from "@/lib/tenant";
 import {
@@ -30,6 +31,16 @@ export async function POST(req: Request) {
     // Host sem tenant: nada a contar, e responder erro daria log de erro em
     // toda visita a um domínio que ainda não foi apontado.
     if (!tenant) return NextResponse.json({ ok: true, ignorado: true });
+
+    // F-07 anti-abuso: o contador e incrementado a cada POST. Sem freio, da
+    // para inflar a metrica trivialmente. Freio por IP confiavel (mesma
+    // infra do login). Bloqueado -> responde ok e nao conta.
+    const ip = ipDaRequisicao(await headers());
+    const chaveVisita = `visita:${ip ?? "sem-ip"}`;
+    if ((await estaBloqueado([chaveVisita])).bloqueado) {
+      return NextResponse.json({ ok: true, ignorado: true });
+    }
+    await registrarFalha([chaveVisita]);
 
     const jar = await cookies();
     const hoje = diaEmBrasilia().toISOString().slice(0, 10);

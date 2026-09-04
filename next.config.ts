@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/lib/security-headers";
 
 // O otimizador do next/image só busca imagem de host autorizado; qualquer
 // outro responde 400, e a capa aparece quebrada na página. As capas enviadas
@@ -47,6 +48,11 @@ const nextConfig: NextConfig = {
     //
     // 75 fica porque é o padrão de todo o resto do site, onde ele serve bem.
     qualities: [75, 92],
+  },
+  async headers() {
+    return [
+      { source: "/:path*", headers: securityHeaders(process.env.VERCEL_ENV === "production") },
+    ];
   },
   experimental: {
     serverActions: {

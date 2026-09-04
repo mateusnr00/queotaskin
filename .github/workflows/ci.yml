@@ -1,0 +1,46 @@
+# CI de segurança (P1-C §44). Postgres efêmero em container — NUNCA produção.
+# Sem secrets reais de gateway (fake nos testes). Não faz deploy.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: queotaskin_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      # DB claramente test-only; jamais aponta produção.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/queotaskin_ci?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/queotaskin_ci?schema=public
+      NODE_ENV: test
+      ALLOW_DESTRUCTIVE_TESTS: "true"
+      PAYMENT_SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      AUTH_SECRET: "ci-only-secret-nao-usar-em-producao"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci                       # install frozen/reproduzível (§49)
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy     # aplica migrations no DB efêmero
+      # sentinela test/prod: marca este DB como base de teste (barreira P0)
+      - run: |
+          psql "$DATABASE_URL" -c 'CREATE TABLE IF NOT EXISTS "_test_environment_sentinel" (marker text);'
+          psql "$DATABASE_URL" -c "INSERT INTO \"_test_environment_sentinel\" (marker) VALUES ('QUEOTA_TEST_DATABASE_V1');"
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test                  # inclui as suítes de segurança
+      - run: npm run build                 # build NÃO roda migration

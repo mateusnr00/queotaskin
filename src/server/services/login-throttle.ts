@@ -33,6 +33,7 @@ const LIMITE_POR_CHAVE: Record<string, number> = {
   registro: 15, // cadastros por IP na janela
   poll: 30, // consultas forçadas de status por reserva na janela
   pixgen: 6, // gerações de Pix por reserva na janela
+  visita: 120, // POSTs de /api/visita por IP na janela (anti-inflacao)
 };
 const LIMITE_PADRAO = 10;
 
