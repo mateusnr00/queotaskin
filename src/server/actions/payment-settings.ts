@@ -10,6 +10,7 @@
 
 import { revalidatePath } from "next/cache";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
+import { guardarAcaoCritica } from "@/server/services/admin/sessao";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -50,6 +51,16 @@ export async function updatePaymentSettingsAction(
 ): Promise<ActionResult> {
   const session = await getAdminOrThrow();
   const tenantId = await getActiveTenantIdForAdmin(session.user);
+
+  // §2 gateway config e CRITICAL: MFA ativa + step-up recente + tenant/role.
+  const totp = typeof (raw as { totp?: unknown })?.totp === "string" ? (raw as { totp: string }).totp : "";
+  const guarda = await guardarAcaoCritica({
+    sessao: { userId: session.user.id, sessionVersion: session.user.sessionVersion },
+    totp, tenantContexto: tenantId,
+  });
+  if (!guarda.ok) {
+    return { ok: false, error: "Confirmacao de seguranca (MFA) necessaria para alterar o gateway." };
+  }
 
   const parsed = paymentSettingsSchema.safeParse(raw);
   if (!parsed.success) {

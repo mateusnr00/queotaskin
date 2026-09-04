@@ -22,6 +22,8 @@ import { diferencas } from "@/lib/activity-log-detalhes";
 import bcrypt from "bcryptjs";
 
 import { userCreateSchema, userEditSchema } from "@/lib/validations/auth";
+import { guardarAcaoCritica, podeAlterarRole } from "@/server/services/admin/sessao";
+import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 import { gerarSenhaTemporaria } from "@/lib/senha-temporaria";
 import type { ActionResult } from "@/server/actions/auth";
 
@@ -102,6 +104,24 @@ export async function updateUserAction(
       },
     });
     if (!target) return { ok: false, error: "Usuário não encontrado" };
+
+    // §4/§5 ROLE CHANGE e CRITICAL: politica de role + step-up + audit.
+    if (role !== target.role) {
+      if (!podeAlterarRole({ actorRole: session.user.role, actorId: session.user.id, targetId: id, targetRoleAtual: target.role, novaRole: role })) {
+        await registrarEventoDeSeguranca({ action: "ROLE_CHANGE", result: "DENIED", actorAdminId: session.user.id, tenantId, targetType: "User", targetId: id, before: { role: target.role }, after: { role } });
+        return { ok: false, error: "Voce nao tem autoridade para essa mudanca de papel." };
+      }
+      const totp = typeof (raw as { totp?: unknown })?.totp === "string" ? (raw as { totp: string }).totp : "";
+      const guarda = await guardarAcaoCritica({
+        sessao: { userId: session.user.id, sessionVersion: session.user.sessionVersion },
+        totp,
+        exigeSuperAdmin: role === "SUPER_ADMIN" || target.role === "SUPER_ADMIN",
+      });
+      if (!guarda.ok) {
+        return { ok: false, error: "Confirmacao de seguranca (MFA) necessaria para alterar papel." };
+      }
+      await registrarEventoDeSeguranca({ action: "ROLE_CHANGE", actorAdminId: session.user.id, tenantId, targetType: "User", targetId: id, before: { role: target.role }, after: { role } });
+    }
     const belongsToTenant =
       target.tenantId === tenantId || target.reservations.length > 0;
     if (!belongsToTenant && session.user.role !== "SUPER_ADMIN") {

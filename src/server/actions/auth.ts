@@ -22,6 +22,7 @@ import { solicitarOtpDeLogin } from "@/server/services/otp/login";
 import { provedorDeOtp } from "@/server/services/otp/provider";
 import { solicitarCadastro, concluirCadastro } from "@/server/services/otp/registro";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
+import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 import { criarDesafio } from "@/server/services/otp/otp-service";
 import { trocarTelefoneVerificado } from "@/server/services/otp/conta";
 import { onlyDigits } from "@/lib/cpf";
@@ -289,6 +290,11 @@ export async function changeOwnPasswordAction(
     },
   });
 
+  // §7/§8 revoga TODAS as sessoes (incremento atomico) e audita. A propria
+  // sessao que trocou tambem cai: forca novo login (preferencia declarada).
+  await revogarTodasAsSessoes(user.id);
+  await registrarEventoDeSeguranca({ action: "PASSWORD_CHANGE", actorAdminId: user.id, targetType: "User", targetId: user.id });
+
   // Trocar a própria senha é o movimento clássico de quem tomou uma conta e
   // quer ficar dentro dela. Sem esta linha, a única troca de senha que o
   // histórico enxergava era a feita por outra pessoa no painel.
@@ -302,6 +308,8 @@ export async function changeOwnPasswordAction(
     detalhes: { o_que: "trocou a propria senha" },
   });
 
+  // A sessao atual foi revogada junto: encerra o cookie para forcar novo login.
+  await signOut({ redirect: false });
   return { ok: true, data: undefined };
 }
 

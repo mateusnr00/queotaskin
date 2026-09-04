@@ -7,6 +7,7 @@ import { hmac, hmacConfere } from "@/lib/auth/cripto";
 import { gerarSegredoTotp, verificarTotp, otpauthUri } from "@/lib/auth/totp";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
+import { chaveDeAuth, permitido, registrar } from "@/server/services/otp/rate-limit";
 
 /// Quantidade de recovery codes (§36). Documentado.
 export const QTD_RECOVERY_CODES = 10;
@@ -31,11 +32,13 @@ export async function iniciarEnrollment(userId: string, contaLabel: string): Pro
 /// Passo 2: confirma o codigo do app -> ACTIVE. So aqui a MFA passa a valer, e
 /// so aqui os recovery codes sao gerados (retornados UMA vez).
 export async function confirmarEnrollment(userId: string, codigo: string): Promise<{ ok: true; recoveryCodes: string[] } | { ok: false }> {
+  const chavesSetup = [chaveDeAuth("MFA_SETUP_VERIFY", "user", userId)];
+  if (!(await permitido(chavesSetup)).permitido) return { ok: false };
   const m = await prisma.adminMfa.findUnique({ where: { userId } });
   if (!m || m.status === "ACTIVE") return { ok: false };
   const secret = decryptSecret(m.secretEnc);
   const r = verificarTotp(secret, codigo, { ultimoStep: m.lastUsedStep });
-  if (!r.ok) return { ok: false };
+  if (!r.ok) { await registrar("MFA_SETUP_VERIFY", chavesSetup); return { ok: false }; }
   await prisma.adminMfa.update({ where: { userId }, data: { status: "ACTIVE", activatedAt: new Date(), lastUsedStep: r.step } });
   const recoveryCodes = await regenerarRecoveryCodes(userId);
   await registrarEventoDeSeguranca({ action: "MFA_ENROLL", actorAdminId: userId, targetType: "User", targetId: userId });
@@ -75,9 +78,11 @@ async function regenerarRecoveryCodes(userId: string): Promise<string[]> {
 /// Consome um recovery code (single-use, §37). Compare-and-set no usedAt para
 /// 20 usos concorrentes -> 1 vence.
 export async function usarRecoveryCode(userId: string, code: string): Promise<boolean> {
+  const chaves = [chaveDeAuth("RECOVERY_CODE_VERIFY", "user", userId)];
+  if (!(await permitido(chaves)).permitido) return false; // §16 fail-closed
   const candidatos = await prisma.adminRecoveryCode.findMany({ where: { userId, usedAt: null }, select: { id: true, codeHash: true } });
   const alvo = candidatos.find((c) => hmacConfere(c.codeHash, hmac(code)));
-  if (!alvo) return false;
+  if (!alvo) { await registrar("RECOVERY_CODE_VERIFY", chaves); return false; }
   const claim = await prisma.adminRecoveryCode.updateMany({ where: { id: alvo.id, usedAt: null }, data: { usedAt: new Date() } });
   if (claim.count !== 1) return false;
   await registrarEventoDeSeguranca({ action: "RECOVERY_CODE_USED", actorAdminId: userId, targetType: "User", targetId: userId });

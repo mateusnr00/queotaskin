@@ -18,6 +18,13 @@ vi.mock("@/lib/auth-helpers", () => ({
     user: { id: "admin1", name: "Dono", role: "ADMIN", tenantId: "t1" },
   }),
 }));
+vi.mock("@/server/services/admin/sessao", () => ({
+  guardarAcaoCritica: async () => ({ ok: true, userId: "admin1", role: "ADMIN", tenantId: "t1" }),
+  podeAlterarRole: () => true,
+}));
+vi.mock("@/server/services/admin/audit", () => ({
+  registrarEventoDeSeguranca: async () => {},
+}));
 vi.mock("@/lib/tenant", () => ({
   getActiveTenantIdForAdmin: async () => "t1",
 }));

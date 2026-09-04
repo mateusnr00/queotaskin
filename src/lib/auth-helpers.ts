@@ -13,10 +13,14 @@
 
 import { redirect } from "next/navigation";
 
+/** Rota de enrollment de MFA (fora do layout (admin) para nao dar loop). */
+export const ROTA_CONFIGURAR_MFA = "/configurar-mfa";
+
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { validarSessaoParticipante, donoOuAdminPodeAcessar, sessaoFoiRevogada } from "@/server/services/otp/sessao-participante";
+import { mfaAtivo } from "@/server/services/admin/mfa";
 
 export async function requireAuth() {
   const session = await auth();
@@ -43,6 +47,10 @@ export async function requireAdmin() {
   // valendo indefinidamente.
   if (sessao.mustChangePassword) {
     redirect("/trocar-senha");
+  }
+  // §12/§13 gate de MFA: admin sem MFA ACTIVE so acessa a area de enrollment.
+  if (!(await mfaAtivo(sessao.user.id))) {
+    redirect(ROTA_CONFIGURAR_MFA);
   }
   return sessao;
 }
@@ -114,6 +122,11 @@ export async function getAdminOrThrow() {
   if (fresh.mustChangePassword) {
     throw new ForbiddenError();
   }
+  // §14 nenhuma server action protegida executa sem MFA ACTIVE (enrollment usa
+  // getAdminParaEnrollment). Nao confia na UI.
+  if (!(await mfaAtivo(session.user.id))) {
+    throw new ForbiddenError();
+  }
   return {
     ...session,
     user: {
@@ -122,6 +135,18 @@ export async function getAdminOrThrow() {
       tenantId: fresh.tenantId,
     },
   };
+}
+
+/// Admin autenticado para o fluxo de ENROLLMENT de MFA: exige papel e senha
+/// nao-temporaria, mas NAO exige MFA ativa (senao nao daria para ativar).
+export async function getAdminParaEnrollment() {
+  const session = await auth();
+  if (!session?.user?.id) throw new UnauthorizedError();
+  const fresh = await freshUser(session.user.id);
+  if (!fresh || (fresh.role !== "ADMIN" && fresh.role !== "SUPER_ADMIN")) {
+    throw new ForbiddenError();
+  }
+  return { ...session, user: { ...session.user, role: fresh.role, tenantId: fresh.tenantId } };
 }
 
 export async function getSuperAdminOrThrow() {

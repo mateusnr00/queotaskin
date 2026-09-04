@@ -47,6 +47,7 @@ import {
 import { registrarLog } from "@/server/services/activity-log";
 import { mfaAtivo, verificarTotpDoAdmin, usarRecoveryCode } from "@/server/services/admin/mfa";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
+import { chaveDeAuth, permitido, registrar as registrarRate } from "@/server/services/otp/rate-limit";
 
 
 const PAPEIS_DE_PAINEL = new Set(["ADMIN", "SUPER_ADMIN"]);
@@ -170,11 +171,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // segundo fator (TOTP do app, ou recovery code) e obrigatorio aqui.
         // Sem MFA ativa, o login passa e a area de enrollment obriga a ativar.
         if (await mfaAtivo(user.id)) {
+          const chavesMfa = [chaveDeAuth("MFA_VERIFY", "user", user.id)];
+          if (!(await permitido(chavesMfa)).permitido) {
+            await registrarEventoDeSeguranca({ action: "MFA_FAILURE", actorAdminId: user.id, reason: "rate-limit" });
+            return null;
+          }
           const totp = typeof (credentials as { totp?: unknown })?.totp === "string" ? (credentials as { totp: string }).totp.trim() : "";
           let segundoFator = /^[0-9]{6}$/.test(totp) ? await verificarTotpDoAdmin(user.id, totp) : false;
           if (!segundoFator && totp.length >= 8) segundoFator = await usarRecoveryCode(user.id, totp);
           if (!segundoFator) {
             await registrarFalha(chaves);
+            await registrarRate("MFA_VERIFY", chavesMfa);
             await registrarEventoDeSeguranca({ action: "MFA_FAILURE", actorAdminId: user.id });
             return null; // senha certa, MFA errado: NAO autentica
           }

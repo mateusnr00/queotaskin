@@ -13,7 +13,12 @@ export type BucketDeAuth =
   | "ACCOUNT_RECOVERY"
   | "REGISTER_REQUEST"
   | "REGISTER_VERIFY"
-  | "REGISTER_RESEND";
+  | "REGISTER_RESEND"
+  | "ADMIN_PASSWORD_ATTEMPT"
+  | "MFA_VERIFY"
+  | "MFA_SETUP_VERIFY"
+  | "RECOVERY_CODE_VERIFY"
+  | "ADMIN_STEP_UP";
 
 // Teto por bucket dentro da janela. Escolhas explícitas (documentadas), não
 // silenciosas.
@@ -26,6 +31,11 @@ const LIMITE: Record<BucketDeAuth, number> = {
   REGISTER_REQUEST: 5,  // pedidos de cadastro por identidade/janela
   REGISTER_VERIFY: 10,  // verificações de cadastro por identidade/janela
   REGISTER_RESEND: 4,   // reenvios de cadastro por identidade/janela
+  ADMIN_PASSWORD_ATTEMPT: 10, // tentativas de senha admin por identidade/janela
+  MFA_VERIFY: 8,        // verificacoes de TOTP no login por admin/janela
+  MFA_SETUP_VERIFY: 8,  // confirmacoes de enrollment por admin/janela
+  RECOVERY_CODE_VERIFY: 6, // usos de recovery code por admin/janela
+  ADMIN_STEP_UP: 8,     // step-ups por admin/janela (independente do login)
 };
 
 const JANELA_MS = 15 * 60 * 1000;

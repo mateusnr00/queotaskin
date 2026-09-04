@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { mfaAtivo, verificarTotpDoAdmin, usarRecoveryCode } from "@/server/services/admin/mfa";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
+import { chaveDeAuth, permitido, registrar } from "@/server/services/otp/rate-limit";
 
 export type FalhaAdmin = "NAO_AUTENTICADO" | "SESSAO_REVOGADA" | "SESSAO_LEGADA" | "SEM_PAPEL" | "MFA_PENDENTE";
 
@@ -33,10 +34,17 @@ export async function validarSessaoAdmin(
 /// single-use por timestep. A acao critica passa o codigo; sem prova valida,
 /// nao executa. Audita o desfecho.
 export async function exigirStepUpAdmin(userId: string, codigo: string): Promise<boolean> {
+  // §17 rate-limit dedicado do step-up (fail-closed), independente do login.
+  const chaves = [chaveDeAuth("ADMIN_STEP_UP", "user", userId)];
+  if (!(await permitido(chaves)).permitido) {
+    await registrarEventoDeSeguranca({ action: "STEP_UP_FAILURE", actorAdminId: userId, reason: "rate-limit" });
+    return false;
+  }
   let ok = /^[0-9]{6}$/.test(codigo)
     ? await verificarTotpDoAdmin(userId, codigo)
     : false;
   if (!ok && codigo.length >= 8) ok = await usarRecoveryCode(userId, codigo); // recovery como step-up
+  if (!ok) await registrar("ADMIN_STEP_UP", chaves);
   await registrarEventoDeSeguranca({ action: ok ? "STEP_UP_SUCCESS" : "STEP_UP_FAILURE", actorAdminId: userId });
   return ok;
 }
@@ -55,4 +63,41 @@ export function tenantAutorizado(role: string, tenantDoAdmin: string | null, ten
 /// esta acao normal nao oferece. Break-glass fica declarado P2/ops.
 export function vencedorEstaTravado(statusDoSorteio: string): boolean {
   return statusDoSorteio === "FINISHED";
+}
+
+/// Guard central de acao CRITICAL (§10 wrapper server-side): sessao admin
+/// valida + (opcional) super-admin + tenant autorizado + step-up recente. As
+/// actions criticas chamam isto; sem ok, nao mutam.
+export async function guardarAcaoCritica(entrada: {
+  sessao: SessaoAdmin;
+  totp: string;
+  tenantContexto?: string | null;
+  exigeSuperAdmin?: boolean;
+}): Promise<{ ok: true; userId: string; role: string; tenantId: string | null } | { ok: false; motivo: string }> {
+  const v = await validarSessaoAdmin(entrada.sessao);
+  if (!v.ok) return { ok: false, motivo: v.falha };
+  if (entrada.exigeSuperAdmin && v.role !== "SUPER_ADMIN") return { ok: false, motivo: "SEM_SUPER_ADMIN" };
+  if (entrada.tenantContexto !== undefined) {
+    const t = tenantAutorizado(v.role, v.tenantId, entrada.tenantContexto ?? null);
+    if (t === false) return { ok: false, motivo: "TENANT_NAO_AUTORIZADO" };
+  }
+  if (!(await exigirStepUpAdmin(v.userId, entrada.totp))) return { ok: false, motivo: "STEP_UP" };
+  return { ok: true, userId: v.userId, role: v.role, tenantId: v.tenantId };
+}
+
+/// Politica pura de alteracao de role (§4/§5). SUPER_ADMIN so e concedido por
+/// SUPER_ADMIN; ninguem se auto-eleva; rebaixar SUPER_ADMIN alheio e negado.
+export function podeAlterarRole(entrada: {
+  actorRole: string; actorId: string;
+  targetId: string; targetRoleAtual: string; novaRole: string;
+}): boolean {
+  const { actorRole, actorId, targetId, targetRoleAtual, novaRole } = entrada;
+  if (novaRole === targetRoleAtual) return true; // sem mudanca
+  // Conceder ou revogar SUPER_ADMIN exige ator SUPER_ADMIN.
+  if (novaRole === "SUPER_ADMIN" || targetRoleAtual === "SUPER_ADMIN") {
+    if (actorRole !== "SUPER_ADMIN") return false;
+  }
+  // Ninguem se auto-promove a SUPER_ADMIN.
+  if (actorId === targetId && novaRole === "SUPER_ADMIN") return false;
+  return actorRole === "ADMIN" || actorRole === "SUPER_ADMIN";
 }

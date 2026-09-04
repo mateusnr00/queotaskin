@@ -28,6 +28,7 @@ const ROTAS_DO_SITE = [
   "sorteio", // a transmissão ao vivo: /sorteio/DRW-20260829-8F2C
   "sorteios",
   "trocar-senha",
+  "configurar-mfa",
 ] as const;
 
 // Nomes que o site ainda não usa, mas que são candidatos naturais a virar
