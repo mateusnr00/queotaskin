@@ -2,7 +2,7 @@
 import { randomBytes } from "node:crypto";
 
 import { prisma } from "@/lib/db";
-import { encryptSecret, decryptSecret } from "@/lib/crypto";
+import { cifrarSegredoMfa, decifrarSegredoMfa, ehFormatoV2 } from "@/lib/auth/mfa-crypto";
 import { hmac, hmacConfere } from "@/lib/auth/cripto";
 import { gerarSegredoTotp, verificarTotp, otpauthUri } from "@/lib/auth/totp";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
@@ -23,8 +23,8 @@ export async function iniciarEnrollment(userId: string, contaLabel: string): Pro
   const secret = gerarSegredoTotp();
   await prisma.adminMfa.upsert({
     where: { userId },
-    create: { userId, secretEnc: encryptSecret(secret), status: "PENDING" },
-    update: { secretEnc: encryptSecret(secret), status: "PENDING", lastUsedStep: null, activatedAt: null },
+    create: { userId, secretEnc: cifrarSegredoMfa(secret), status: "PENDING" },
+    update: { secretEnc: cifrarSegredoMfa(secret), status: "PENDING", lastUsedStep: null, activatedAt: null },
   });
   return { secret, uri: otpauthUri(secret, "QueOta Skin", contaLabel) };
 }
@@ -36,7 +36,7 @@ export async function confirmarEnrollment(userId: string, codigo: string): Promi
   if (!(await permitido(chavesSetup)).permitido) return { ok: false };
   const m = await prisma.adminMfa.findUnique({ where: { userId } });
   if (!m || m.status === "ACTIVE") return { ok: false };
-  const secret = decryptSecret(m.secretEnc);
+  const secret = decifrarSegredoMfa(m.secretEnc);
   const r = verificarTotp(secret, codigo, { ultimoStep: m.lastUsedStep });
   if (!r.ok) { await registrar("MFA_SETUP_VERIFY", chavesSetup); return { ok: false }; }
   await prisma.adminMfa.update({ where: { userId }, data: { status: "ACTIVE", activatedAt: new Date(), lastUsedStep: r.step } });
@@ -50,7 +50,7 @@ export async function confirmarEnrollment(userId: string, codigo: string): Promi
 export async function verificarTotpDoAdmin(userId: string, codigo: string): Promise<boolean> {
   const m = await prisma.adminMfa.findUnique({ where: { userId } });
   if (!m || m.status !== "ACTIVE") return false;
-  const secret = decryptSecret(m.secretEnc);
+  const secret = decifrarSegredoMfa(m.secretEnc);
   const r = verificarTotp(secret, codigo, { ultimoStep: m.lastUsedStep });
   if (!r.ok) return false;
   // Anti-replay concorrente: so avanca se lastUsedStep nao mudou (§44).
@@ -97,4 +97,19 @@ export async function resetarMfa(userId: string, operador: string): Promise<void
   await prisma.adminRecoveryCode.deleteMany({ where: { userId } });
   await revogarTodasAsSessoes(userId);
   await registrarEventoDeSeguranca({ action: "MFA_RESET", actorAdminId: operador, targetType: "User", targetId: userId });
+}
+
+/// Re-cifra secrets TOTP legados (v1/chave de pagamento) para v2 (chave MFA).
+/// Bounded, idempotente (so toca quem ainda esta em v1). Sem plaintext em log.
+/// Rodar como job controlado apos configurar ADMIN_MFA_ENCRYPTION_KEY (§21).
+export async function recifrarSegredosMfaLegados(limite = 100): Promise<{ recifrados: number; jaV2: number }> {
+  const linhas = await prisma.adminMfa.findMany({ select: { userId: true, secretEnc: true }, take: Math.min(Math.max(limite, 1), 500) });
+  let recifrados = 0, jaV2 = 0;
+  for (const l of linhas) {
+    if (ehFormatoV2(l.secretEnc)) { jaV2++; continue; }
+    const secret = decifrarSegredoMfa(l.secretEnc); // le com a chave de pagamento
+    await prisma.adminMfa.update({ where: { userId: l.userId }, data: { secretEnc: cifrarSegredoMfa(secret) } });
+    recifrados++;
+  }
+  return { recifrados, jaV2 };
 }

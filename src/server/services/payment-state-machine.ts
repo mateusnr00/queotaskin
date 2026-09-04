@@ -65,25 +65,32 @@ export async function transitionPaymentState(
     return { ok: false, motivo: "TRANSICAO_INVALIDA", de, para };
   }
 
-  // Compare-and-set: só transiciona quem AINDA está em `de`. Fecha a corrida
-  // de dois webhooks concorrentes lendo o mesmo estado.
-  const now = new Date();
-  const escrito = await tx.payment.updateMany({
-    where: { id: entrada.paymentId, status: de },
-    data: { status: para, ...(para === "APPROVED" ? { paidAt: now } : {}) },
-  });
-  if (escrito.count === 0) {
-    // Alguém transicionou entre o SELECT e o UPDATE. Relê para decidir.
-    const relido = await tx.payment.findUnique({
-      where: { id: entrada.paymentId },
-      select: { status: true },
-    });
+  // ESCRITA AUTORITATIVA VIA FUNCAO SECURITY DEFINER. Em producao a app_runtime
+  // nao tem UPDATE(status) direto: esta funcao (dona = migration_role) e o unico
+  // caminho de escrita de status, e reforca a matriz e a compare-and-set no
+  // proprio banco. O guard financeiro continua no seu trigger (fail-closed).
+  const linhas = await tx.$queryRawUnsafe<{ r: string }[]>(
+    `SELECT "fin_transicao_pagamento"($1, $2, $3) AS r`,
+    entrada.paymentId,
+    para,
+    para === "APPROVED" ? (entrada.verificado ?? false) : true,
+  );
+  const r = linhas[0]?.r ?? "SUMIU";
+
+  if (r === "OK") {
+    logSeguranca("PAYMENT_STATE_TRANSITION", entrada.paymentId, de, para, entrada.motivo);
+    return { ok: true, de, para, noop: false };
+  }
+  if (r === "NOOP" || r === "CORRIDA") {
+    const relido = await tx.payment.findUnique({ where: { id: entrada.paymentId }, select: { status: true } });
     if (relido?.status === para) return { ok: true, de, para, noop: true };
     return { ok: false, motivo: "TRANSICAO_INVALIDA", de: relido?.status, para };
   }
-
-  logSeguranca("PAYMENT_STATE_TRANSITION", entrada.paymentId, de, para, entrada.motivo);
-  return { ok: true, de, para, noop: false };
+  if (r === "SEM_VERIFICACAO") return { ok: false, motivo: "SEM_VERIFICACAO", de, para };
+  if (r === "SUMIU") return { ok: false, motivo: "PAGAMENTO_SUMIU", para };
+  // INVALIDA
+  logSeguranca("PAYMENT_STATE_TRANSITION_BLOCKED", entrada.paymentId, de, para, "transição inválida (fn)");
+  return { ok: false, motivo: "TRANSICAO_INVALIDA", de, para };
 }
 
 /** Log estruturado sem payload sensível (ETAPA 10). */

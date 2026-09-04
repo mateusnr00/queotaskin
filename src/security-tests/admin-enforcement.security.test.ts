@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { integracaoLiberada, suiteDeIntegracao } from "@/test/integration-setup";
 import { codigoNoStep, stepAtual } from "@/lib/auth/totp";
 import { iniciarEnrollment, confirmarEnrollment } from "@/server/services/admin/mfa";
-import { decryptSecret } from "@/lib/crypto";
+import { decifrarSegredoMfa } from "@/lib/auth/mfa-crypto";
 import {
   guardarAcaoCritica, podeAlterarRole, exigirStepUpAdmin,
 } from "@/server/services/admin/sessao";
@@ -40,7 +40,7 @@ suiteDeIntegracao("FASE 6.1 · guard de acao critica (DB)", () => {
   }
   async function totpFresco(userId: string): Promise<string> {
     const row = await prisma.adminMfa.findUnique({ where: { userId }, select: { secretEnc: true } });
-    return codigoNoStep(decryptSecret(row!.secretEnc), stepAtual() + 1);
+    return codigoNoStep(decifrarSegredoMfa(row!.secretEnc), stepAtual() + 1);
   }
 
   beforeAll(() => { if (!integracaoLiberada) return; });

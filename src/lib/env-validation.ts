@@ -19,6 +19,7 @@ export function coletarProblemasDeProducao(env: NodeJS.ProcessEnv = process.env)
   // Segredos criticos obrigatorios.
   exigir("AUTH_SECRET");
   exigir("PAYMENT_SECRET_ENCRYPTION_KEY");
+  exigir("ADMIN_MFA_ENCRYPTION_KEY"); // §22 dominio separado do TOTP, sem fallback
   exigir("DATABASE_URL");
   exigir("DIRECT_URL");
 
@@ -29,6 +30,14 @@ export function coletarProblemasDeProducao(env: NodeJS.ProcessEnv = process.env)
       if (Buffer.from(key, "base64").length !== 32) p.push({ variavel: "PAYMENT_SECRET_ENCRYPTION_KEY", problema: "nao decodifica para 32 bytes" });
     } catch { p.push({ variavel: "PAYMENT_SECRET_ENCRYPTION_KEY", problema: "base64 invalido" }); }
   }
+
+  const mfaKey = env.ADMIN_MFA_ENCRYPTION_KEY;
+  if (mfaKey) {
+    try { if (Buffer.from(mfaKey, "base64").length !== 32) p.push({ variavel: "ADMIN_MFA_ENCRYPTION_KEY", problema: "nao decodifica para 32 bytes" }); }
+    catch { p.push({ variavel: "ADMIN_MFA_ENCRYPTION_KEY", problema: "base64 invalido" }); }
+  }
+  // A chave do MFA NAO pode ser igual a de pagamento (dominio separado).
+  if (mfaKey && key && mfaKey === key) p.push({ variavel: "ADMIN_MFA_ENCRYPTION_KEY", problema: "deve ser diferente de PAYMENT_SECRET_ENCRYPTION_KEY (dominio separado)" });
 
   // Flags inseguras NAO podem estar ligadas em producao.
   if (env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL === "true") p.push({ variavel: "PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL", problema: "STATUS_ONLY autoaprovar e proibido em producao" });

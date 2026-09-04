@@ -8,7 +8,7 @@ import {
   iniciarEnrollment, confirmarEnrollment, mfaAtivo, verificarTotpDoAdmin,
   usarRecoveryCode, resetarMfa, QTD_RECOVERY_CODES,
 } from "@/server/services/admin/mfa";
-import { decryptSecret } from "@/lib/crypto";
+import { decifrarSegredoMfa } from "@/lib/auth/mfa-crypto";
 import {
   validarSessaoAdmin, exigirStepUpAdmin, tenantAutorizado, vencedorEstaTravado,
 } from "@/server/services/admin/sessao";
@@ -80,7 +80,7 @@ suiteDeIntegracao("P1-B · MFA de admin (DB)", () => {
     // secret no banco esta cifrado (nao e o texto)
     const row = await prisma.adminMfa.findUnique({ where: { userId: a.id }, select: { secretEnc: true } });
     expect(row?.secretEnc).not.toBe(secret);
-    expect(decryptSecret(row!.secretEnc)).toBe(secret);
+    expect(decifrarSegredoMfa(row!.secretEnc)).toBe(secret);
     // codigo errado nao ativa
     expect((await confirmarEnrollment(a.id, "000000")).ok).toBe(false);
     expect(await mfaAtivo(a.id)).toBe(false);
@@ -103,7 +103,7 @@ suiteDeIntegracao("P1-B · MFA de admin (DB)", () => {
 
   async function segredoDe(userId: string): Promise<string> {
     const row = await prisma.adminMfa.findUnique({ where: { userId }, select: { secretEnc: true } });
-    return decryptSecret(row!.secretEnc);
+    return decifrarSegredoMfa(row!.secretEnc);
   }
 
   it("§44 TOTP replay: mesmo step nao autentica duas vezes", async () => {

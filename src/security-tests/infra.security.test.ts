@@ -20,6 +20,7 @@ const envProdBase = {
   PAYMENT_SECRET_ENCRYPTION_KEY: Buffer.alloc(32).toString("base64"),
   DATABASE_URL: "postgresql://app@host/db",
   DIRECT_URL: "postgresql://mig@host/db",
+  ADMIN_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
 } as unknown as NodeJS.ProcessEnv;
 
 describe("INFRA-4 build nao executa migration", () => {

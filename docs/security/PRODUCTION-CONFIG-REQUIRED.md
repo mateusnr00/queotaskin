@@ -14,4 +14,10 @@ Supabase/Vercel e NÃO podem ser feitos localmente por esta fase:
    (env-validation derruba o boot se faltarem).
 5. **Backup/PITR** (BACKUP-CHECKLIST) — habilitar e testar restore.
 6. **Provider real de OTP** (participante) por trás de OtpDeliveryProvider.
-7. **Alerting** conforme ALERTING-CONTRACT (Sentry/Datadog).
+7. **Lockdown financeiro no banco** (prisma/roles/financial-fsm-lockdown.sql):
+   aplicar pela migration_role, na mesma janela do guard (revoga UPDATE(status)
+   de Payment da app_runtime; força INSERT PENDING; guarda Reservation PAID).
+8. **ADMIN_MFA_ENCRYPTION_KEY** em prod (32 bytes, **diferente** de
+   PAYMENT_SECRET_ENCRYPTION_KEY); rodar `recifrarSegredosMfaLegados` para migrar
+   TOTP legados para v2.
+9. **Alerting** conforme ALERTING-CONTRACT (Sentry/Datadog).

@@ -38,6 +38,7 @@ import {
 import { exigirStepUpAdmin } from "@/server/services/admin/sessao";
 import { mfaAtivo } from "@/server/services/admin/mfa";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
+import { transitionPaymentState } from "@/server/services/payment-state-machine";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
@@ -653,9 +654,14 @@ export async function markReservationPaidAction(
         data: { status: "PAID", paidAt: now },
       });
       if (reservation.payment) {
-        await tx.payment.update({
-          where: { id: reservation.payment.id },
-          data: { status: "APPROVED", paidAt: now },
+        // Override manual passa pela FSM (funcao autoritativa), com verificado:
+        // e admin autorizado (MFA+step-up+audit). Assim tambem respeita o
+        // column-lockdown de producao (app_runtime nao escreve status direto).
+        await transitionPaymentState(tx, {
+          paymentId: reservation.payment.id,
+          para: "APPROVED",
+          motivo: "MANUAL_ADMIN_OVERRIDE",
+          verificado: true,
         });
       }
       if (toRecreate && toRecreate.length > 0) {

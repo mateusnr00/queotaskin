@@ -29,6 +29,7 @@ jobs:
       ALLOW_DESTRUCTIVE_TESTS: "true"
       PAYMENT_SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
       AUTH_SECRET: "ci-only-secret-nao-usar-em-producao"
+      ADMIN_MFA_ENCRYPTION_KEY: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

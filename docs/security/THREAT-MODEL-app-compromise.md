@@ -9,14 +9,21 @@ runtime (app_runtime), APÓS a separação de roles.
 - Ligar/desligar a flag do guard — negado (sem escrita em _financial_maintenance).
 - UPDATE/DELETE em AdminSecurityEvent e LegacyRecoveryAudit — negado (append-only).
 
-## O que ele AINDA consegue (residual, declarado)
-- DML nas tabelas de negócio: pode **aprovar pagamento via `UPDATE Payment SET
-  status='APPROVED'`** diretamente, pulando a FSM da aplicação — PORÉM:
-  - se o guard estiver ON, o trigger no banco BLOQUEIA a transição;
-  - fora de janela de release o guard está OFF, então **a proteção é só a
-    aplicação (FSM) + auditoria**, não o banco.
-  - **Mitigação futura (P2):** trigger de FSM no banco que rejeite transições
-    inválidas de Payment.status independentemente do código. Não implementado.
+## O que ele NÃO consegue mais (FASE 7.1 — lockdown financeiro)
+- `UPDATE Payment SET status='APPROVED'` via DML cru → **negado** (app_runtime
+  perde UPDATE da coluna status; provado em db-financial-fsm.security).
+- INSERT de Payment já APPROVED → **forçado a PENDING** por trigger.
+- `UPDATE Reservation SET status='PAID'` com Payment não-aprovado → **negado**.
+- Alterar/dropar a função autoritativa ou os triggers → **negado** (não é dono).
+
+## O que ele AINDA consegue (residual menor, declarado)
+- Chamar a função autoritativa `fin_transicao_pagamento(id,'APPROVED',true)` para
+  aprovar um Payment PENDING (a função é o caminho legítimo; enforça a matriz +
+  guard, mas não re-verifica o gateway — impossível no banco). Ou seja: raw DML
+  não aprova, mas um RCE que invoca a função da app pode. Mitigação: guard ON
+  durante releases + auditoria + a matriz/guard no banco impedem transições
+  impossíveis e aprovação sob manutenção.
+- Inserir eventos de audit falsos (INSERT permitido) — mas não apagar os reais.
 - Ler dados de negócio (CPF, telefone) — inerente ao runtime; PII no banco.
 - Inserir eventos de audit falsos (INSERT permitido) — mas não apagar os reais.
 

@@ -43,6 +43,36 @@ function loadKey(): Buffer {
   return key;
 }
 
+/// Carrega uma chave de 32 bytes de uma env especifica (base64 ou hex).
+export function loadKeyFrom(nomeEnv: string): Buffer {
+  const raw = process.env[nomeEnv];
+  if (!raw) throw new Error(`${nomeEnv} nao definida (32 bytes base64/hex)`);
+  const key = /^[0-9a-f]+$/i.test(raw) && raw.length === KEY_LEN * 2 ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+  if (key.length !== KEY_LEN) throw new Error(`${nomeEnv} com tamanho invalido (${key.length} bytes; precisa de 32)`);
+  return key;
+}
+
+/// Cifra com uma chave explicita (AES-256-GCM). base64(iv|ct|tag).
+export function cifrarComChave(key: Buffer, plaintext: string): string {
+  const iv = randomBytes(IV_LEN);
+  const cipher = createCipheriv(ALGO, key, iv);
+  const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, ct, tag]).toString("base64");
+}
+
+/// Decifra com uma chave explicita.
+export function decifrarComChave(key: Buffer, blob: string): string {
+  const buf = Buffer.from(blob, "base64");
+  if (buf.length < IV_LEN + TAG_LEN) throw new Error("ciphertext corrompido (curto demais)");
+  const iv = buf.subarray(0, IV_LEN);
+  const tag = buf.subarray(buf.length - TAG_LEN);
+  const ct = buf.subarray(IV_LEN, buf.length - TAG_LEN);
+  const decipher = createDecipheriv(ALGO, key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
+}
+
 export function encryptSecret(plaintext: string): string {
   const key = loadKey();
   const iv = randomBytes(IV_LEN);
