@@ -182,42 +182,56 @@ describe("assinaturaConfere", () => {
     return `t=${unix},v1=${hmac}`;
   }
 
-  it("aceita a assinatura correta", () => {
-    expect(assinaturaConfere(assinar("1700000000", corpo), corpo, segredo)).toBe(
-      true,
-    );
+  const AGORA_FIXO = new Date(1700000000 * 1000); // casa com o timestamp fixo
+
+  it("aceita a assinatura correta (dentro da janela)", () => {
+    expect(
+      assinaturaConfere(assinar("1700000000", corpo), corpo, segredo, AGORA_FIXO),
+    ).toBe(true);
   });
 
   it("recusa quando o corpo foi alterado", () => {
     const header = assinar("1700000000", corpo);
     const adulterado = corpo.replace("abc", "xyz");
-    expect(assinaturaConfere(header, adulterado, segredo)).toBe(false);
+    expect(assinaturaConfere(header, adulterado, segredo, AGORA_FIXO)).toBe(false);
   });
 
   it("recusa quando o segredo é outro", () => {
     const header = assinar("1700000000", corpo, "outro_segredo");
-    expect(assinaturaConfere(header, corpo, segredo)).toBe(false);
+    expect(assinaturaConfere(header, corpo, segredo, AGORA_FIXO)).toBe(false);
   });
 
   it("recusa header ausente, incompleto ou fora do formato", () => {
-    expect(assinaturaConfere(null, corpo, segredo)).toBe(false);
-    expect(assinaturaConfere("t=1700000000", corpo, segredo)).toBe(false);
-    expect(assinaturaConfere("v1=abc", corpo, segredo)).toBe(false);
-    expect(assinaturaConfere("lixo", corpo, segredo)).toBe(false);
+    expect(assinaturaConfere(null, corpo, segredo, AGORA_FIXO)).toBe(false);
+    expect(assinaturaConfere("t=1700000000", corpo, segredo, AGORA_FIXO)).toBe(false);
+    expect(assinaturaConfere("v1=abc", corpo, segredo, AGORA_FIXO)).toBe(false);
+    expect(assinaturaConfere("lixo", corpo, segredo, AGORA_FIXO)).toBe(false);
   });
 
   it("recusa quando não há segredo configurado", () => {
-    expect(assinaturaConfere(assinar("1700000000", corpo), corpo, "")).toBe(
+    expect(assinaturaConfere(assinar("1700000000", corpo), corpo, "", AGORA_FIXO)).toBe(
       false,
     );
   });
 
-  it("aceita assinatura antiga, porque a reentrega deles vai até 72h", () => {
-    // Recusar pela idade mataria reentrega legítima de pagamento. A repetição
-    // em si é inofensiva: confirmar de novo o que já está confirmado não faz
-    // nada no nosso lado.
-    const velho = String(Math.floor(Date.now() / 1000) - 3 * 24 * 3600);
-    expect(assinaturaConfere(assinar(velho, corpo), corpo, segredo)).toBe(true);
+  // §11 ANTI-REPLAY: a política mudou (FASE 4.7). Fora da janela de 300s a
+  // assinatura é recusada. A prova financeira agora é a consulta S2S por valor,
+  // então rejeitar um webhook velho no pré-filtro não perde pagamento legítimo:
+  // o polling/"já paguei" confirma pelo valor. O que fecha é o replay.
+  it("recusa assinatura fora da janela de 300s (passado)", () => {
+    const agora = new Date();
+    const velho = String(Math.floor(agora.getTime() / 1000) - 301);
+    expect(assinaturaConfere(assinar(velho, corpo), corpo, segredo, agora)).toBe(false);
+  });
+  it("recusa assinatura muito no futuro", () => {
+    const agora = new Date();
+    const futuro = String(Math.floor(agora.getTime() / 1000) + 3600);
+    expect(assinaturaConfere(assinar(futuro, corpo), corpo, segredo, agora)).toBe(false);
+  });
+  it("aceita dentro da janela (timestamp atual)", () => {
+    const agora = new Date();
+    const t = String(Math.floor(agora.getTime() / 1000) - 30);
+    expect(assinaturaConfere(assinar(t, corpo), corpo, segredo, agora)).toBe(true);
   });
 });
 

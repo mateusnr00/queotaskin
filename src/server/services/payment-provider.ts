@@ -47,7 +47,14 @@ export interface PaymentProviderClient {
   /** Polling opcional. Sustenta o botão "já paguei" de quem implementa. */
   getStatus?(
     identifier: string
-  ): Promise<{ status: "PENDING" | "APPROVED" | "REJECTED"; raw: unknown }>;
+  ): Promise<{
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    raw: unknown;
+    /** Valor BRUTO em reais, quando o provider expõe (hoje: NexusPag). */
+    amountBrl?: number | null;
+    /** Identidade da transação no gateway, para verificação forte. */
+    identity?: { id?: string | null; txid?: string | null; externalId?: string | null };
+  }>;
 }
 
 export interface CreatePixInput {

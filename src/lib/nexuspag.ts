@@ -204,10 +204,20 @@ export function traduzirStatus(status: string): StatusDePagamento | null {
  * Status desconhecido vira PENDING, e não erro: quem chama pergunta "já
  * pagou?", e a resposta honesta para o desconhecido é "ainda não sei".
  */
+/** Identidade e valor extraídos da consulta oficial, para verificação forte. */
+export interface ConsultaNexusPag {
+  status: StatusDePagamento;
+  raw: unknown;
+  /** `amount` OFICIAL: valor BRUTO da cobrança em reais. Nunca net_amount. */
+  amountBrl: number | null;
+  /** Identidade da transação, para provar que a resposta é do Payment certo. */
+  identity: { id: string | null; txid: string | null; externalId: string | null };
+}
+
 export async function consultarCobranca(
   creds: NexusPagCredentials,
   id: string,
-): Promise<{ status: StatusDePagamento; raw: unknown }> {
+): Promise<ConsultaNexusPag> {
   const res = await fetch(
     `${base(creds)}/api/pix/${encodeURIComponent(id)}`,
     { method: "GET", headers: cabecalhos(creds), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) },
@@ -217,10 +227,19 @@ export async function consultarCobranca(
       `A NexusPag falhou ao consultar a cobrança (${res.status}): ${await mensagemDoErro(res)}`,
     );
   }
-  const corpo = (await res.json()) as { status?: string };
+  // Parser DEFENSIVO da resposta oficial. `amount` é o valor BRUTO (não
+  // net_amount). Campo ausente/errado NÃO vira zero nem passa: fica null, e a
+  // verificação trata null como "não confirmável".
+  const corpo = (await res.json()) as Record<string, unknown>;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.length > 0 ? v : null;
   return {
-    status: (corpo.status && traduzirStatus(corpo.status)) || "PENDING",
+    status: (typeof corpo.status === "string" && traduzirStatus(corpo.status)) || "PENDING",
     raw: corpo,
+    amountBrl: num(corpo.amount), // BRUTO. Nunca corpo.net_amount.
+    identity: { id: str(corpo.id), txid: str(corpo.txid), externalId: str(corpo.external_id) },
   };
 }
 
@@ -239,10 +258,14 @@ export async function consultarCobranca(
  * que o nosso processamento já trata como inofensiva: confirmar de novo um
  * pagamento já confirmado não faz nada.
  */
+/** Janela oficial recomendada da NexusPag para o webhook: 300 segundos. */
+export const JANELA_DO_WEBHOOK_SEGUNDOS = 300;
+
 export function assinaturaConfere(
   header: string | null,
   corpoCru: string,
   segredo: string,
+  agora: Date = new Date(),
 ): boolean {
   if (!header || !segredo) return false;
 
@@ -254,6 +277,15 @@ export function assinaturaConfere(
   ) as { t?: string; v1?: string };
 
   if (!partes.t || !partes.v1) return false;
+
+  // ANTI-REPLAY (§11): fora da janela de 300s (para trás OU para frente),
+  // recusa a assinatura. Um pagamento legítimo tardio não se perde: a consulta
+  // server-to-server e o polling continuam confirmando pelo valor. O que isto
+  // fecha é a reapresentação de um webhook antigo capturado.
+  const t = Number(partes.t);
+  if (!Number.isFinite(t)) return false;
+  const idadeSegundos = Math.abs(agora.getTime() / 1000 - t);
+  if (idadeSegundos > JANELA_DO_WEBHOOK_SEGUNDOS) return false;
 
   const esperado = createHmac("sha256", segredo)
     .update(`${partes.t}.${corpoCru}`)

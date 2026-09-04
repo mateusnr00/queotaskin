@@ -120,7 +120,7 @@ export async function processarWebhookDePagamento(
     { paymentId: payment.id, providerDaRota: evento.provider, externalIdDoWebhook: evento.externalId },
     deps,
   );
-  logSeg("PAYMENT_VERIFICATION", { provider: evento.provider, paymentId: payment.id, resultado: verif.resultado, detalhe: verif.detalhe });
+  logSeg("PAYMENT_VERIFICATION", { provider: evento.provider, paymentId: payment.id, resultado: verif.resultado, metodo: verif.metodo, detalhe: verif.detalhe });
 
   if (verif.resultado !== "VERIFIED_APPROVED" && verif.resultado !== "VERIFIED_FAILED") {
     await marcarEvento(eventId, {
@@ -165,7 +165,14 @@ export async function processarWebhookDePagamento(
     acao: "pagamento.aprovado", tenantId, origem: "SISTEMA",
     ator: { nome: `Webhook ${evento.provider}` },
     alvo: { tipo: "Reservation", id: payment.reservationId },
-    detalhes: { pagamentoId: payment.id, caminho: "webhook-verificado" },
+    // Auditoria financeira segura: método e valores em centavos, sem segredo,
+    // sem PIX copia-e-cola, sem documento.
+    detalhes: {
+      pagamentoId: payment.id,
+      verificationMethod: verif.metodo,
+      centavosVerificados: verif.centavosConfirmados,
+      caminho: "webhook-verificado",
+    },
   });
   // Se a finalização mandou para reconciliação, a reserva NÃO está PAID e os
   // efeitos derivados (que assumem entrega) não podem rodar.

@@ -14,6 +14,11 @@ import {
   getProviderForRaffle,
   type PaymentProviderClient,
 } from "@/server/services/payment-provider";
+import { normalizeBRLToCents, reaisParaCentavos } from "@/lib/pagamentos/dinheiro";
+
+// Providers cuja consulta oficial EXPÕE o valor bruto: para eles, amount é
+// OBRIGATÓRIO para aprovar. Sem fallback "verifico só status".
+const VALOR_OBRIGATORIO = new Set(["NEXUSPAG"]);
 
 export type ResultadoDaVerificacao =
   | "VERIFIED_APPROVED" // o gateway confirmou o pagamento
@@ -26,8 +31,10 @@ export interface VerificacaoDePagamento {
   resultado: ResultadoDaVerificacao;
   /** Detalhe curto para o log estruturado. Nunca payload sensível. */
   detalhe: string;
-  /** Valor confirmado pelo gateway, quando o provedor o expõe. Hoje: null. */
-  valorConfirmado: number | null;
+  /** Valor confirmado pelo gateway em CENTAVOS, quando o provedor expõe. */
+  centavosConfirmados: number | null;
+  /** Como se verificou: S2S_STATUS ou S2S_STATUS_AMOUNT (forte). */
+  metodo: string;
 }
 
 export interface EntradaDaVerificacao {
@@ -83,10 +90,9 @@ export async function verifyPayment(
   if (!provider.getStatus) return v("UNVERIFIABLE", "provider sem consulta server-to-server");
 
   // Timeout na fronteira financeira (§16): a consulta que pendura NUNCA vira
-  // aprovação. Vale para os 4 gateways, independente de o adapter ter ou não
-  // o próprio timeout.
+  // aprovação. Fail-closed para timeout/500/401/JSON inválido.
   const TIMEOUT_MS = 10_000;
-  let consulta: { status: string; raw: unknown };
+  let consulta: Awaited<ReturnType<NonNullable<PaymentProviderClient["getStatus"]>>>;
   try {
     consulta = await Promise.race([
       provider.getStatus(pg.externalId),
@@ -95,38 +101,56 @@ export async function verifyPayment(
       ),
     ]);
   } catch (e) {
-    // Gateway indisponível, timeout, 401/403, 500, JSON inválido: NADA disso
-    // aprova. Fail-closed.
-    return v("UNVERIFIABLE", `gateway não confirmável: ${(e as Error).name}`);
+    return v("UNVERIFIABLE", `gateway não confirmável: ${(e as Error).name}`, null, "S2S_STATUS");
   }
 
-  // 7. valor, SE o gateway expõe. Comparado em CENTAVOS inteiros (nada de
-  //    float solto), e um valor não-finito (NaN/Infinity) é divergência, não
-  //    "sem valor": NaN em comparação escaparia a guarda ingênua.
-  const valorGateway = extrairValor(consulta.raw);
-  if (valorGateway != null) {
-    if (!Number.isFinite(valorGateway)) {
-      return v("INVALID", "valor do gateway não é finito", null);
-    }
-    const centavosGateway = Math.round(valorGateway * 100);
-    const centavosEsperado = Math.round(Number(pg.amount) * 100);
-    if (centavosGateway !== centavosEsperado) {
-      return v("INVALID", "valor do gateway diverge do esperado", valorGateway);
-    }
+  // Status não-aprovado decide cedo (não precisa de valor para recusar).
+  if (consulta.status === "REJECTED") return v("VERIFIED_FAILED", "gateway recusou", null, "S2S_STATUS");
+  if (consulta.status !== "APPROVED") return v("VERIFIED_PENDING", "gateway ainda pendente", null, "S2S_STATUS");
+
+  // IDENTIDADE (§7/§8): se o gateway devolve a identidade da transação, ela
+  // precisa bater com o Payment consultado. Fecha o confused-deputy mesmo que
+  // valor e status coincidam.
+  const idGateway = consulta.identity?.id;
+  if (idGateway != null && idGateway !== pg.externalId) {
+    return v("INVALID", "identidade da transação no gateway diverge do Payment", null, "S2S_STATUS");
   }
 
-  // 8. status consultado decide.
-  if (consulta.status === "APPROVED") return v("VERIFIED_APPROVED", "gateway confirmou", valorGateway);
-  if (consulta.status === "REJECTED") return v("VERIFIED_FAILED", "gateway recusou", valorGateway);
-  return v("VERIFIED_PENDING", "gateway ainda pendente", valorGateway);
+  const centavosEsperado = reaisParaCentavos(Number(pg.amount));
+
+  // VALOR OBRIGATÓRIO para providers que o expõem (NexusPag). Sem fallback.
+  if (VALOR_OBRIGATORIO.has(pg.provider)) {
+    if (consulta.amountBrl == null) {
+      return v("INVALID", "amount ausente na consulta (obrigatório para este provider)", null, "S2S_STATUS_AMOUNT");
+    }
+    const centavos = normalizeBRLToCents(consulta.amountBrl);
+    if (!centavos.ok) {
+      return v("INVALID", `amount inválido: ${centavos.motivo}`, null, "S2S_STATUS_AMOUNT");
+    }
+    if (centavos.centavos !== centavosEsperado) {
+      return v("INVALID", "amount do gateway diverge do esperado", centavos.centavos, "S2S_STATUS_AMOUNT");
+    }
+    return v("VERIFIED_APPROVED", "gateway confirmou status e valor", centavos.centavos, "S2S_STATUS_AMOUNT");
+  }
+
+  // Demais providers: valor não exposto oficialmente ainda. Aprova por status.
+  const talvezValor = extrairValor(consulta.raw);
+  if (talvezValor != null) {
+    const c = normalizeBRLToCents(talvezValor);
+    if (!c.ok || c.centavos !== centavosEsperado) {
+      return v("INVALID", "valor do gateway diverge do esperado", null, "S2S_STATUS");
+    }
+  }
+  return v("VERIFIED_APPROVED", "gateway confirmou status", null, "S2S_STATUS");
 }
 
 function v(
   resultado: ResultadoDaVerificacao,
   detalhe: string,
-  valorConfirmado: number | null = null,
+  centavosConfirmados: number | null = null,
+  metodo = "S2S_STATUS",
 ): VerificacaoDePagamento {
-  return { resultado, detalhe, valorConfirmado };
+  return { resultado, detalhe, centavosConfirmados, metodo };
 }
 
 async function padraoBuscarPagamento(paymentId: string) {
