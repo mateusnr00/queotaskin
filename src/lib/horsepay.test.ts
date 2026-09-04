@@ -205,6 +205,35 @@ describe("consultarDeposito", () => {
     respondeEm([TOKEN, { status: 200, corpo: { status: "coisa_nova" } }]);
     expect((await consultarDeposito(creds, "1")).status).toBe("PENDING");
   });
+
+  // GATE 10F: STRONG. A consulta autoritativa expõe `value` e `id`.
+  it("extrai value->amountBrl (BRUTO) e id->identity da consulta oficial", async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 12345, value: 1.01, tax: 0.02, status: "paid", end_to_end: "E1" } }]);
+    const c = await consultarDeposito(creds, "12345");
+    expect(c.status).toBe("APPROVED");
+    expect(c.amountBrl).toBe(1.01); // value, NUNCA tax
+    expect(c.identity.id).toBe("12345"); // id numérico vira string canônica
+    expect(c.endToEnd).toBe("E1");
+  });
+
+  it("parsing fail-closed: value não-numérico e id malformado viram null", async () => {
+    for (const corpo of [
+      { id: 12345, value: "1.01", status: "paid" }, // value string -> null
+      { id: 12345, value: "1e309", status: "paid" }, // string overflow -> null
+      { id: 12345, status: "paid" }, // value ausente -> null
+    ]) {
+      respondeEm([TOKEN, { status: 200, corpo }]);
+      expect((await consultarDeposito(creds, "12345")).amountBrl).toBeNull();
+    }
+    for (const corpo of [
+      { id: 12.5, value: 1.01, status: "paid" }, // id float -> null
+      { id: {}, value: 1.01, status: "paid" }, // id objeto -> null
+      { value: 1.01, status: "paid" }, // id ausente -> null
+    ]) {
+      respondeEm([TOKEN, { status: 200, corpo }]);
+      expect((await consultarDeposito(creds, "x")).identity.id).toBeNull();
+    }
+  });
 });
 
 describe("traduzirStatus", () => {

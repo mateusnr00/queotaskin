@@ -13,7 +13,11 @@ export type TierDeSeguranca = "STRONG" | "STATUS_ONLY" | "DISABLED";
 
 const TIER: Record<string, TierDeSeguranca> = {
   NEXUSPAG: "STRONG",
-  HORSEPAY: "STATUS_ONLY",
+  // GATE 10F: promovido de STATUS_ONLY -> STRONG. A consulta autoritativa S2S
+  // (GET /api/orders/deposit/{id}) expõe `value` e `id`, então verifyPayment
+  // confere VALOR (centavos) + IDENTIDADE além do status antes de aprovar. O
+  // webhook continua sendo só gatilho; a prova vem da consulta independente.
+  HORSEPAY: "STRONG",
   SYNCPAY: "STATUS_ONLY",
   SIGILOPAY: "STATUS_ONLY",
 };

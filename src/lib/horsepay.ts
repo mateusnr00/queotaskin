@@ -180,6 +180,10 @@ async function chamar(
     },
     body: init.body,
     cache: "no-store",
+    // Fronteira financeira: redirect inesperado NUNCA é seguido (anti-SSRF) e
+    // toda chamada tem timeout. Espelha o caminho de retry logo abaixo.
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (res.status === 401) {
@@ -326,10 +330,27 @@ export function traduzirStatus(status: string): StatusDePagamento | null {
  * Status desconhecido vira PENDING, e não erro: quem chama pergunta "já
  * pagou?", e a resposta honesta para o desconhecido é "ainda não sei".
  */
+/** Identidade e valor extraídos da consulta OFICIAL (S2S), para verificação
+ *  forte (STRONG). Nada aqui vem do webhook. */
+export interface ConsultaHorsePay {
+  status: StatusDePagamento;
+  raw: unknown;
+  /** `value` OFICIAL da consulta: valor BRUTO da cobrança em reais. `null`
+   *  quando ausente/não-numérico (a verificação trata null como "não
+   *  confirmável"). NUNCA é `tax` nem derivado. */
+  amountBrl: number | null;
+  /** Identidade da transação no gateway (o `id`), para provar que a resposta é
+   *  do Payment certo. Só `id`; os demais campos ficam null (a HorsePay não os
+   *  expõe na consulta). */
+  identity: { id: string | null; txid: string | null; externalId: string | null };
+  /** `end_to_end`, quando presente. Só evidência; não decide aprovação. */
+  endToEnd: string | null;
+}
+
 export async function consultarDeposito(
   creds: HorsePayCredentials,
   id: string,
-): Promise<{ status: StatusDePagamento; raw: unknown }> {
+): Promise<ConsultaHorsePay> {
   const res = await chamar(
     creds,
     `/api/orders/deposit/${encodeURIComponent(id)}`,
@@ -340,12 +361,36 @@ export async function consultarDeposito(
       `A HorsePay falhou ao consultar o depósito (${res.status}): ${await mensagemDoErro(res)}`,
     );
   }
-  const corpo = (await res.json()) as { status?: string };
+  // Parser DEFENSIVO da resposta OFICIAL (fonte da prova STRONG). Campo
+  // ausente/errado NÃO vira zero nem string vazia: fica null, e a verificação
+  // trata null como "não confirmável" (fail-closed). Sem coerção perigosa.
+  const corpo = (await res.json()) as Record<string, unknown>;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+  // O `id` da HorsePay é numérico (ex.: 12345). Aceita number inteiro seguro
+  // >= 0 (vira string canônica) ou string não-vazia; qualquer outra coisa
+  // (NaN, Infinity, float, objeto, array, null) vira null. NUNCA faz parseInt
+  // de string (que truncaria "12345abc" → 12345).
+  const idOficial = ((): string | null => {
+    if (typeof corpo.id === "number") {
+      return Number.isSafeInteger(corpo.id) && corpo.id >= 0 ? String(corpo.id) : null;
+    }
+    if (typeof corpo.id === "string") {
+      const s = corpo.id.trim();
+      return s.length > 0 ? s : null;
+    }
+    return null;
+  })();
   return {
     status:
       (typeof corpo.status === "string" && traduzirStatus(corpo.status)) ||
       "PENDING",
     raw: corpo,
+    amountBrl: num(corpo.value), // valor BRUTO; NUNCA `tax` nem net
+    identity: { id: idOficial, txid: null, externalId: null },
+    endToEnd: str(corpo.end_to_end),
   };
 }
 

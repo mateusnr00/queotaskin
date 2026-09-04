@@ -70,10 +70,11 @@ suiteDeIntegracao("§29/§30 · kill switch de aprovação automática", () => {
     corpoCru: "", payload: {}, assinaturaValida: true,
   }, nexusOk(externalId));
 
-  it("o tier classifica NexusPag como STRONG e os outros como STATUS_ONLY", () => {
+  it("o tier classifica NexusPag e HorsePay como STRONG; SyncPay/SigiloPay como STATUS_ONLY", () => {
     expect(tierDoProvider("NEXUSPAG")).toBe("STRONG");
+    // GATE 10F: HorsePay promovido a STRONG (verifica valor+identidade S2S).
+    expect(tierDoProvider("HORSEPAY")).toBe("STRONG");
     expect(tierDoProvider("SYNCPAY")).toBe("STATUS_ONLY");
-    expect(tierDoProvider("HORSEPAY")).toBe("STATUS_ONLY");
     expect(tierDoProvider("SIGILOPAY")).toBe("STATUS_ONLY");
     expect(tierDoProvider("DESCONHECIDO")).toBe("DISABLED");
   });
@@ -82,8 +83,10 @@ suiteDeIntegracao("§29/§30 · kill switch de aprovação automática", () => {
   it("§17 política: STRONG autoaprova, STATUS_ONLY não (sem opt-in), DISABLED nunca", () => {
     delete process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL;
     expect(aprovacaoAutomaticaPermitida("NEXUSPAG")).toBe(true);
+    // GATE 10F: HorsePay agora é STRONG -> autoaprova (após verificação S2S de
+    // valor+identidade em verifyPayment). Não depende de opt-in de STATUS_ONLY.
+    expect(aprovacaoAutomaticaPermitida("HORSEPAY")).toBe(true);
     expect(aprovacaoAutomaticaPermitida("SYNCPAY")).toBe(false);
-    expect(aprovacaoAutomaticaPermitida("HORSEPAY")).toBe(false);
     expect(aprovacaoAutomaticaPermitida("SIGILOPAY")).toBe(false);
     expect(aprovacaoAutomaticaPermitida("DESCONHECIDO")).toBe(false);
     process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL = "true";

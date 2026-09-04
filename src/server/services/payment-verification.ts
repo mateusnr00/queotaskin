@@ -18,7 +18,38 @@ import { normalizeBRLToCents, reaisParaCentavos } from "@/lib/pagamentos/dinheir
 
 // Providers cuja consulta oficial EXPÕE o valor bruto: para eles, amount é
 // OBRIGATÓRIO para aprovar. Sem fallback "verifico só status".
-const VALOR_OBRIGATORIO = new Set(["NEXUSPAG"]);
+const VALOR_OBRIGATORIO = new Set(["NEXUSPAG", "HORSEPAY"]);
+
+// Providers cuja consulta oficial expõe a IDENTIDADE (id) da transação e cujo
+// binding depende dela: para eles a identidade é OBRIGATÓRIA - sem id na
+// resposta autoritativa, ou id divergente do externalId gravado, NÃO aprova
+// (fail-closed). HorsePay: o externalId é o `id` numérico da cobrança, e a
+// consulta devolve esse mesmo `id`, então exigimos a igualdade como prova de
+// que a resposta é da transação certa (fecha confused-deputy).
+const IDENTIDADE_OBRIGATORIA = new Set(["HORSEPAY"]);
+
+/**
+ * Normaliza um id de transação para comparação SEGURA, sem coerção perigosa.
+ *
+ *  - number: só inteiro seguro >= 0 vira string canônica (`12345` -> "12345");
+ *    NaN, Infinity, float, negativo -> null.
+ *  - string: trim; não-vazia passa como está.
+ *  - qualquer outra coisa (null, undefined, objeto, array) -> null.
+ *
+ * NUNCA faz parseInt/Number de string: `parseInt("12345abc")` = 12345 casaria
+ * um id adulterado. Aqui "12345abc" fica "12345abc" e a comparação estrita
+ * falha contra "12345". Permite a equivalência segura 12345 == "12345".
+ */
+export function normalizeProviderId(v: unknown): string | null {
+  if (typeof v === "number") {
+    return Number.isSafeInteger(v) && v >= 0 ? String(v) : null;
+  }
+  if (typeof v === "string") {
+    const s = v.trim();
+    return s.length > 0 ? s : null;
+  }
+  return null;
+}
 
 export type ResultadoDaVerificacao =
   | "VERIFIED_APPROVED" // o gateway confirmou o pagamento
@@ -108,12 +139,23 @@ export async function verifyPayment(
   if (consulta.status === "REJECTED") return v("VERIFIED_FAILED", "gateway recusou", null, "S2S_STATUS");
   if (consulta.status !== "APPROVED") return v("VERIFIED_PENDING", "gateway ainda pendente", null, "S2S_STATUS");
 
-  // IDENTIDADE (§7/§8): se o gateway devolve a identidade da transação, ela
-  // precisa bater com o Payment consultado. Fecha o confused-deputy mesmo que
-  // valor e status coincidam.
-  const idGateway = consulta.identity?.id;
-  if (idGateway != null && idGateway !== pg.externalId) {
-    return v("INVALID", "identidade da transação no gateway diverge do Payment", null, "S2S_STATUS");
+  // IDENTIDADE (§7/§8): a resposta autoritativa precisa ser da MESMA transação.
+  // Fecha o confused-deputy mesmo que valor e status coincidam.
+  if (IDENTIDADE_OBRIGATORIA.has(pg.provider)) {
+    // STRONG por id: a identidade é OBRIGATÓRIA. Sem id na consulta, ou id que
+    // não bate (comparação normalizada, sem coerção perigosa), NÃO aprova.
+    const idEsperado = normalizeProviderId(pg.externalId);
+    const idGateway = normalizeProviderId(consulta.identity?.id);
+    if (idEsperado == null || idGateway == null || idGateway !== idEsperado) {
+      return v("INVALID", "identidade da transação ausente ou divergente na consulta", null, "S2S_STATUS_AMOUNT");
+    }
+  } else {
+    // Demais: se o gateway devolve identidade, ela precisa bater; se não
+    // devolve, o binding já vem de a consulta ser feita pelo externalId gravado.
+    const idGateway = consulta.identity?.id;
+    if (idGateway != null && idGateway !== pg.externalId) {
+      return v("INVALID", "identidade da transação no gateway diverge do Payment", null, "S2S_STATUS");
+    }
   }
 
   const centavosEsperado = reaisParaCentavos(Number(pg.amount));
