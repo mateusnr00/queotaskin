@@ -218,6 +218,15 @@ describe("assinaturaConfere", () => {
   // assinatura é recusada. A prova financeira agora é a consulta S2S por valor,
   // então rejeitar um webhook velho no pré-filtro não perde pagamento legítimo:
   // o polling/"já paguei" confirma pelo valor. O que fecha é o replay.
+
+  it("§36 clock skew: 299s aceita, 300s aceita (borda), 301s recusa", () => {
+    const seg = Math.floor(Date.now() / 1000);
+    const agora = new Date(seg * 1000); // segundo cheio: borda determinística
+    const em = (delta: number) => assinaturaConfere(assinar(String(seg - delta), corpo), corpo, segredo, agora);
+    expect(em(299)).toBe(true);
+    expect(em(300)).toBe(true);
+    expect(em(301)).toBe(false);
+  });
   it("recusa assinatura fora da janela de 300s (passado)", () => {
     const agora = new Date();
     const velho = String(Math.floor(agora.getTime() / 1000) - 301);

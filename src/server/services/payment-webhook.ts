@@ -10,6 +10,7 @@ import type { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { chaveDeEvento, hashDoCorpo } from "@/lib/pagamentos/idempotencia";
+import { aprovacaoAutomaticaDesligada } from "@/lib/pagamentos/tier";
 import { transitionPaymentState } from "@/server/services/payment-state-machine";
 import {
   verifyPayment,
@@ -129,6 +130,19 @@ export async function processarWebhookDePagamento(
       processingError: verif.resultado === "VERIFIED_PENDING" ? null : verif.detalhe,
     });
     return { desfecho: verif.resultado === "VERIFIED_PENDING" ? "PENDENTE" : "NAO_APROVADO", verificacao: verif.resultado };
+  }
+
+  // KILL SWITCH (fail-closed): mesmo com o gateway confirmando, se a aprovação
+  // automática estiver desligada o pagamento NÃO é aprovado. Fica PENDING para
+  // reconciliação. Nunca vira comportamento legado nem provider fraco.
+  if (verif.resultado === "VERIFIED_APPROVED" && aprovacaoAutomaticaDesligada()) {
+    await marcarEvento(eventId, {
+      verificationResult: verif.resultado,
+      previousStatus: payment.status,
+      processingError: "aprovação automática desligada (kill switch)",
+    });
+    logSeg("PAYMENT_AUTO_APPROVAL_DISABLED", { provider: evento.provider, paymentId: payment.id });
+    return { desfecho: "PENDENTE", verificacao: verif.resultado };
   }
 
   // 4. TRANSIÇÃO ATÔMICA: Payment.status + Reservation + Tickets numa transação.
