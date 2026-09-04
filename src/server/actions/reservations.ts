@@ -617,6 +617,10 @@ export async function markReservationPaidAction(
           // ler, não coluna para somar. Dinheiro que não passou pelo gateway
           // não é receita do mês, e sem a marca ele entrava no total sem
           // ninguém ter pago nada.
+          // MANUAL_ADMIN_OVERRIDE: aprovação por decisão de admin, NÃO por
+          // verificação de gateway. A flag distingue esta reserva de uma paga
+          // via PIX confirmado. Não passa pela máquina de estados nesta fase
+          // (P0 cobre só o webhook); roteamento formal fica para P1.
           aprovadaNoPainel: true,
         },
       });

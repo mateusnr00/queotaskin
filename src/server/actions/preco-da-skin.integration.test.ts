@@ -13,6 +13,9 @@
 // vez que a fonte falha, e a fonte deste projeto já falhou.
 
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
 vi.mock("@/lib/auth-helpers", () => ({
   getAdminOrThrow: async () => ({
@@ -29,19 +32,7 @@ vi.mock("@/lib/tenant", () => ({
 
 const { precoDaSkinAction } = await import("./preco-da-skin");
 
-function isLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  if (process.env.XP_INTEGRATION_ALLOW_REMOTE === "1") return true;
-  try {
-    const { hostname } = new URL(url);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    return false;
-  }
-}
 
-const suite = isLocalDatabase() && TENANT ? describe : describe.skip;
 
 /** O que estava guardado antes de qualquer consulta falhar. */
 const VALOR_ANTERIOR = 128.45;
@@ -50,7 +41,7 @@ const CONSULTADO_ANTES = new Date("2026-09-01T10:00:00.000Z");
 
 const criadas: string[] = [];
 
-suite("consulta que falha não apaga o catálogo (integração)", () => {
+__suiteIntegra("consulta que falha não apaga o catálogo (integração)", () => {
   let skinId: string;
 
   beforeEach(async () => {

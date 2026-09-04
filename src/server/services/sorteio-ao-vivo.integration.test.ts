@@ -25,27 +25,16 @@ import {
 } from "./sorteio-ao-vivo";
 import { conferirProva } from "@/lib/sorteio-justo";
 import { marcosDoSorteio, TEMPOS_PADRAO } from "@/lib/sorteio-ao-vivo";
+import { integracaoLiberada } from "@/test/integration-setup";
 
-function isLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  if (process.env.XP_INTEGRATION_ALLOW_REMOTE === "1") return true;
-  try {
-    const { hostname } = new URL(url);
-    return (
-      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
-    );
-  } catch {
-    return false;
-  }
-}
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
-const suite = isLocalDatabase() ? describe : describe.skip;
+
 
 const criados: string[] = [];
 const usuariosCriados: string[] = [];
 
-suite("motor do sorteio ao vivo (integração)", () => {
+__suiteIntegra("motor do sorteio ao vivo (integração)", () => {
   let tenantId: string;
   let userId: string;
 

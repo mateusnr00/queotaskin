@@ -2,6 +2,9 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
 import { createReservation } from "@/server/services/reservations";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 import {
   ajustarEntradas,
   ativarAfiliado,
@@ -174,7 +177,7 @@ beforeEach(async () => {
   await ativarAfiliado(afiliado.id, `TESTE${Date.now() % 100000}X${contador}`);
 });
 
-describe("vínculo com quem indicou", () => {
+__suiteIntegra("vínculo com quem indicou", () => {
   it("vincula pelo código e o vínculo é permanente", async () => {
     const codigo = (
       await prisma.affiliate.findUniqueOrThrow({
@@ -240,7 +243,7 @@ describe("vínculo com quem indicou", () => {
   });
 });
 
-describe("recompensa progressiva", () => {
+__suiteIntegra("recompensa progressiva", () => {
   beforeEach(async () => {
     const codigo = (
       await prisma.affiliate.findUniqueOrThrow({
@@ -677,7 +680,7 @@ describe("recompensa progressiva", () => {
   });
 });
 
-describe("Cupom de Entrada no checkout", () => {
+__suiteIntegra("Cupom de Entrada no checkout", () => {
   beforeEach(async () => {
     // Três cupons na mão, direto pelo ajuste do painel.
     await ajustarEntradas({
@@ -1013,7 +1016,7 @@ describe("Cupom de Entrada no checkout", () => {
   });
 });
 
-describe("ajuste manual", () => {
+__suiteIntegra("ajuste manual", () => {
   it("tirar entrada não alcança o que já foi gasto", async () => {
     await ajustarEntradas({
       userId: afiliado.id,

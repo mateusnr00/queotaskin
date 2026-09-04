@@ -31,27 +31,16 @@ import {
 } from "./cronograma";
 import { avancarSorteio } from "./sorteio-ao-vivo";
 import { definirStatusDaCampanha } from "./raffles";
+import { integracaoLiberada } from "@/test/integration-setup";
 
-function isLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  if (process.env.XP_INTEGRATION_ALLOW_REMOTE === "1") return true;
-  try {
-    const { hostname } = new URL(url);
-    return (
-      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
-    );
-  } catch {
-    return false;
-  }
-}
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
-const suite = isLocalDatabase() ? describe : describe.skip;
+
 
 const campanhasCriadas: string[] = [];
 const usuariosCriados: string[] = [];
 
-suite("cronograma de sorteios (integração)", () => {
+__suiteIntegra("cronograma de sorteios (integração)", () => {
   let tenantId: string;
   let userId: string;
 
@@ -825,7 +814,7 @@ suite("cronograma de sorteios (integração)", () => {
  * puser QUEUED no fim, ele falha aqui, e não numa terça-feira em que a fila
  * apareceu embaixo das campanhas canceladas.
  */
-const suiteDoEnum = isLocalDatabase() ? describe : describe.skip;
+const suiteDoEnum = integracaoLiberada ? describe : describe.skip;
 
 suiteDoEnum("a ordem das situações no banco", () => {
   it("é exatamente a que o painel espera", async () => {

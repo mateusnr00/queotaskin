@@ -5,6 +5,9 @@ import { alocarPremiosDaReserva } from "@/server/services/alocacao";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
 import { revelarBilhete, revelarCaixa } from "@/server/services/revelacao";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
 // A alocação de prêmios, contra o banco de verdade.
 //
@@ -126,7 +129,7 @@ beforeEach(async () => {
   await novaCampanha();
 });
 
-describe("distribuição na compra", () => {
+__suiteIntegra("distribuição na compra", () => {
   it("cenário A: 20 caixas e 2 prêmios elegíveis dão exatamente 2 premiadas", async () => {
     await combosDeCaixa(1, 20);
     await premiosDeCaixa(2, { saidaEmTitulos: 19 });
@@ -278,7 +281,7 @@ describe("distribuição na compra", () => {
   });
 });
 
-describe("idempotência da alocação", () => {
+__suiteIntegra("idempotência da alocação", () => {
   it("cenário F: webhook duplicado não duplica unidade nem prêmio", async () => {
     await combosDeCaixa(1, 6);
     await premiosDeCaixa(2);
@@ -347,7 +350,7 @@ describe("idempotência da alocação", () => {
   });
 });
 
-describe("abertura só revela", () => {
+__suiteIntegra("abertura só revela", () => {
   it("cenário H e L: abrir duas vezes devolve o mesmo, e não muda nada", async () => {
     await combosDeCaixa(1, 4);
     await premiosDeCaixa(4);
@@ -392,7 +395,7 @@ describe("abertura só revela", () => {
   });
 });
 
-describe("raspadinha decide na compra", () => {
+__suiteIntegra("raspadinha decide na compra", () => {
   async function combosDeRaspadinha(minimo: number, quantidade: number) {
     await prisma.raspadinhaCombo.create({
       data: { raffleId, minimo, quantidade, visivel: true },

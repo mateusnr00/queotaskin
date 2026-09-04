@@ -11,29 +11,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 import {
   contarOcupados,
   contarVendidos,
   contarVendidosPorRifa,
 } from "./vendidos";
 
-function isLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  if (process.env.XP_INTEGRATION_ALLOW_REMOTE === "1") return true;
-  try {
-    const { hostname } = new URL(url);
-    return (
-      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
-    );
-  } catch {
-    return false;
-  }
-}
 
-const suite = isLocalDatabase() ? describe : describe.skip;
 
-suite("contagem de vendidos (integração)", () => {
+__suiteIntegra("contagem de vendidos (integração)", () => {
   let raffleId: string;
 
   beforeAll(async () => {

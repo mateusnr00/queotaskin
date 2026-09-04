@@ -1897,12 +1897,27 @@ model PaymentWebhookEvent {
   processedAt     DateTime?
   processingError String?
 
+  // IDEMPOTÊNCIA POR EVENTO, no banco (última linha de defesa).
+  //
+  // Chave canônica do evento: o id oficial do gateway quando existe, senão um
+  // fingerprint determinístico sha256(provider|transacao|status). Dois eventos
+  // semanticamente idênticos produzem a MESMA chave e o @@unique abaixo recusa
+  // o segundo, mesmo sob concorrência real. Eventos DIFERENTES da mesma
+  // transação (created, paid) têm status distinto, chave distinta, e ambos são
+  // logados: o audit-all é preservado.
+  providerEventId String?
+
+  // Evidência da verificação, para responder "por que ficou pago?" sem log.
+  signatureValid     Boolean?
+  verificationResult String? // VERIFIED_APPROVED | VERIFIED_PENDING | ...
+  verifiedAt         DateTime?
+  previousStatus     PaymentStatus?
+  nextStatus         PaymentStatus?
+  rawPayloadHash     String? // sha256 do corpo cru; nunca o corpo com segredo
+
   createdAt DateTime @default(now())
 
-  // Sem unique aqui: cada transação dispara MÚLTIPLOS eventos ao longo
-  // do tempo (created, paid, expired, etc) e queremos logar todos. A
-  // idempotência do PROCESSAMENTO é garantida no handler, só atualiza
-  // Payment se ainda não estiver em estado terminal.
+  @@unique([provider, providerEventId])
   @@index([provider, externalId])
   @@index([processedAt])
 }

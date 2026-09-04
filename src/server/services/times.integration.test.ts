@@ -8,12 +8,15 @@ import {
   textoSobreACor,
 } from "@/lib/times-cs2";
 import { listarTimesAtivos, mapaDeTimes } from "@/server/services/times";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
 // Os times saíram do código e viraram linhas da tabela Team. Estes testes
 // substituem os que percorriam a constante: agora eles olham o DADO, que é
 // onde o erro pode entrar, seja pela migration seja pelo painel.
 
-describe("times cadastrados", () => {
+__suiteIntegra("times cadastrados", () => {
   it("a migration levou a lista inteira, com os mesmos ids", async () => {
     // Os ids são a chave gravada em User.favoriteTeamId. Se a migration
     // tivesse gerado outros, todo mundo perderia o time em silêncio.

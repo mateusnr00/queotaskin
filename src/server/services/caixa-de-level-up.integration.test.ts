@@ -10,26 +10,17 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { levelFromXp, XP_POR_NIVEL } from "@/lib/rank";
 import { awardXpForReservation } from "@/server/services/xp";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 import {
   abrirCaixa,
   recompensasDoUsuario,
 } from "@/server/services/caixa-de-level-up";
 
-function isLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  if (process.env.XP_INTEGRATION_ALLOW_REMOTE === "1") return true;
-  try {
-    const { hostname } = new URL(url);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    return false;
-  }
-}
 
-const suite = isLocalDatabase() ? describe : describe.skip;
 
-suite("Caixa de Level Up (integração)", () => {
+__suiteIntegra("Caixa de Level Up (integração)", () => {
   let tenantId: string;
   let raffleId: string;
   let userId: string;

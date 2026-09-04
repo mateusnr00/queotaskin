@@ -60,15 +60,28 @@ describe("geração de caixas e raspadinhas", () => {
     expect(faltando).toEqual([]);
   });
 
-  it("os seis caminhos de confirmação continuam existindo", () => {
-    // Se um deles sumir, o teste acima passa vazio e o defeito volta pela
-    // porta oposta: ninguém gera nada e ninguém percebe.
-    const comRaspadinha = arquivos(RAIZ).filter(
-      (c) =>
-        !c.endsWith(".test.ts") &&
-        readFileSync(c, "utf8").includes(RASPADINHA) &&
-        !c.endsWith("raspadinhas.ts"),
+  it("os caminhos de confirmação chegam aos efeitos, agora centralizados", () => {
+    // A geração passou a ser DRY: os quatro webhooks delegam ao handler
+    // central (payment-webhook.ts), que chama os efeitos; a reconsulta de
+    // status (pix.ts) e a aprovação no painel (reservations.ts) mantêm os
+    // seus. Se um deles sumir, o defeito silencioso volta. O teste garante:
+    //   (a) as três FONTES de efeito existem;
+    //   (b) as quatro rotas de webhook delegam ao handler central.
+    const fontes = arquivos(RAIZ).filter(
+      (c) => !c.endsWith(".test.ts") && !c.endsWith("raspadinhas.ts") &&
+        readFileSync(c, "utf8").includes(RASPADINHA),
     );
-    expect(comRaspadinha.length).toBeGreaterThanOrEqual(6);
+    expect(fontes.length).toBeGreaterThanOrEqual(3);
+
+    const rotasDeWebhook = arquivos(join(RAIZ, "app", "api", "webhooks")).filter(
+      (c) => c.endsWith("route.ts"),
+    );
+    expect(rotasDeWebhook.length).toBe(4);
+    for (const rota of rotasDeWebhook) {
+      expect(
+        readFileSync(rota, "utf8").includes("processarWebhookDePagamento"),
+        `${rota} deve delegar ao handler central`,
+      ).toBe(true);
+    }
   });
 });

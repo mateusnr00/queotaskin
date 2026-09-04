@@ -10,6 +10,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 import {
   adjustXp,
   awardXpForReservation,
@@ -23,21 +26,9 @@ import {
  * banco real de lixo. Para forçar em outro host, exporte
  * XP_INTEGRATION_ALLOW_REMOTE=1 conscientemente.
  */
-function isLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  if (process.env.XP_INTEGRATION_ALLOW_REMOTE === "1") return true;
-  try {
-    const { hostname } = new URL(url);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    return false;
-  }
-}
 
-const suite = isLocalDatabase() ? describe : describe.skip;
 
-suite("serviço de XP (integração)", () => {
+__suiteIntegra("serviço de XP (integração)", () => {
   let tenantId: string;
   let raffleId: string;
   let userId: string;

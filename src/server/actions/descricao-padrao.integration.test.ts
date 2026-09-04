@@ -14,6 +14,9 @@
 // não afirmaria nada.
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
 // O id do admin sai do banco: a campanha tem chave estrangeira para o autor,
 // e um id inventado derruba o create antes de a descrição chegar à coluna.
@@ -31,10 +34,8 @@ const { prisma } = await import("@/lib/db");
 const { montarDescricaoPadrao } = await import("@/lib/descricao-padrao");
 const { createRaffleAction } = await import("./raffles");
 
-const local = /(?:localhost|127\.0\.0\.1):5433/.test(process.env.DATABASE_URL ?? "");
-const conta = local ? describe : describe.skip;
 
-conta("descrição padrão, da criação até a leitura pública", () => {
+__suiteIntegra("descrição padrão, da criação até a leitura pública", () => {
   let tenantId = "";
   const criados: string[] = [];
 

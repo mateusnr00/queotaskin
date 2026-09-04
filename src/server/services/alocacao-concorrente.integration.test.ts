@@ -3,6 +3,9 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { alocarPremiosDaReserva } from "@/server/services/alocacao";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
 // DUAS COMPRAS DA MESMA CAMPANHA CONFIRMANDO JUNTAS.
 //
@@ -145,7 +148,7 @@ beforeEach(() => {
   proximoNumero = 1;
 });
 
-describe("cenário 1: duas compras, mesma campanha, ao mesmo tempo", () => {
+__suiteIntegra("cenário 1: duas compras, mesma campanha, ao mesmo tempo", () => {
   it("cada ponto vai para a compra que o atravessou", async () => {
     const rifa = await novaCampanha();
     await combo(rifa.id, 8);
@@ -233,7 +236,7 @@ describe("cenário 1: duas compras, mesma campanha, ao mesmo tempo", () => {
   });
 });
 
-describe("cenário 2: três compras simultâneas", () => {
+__suiteIntegra("cenário 2: três compras simultâneas", () => {
   it("divide os pontos pelos três intervalos", async () => {
     const rifa = await novaCampanha();
     await combo(rifa.id, 6);
@@ -270,7 +273,7 @@ describe("cenário 2: três compras simultâneas", () => {
   });
 });
 
-describe("cenário 3: os dois webhooks disparam a alocação juntos", () => {
+__suiteIntegra("cenário 3: os dois webhooks disparam a alocação juntos", () => {
   it("e cada um ainda leva o que atravessou", async () => {
     // A diferença para o cenário 1 é o caminho: aqui entra pela função que os
     // webhooks chamam de fato, com a criação das caixas junto.
@@ -299,7 +302,7 @@ describe("cenário 3: os dois webhooks disparam a alocação juntos", () => {
   });
 });
 
-describe("cenário 4: webhook de uma e aprovação manual da outra", () => {
+__suiteIntegra("cenário 4: webhook de uma e aprovação manual da outra", () => {
   it("os dois caminhos respeitam a mesma ordem", async () => {
     const rifa = await novaCampanha();
     await combo(rifa.id, 5);
@@ -326,7 +329,7 @@ describe("cenário 4: webhook de uma e aprovação manual da outra", () => {
   });
 });
 
-describe("cenário 5: uma transação demora segurando os prêmios", () => {
+__suiteIntegra("cenário 5: uma transação demora segurando os prêmios", () => {
   it("a outra espera a vez e não rouba o ponto da primeira", async () => {
     const rifa = await novaCampanha();
     await combo(rifa.id, 5);

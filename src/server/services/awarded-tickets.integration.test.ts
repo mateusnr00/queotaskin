@@ -2,6 +2,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
+import { integracaoLiberada } from "@/test/integration-setup";
+
+const __suiteIntegra = integracaoLiberada ? describe : describe.skip;
 
 // O número premiado com CONDIÇÕES.
 //
@@ -65,7 +68,7 @@ beforeAll(async () => {
   raffleId = rifa.id;
 });
 
-describe("título premiado com condições", () => {
+__suiteIntegra("título premiado com condições", () => {
   it("sem condição nenhuma, comprou o número, ganhou", async () => {
     // O comportamento de sempre, e o de toda linha antiga: a migration não
     // gravou condição em ninguém.
