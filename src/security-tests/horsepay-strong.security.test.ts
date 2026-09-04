@@ -11,7 +11,7 @@ import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 
 import { verifyPayment, normalizeProviderId } from "@/server/services/payment-verification";
-import { tierDoProvider } from "@/lib/pagamentos/tier";
+import { tierDoProvider, aprovacaoAutomaticaPermitida } from "@/lib/pagamentos/tier";
 import { assinaturaConfere } from "@/lib/horsepay";
 
 // ---- verifyPayment via injeção de dependências (sem rede, sem banco) --------
@@ -211,6 +211,25 @@ describe("tier + HMAC (invariantes preservadas)", () => {
   });
   it("HorsePay agora é STRONG", () => {
     expect(tierDoProvider("HORSEPAY")).toBe("STRONG");
+  });
+
+  it("FASE D · em NODE_ENV=production: HorsePay STRONG elegível; STATUS_ONLY hard-false mesmo com flag", () => {
+    const orig = process.env.NODE_ENV;
+    const origFlag = process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL;
+    try {
+      // @ts-expect-error override controlado só para o teste de política
+      process.env.NODE_ENV = "production";
+      process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL = "true"; // flag perigosa LIGADA
+      expect(aprovacaoAutomaticaPermitida("HORSEPAY")).toBe(true); // STRONG independe da flag
+      expect(aprovacaoAutomaticaPermitida("SYNCPAY")).toBe(false); // STATUS_ONLY: hard-false em prod
+      expect(aprovacaoAutomaticaPermitida("SIGILOPAY")).toBe(false);
+      expect(aprovacaoAutomaticaPermitida("DESCONHECIDO")).toBe(false); // DISABLED
+    } finally {
+      // @ts-expect-error restaura
+      process.env.NODE_ENV = orig;
+      if (origFlag === undefined) delete process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL;
+      else process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL = origFlag;
+    }
   });
   it("18/19. HMAC do webhook: válida passa, inválida e ausente rejeitam (preservado)", () => {
     const segredo = "s3gr3d0";
