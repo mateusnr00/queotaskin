@@ -103,12 +103,20 @@ psql "$DIRECT_URL" -f prisma/roles/roles.sql                    # REQUIRES EXPLI
 # --- só APÓS o GATE-5 (função existe) ---
 psql "$DIRECT_URL" -f prisma/roles/financial-fsm-lockdown.sql   # REQUIRES EXPLICIT HUMAN APPROVAL
 ```
+**Antes de apontar DATABASE_URL→app_runtime** (pré-requisito de cutover, GATE-5.5):
+RLS resolvida. O Supabase (`ensure_rls`) habilita RLS em toda tabela; app_runtime
+sem BYPASSRLS seria negada em tudo.
+### MUTATING — REQUIRES EXPLICIT HUMAN APPROVAL (como superuser supabase_admin)
+```bash
+psql "$SUPABASE_ADMIN_URL" -f prisma/roles/runtime-rls.sql   # REQUIRES EXPLICIT HUMAN APPROVAL (superuser)
+```
 Depois: apontar **DATABASE_URL→app_runtime** e **DIRECT_URL→migration_role**.
 **Credencial de migration NUNCA no runtime (§11).**
 ### READ-ONLY (provar privilégios)
 ```bash
 psql "$DATABASE_URL" -f prisma/roles/verify-roles.sql
-# app_runtime: sem DDL, sem UPDATE(status) de Payment, audit append-only.
+psql "$DATABASE_URL" -f prisma/roles/verify-runtime-rls.sql
+# app_runtime: bypassa RLS, sem DDL, sem UPDATE(status) de Payment, audit append-only.
 ```
 
 ---

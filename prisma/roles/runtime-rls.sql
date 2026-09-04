@@ -1,0 +1,65 @@
+-- ============================================================================
+-- RUNTIME RLS RESOLUTION (GATE-5.5)  -- app_runtime cutover pre-requisito
+-- ----------------------------------------------------------------------------
+-- CONTEXTO (evidencia colhida em producao, read-only):
+--   * As 63 tabelas de public tem RLS habilitada (relrowsecurity), com ZERO
+--     policies. Nao ha FORCE RLS. Todas sao owned por `postgres`.
+--   * A RLS NAO vem de nenhum artefato do repo: e a event trigger nativa do
+--     Supabase `ensure_rls` (ddl_command_end) que habilita RLS em TODA tabela
+--     nova. Logo, qualquer migration futura tera RLS habilitada automaticamente.
+--   * A aplicacao NAO usa RLS para isolamento: o acesso ao banco e 100% via
+--     Prisma (postgres, owner, bypassa RLS) e o tenant isolation e feito na
+--     camada da app (`where { tenantId }`). O `@supabase/supabase-js` so e usado
+--     para STORAGE, nunca para tabelas via Data API/PostREST.
+--   * O papel ATUAL da RLS e proteger a Data API: `anon` e `authenticated` tem
+--     grants em todas as tabelas, mas a RLS (0 policies) nega tudo. `service_role`
+--     e `postgres` tem BYPASSRLS.
+--
+-- PROBLEMA: `app_runtime` (runtime alvo, nao-dona, sem BYPASSRLS) e bloqueada
+-- pela RLS em toda tabela -> trocar DATABASE_URL para ela quebraria o app.
+--
+-- DECISAO (GATE-5.5, OPCAO 1): conceder BYPASSRLS a app_runtime.
+--   Por que:
+--   * Minimo: um atributo de role, nao mexe em 63 tabelas nem policies.
+--   * Future-proof: cobre tabelas atuais E futuras (a ensure_rls seguira
+--     habilitando RLS, mas app_runtime a ignora por ser role-level).
+--   * Preserva o financial column lockdown: BYPASSRLS ignora SOMENTE RLS
+--     (row-level); GRANTs de coluna continuam valendo. app_runtime segue SEM
+--     UPDATE(Payment.status). Validado em transacao (rollback) no GATE-5.5.
+--   * Nao aumenta exposicao da Data API: a RLS permanece ATIVA para anon/
+--     authenticated (a protecao deles nao muda).
+--   * Alinhado ao que ja existe: `service_role` ja tem BYPASSRLS.
+--
+-- PERMISSAO: ALTER ROLE ... BYPASSRLS exige SUPERUSER. No Supabase o `postgres`
+-- NAO e superuser (nao consegue). Rode como `supabase_admin` (via dashboard,
+-- SQL editor com privilegio, ou suporte). Idempotente.
+--
+-- FAIL-CLOSED: enquanto isto NAO for aplicado, app_runtime fica sem acesso
+-- (nega, nao vaza). O cutover para app_runtime so pode ocorrer depois disto.
+-- ============================================================================
+
+-- Aplicar como superuser (supabase_admin):
+ALTER ROLE app_runtime BYPASSRLS;
+
+-- Verificacao imediata (deve retornar true):
+--   SELECT rolbypassrls FROM pg_roles WHERE rolname = 'app_runtime';
+
+-- ----------------------------------------------------------------------------
+-- FALLBACK (OPCAO 3), somente se BYPASSRLS nao puder ser concedida:
+-- criar policy permissiva por-tabela SO para app_runtime, preservando RLS para
+-- as demais roles. Precisa ser reaplicada a cada tabela nova (a ensure_rls
+-- habilita RLS mas nao cria policy) -> maior manutencao. NAO recomendado.
+--
+--   DO $$
+--   DECLARE t text;
+--   BEGIN
+--     FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP
+--       EXECUTE format(
+--         'DROP POLICY IF EXISTS "app_runtime_all" ON public.%I; '
+--         'CREATE POLICY "app_runtime_all" ON public.%I FOR ALL TO app_runtime '
+--         'USING (true) WITH CHECK (true)', t, t);
+--     END LOOP;
+--   END $$;
+--
+-- NAO usar DISABLE ROW LEVEL SECURITY: anon/authenticated tem grants em todas as
+-- tabelas, entao desabilitar RLS as exporia pela Data API. (OPCAO 2 = rejeitada.)
