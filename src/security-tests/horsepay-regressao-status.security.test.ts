@@ -110,4 +110,44 @@ describe("regressão HorsePay · S2S pago vira VERIFIED_APPROVED sob STRONG", ()
     const v = await verifyPayment(entrada("8123456"), deps("8123456", 1.01));
     expect(v.resultado).toBe("VERIFIED_FAILED");
   });
+
+  // GATE 15: "success" é o status REAL de pago em produção. Prova ponta a ponta
+  // + STRONG preservado (valor e identidade continuam obrigatórios).
+  it('S2S "success" + value exato + id == externalId => VERIFIED_APPROVED / S2S_STATUS_AMOUNT', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: 1.01, tax: 0.02, status: "success", end_to_end: "E1" } }]);
+    const v = await verifyPayment(entrada("8123456"), deps("8123456", 1.01));
+    expect(v.resultado).toBe("VERIFIED_APPROVED");
+    expect(v.metodo).toBe("S2S_STATUS_AMOUNT");
+    expect(v.centavosConfirmados).toBe(101);
+  });
+
+  it('STRONG preservado: "success" + underpayment => INVALID', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: 1.0, status: "success" } }]);
+    expect((await verifyPayment(entrada("8123456"), deps("8123456", 1.01))).resultado).toBe("INVALID");
+  });
+
+  it('STRONG preservado: "success" + overpayment => INVALID', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: 1.02, status: "success" } }]);
+    expect((await verifyPayment(entrada("8123456"), deps("8123456", 1.01))).resultado).toBe("INVALID");
+  });
+
+  it('STRONG preservado: "success" + id divergente => INVALID', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 999999, value: 1.01, status: "success" } }]);
+    expect((await verifyPayment(entrada("8123456"), deps("8123456", 1.01))).resultado).toBe("INVALID");
+  });
+
+  it('STRONG preservado: "success" + id ausente => INVALID', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { value: 1.01, status: "success" } }]);
+    expect((await verifyPayment(entrada("8123456"), deps("8123456", 1.01))).resultado).toBe("INVALID");
+  });
+
+  it('STRONG preservado: "success" + value malformado (string) => INVALID', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: "1.01", status: "success" } }]);
+    expect((await verifyPayment(entrada("8123456"), deps("8123456", 1.01))).resultado).toBe("INVALID");
+  });
+
+  it("status desconhecido continua PENDING (fail-closed, sem substring/truthy)", async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: 1.01, status: "successo_inventado" } }]);
+    expect((await verifyPayment(entrada("8123456"), deps("8123456", 1.01))).resultado).toBe("VERIFIED_PENDING");
+  });
 });

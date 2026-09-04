@@ -228,6 +228,17 @@ describe("consultarDeposito", () => {
     expect(c.identity.id).toBe("8123456");
   });
 
+  // GATE 14/15: a resposta REAL de produção usa status "success" e o payload
+  // exato {created_at, end_to_end, id, status, tax, updated_at, value}. Antes
+  // "success" caía em PENDING (regressão confirmada em produção pelo diagnóstico).
+  it('status "success" (resposta REAL de produção) => APPROVED, com value e id', async () => {
+    respondeEm([TOKEN, { status: 200, corpo: { id: 8123456, value: 1.01, tax: 0.02, status: "success", end_to_end: "E9", created_at: "2026-09-04T20:30:00Z", updated_at: "2026-09-04T20:31:00Z" } }]);
+    const c = await consultarDeposito(creds, "8123456");
+    expect(c.status).toBe("APPROVED");
+    expect(c.amountBrl).toBe(1.01);
+    expect(c.identity.id).toBe("8123456");
+  });
+
   it("parsing fail-closed: value não-numérico e id malformado viram null", async () => {
     for (const corpo of [
       { id: 12345, value: "1.01", status: "paid" }, // value string -> null
@@ -253,10 +264,12 @@ describe("traduzirStatus", () => {
     expect(traduzirStatus("pending")).toBe("PENDING");
     expect(traduzirStatus("waiting_payment")).toBe("PENDING");
     expect(traduzirStatus("paid")).toBe("APPROVED");
-    // REGRESSÃO: "approved" é sinônimo de pago na HorsePay (doc de rastreamento).
+    // REGRESSÃO: a consulta REAL de produção usa "success" para pago (GATE 14);
+    // "approved" é o sinônimo da doc de rastreamento. Ambos + "paid" => pago.
+    expect(traduzirStatus("success")).toBe("APPROVED");
     expect(traduzirStatus("approved")).toBe("APPROVED");
     expect(traduzirStatus("PAID")).toBe("APPROVED"); // case-insensitive
-    expect(traduzirStatus("Approved")).toBe("APPROVED");
+    expect(traduzirStatus("Success")).toBe("APPROVED");
     expect(traduzirStatus("refunded")).toBe("REJECTED");
     expect(traduzirStatus("chargedback")).toBe("REJECTED");
     expect(traduzirStatus("inventado")).toBeNull();

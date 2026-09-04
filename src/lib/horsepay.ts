@@ -314,14 +314,18 @@ export function traduzirStatus(status: string): StatusDePagamento | null {
     case "pending":
     case "waiting_payment": // vocabulário de rastreamento (Utmify) para "aguardando"
       return "PENDING";
-    // A HorsePay reporta um depósito PAGO como "paid" OU "approved" (a própria
-    // doc de rastreamento diz "Status paid ou approved" quando o PIX é pago). O
-    // GET /api/orders/deposit devolve um desses; tratar só "paid" fazia um
-    // depósito "approved" cair em PENDING e NUNCA virar VERIFIED_APPROVED - a
-    // regressão que segurou os pagamentos após o STRONG. Continua sendo prova de
-    // status server-to-server: valor e identidade ainda são conferidos depois.
+    // Depósito PAGO na consulta autoritativa GET /api/orders/deposit. A resposta
+    // REAL de produção usa "success" (diagnóstico HORSEPAY_S2S_DIAGNOSTICO,
+    // GATE 14); a doc mostra "paid" e a doc de rastreamento cita "approved".
+    // Aceitamos os três (enum EXPLÍCITO, nunca truthy/substring). Tratar só
+    // "paid" fazia um depósito "success" cair em PENDING e NUNCA virar
+    // VERIFIED_APPROVED - a regressão que segurou os pagamentos após o STRONG.
+    // "success" apenas leva o providerStatus a APPROVED: valor (centavos exatos)
+    // e identidade (id == externalId) seguem sendo conferidos depois. STRONG
+    // intacto; o webhook continua sendo só SINAL.
     case "paid":
     case "approved":
+    case "success":
       return "APPROVED";
     case "refunded":
     case "canceled":
