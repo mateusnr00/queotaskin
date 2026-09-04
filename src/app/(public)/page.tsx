@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { TicketCheck, Trophy } from "lucide-react";
 
@@ -25,19 +26,15 @@ import {
 import { notFound } from "next/navigation";
 import { ContainerPublico } from "@/components/public/container";
 
-// Sete campanhas ativas na home: uma principal e seis embaixo.
+// Até nove campanhas ativas na home: uma principal e oito na grade. É um TETO,
+// não uma meta: se houver menos, mostra só o que existe (não preenche à força).
 //
-// Eram doze, ou seja, uma principal e onze na grade. O pedido foi "até 7, uma
-// principal e 5 embaixo", e os dois números não fecham: 1 + 5 dá 6.
-//
-// Fiquei com SETE, que é o teto que foi dito, e ele também é o que fecha a
-// grade: são duas colunas, então seis embaixo formam três linhas cheias, e
-// cinco deixariam um cartão sozinho na última. Se a intenção era seis no
-// total, é trocar este número por 6.
+// Nove também fecha a grade de duas colunas: as oito de baixo formam quatro
+// linhas cheias, sem cartão sozinho na última.
 //
 // As campanhas que não couberem continuam na página /sorteios, que existe para
 // isso e não tem teto.
-const MAX_RAFFLES = 7;
+const MAX_RAFFLES = 9;
 // Quatro cartões, somando as duas origens.
 //
 // Eram seis de CADA, ou seja, até doze na página, e doze cartões de ganhador
@@ -329,6 +326,7 @@ export default async function HomePage() {
         {mostrarGanhadores && (
           <section className="mt-10 space-y-3">
             <SectionHeader
+              icone={<Trophy className="h-4 w-4 text-amber-500 dark:text-amber-400" />}
               title="Ganhadores"
               caption="quem já levou pra casa"
             />
@@ -344,15 +342,19 @@ export default async function HomePage() {
 }
 
 function SectionHeader({
+  icone,
   title,
   caption,
 }: {
+  icone?: ReactNode;
   title?: string;
   caption?: string;
 }) {
   if (!title && !caption) return null;
   return (
-    <div className="flex items-baseline gap-2 px-1 flex-wrap">
+    <div className="flex items-center gap-2 px-1 flex-wrap">
+      {/* O troféu fica à esquerda do título (ex.: "Ganhadores"). */}
+      {icone}
       {title && (
         <h2 className="text-base font-bold tracking-tight">{title}</h2>
       )}
