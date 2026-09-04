@@ -63,7 +63,7 @@ suiteDeIntegracao("P1-A · OTP e isolamento", () => {
   async function criarUser(tenantId: string | null, phone: string | null) {
     const cpf = cpfAleatorioValido();
     const u = await prisma.user.create({
-      data: { name: `U ${cpf}`, cpf, tenantId, phone, phoneCountry: "BR", role: "PARTICIPANT" },
+      data: { name: `U ${cpf}`, cpf, tenantId, phone, phoneCountry: "BR", phoneVerifiedAt: new Date(), role: "PARTICIPANT" },
       select: { id: true },
     });
     users.push(u.id);

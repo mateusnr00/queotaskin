@@ -50,10 +50,14 @@ export async function solicitarOtpDeLogin(
   // participante - documentado no relatório.
   const user = await prisma.user.findUnique({
     where: { cpf: pedido.cpf },
-    select: { id: true, tenantId: true, phone: true, phoneCountry: true },
+    select: { id: true, tenantId: true, phone: true, phoneCountry: true, phoneVerifiedAt: true },
   });
 
-  if (user?.phone) {
+  // REG-2 / §12 FAIL-CLOSED: telefone NAO verificado nunca vira fator. Conta
+  // legada (phoneVerifiedAt NULL) cai no chamariz: nao recebe codigo e nao
+  // autentica. E o cerne do blocker - migracao passa por fluxo assistido, nao
+  // por mandar OTP para um telefone que nunca foi provado.
+  if (user?.phone && user.phoneVerifiedAt) {
     const { challengeId } = await criarDesafio(
       {
         tenantId: user.tenantId,

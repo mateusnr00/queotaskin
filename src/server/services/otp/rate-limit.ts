@@ -10,7 +10,10 @@ export type BucketDeAuth =
   | "VERIFY_OTP"
   | "RESEND_OTP"
   | "LOGIN_FAILURE"
-  | "ACCOUNT_RECOVERY";
+  | "ACCOUNT_RECOVERY"
+  | "REGISTER_REQUEST"
+  | "REGISTER_VERIFY"
+  | "REGISTER_RESEND";
 
 // Teto por bucket dentro da janela. Escolhas explícitas (documentadas), não
 // silenciosas.
@@ -20,6 +23,9 @@ const LIMITE: Record<BucketDeAuth, number> = {
   RESEND_OTP: 4,        // reenvios por identidade/janela
   LOGIN_FAILURE: 10,    // falhas de login por identidade/janela
   ACCOUNT_RECOVERY: 3,  // pedidos de recuperação por identidade/janela
+  REGISTER_REQUEST: 5,  // pedidos de cadastro por identidade/janela
+  REGISTER_VERIFY: 10,  // verificações de cadastro por identidade/janela
+  REGISTER_RESEND: 4,   // reenvios de cadastro por identidade/janela
 };
 
 const JANELA_MS = 15 * 60 * 1000;

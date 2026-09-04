@@ -5,10 +5,18 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { IdCard, Link2, Lock, User } from "lucide-react";
+import { IdCard, KeyRound, Link2, Lock, User } from "lucide-react";
 
-import { loginAction, registerAction } from "@/server/actions/auth";
-import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
+import {
+  solicitarCadastroAction,
+  concluirCadastroAction,
+} from "@/server/actions/auth";
+import {
+  registerSchema,
+  otpCodigoSchema,
+  type RegisterInput,
+  type OtpCodigoInput,
+} from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
 import { normalizarCodigo } from "@/lib/afiliados";
 import { PAIS_PADRAO } from "@/lib/telefone";
@@ -68,6 +76,11 @@ export function RegisterForm({
   const travado = Boolean(codigoTravado);
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const formCodigo = useForm<OtpCodigoInput>({
+    resolver: zodResolver(otpCodigoSchema),
+    defaultValues: { codigo: "" },
+  });
 
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -83,38 +96,72 @@ export function RegisterForm({
   function onSubmit(values: RegisterInput) {
     setServerError(null);
     startTransition(async () => {
-      const result = await registerAction(values);
+      const result = await solicitarCadastroAction(values);
       if (!result.ok) {
         setServerError(result.error);
         toast.error(result.error);
         return;
       }
-      // Loga automaticamente após registro, login é por nome + CPF, sem
-      // senha. O celular fica guardado para a operação falar com o cliente.
-      const login = await loginAction({
-        name: values.name,
-        cpf: values.cpf,
-      });
-      if (!login.ok) {
-        // Dentro do diálogo não há para onde mandar: a pessoa está no meio
-        // de uma reserva. Vira aviso, e ela tenta entrar ali mesmo.
-        if (aoConcluir) {
-          setServerError("Conta criada, mas o login falhou. Tente entrar.");
-          toast.error("Conta criada, mas o login falhou. Tente entrar.");
-          return;
-        }
-        toast.success("Conta criada. Faça login para continuar");
-        router.push(`/login?redirect=${encodeURIComponent(redirectTo)}`);
-        return;
-      }
-      toast.success("Conta criada com sucesso");
-      if (aoConcluir) {
-        aoConcluir();
-        return;
-      }
-      router.refresh();
-      router.push(redirectTo);
+      setChallengeId(result.data.challengeId);
+      toast.success("Enviamos um codigo ao seu telefone para confirmar o cadastro.");
     });
+  }
+
+  function confirmarCadastro(values: OtpCodigoInput) {
+    if (!challengeId) return;
+    setServerError(null);
+    startTransition(async () => {
+      const r = await concluirCadastroAction({ challengeId, codigo: values.codigo });
+      if (!r.ok) {
+        setServerError(r.error);
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Conta criada. Faça login para continuar.");
+      if (aoConcluir) return aoConcluir();
+      router.push(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+    });
+  }
+
+
+  if (challengeId) {
+    return (
+      <Form {...formCodigo}>
+        <form onSubmit={formCodigo.handleSubmit(confirmarCadastro)} className="space-y-4">
+          <FormField
+            control={formCodigo.control}
+            name="codigo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className={ROTULO}>Codigo recebido</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="000000"
+                      maxLength={6}
+                      className={cn(CAMPO, "tabular-nums tracking-[0.4em]")}
+                      {...field}
+                    />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {serverError && (
+            <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+              {serverError}
+            </p>
+          )}
+          <BotaoDeGrade disabled={isPending}>
+            {isPending ? "Confirmando..." : "Confirmar cadastro"}
+          </BotaoDeGrade>
+        </form>
+      </Form>
+    );
   }
 
   return (

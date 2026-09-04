@@ -11,23 +11,22 @@
 // Server Actions = funções TS que rodam SEMPRE no servidor, mesmo quando
 // chamadas a partir de componentes client. CSRF é tratado nativamente.
 
-import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { getCurrentTenant } from "@/lib/tenant";
 import { cookies, headers } from "next/headers";
 import { COOKIE_DE_INDICACAO } from "@/lib/afiliados";
-import { vincularIndicacao } from "@/server/services/afiliados";
 
 import { auth, signIn, signOut } from "@/auth";
 import { solicitarOtpDeLogin } from "@/server/services/otp/login";
 import { provedorDeOtp } from "@/server/services/otp/provider";
+import { solicitarCadastro, concluirCadastro } from "@/server/services/otp/registro";
+import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
 import { registrarLog } from "@/server/services/activity-log";
 import {
   chavesDoLogin,
   estaBloqueado,
   ipDaRequisicao,
-  registrarFalha,
 } from "@/server/services/login-throttle";
 import bcrypt from "bcryptjs";
 import {
@@ -45,92 +44,62 @@ export type ActionResult<T = void> =
 export async function registerAction(
   raw: unknown
 ): Promise<ActionResult<{ userId: string }>> {
+  // FECHADO: cadastro nao cria mais conta autenticavel so com nome+CPF+telefone.
+  // O telefone precisa ser provado por OTP antes da conta existir
+  // (solicitarCadastroAction -> concluirCadastroAction). Esta action legada
+  // recusa, para nao restar caminho que crie conta sem prova do telefone.
+  void raw;
+  return { ok: false, error: "O cadastro agora confirma seu telefone por um codigo." };
+}
+
+/// Passo 1 do cadastro: valida os dados e dispara o OTP ao telefone. Resposta
+/// neutra: nao revela se CPF/telefone ja existem, e nao altera conta alguma.
+export async function solicitarCadastroAction(
+  raw: unknown
+): Promise<ActionResult<{ challengeId: string }>> {
   const parsed = registerSchema.safeParse(raw);
   if (!parsed.success) {
-    return {
-      ok: false,
-      error: "Dados inválidos",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
+    return { ok: false, error: "Dados invalidos", fieldErrors: parsed.error.flatten().fieldErrors };
   }
-
   const { name, cpf, phone, phoneCountry, codigoDeIndicacao } = parsed.data;
-
-  // Freio por IP: o cadastro é sem senha e sem captcha, então é criação livre
-  // de contas (munição para abuso de reserva) e um oráculo de enumeração. Usa
-  // o mesmo freio do login, por IP.
-  const ipReg = ipDaRequisicao(await headers());
-  const chaveReg = `registro:${ipReg ?? "sem-ip"}`;
-  if ((await estaBloqueado([chaveReg])).bloqueado) {
-    return {
-      ok: false,
-      error: "Muitas tentativas de cadastro. Espere alguns minutos e tente de novo.",
-    };
-  }
-  await registrarFalha([chaveReg]);
-
-  // Onde a pessoa se cadastrou.
-  //
-  // Sem isso a conta nasce solta e não aparece em Clientes até a primeira
-  // compra, porque a lista acha o cliente por vínculo com o tenant ou por
-  // reserva, e quem acabou de se cadastrar não tem nenhum dos dois. Quem
-  // criou conta e não comprou é exatamente o cliente que o painel precisa
-  // enxergar para ir atrás.
-  //
-  // Não muda o que o schema diz: PARTICIPANT continua global, podendo
-  // comprar em qualquer tenant, porque a lista também casa por reserva. Isto
-  // aqui só registra a porta de entrada.
+  const ip = ipDaRequisicao(await headers());
   const tenant = await getCurrentTenant();
-
+  const codigoDoCookie = (await cookies()).get(COOKIE_DE_INDICACAO)?.value;
   try {
-    const user = await prisma.user.create({
-      data: {
-        name,
-        cpf,
-        phone,
-        phoneCountry,
-        role: "PARTICIPANT",
-        tenantId: tenant?.id ?? null,
-      },
-      select: { id: true },
-    });
-
-    // O VÍNCULO COM QUEM INDICOU.
-    //
-    // Vem do campo do formulário quando a pessoa digitou, e do cookie quando
-    // ela chegou por /?ref=CODIGO dias atrás. Roda depois da conta existir e
-    // nunca derruba o cadastro: código inexistente, autoindicação ou afiliado
-    // suspenso simplesmente não vinculam, e a conta é criada igual.
-    const codigoDoCookie = (await cookies()).get(COOKIE_DE_INDICACAO)?.value;
-    const codigo = (codigoDeIndicacao || codigoDoCookie || "").trim();
-    if (codigo) {
-      const vinculado = await vincularIndicacao(user.id, codigo);
-      if (vinculado) {
-        void registrarLog({
-          acao: "afiliado.indicacao_vinculada",
-          tenantId: tenant?.id ?? null,
-          origem: "PUBLICO",
-          ator: { id: user.id, nome: name, papel: "PARTICIPANT" },
-          alvo: { tipo: "User", id: user.id },
-          detalhes: { codigo: vinculado },
-        });
-      }
-    }
-
-    return { ok: true, data: { userId: user.id } };
-  } catch (err) {
-    // P2002 = unique constraint violation. Phone e cpf são unique.
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
-      // Mensagem única, sem distinguir a coluna (phone/cpf): uma resposta
-      // específica por campo vira oráculo de enumeração de quem já tem conta.
-      return { ok: false, error: "Já existe uma conta com esses dados." };
-    }
-    console.error("[registerAction] erro criando user:", err);
-    return { ok: false, error: "Erro ao criar conta" };
+    const r = await solicitarCadastro(
+      { name, cpf, phone, phoneCountry, tenantId: tenant?.id ?? null, codigoDeIndicacao: codigoDeIndicacao || codigoDoCookie || null, ip },
+      provedorDeOtp(),
+    );
+    if ("bloqueado" in r) return { ok: false, error: "Muitas tentativas. Tente novamente em alguns minutos." };
+    return { ok: true, data: { challengeId: r.challengeId } };
+  } catch {
+    return { ok: false, error: "Envio de codigo indisponivel no momento." };
   }
+}
+
+/// Passo 2 do cadastro: valida o OTP e cria a conta (telefone ja verificado).
+export async function concluirCadastroAction(
+  raw: unknown
+): Promise<ActionResult<{ userId: string }>> {
+  const challengeId = typeof (raw as { challengeId?: unknown })?.challengeId === "string" ? (raw as { challengeId: string }).challengeId : "";
+  const codigo = typeof (raw as { codigo?: unknown })?.codigo === "string" ? (raw as { codigo: string }).codigo : "";
+  if (!challengeId || !/^[0-9]{6}$/.test(codigo)) return { ok: false, error: "Codigo invalido" };
+  const ip = ipDaRequisicao(await headers());
+  const r = await concluirCadastro({ challengeId, codigo, ip });
+  if (r.ok) return { ok: true, data: { userId: r.userId } };
+  const msg = r.motivo === "BLOQUEADO" ? "Muitas tentativas. Tente novamente em alguns minutos."
+    : r.motivo === "JA_EXISTE" ? "Ja existe uma conta com esses dados."
+    : "Codigo incorreto ou expirado.";
+  return { ok: false, error: msg };
+}
+
+/// Encerra todas as sessoes do usuario autenticado (§24 logout-all).
+export async function encerrarTodasAsSessoesAction(): Promise<ActionResult> {
+  const sessao = await auth();
+  if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
+  await revogarTodasAsSessoes(sessao.user.id);
+  await signOut({ redirect: false });
+  return { ok: true, data: undefined };
 }
 
 // Login passwordless via nome + celular. O provider Credentials no auth.ts

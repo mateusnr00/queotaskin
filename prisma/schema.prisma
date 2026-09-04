@@ -219,28 +219,29 @@ model User {
   /// Interruptor por pessoa, e não algo derivado do papel, porque cargo e
   /// aparência pública são decisões separadas: existe admin que precisa
   /// passar por cliente comum, e pode existir moderador que não é admin.
-  showModBadge   Boolean @default(false)
-  name           String
+  showModBadge    Boolean   @default(false)
+  name            String
   // CPF não é mais usado pra login (passou a ser nome+celular). Continua
   // como campo opcional pra dados antigos e edição via admin. Múltiplos
   // NULLs são OK no @unique.
-  cpf            String? @unique
+  cpf             String?   @unique
   // Celular é o identificador único do login (combinado com nome). Armazenado
   // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
   // novos sempre cadastram.
-  phone          String? @unique
+  phone           String?   @unique
   // País do telefone, em ISO 3166-1 alfa-2. O número continua guardado só em
   // dígitos e sem o código do país: assim as contas que já existem seguem
   // válidas sem migração de dados, e a formatação sabe de que país o número
   // é na hora de exibir.
-  phoneCountry   String  @default("BR")
-  role           Role    @default(PARTICIPANT)
+  phoneCountry    String    @default("BR")
+  phoneVerifiedAt DateTime?
+  role            Role      @default(PARTICIPANT)
   // Versão da sessão. Toda sessão carrega a versão vigente no momento do
   // login; incrementar aqui (troca de telefone, logout global, ação de
   // segurança) invalida imediatamente todas as sessões emitidas antes, sem
   // depender de expiração. Ver auth.config.ts (callback jwt/session).
-  sessionVersion Int     @default(0)
-  image          String?
+  sessionVersion  Int       @default(0)
+  image           String?
 
   /// O time de CS2 para quem a pessoa torce, exibido ao lado do nome dela.
   ///
@@ -2760,4 +2761,26 @@ model AuthChallenge {
   @@index([purpose])
   @@index([expiresAt])
   @@index([tenantId])
+}
+
+/// Cadastro em andamento, ANTES de virar conta. Modelo "verifica e so entao
+/// cria": nenhum User autenticavel nasce sem prova do telefone. Guarda os
+/// dados do cadastro ligados a um AuthChallenge(REGISTER_PHONE). Ao verificar
+/// o codigo, cria o User atomicamente (a unicidade global de cpf/phone
+/// resolve concorrencia) e descarta o pendente.
+model PendingRegistration {
+  id                String    @id @default(cuid())
+  challengeId       String    @unique
+  name              String
+  cpf               String
+  phone             String
+  phoneCountry      String    @default("BR")
+  tenantId          String?
+  codigoDeIndicacao String?
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+  consumedAt        DateTime?
+
+  @@index([cpf])
+  @@index([expiresAt])
 }

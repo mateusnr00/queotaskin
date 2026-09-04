@@ -214,3 +214,14 @@ export const userCreateSchema = z
     }
   });
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
+
+
+// Passo 1 do login: só o CPF (identificador). Nome não é credencial.
+export const cpfLoginSchema = z.object({ cpf: cpfField });
+export type CpfLoginInput = z.infer<typeof cpfLoginSchema>;
+
+// Passo do código OTP (login ou cadastro).
+export const otpCodigoSchema = z.object({
+  codigo: z.string().regex(/^[0-9]{6}$/, "Código de 6 dígitos"),
+});
+export type OtpCodigoInput = z.infer<typeof otpCodigoSchema>;

@@ -162,6 +162,9 @@ export async function updateUserAction(
           email: email || null,
           cpf: cpf || null,
           phone: phone || null,
+          // REG-4/§2: telefone alterado por admin NAO e verificado. Zera a
+          // marca de confianca; so o dono, provando o numero por OTP, verifica.
+          ...(( phone || null) !== (target.phone ?? null) ? { phoneVerifiedAt: null } : {}),
           role: finalRole,
           showModBadge,
           // Se promovendo pra ADMIN/AFFILIATE e ainda não pertence a um tenant,
