@@ -1,5 +1,9 @@
 # Observabilidade de deploy
 
+## Drain do OLD (§20)
+Provar 100% NEW por `/api/health` (campo `release` = sha do NEW) + deployment id
+da plataforma. Nunca por tempo fixo. `/api/health/ready` confirma o banco.
+
 ## Primeiros 30–60 min
 - Taxa de erro 5xx (deve ser ~0).
 - Login admin com MFA (sucesso/falha).

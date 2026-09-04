@@ -27,6 +27,7 @@ Estas suítes provam invariantes de segurança. Removê-las reabre vulnerabilida
 - src/security-tests/infra.security.test.ts
 - src/security-tests/db-financial-fsm.security.test.ts (7.1 lockdown financeiro)
 - src/security-tests/mfa-key-separation.security.test.ts (7.1 chave MFA)
+- src/app/api/health/health.test.ts (liveness sem segredo)
 
 Barreira test/prod: src/test/assert-safe-environment.test.ts (NUNCA remover).
 Rode todas: `npm run security:test`.

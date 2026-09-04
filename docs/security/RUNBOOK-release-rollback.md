@@ -1,5 +1,9 @@
 # Runbook de Release e Rollback (P0 + P1)
 
+> **A sequência autoritativa e 7.1-aware (com roles, FSM function, lockdown e
+> chave MFA) vive em `RELEASE-PLAN.md`.** Este arquivo mantém a matriz de
+> rollback e o floor; para a ordem exata de execução, use o RELEASE-PLAN.
+
 ## Sequência de release (preserva a propriedade "sem janela vulnerável")
 Ordem obrigatória — não altere:
 1. Backup/PITR confirmado (ver BACKUP-CHECKLIST).
