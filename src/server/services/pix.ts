@@ -10,11 +10,7 @@
 
 import { prisma } from "@/lib/db";
 import { registrarLog } from "@/server/services/activity-log";
-import { awardXpForReservation } from "@/server/services/xp";
-import { processarPagamentoConfirmado } from "@/server/services/afiliados";
-import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
-import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
-import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
+import { processarWebhookDePagamento } from "@/server/services/payment-webhook";
 import {
   getProviderForRaffle,
   type PaymentProviderClient,
@@ -287,117 +283,31 @@ export async function pollPaymentStatusIfPending(
     const res = await resolution.provider.getStatus(externalId);
     const resolved = res.status;
 
-    // Lida uma vez, antes de decidir qualquer coisa, e usada só para decidir
-    // SE o log abaixo é escrito (não guarda a transação, que já era assim
-    // antes desta task). O freio de polling logo acima é um Map em memória:
-    // em serverless cada instância tem o seu, então duas requisições que
-    // caem em instâncias diferentes furam o freio e chegam as duas aqui. Um
-    // polling que roda depois de o webhook já ter confirmado também cai
-    // neste ramo. Sem esta leitura, a mesma confirmação apareceria repetida
-    // no histórico.
-    //
-    // A leitura não fecha a corrida de verdade (ainda é ler e depois agir),
-    // mas colapsa o caso real, que é a repetição em sequência. Fechar de
-    // verdade exigiria trocar o update por updateMany com guarda de status,
-    // e mudar a semântica do caminho do dinheiro (update lança quando a
-    // linha não existe, updateMany não) só por causa de um campo de log não
-    // se paga.
-    //
-    // Só quando há transição para registrar: no caso dominante o gateway
-    // responde PENDING, e aí esta leitura seria uma ida ao banco por
-    // consulta de status, sem nada para gravar no fim.
-    const paymentAntesDoPoll =
-      resolved === "APPROVED" || resolved === "REJECTED"
-        ? await prisma.payment.findUnique({
-            where: { id: paymentId },
-            select: { status: true },
-          })
-        : null;
-
-    if (resolved === "APPROVED") {
-      await prisma.$transaction([
-        prisma.payment.update({
-          where: { id: paymentId },
-          data: { status: "APPROVED", paidAt: new Date() },
-        }),
-        prisma.reservation.update({
-          where: { id: reservationId },
-          data: { status: "PAID", paidAt: new Date() },
-        }),
-        prisma.ticket.updateMany({
-          where: { reservationId, status: "RESERVED" },
-          data: { status: "PAID", paidAt: new Date() },
-        }),
-      ]);
-      // void, sem await: esta chamada vai PARA o gateway, quem espera a
-      // resposta é o cliente (o botão "Já paguei" via checkPaymentStatusAction,
-      // ou o render da página do comprovante), e a escrita do log não pode
-      // somar latência a essa resposta.
-      if (paymentAntesDoPoll?.status !== "APPROVED") {
-        void registrarLog({
-          acao: "pagamento.aprovado",
-          tenantId: reservation.raffle.tenantId,
-          origem: "SISTEMA",
-          ator: { nome: "Consulta de status no gateway" },
-          alvo: { tipo: "Reservation", id: reservationId },
-          detalhes: { pagamentoId: paymentId, caminho: "polling" },
-        });
-      }
-      // Tudo o que o webhook faz depois de confirmar precisa acontecer aqui
-      // também. Quando o webhook não chega, este é o único caminho que marca
-      // a reserva como paga, e sem isto a pessoa pagava, recebia os números e
-      // o XP, e nunca recebia título premiado nem caixa surpresa. Em silêncio:
-      // nada falhava, o prêmio simplesmente não vinha.
-      //
-      // Cada entrega vai com catch próprio, como no webhook: o pagamento já
-      // está confirmado neste ponto, e derrubar a função por causa de um
-      // prêmio deixaria os outros sem entregar também.
-      await processarPagamentoConfirmado(reservationId).catch((err) =>
-        console.error("[pix] afiliado falhou:", err),
-      );
-      await awardXpForReservation(reservationId).catch((err) =>
-        console.error("[pollPaymentStatusIfPending] awardXp falhou:", err),
-      );
-      await autoAwardTicketsForReservation(reservationId).catch((err) =>
-        console.error(
-          "[pollPaymentStatusIfPending] autoAwardTickets falhou:",
-          err,
-        ),
-      );
-      await autoGenerateSurpriseBoxesForReservation(reservationId).catch(
-        (err) =>
-          console.error(
-            "[pollPaymentStatusIfPending] autoGenerateSurpriseBoxes falhou:",
-            err,
-          ),
-      );
-      // A raspadinha andava só com três dos seis caminhos de confirmação, e
-      // este era um dos que faltavam: quem tinha o pagamento confirmado por
-      // aqui comprava vinte e cinco títulos e não recebia raspadinha nenhuma,
-      // enquanto as caixas surpresas da mesma compra vinham normalmente.
-      await gerarRaspadinhasParaReserva(reservationId).catch((err) =>
-        console.error(
-          "[pollPaymentStatusIfPending] gerarRaspadinhas falhou:",
-          err,
-        ),
-      );
-    } else if (resolved === "REJECTED") {
-      await prisma.payment.update({
+    // CHOKE POINT ÚNICO: o polling não escreve status nem aplica efeitos por
+    // conta própria. Ele é só mais um GATILHO; a autoridade é a mesma do
+    // webhook. Delegando, o polling herda de graça a verificação
+    // server-to-server, a máquina de estados, a idempotência por evento e os
+    // guardas de reconciliação (rifa encerrada, cotas insuficientes).
+    if (resolved === "APPROVED" || resolved === "REJECTED") {
+      const provColuna = await prisma.payment.findUnique({
         where: { id: paymentId },
-        data: { status: "REJECTED" },
+        select: { provider: true },
       });
-      // void, sem await: mesmo raciocínio do ramo APPROVED acima.
-      if (paymentAntesDoPoll?.status !== "REJECTED") {
-        void registrarLog({
-          acao: "pagamento.recusado",
-          tenantId: reservation.raffle.tenantId,
-          origem: "SISTEMA",
-          ator: { nome: "Consulta de status no gateway" },
-          alvo: { tipo: "Reservation", id: reservationId },
-          detalhes: { pagamentoId: paymentId, caminho: "polling" },
+      if (provColuna) {
+        await processarWebhookDePagamento({
+          evento: {
+            provider: provColuna.provider,
+            externalId,
+            statusAfirmado: resolved,
+            eventoOficial: null,
+          },
+          corpoCru: "",
+          payload: { fonte: "polling", paymentId },
+          assinaturaValida: null,
         });
       }
     }
+
     return resolved;
   } catch (err) {
     console.error("[pollPaymentStatusIfPending]", err);

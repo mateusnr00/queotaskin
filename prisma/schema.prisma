@@ -1803,6 +1803,15 @@ model Reservation {
   /// valem, o premio sai, o comprovante existe), e o registro de quem marcou
   /// fica no historico.
   aprovadaNoPainel Boolean           @default(false)
+  /// DINHEIRO RECEBIDO, ENTREGA IMPOSSÍVEL.
+  /// Um PIX confirmado tarde demais (rifa encerrada, ou sem cotas livres
+  /// suficientes) não pode virar uma compra normal concluída: os números
+  /// seriam inseridos numa rifa já sorteada, ou faltariam. Nesses casos o
+  /// Payment fica APPROVED (o dinheiro entrou, é fato), mas a Reservation NÃO
+  /// vira PAID: entra aqui, para reconciliação/decisão manual, sem fingir
+  /// entrega e sem alterar o histórico do sorteio.
+  precisaReconciliacao Boolean @default(false)
+  motivoReconciliacao  String?
   status           ReservationStatus @default(PENDING)
   expiresAt        DateTime
   paidAt           DateTime?

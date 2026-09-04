@@ -155,6 +155,35 @@ export async function computeTicketsToRecreate(
 }
 
 /**
+ * Quantas cotas esta reserva comprou, independente de haver números livres.
+ *
+ * É a mesma conta de `computeTicketsToRecreate`, isolada para o fluxo de
+ * pagamento tardio comparar "o que a pessoa pagou" com "o que dá para
+ * entregar" e detectar entrega parcial/impossível.
+ */
+export async function ticketsNecessariosDaReserva(
+  reservationId: string,
+): Promise<number> {
+  const reservation = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    select: {
+      totalAmount: true,
+      dobroAplicado: true,
+      entradasGratis: { select: { id: true }, take: 1 },
+      raffle: { select: { pricePerNumber: true, feeAmount: true, hasFee: true, isFree: true } },
+    },
+  });
+  if (!reservation) return 0;
+  const fee = reservation.raffle.hasFee && reservation.raffle.feeAmount
+    ? Number(reservation.raffle.feeAmount) : 0;
+  const price = reservation.raffle.isFree ? 0 : Number(reservation.raffle.pricePerNumber);
+  if (price <= 0) return 0;
+  const pagas = Math.round((Number(reservation.totalAmount) - fee) / price) + reservation.entradasGratis.length;
+  if (pagas <= 0) return 0;
+  return bilhetesDe(pagas, reservation.dobroAplicado);
+}
+
+/**
  * A compra, com a Entrada Grátis opcional.
  *
  * `usarEntradaDe` é o id do afiliado que vai gastar a entrada, e não um

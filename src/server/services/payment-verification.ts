@@ -82,12 +82,22 @@ export async function verifyPayment(
   const provider: PaymentProviderClient = resolucao.provider;
   if (!provider.getStatus) return v("UNVERIFIABLE", "provider sem consulta server-to-server");
 
+  // Timeout na fronteira financeira (§16): a consulta que pendura NUNCA vira
+  // aprovação. Vale para os 4 gateways, independente de o adapter ter ou não
+  // o próprio timeout.
+  const TIMEOUT_MS = 10_000;
   let consulta: { status: string; raw: unknown };
   try {
-    consulta = await provider.getStatus(pg.externalId);
+    consulta = await Promise.race([
+      provider.getStatus(pg.externalId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Object.assign(new Error("timeout"), { name: "TimeoutError" })), TIMEOUT_MS),
+      ),
+    ]);
   } catch (e) {
-    // Gateway indisponível NUNCA vira aprovação.
-    return v("UNVERIFIABLE", `gateway indisponível: ${(e as Error).name}`);
+    // Gateway indisponível, timeout, 401/403, 500, JSON inválido: NADA disso
+    // aprova. Fail-closed.
+    return v("UNVERIFIABLE", `gateway não confirmável: ${(e as Error).name}`);
   }
 
   // 7. valor, SE o gateway expõe. Comparado em CENTAVOS inteiros (nada de

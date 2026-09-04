@@ -322,6 +322,8 @@ export async function getPixStatus(
           Authorization: `Bearer ${token}`,
         },
         cache: "no-store",
+        redirect: "error", // §15: host oficial nunca redireciona para autoridade arbitrária
+        signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) {
         lastError = `${url} → ${res.status}`;

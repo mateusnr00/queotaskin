@@ -16,7 +16,7 @@ import {
   type DepsDaVerificacao,
   type ResultadoDaVerificacao,
 } from "@/server/services/payment-verification";
-import { computeTicketsToRecreate } from "@/server/services/reservations";
+import { computeTicketsToRecreate, ticketsNecessariosDaReserva } from "@/server/services/reservations";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
@@ -48,7 +48,8 @@ export type DesfechoDoWebhook =
   | "PENDENTE"
   | "RECUSADO"
   | "NAO_APROVADO"
-  | "PAGAMENTO_DESCONHECIDO";
+  | "PAGAMENTO_DESCONHECIDO"
+  | "RECONCILIACAO";
 
 export async function processarWebhookDePagamento(
   entrada: EntradaDoWebhook,
@@ -166,31 +167,68 @@ export async function processarWebhookDePagamento(
     alvo: { tipo: "Reservation", id: payment.reservationId },
     detalhes: { pagamentoId: payment.id, caminho: "webhook-verificado" },
   });
+  // Se a finalização mandou para reconciliação, a reserva NÃO está PAID e os
+  // efeitos derivados (que assumem entrega) não podem rodar.
+  const finalReserva = await prisma.reservation.findUnique({
+    where: { id: payment.reservationId },
+    select: { status: true, precisaReconciliacao: true },
+  });
+  if (finalReserva?.precisaReconciliacao || finalReserva?.status !== "PAID") {
+    return { desfecho: "RECONCILIACAO", verificacao: verif.resultado };
+  }
   await aplicarEfeitosDePagamentoAprovado(payment.reservationId);
   return { desfecho: "APROVADO", verificacao: verif.resultado };
 }
 
-/** Reserva PAID + tickets PAID, atômico. Trata reserva expirada mas paga. */
+/**
+ * Reserva PAID + tickets PAID, atômico. Mas ANTES, dois guardas financeiros:
+ *
+ *  - rifa não-ACTIVE (FINISHED/CANCELLED/...): um pagamento tardio JAMAIS
+ *    insere tickets numa rifa já sorteada, o que alteraria o histórico do
+ *    sorteio (§20). Vai para reconciliação.
+ *  - cotas insuficientes para entregar o que foi comprado (§18/§19): não
+ *    finge entrega parcial como se fosse completa. Vai para reconciliação.
+ *
+ * Nos dois casos o Payment continua APPROVED (o dinheiro entrou, é fato), mas
+ * a Reservation NÃO vira PAID: fica marcada para decisão manual, auditável, e
+ * nada de número roubado, duplicado, nem entrega fingida.
+ */
 async function finalizarReservaPaga(tx: Prisma.TransactionClient, reservationId: string): Promise<void> {
   const reserva = await tx.reservation.findUnique({
     where: { id: reservationId },
-    select: { status: true, raffleId: true, _count: { select: { tickets: true } } },
+    select: {
+      status: true, raffleId: true,
+      _count: { select: { tickets: true } },
+      raffle: { select: { status: true } },
+    },
   });
   if (!reserva) return;
 
-  // ETAPA 13: expirada mas paga de verdade. Não fraudar, não duplicar cota:
-  // recria os tickets que o cron apagou, com os mesmos números.
+  // GUARDA 1 (§20, BLOCKER): rifa não-ativa não recebe tickets novos.
+  if (reserva.raffle.status !== "ACTIVE") {
+    await marcarReconciliacao(tx, reservationId, `rifa ${reserva.raffle.status} no momento do pagamento`);
+    return;
+  }
+
   if (reserva.status === "EXPIRED" && reserva._count.tickets === 0) {
+    // Pagou depois de expirar: precisa recriar os tickets apagados. Só se
+    // houver cotas livres suficientes; senão, não finge entrega.
+    const necessarios = await ticketsNecessariosDaReserva(reservationId);
     const recriar = await computeTicketsToRecreate(reservationId);
-    if (recriar.length > 0) {
-      await tx.ticket.createMany({
-        data: recriar.map((number) => ({
-          raffleId: reserva.raffleId, number, status: "PAID" as const,
-          reservationId, paidAt: new Date(),
-        })),
-        skipDuplicates: true,
-      });
+    if (necessarios <= 0 || recriar.length < necessarios) {
+      await marcarReconciliacao(
+        tx, reservationId,
+        `cotas insuficientes no pagamento tardio: ${recriar.length}/${necessarios} disponíveis`,
+      );
+      return;
     }
+    await tx.ticket.createMany({
+      data: recriar.map((number) => ({
+        raffleId: reserva.raffleId, number, status: "PAID" as const,
+        reservationId, paidAt: new Date(),
+      })),
+      skipDuplicates: true,
+    });
   }
 
   await tx.reservation.update({ where: { id: reservationId }, data: { status: "PAID", paidAt: new Date() } });
@@ -198,6 +236,15 @@ async function finalizarReservaPaga(tx: Prisma.TransactionClient, reservationId:
     where: { reservationId, status: "RESERVED" },
     data: { status: "PAID", paidAt: new Date() },
   });
+}
+
+/** Marca a reserva para reconciliação (dinheiro recebido, entrega bloqueada). */
+async function marcarReconciliacao(tx: Prisma.TransactionClient, reservationId: string, motivo: string): Promise<void> {
+  await tx.reservation.update({
+    where: { id: reservationId },
+    data: { precisaReconciliacao: true, motivoReconciliacao: motivo },
+  });
+  logSeg("PAYMENT_REQUIRES_RECONCILIATION", { reservationId, motivo });
 }
 
 /** Efeitos derivados, todos idempotentes. Preserva o mecanismo atual. */

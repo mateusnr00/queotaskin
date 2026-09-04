@@ -210,7 +210,7 @@ export async function consultarCobranca(
 ): Promise<{ status: StatusDePagamento; raw: unknown }> {
   const res = await fetch(
     `${base(creds)}/api/pix/${encodeURIComponent(id)}`,
-    { method: "GET", headers: cabecalhos(creds), cache: "no-store" },
+    { method: "GET", headers: cabecalhos(creds), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) },
   );
   if (!res.ok) {
     throw new Error(

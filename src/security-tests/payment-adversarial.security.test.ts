@@ -184,4 +184,67 @@ suiteDeIntegracao("ADVERSARIAL · quebrar o P0", () => {
     await prisma.raffle.deleteMany({ where: { id: raffle.id } }).catch(() => {});
   });
 
+
+  // §20 (BLOCKER) - pagamento tardio numa rifa FINISHED não insere tickets.
+  it("pagamento tardio em rifa FINISHED vai para reconciliação, sem alterar o sorteio", async () => {
+    const sx = `${Date.now()}${Math.floor(Math.random() * 1e5)}`;
+    const raffle = await prisma.raffle.create({ data: {
+      tenantId, title: `FIN ${sx}`, slug: `fin-${sx}`, status: "FINISHED", privacy: "PUBLIC",
+      modality: "OWN_DRAW", reservationModel: "RANDOM_NUMBERS",
+      requiredFields: { name: true, phone: true, cpf: true, email: false },
+      totalNumbers: 100, pricePerNumber: 10, createdById: donoId, winnerDrawnAt: new Date(),
+    }, select: { id: true } });
+    const r = await prisma.reservation.create({ data: {
+      raffleId: raffle.id, userId: donoId, participantName: "Tardio", totalAmount: 10,
+      status: "EXPIRED", expiresAt: new Date(Date.now() - 1000),
+    }, select: { id: true } });
+    const ext = `ADV-${r.id}`;
+    await prisma.payment.create({ data: { reservationId: r.id, provider: "SYNCPAY", externalId: ext, status: "PENDING", amount: 10, method: "PIX" } });
+    criados.push(r.id);
+
+    const ticketsAntes = await prisma.ticket.count({ where: { raffleId: raffle.id } });
+    const res = await processarWebhookDePagamento(forjar(ext), fakeProvider("APPROVED", { valor: 10 }));
+
+    expect(res.desfecho).toBe("RECONCILIACAO");
+    const ticketsDepois = await prisma.ticket.count({ where: { raffleId: raffle.id } });
+    expect(ticketsDepois).toBe(ticketsAntes); // NENHUM ticket novo na rifa sorteada
+    const rr = await prisma.reservation.findUnique({ where: { id: r.id }, select: { status: true, precisaReconciliacao: true } });
+    expect(rr?.status).not.toBe("PAID"); // não finge entrega
+    expect(rr?.precisaReconciliacao).toBe(true); // auditável
+    const pg = await prisma.payment.findFirst({ where: { externalId: ext }, select: { status: true } });
+    expect(pg?.status).toBe("APPROVED"); // o dinheiro entrou, é fato
+    await prisma.paymentWebhookEvent.deleteMany({ where: { externalId: ext } });
+    await prisma.payment.deleteMany({ where: { reservationId: r.id } });
+    await prisma.raffle.deleteMany({ where: { id: raffle.id } }).catch(() => {});
+  });
+
+  // §19 cenário A - expirada, rifa ACTIVE com cotas: entrega normal.
+  it("pagamento tardio com cotas disponíveis entrega e vira PAID", async () => {
+    const sx = `${Date.now()}${Math.floor(Math.random() * 1e5)}`;
+    const raffle = await prisma.raffle.create({ data: {
+      tenantId, title: `LIVRE ${sx}`, slug: `livre-${sx}`, status: "ACTIVE", privacy: "PUBLIC",
+      modality: "OWN_DRAW", reservationModel: "RANDOM_NUMBERS",
+      requiredFields: { name: true, phone: true, cpf: true, email: false },
+      totalNumbers: 100, pricePerNumber: 10, createdById: donoId,
+    }, select: { id: true } });
+    const r = await prisma.reservation.create({ data: {
+      raffleId: raffle.id, userId: donoId, participantName: "Tardio", totalAmount: 10,
+      status: "EXPIRED", expiresAt: new Date(Date.now() - 1000),
+    }, select: { id: true } });
+    const ext = `ADV-${r.id}`;
+    await prisma.payment.create({ data: { reservationId: r.id, provider: "SYNCPAY", externalId: ext, status: "PENDING", amount: 10, method: "PIX" } });
+    criados.push(r.id);
+
+    const res = await processarWebhookDePagamento(forjar(ext), fakeProvider("APPROVED", { valor: 10 }));
+    expect(res.desfecho).toBe("APROVADO");
+    const rr = await prisma.reservation.findUnique({ where: { id: r.id }, select: { status: true } });
+    expect(rr?.status).toBe("PAID");
+    const tk = await prisma.ticket.count({ where: { reservationId: r.id, status: "PAID" } });
+    expect(tk).toBe(1);
+    await prisma.ticket.deleteMany({ where: { raffleId: raffle.id } });
+    await prisma.paymentWebhookEvent.deleteMany({ where: { externalId: ext } });
+    await prisma.payment.deleteMany({ where: { reservationId: r.id } });
+    await prisma.raffle.deleteMany({ where: { id: raffle.id } }).catch(() => {});
+  });
+
 });

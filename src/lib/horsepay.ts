@@ -193,6 +193,8 @@ async function chamar(
       },
       body: init.body,
       cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
     });
   }
 
