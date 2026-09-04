@@ -16,7 +16,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
-import { validarSessaoParticipante, donoOuAdminPodeAcessar } from "@/server/services/otp/sessao-participante";
+import { validarSessaoParticipante, donoOuAdminPodeAcessar, sessaoFoiRevogada } from "@/server/services/otp/sessao-participante";
 
 export async function requireAuth() {
   const session = await auth();
@@ -157,6 +157,12 @@ export async function sessionMayAccessOwnedResource(
   ownerUserId: string | null | undefined
 ): Promise<boolean> {
   const session = await auth();
+  // §21: sessao REVOGADA nao acessa recurso privado autenticado, mesmo que o
+  // ownership ainda bata. Deslogado (capability-URL) segue por outro caminho.
+  if (session?.user?.id) {
+    const revogada = await sessaoFoiRevogada({ userId: session.user.id, sessionVersion: session.user.sessionVersion });
+    if (revogada) return false;
+  }
   return donoOuAdminPodeAcessar(session?.user?.id, session?.user?.role, ownerUserId);
 }
 

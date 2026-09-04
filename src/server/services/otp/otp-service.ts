@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db";
 import { destinoCanonico, gerarCodigoOtp, hmac, hmacConfere } from "@/lib/auth/cripto";
 import type { DestinoDeEntrega, OtpDeliveryProvider } from "@/server/services/otp/provider";
 
-export type PropositoDeOtp = "LOGIN" | "REGISTER_PHONE" | "CHANGE_PHONE" | "RECOVERY" | "CRITICAL_ACTION";
+export type PropositoDeOtp = "LOGIN" | "REGISTER_PHONE" | "CHANGE_PHONE" | "RECOVERY" | "CRITICAL_ACTION" | "LEGACY_RECOVERY";
 
 /// Expiração do OTP. Curta de propósito: janela grande é janela de brute force
 /// e de replay. 5 minutos cobre o tempo real de receber e digitar.

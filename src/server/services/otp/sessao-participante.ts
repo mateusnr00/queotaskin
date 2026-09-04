@@ -64,3 +64,16 @@ export function donoOuAdminPodeAcessar(
   if (ownerUserId && uid === ownerUserId) return true;
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
+
+/// A sessao foi REVOGADA? Verdadeiro so quando o token traz um sessionVersion
+/// numerico que NAO bate com o banco (logout-all, troca de telefone, recovery).
+/// Sessao legada (sem o claim) nao e classificada como revogada aqui - ela e
+/// barrada nas MUTACOES sensiveis por validarSessaoParticipante; para LEITURA
+/// de recurso proprio na transicao, o ownership decide. Revogacao explicita
+/// SEMPRE nega (§21).
+export async function sessaoFoiRevogada(sessao: SessaoParticipante | null | undefined): Promise<boolean> {
+  if (!sessao?.userId || typeof sessao.sessionVersion !== "number") return false;
+  const u = await prisma.user.findUnique({ where: { id: sessao.userId }, select: { sessionVersion: true } });
+  if (!u) return true; // conta sumiu: nega
+  return u.sessionVersion !== sessao.sessionVersion;
+}

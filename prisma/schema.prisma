@@ -2784,3 +2784,42 @@ model PendingRegistration {
   @@index([cpf])
   @@index([expiresAt])
 }
+
+/// Caso de migracao/recuperacao assistida de conta legada. Suporte AUTORIZA a
+/// migracao (nao substitui o telefone). A posse do NOVO telefone e provada por
+/// OTP a parte. Grant e single-use, expiravel, bound ao user e ao purpose
+/// LEGACY_RECOVERY; guardado so como HMAC.
+model LegacyRecoveryCase {
+  id         String    @id @default(cuid())
+  userId     String
+  status     String    @default("OPEN") // OPEN|IN_REVIEW|APPROVED|REJECTED|CANCELLED
+  reason     String?
+  riskLevel  String    @default("NORMAL") // NORMAL|HIGH (patrimonio)
+  openedAt   DateTime  @default(now())
+  resolvedAt DateTime?
+  resolvedBy String? // operador (audit; MFA do operador fica no P1-B)
+  resolution String?
+
+  grantHash       String? // HMAC do token de grant, nunca plaintext
+  grantExpiresAt  DateTime?
+  grantConsumedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+/// Trilha de auditoria do recovery. Sem CPF/telefone/OTP/Steam completos.
+model LegacyRecoveryAudit {
+  id         String   @id @default(cuid())
+  caseId     String
+  userId     String
+  action     String
+  actor      String?
+  fromStatus String?
+  toStatus   String?
+  reason     String?
+  at         DateTime @default(now())
+
+  @@index([caseId])
+  @@index([userId])
+}

@@ -9,6 +9,7 @@ import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
 import {
   validarSessaoParticipante,
   donoOuAdminPodeAcessar,
+  sessaoFoiRevogada,
 } from "@/server/services/otp/sessao-participante";
 import { alterarSteamTradeUrl } from "@/server/services/otp/steam-url";
 import { trocarTelefoneVerificado } from "@/server/services/otp/conta";
@@ -140,4 +141,13 @@ suiteDeIntegracao("FASE 5.2 · enforcement de sessao (DB)", () => {
     ));
     expect(res.filter((x) => x.ok)).toHaveLength(1); // reauth consumida uma vez
   });
+
+  it("LEG-8/§21 sessaoFoiRevogada: revogada=true, valida=false, legada=false", async () => {
+    const u = await novoUser();
+    expect(await sessaoFoiRevogada({ userId: u.id, sessionVersion: u.sv })).toBe(false);
+    expect(await sessaoFoiRevogada({ userId: u.id, sessionVersion: undefined })).toBe(false); // legada: nao classifica como revogada
+    await revogarTodasAsSessoes(u.id);
+    expect(await sessaoFoiRevogada({ userId: u.id, sessionVersion: u.sv })).toBe(true); // revogada explicita nega
+  });
+
 });
