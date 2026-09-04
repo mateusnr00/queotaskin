@@ -20,6 +20,8 @@ import { COOKIE_DE_INDICACAO } from "@/lib/afiliados";
 import { vincularIndicacao } from "@/server/services/afiliados";
 
 import { auth, signIn, signOut } from "@/auth";
+import { solicitarOtpDeLogin } from "@/server/services/otp/login";
+import { provedorDeOtp } from "@/server/services/otp/provider";
 import { registrarLog } from "@/server/services/activity-log";
 import {
   chavesDoLogin,
@@ -30,7 +32,6 @@ import {
 import bcrypt from "bcryptjs";
 import {
   registerSchema,
-  loginSchema,
   adminLoginSchema,
   changePasswordSchema,
 } from "@/lib/validations/auth";
@@ -137,38 +138,60 @@ export async function registerAction(
 export async function loginAction(
   raw: unknown
 ): Promise<ActionResult> {
-  const parsed = loginSchema.safeParse(raw);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: "Nome ou CPF inválido",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
+  // A1 FECHADO: nome + CPF NÃO autenticam. CPF é identificador, não segredo.
+  // O login passou a ser CPF + código (OTP) enviado ao telefone da conta, em
+  // dois passos (solicitarCodigoDeLoginAction -> entrarComCodigoAction). Esta
+  // action legada existe só para não deixar nenhum caminho antigo conceder
+  // sessão: ela sempre recusa.
+  void raw;
+  return {
+    ok: false,
+    error: "O login agora exige o código enviado ao seu telefone.",
+  };
+}
 
-  const freio = await estaBloqueado(
-    chavesDoLogin(ipDaRequisicao(await headers()), parsed.data.cpf)
-  );
-  if (freio.bloqueado) {
-    // Dizer que está bloqueado é melhor do que repetir "não encontrado": sem
-    // isso a pessoa que errou a digitação fica tentando sem entender por que
-    // o login parou de funcionar. Quem ataca já sabe que errou dez vezes.
-    return {
-      ok: false,
-      error: `Muitas tentativas. Espere ${Math.ceil(freio.segundos / 60)} minuto(s) e tente de novo.`,
-    };
+/// Passo 1 do login: recebe o CPF, localiza a conta e dispara o código (OTP)
+/// para o telefone cadastrado. Resposta neutra: não revela se o CPF existe.
+export async function solicitarCodigoDeLoginAction(
+  raw: unknown
+): Promise<ActionResult<{ challengeId: string }>> {
+  const cpf = typeof (raw as { cpf?: unknown })?.cpf === "string"
+    ? (raw as { cpf: string }).cpf.replace(/\D/g, "")
+    : "";
+  if (cpf.length !== 11) {
+    return { ok: false, error: "CPF inválido" };
   }
-
+  const ip = ipDaRequisicao(await headers());
   try {
-    await signIn("credentials", {
-      name: parsed.data.name,
-      cpf: parsed.data.cpf,
-      redirect: false,
-    });
+    const r = await solicitarOtpDeLogin({ cpf, ip }, provedorDeOtp());
+    if ("bloqueado" in r) {
+      return { ok: false, error: "Muitas tentativas. Tente novamente em alguns minutos." };
+    }
+    return { ok: true, data: { challengeId: r.challengeId } };
+  } catch {
+    // Provider real ainda não configurado (etapa seguinte). Não vaza detalhe.
+    return { ok: false, error: "Envio de código indisponível no momento." };
+  }
+}
+
+/// Passo 2 do login: valida o código e cria a sessão.
+export async function entrarComCodigoAction(
+  raw: unknown
+): Promise<ActionResult> {
+  const challengeId = typeof (raw as { challengeId?: unknown })?.challengeId === "string"
+    ? (raw as { challengeId: string }).challengeId
+    : "";
+  const codigo = typeof (raw as { codigo?: unknown })?.codigo === "string"
+    ? (raw as { codigo: string }).codigo
+    : "";
+  if (!challengeId || !/^[0-9]{6}$/.test(codigo)) {
+    return { ok: false, error: "Código inválido" };
+  }
+  try {
+    await signIn("credentials", { challengeId, codigo, redirect: false });
     return { ok: true, data: undefined };
   } catch {
-    // Sem log do erro: o objeto de credenciais carrega o CPF.
-    return { ok: false, error: "Nome ou CPF não encontrado" };
+    return { ok: false, error: "Código incorreto ou expirado." };
   }
 }
 

@@ -61,6 +61,7 @@ export const authConfig = {
         token.id = user.id;
         token.role = user.role;
         token.tenantId = user.tenantId ?? null;
+        token.sessionVersion = (user as { sessionVersion?: number }).sessionVersion ?? 0;
       }
       return token;
     },
@@ -75,6 +76,8 @@ export const authConfig = {
           | "PARTICIPANT";
         session.user.tenantId =
           (token.tenantId as string | null | undefined) ?? null;
+        session.user.sessionVersion =
+          (token.sessionVersion as number | undefined) ?? 0;
       }
       return session;
     },

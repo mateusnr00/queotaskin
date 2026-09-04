@@ -33,7 +33,8 @@ import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/auth.config";
-import { loginSchema, adminLoginSchema } from "@/lib/validations/auth";
+import { adminLoginSchema } from "@/lib/validations/auth";
+import { autenticarPorDesafioDeLogin } from "@/server/services/otp/login";
 import { isAdminHost } from "@/lib/host";
 import {
   chaveDeConta,
@@ -58,47 +59,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
   providers: [
+    // Participante: login por CPF + OTP. O provider recebe o desafio já
+    // verificado (challengeId + codigo). Nome/CPF NUNCA chegam aqui: quem
+    // localiza a conta e envia o código é a Server Action de passo 1
+    // (solicitarOtpDeLogin); este passo 2 só aceita um código válido, de uso
+    // único, ligado a esta conta. Conhecer nome + CPF não basta.
     Credentials({
+      id: "credentials",
       credentials: {
-        name: { label: "Nome completo", type: "text" },
-        cpf: { label: "CPF", type: "text" },
+        challengeId: { label: "Desafio", type: "text" },
+        codigo: { label: "Código", type: "text" },
       },
       async authorize(credentials, request) {
-        const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+        const challengeId = typeof credentials?.challengeId === "string" ? credentials.challengeId : "";
+        const codigo = typeof credentials?.codigo === "string" ? credentials.codigo : "";
+        if (!challengeId || !/^[0-9]{6}$/.test(codigo)) return null;
 
-        // Freio antes de qualquer consulta de conta: sem senha no caminho, o
-        // que separa uma tentativa de um acerto é só a combinação nome + CPF,
-        // e sem limite dá para varrer uma lista inteira.
-        const chaves = chavesDoLogin(
-          ipDaRequisicao(request?.headers ?? new Headers()),
-          parsed.data.cpf
-        );
-        if ((await estaBloqueado(chaves)).bloqueado) return null;
+        const ip = ipDaRequisicao(request?.headers ?? new Headers());
+        const ident = await autenticarPorDesafioDeLogin({ challengeId, codigo, ip });
+        if (!ident) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { cpf: parsed.data.cpf },
-        });
-        if (!user) {
-          await registrarFalha(chaves);
-          return null;
-        }
-
-        // CPF bate, agora confere o nome (case-insensitive).
-        if (normalizeName(user.name) !== normalizeName(parsed.data.name)) {
-          await registrarFalha(chaves);
-          return null;
-        }
+        const user = await prisma.user.findUnique({ where: { id: ident.id } });
+        if (!user) return null;
 
         // No host do painel, conta de painel entra só com senha.
         if (PAPEIS_DE_PAINEL.has(user.role)) {
           const host = request?.headers?.get("host") ?? "";
           if (isAdminHost(host)) return null;
         }
-
-        // Só a chave da conta: apagar a chave `ip:` compartilhada num acerto
-        // zeraria o freio de varredura por IP de todos os outros.
-        await limparFalhas([chaveDeConta(parsed.data.cpf)]);
 
         return {
           id: user.id,
@@ -107,6 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           tenantId: user.tenantId,
           image: user.image,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),

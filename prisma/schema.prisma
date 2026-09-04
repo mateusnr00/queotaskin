@@ -219,23 +219,28 @@ model User {
   /// Interruptor por pessoa, e não algo derivado do papel, porque cargo e
   /// aparência pública são decisões separadas: existe admin que precisa
   /// passar por cliente comum, e pode existir moderador que não é admin.
-  showModBadge Boolean @default(false)
-  name         String
+  showModBadge   Boolean @default(false)
+  name           String
   // CPF não é mais usado pra login (passou a ser nome+celular). Continua
   // como campo opcional pra dados antigos e edição via admin. Múltiplos
   // NULLs são OK no @unique.
-  cpf          String? @unique
+  cpf            String? @unique
   // Celular é o identificador único do login (combinado com nome). Armazenado
   // SOMENTE em dígitos. Continua opcional pra contas legadas, mas usuários
   // novos sempre cadastram.
-  phone        String? @unique
+  phone          String? @unique
   // País do telefone, em ISO 3166-1 alfa-2. O número continua guardado só em
   // dígitos e sem o código do país: assim as contas que já existem seguem
   // válidas sem migração de dados, e a formatação sabe de que país o número
   // é na hora de exibir.
-  phoneCountry String  @default("BR")
-  role         Role    @default(PARTICIPANT)
-  image        String?
+  phoneCountry   String  @default("BR")
+  role           Role    @default(PARTICIPANT)
+  // Versão da sessão. Toda sessão carrega a versão vigente no momento do
+  // login; incrementar aqui (troca de telefone, logout global, ação de
+  // segurança) invalida imediatamente todas as sessões emitidas antes, sem
+  // depender de expiração. Ver auth.config.ts (callback jwt/session).
+  sessionVersion Int     @default(0)
+  image          String?
 
   /// O time de CS2 para quem a pessoa torce, exibido ao lado do nome dela.
   ///
@@ -1203,8 +1208,8 @@ model LevelUpBoxDrop {
   /// aritmética de inteiro e o total é 10000, sem margem de erro.
   probabilityBps Int @default(0)
 
-  ativo      Boolean          @default(true)
-  ordem      Int              @default(0)
+  ativo Boolean @default(true)
+  ordem Int     @default(0)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1788,13 +1793,13 @@ model Reservation {
   participantSocialName String?
   participantBirthDate  DateTime?
 
-  totalAmount      Decimal           @db.Decimal(10, 2)
+  totalAmount          Decimal           @db.Decimal(10, 2)
   /// A reserva saiu com a promocao em dobro valendo.
   ///
   /// Guardado na reserva, e nao recalculado depois: a promocao acaba, e sem
   /// esta marca uma reserva feita durante a janela seria reconstruida com
   /// metade dos numeros se o webhook chegasse atrasado.
-  dobroAplicado    Boolean           @default(false)
+  dobroAplicado        Boolean           @default(false)
   /// Um admin marcou esta reserva como paga pelo painel.
   ///
   /// Dinheiro que nao passou pelo gateway: cortesia, pagamento combinado por
@@ -1802,7 +1807,7 @@ model Reservation {
   /// sem ninguem ter pago nada. Continua PAGA para todo o resto (os titulos
   /// valem, o premio sai, o comprovante existe), e o registro de quem marcou
   /// fica no historico.
-  aprovadaNoPainel Boolean           @default(false)
+  aprovadaNoPainel     Boolean           @default(false)
   /// DINHEIRO RECEBIDO, ENTREGA IMPOSSÍVEL.
   /// Um PIX confirmado tarde demais (rifa encerrada, ou sem cotas livres
   /// suficientes) não pode virar uma compra normal concluída: os números
@@ -1810,11 +1815,11 @@ model Reservation {
   /// Payment fica APPROVED (o dinheiro entrou, é fato), mas a Reservation NÃO
   /// vira PAID: entra aqui, para reconciliação/decisão manual, sem fingir
   /// entrega e sem alterar o histórico do sorteio.
-  precisaReconciliacao Boolean @default(false)
+  precisaReconciliacao Boolean           @default(false)
   motivoReconciliacao  String?
-  status           ReservationStatus @default(PENDING)
-  expiresAt        DateTime
-  paidAt           DateTime?
+  status               ReservationStatus @default(PENDING)
+  expiresAt            DateTime
+  paidAt               DateTime?
 
   affiliateId String?
   utmSource   String?
@@ -2717,4 +2722,42 @@ model DrawSeed {
 
   committedAt DateTime  @default(now())
   revealedAt  DateTime?
+}
+
+/// Desafio de autenticação de fator único (OTP). Núcleo do login por CPF +
+/// código enviado ao telefone da conta. O código NUNCA é gravado em texto:
+/// só o HMAC. O destino (telefone) também não é gravado puro, só o HMAC, para
+/// que um vazamento do banco não entregue nem o código ativo nem o número.
+model AuthChallenge {
+  id String @id @default(cuid())
+
+  /// Escopo de tenant do desafio (quando aplicável). OTP criado num tenant
+  /// não vale em outro. PARTICIPANT é global no modelo atual, então costuma
+  /// ser nulo; ADMIN/AFFILIATE carregam o tenant.
+  tenantId String?
+
+  /// Conta a que o desafio pertence. Um OTP de User A nunca autentica User B.
+  userId String?
+
+  /// Para que serve: LOGIN, CHANGE_PHONE, RECOVERY, CRITICAL_ACTION. Um OTP
+  /// de LOGIN não serve para trocar telefone. Ver OtpService.
+  purpose String
+
+  /// HMAC(destino E.164, segredo). Sem o telefone puro.
+  destinationHash String
+
+  /// HMAC(código, segredo). Comparado em tempo constante.
+  codeHash String
+
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  attemptCount  Int       @default(0)
+  maxAttempts   Int       @default(5)
+  createdAt     DateTime  @default(now())
+  lastAttemptAt DateTime?
+
+  @@index([userId])
+  @@index([purpose])
+  @@index([expiresAt])
+  @@index([tenantId])
 }
