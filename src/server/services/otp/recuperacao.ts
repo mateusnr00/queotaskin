@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { hmac, hmacConfere } from "@/lib/auth/cripto";
 import { criarDesafio, verificarDesafio } from "@/server/services/otp/otp-service";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
+import { hashDeSenha } from "@/server/services/otp/senha-participante";
 import type { OtpDeliveryProvider } from "@/server/services/otp/provider";
 
 /// Grant de recovery expira em 24h apos aprovado (§11): tempo de o suporte
@@ -202,4 +203,27 @@ export async function listarCasosDeRecuperacao(
         telefoneMascarado: mascararTel(u?.phone ?? null),
       };
     });
+}
+
+export type ResultadoRecoverySenha =
+  | { ok: true; userId: string }
+  | { ok: false; motivo: "GRANT_INVALIDO" | "CORRIDA" };
+
+/// Conclusao da recuperacao definindo NOVA SENHA (FASE 10.2). Grant valido +
+/// nova senha -> hash, consome o grant (single-use), revoga sessoes, fecha o
+/// caso. NAO toca o telefone (segue nao verificado).
+export async function concluirRecuperacaoComSenha(entrada: {
+  caseId: string; grant: string; novaSenha: string;
+}): Promise<ResultadoRecoverySenha> {
+  const c = await grantValido(entrada.caseId, entrada.grant);
+  if (!c) return { ok: false, motivo: "GRANT_INVALIDO" };
+  const claim = await prisma.legacyRecoveryCase.updateMany({
+    where: { id: c.id, grantConsumedAt: null },
+    data: { grantConsumedAt: new Date(), status: "APPROVED", resolution: "SENHA_REDEFINIDA" },
+  });
+  if (claim.count === 0) return { ok: false, motivo: "CORRIDA" };
+  await prisma.user.update({ where: { id: c.userId }, data: { passwordHash: await hashDeSenha(entrada.novaSenha) } });
+  await revogarTodasAsSessoes(c.userId);
+  await auditar({ caseId: c.id, userId: c.userId, action: "CONCLUIR", fromStatus: "APPROVED", toStatus: "APPROVED", reason: "senha redefinida" });
+  return { ok: true, userId: c.userId };
 }

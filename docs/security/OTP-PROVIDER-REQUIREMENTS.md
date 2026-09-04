@@ -1,3 +1,12 @@
+# EXTERNAL PARTICIPANT OTP PROVIDER = NOT REQUIRED BY PRODUCT DESIGN (FASE 10.2)
+
+Decisao de produto: participante autentica por **CPF + SENHA** (sem SMS/
+WhatsApp/OTP externo). A abstracao OtpDeliveryProvider permanece como codigo,
+mas nenhum fluxo de participante depende dela. Admin usa TOTP (offline), nao
+este provider. O conteudo abaixo fica historico.
+
+---
+
 # Requisitos do provider de OTP de participante (§14-16)
 
 O domínio fala com `OtpDeliveryProvider` (src/server/services/otp/provider.ts).

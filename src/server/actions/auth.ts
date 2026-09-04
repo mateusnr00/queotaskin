@@ -18,21 +18,21 @@ import { cookies, headers } from "next/headers";
 import { COOKIE_DE_INDICACAO } from "@/lib/afiliados";
 
 import { auth, signIn, signOut } from "@/auth";
-import { solicitarOtpDeLogin } from "@/server/services/otp/login";
-import { provedorDeOtp } from "@/server/services/otp/provider";
-import { solicitarCadastro, concluirCadastro } from "@/server/services/otp/registro";
+import { hashDeSenha, emitirProvaDeAcaoCritica } from "@/server/services/otp/senha-participante";
+import { participantLoginSchema, participantChangePasswordSchema } from "@/lib/validations/auth";
+import { vincularIndicacao } from "@/server/services/afiliados";
+import { Prisma } from "@prisma/client";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
 import { mfaAtivo } from "@/server/services/admin/mfa";
 import { exigirStepUpAdmin } from "@/server/services/admin/sessao";
 import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
-import { criarDesafio } from "@/server/services/otp/otp-service";
-import { trocarTelefoneVerificado } from "@/server/services/otp/conta";
 import { onlyDigits } from "@/lib/cpf";
 import { registrarLog } from "@/server/services/activity-log";
 import {
   chavesDoLogin,
   estaBloqueado,
   ipDaRequisicao,
+  registrarFalha,
 } from "@/server/services/login-throttle";
 import bcrypt from "bcryptjs";
 import {
@@ -45,58 +45,64 @@ export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
-// Cria nova conta de PARTICIPANT. NÃO loga automaticamente; o componente
-// chama loginAction logo depois com os mesmos dados.
+// Cadastro de PARTICIPANT (FASE 10.2): CPF + senha. O telefone e contato de
+// cadastro e NAO ganha phoneVerifiedAt (nao ha OTP automatico). NAO loga
+// automaticamente.
 export async function registerAction(
   raw: unknown
 ): Promise<ActionResult<{ userId: string }>> {
-  // FECHADO: cadastro nao cria mais conta autenticavel so com nome+CPF+telefone.
-  // O telefone precisa ser provado por OTP antes da conta existir
-  // (solicitarCadastroAction -> concluirCadastroAction). Esta action legada
-  // recusa, para nao restar caminho que crie conta sem prova do telefone.
-  void raw;
-  return { ok: false, error: "O cadastro agora confirma seu telefone por um codigo." };
-}
-
-/// Passo 1 do cadastro: valida os dados e dispara o OTP ao telefone. Resposta
-/// neutra: nao revela se CPF/telefone ja existem, e nao altera conta alguma.
-export async function solicitarCadastroAction(
-  raw: unknown
-): Promise<ActionResult<{ challengeId: string }>> {
   const parsed = registerSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "Dados invalidos", fieldErrors: parsed.error.flatten().fieldErrors };
   }
-  const { name, cpf, phone, phoneCountry, codigoDeIndicacao } = parsed.data;
+  const { name, cpf, phone, phoneCountry, senha, codigoDeIndicacao } = parsed.data;
   const ip = ipDaRequisicao(await headers());
+  const chaveReg = `registro:${ip ?? "sem-ip"}`;
+  if ((await estaBloqueado([chaveReg])).bloqueado) {
+    return { ok: false, error: "Muitas tentativas de cadastro. Espere alguns minutos." };
+  }
+  await registrarFalha([chaveReg]);
+
+  // §15 CPF/telefone ja existente: resposta neutra, sem sobrescrever/upsert.
+  const conflito = await prisma.user.findFirst({ where: { OR: [{ cpf }, { phone }] }, select: { id: true } });
+  if (conflito) return { ok: false, error: "Ja existe uma conta com esses dados." };
+
   const tenant = await getCurrentTenant();
   const codigoDoCookie = (await cookies()).get(COOKIE_DE_INDICACAO)?.value;
   try {
-    const r = await solicitarCadastro(
-      { name, cpf, phone, phoneCountry, tenantId: tenant?.id ?? null, codigoDeIndicacao: codigoDeIndicacao || codigoDoCookie || null, ip },
-      provedorDeOtp(),
-    );
-    if ("bloqueado" in r) return { ok: false, error: "Muitas tentativas. Tente novamente em alguns minutos." };
-    return { ok: true, data: { challengeId: r.challengeId } };
-  } catch {
-    return { ok: false, error: "Envio de codigo indisponivel no momento." };
+    const user = await prisma.user.create({
+      data: {
+        name, cpf, phone, phoneCountry,
+        phoneVerifiedAt: null, // §10 telefone NUNCA verificado sem processo explicito
+        passwordHash: await hashDeSenha(senha),
+        role: "PARTICIPANT",
+        tenantId: tenant?.id ?? null,
+      },
+      select: { id: true },
+    });
+    const codigo = (codigoDeIndicacao || codigoDoCookie || "").trim();
+    if (codigo) await vincularIndicacao(user.id, codigo).catch(() => null);
+    return { ok: true, data: { userId: user.id } };
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { ok: false, error: "Ja existe uma conta com esses dados." };
+    }
+    return { ok: false, error: "Erro ao criar conta" };
   }
 }
 
-/// Passo 2 do cadastro: valida o OTP e cria a conta (telefone ja verificado).
-export async function concluirCadastroAction(
+/// Login do participante: CPF + senha (§11/§12). Resposta neutra.
+export async function loginParticipanteAction(
   raw: unknown
-): Promise<ActionResult<{ userId: string }>> {
-  const challengeId = typeof (raw as { challengeId?: unknown })?.challengeId === "string" ? (raw as { challengeId: string }).challengeId : "";
-  const codigo = typeof (raw as { codigo?: unknown })?.codigo === "string" ? (raw as { codigo: string }).codigo : "";
-  if (!challengeId || !/^[0-9]{6}$/.test(codigo)) return { ok: false, error: "Codigo invalido" };
-  const ip = ipDaRequisicao(await headers());
-  const r = await concluirCadastro({ challengeId, codigo, ip });
-  if (r.ok) return { ok: true, data: { userId: r.userId } };
-  const msg = r.motivo === "BLOQUEADO" ? "Muitas tentativas. Tente novamente em alguns minutos."
-    : r.motivo === "JA_EXISTE" ? "Ja existe uma conta com esses dados."
-    : "Codigo incorreto ou expirado.";
-  return { ok: false, error: msg };
+): Promise<ActionResult> {
+  const parsed = participantLoginSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "CPF ou senha invalidos" };
+  try {
+    await signIn("credentials", { cpf: parsed.data.cpf, senha: parsed.data.senha, redirect: false });
+    return { ok: true, data: undefined };
+  } catch {
+    return { ok: false, error: "CPF ou senha invalidos" };
+  }
 }
 
 /// Encerra todas as sessoes do usuario autenticado (§24 logout-all).
@@ -108,138 +114,73 @@ export async function encerrarTodasAsSessoesAction(): Promise<ActionResult> {
   return { ok: true, data: undefined };
 }
 
-/// Passo 1 da troca de telefone (§9): exige sessao; dispara OTP ao NOVO numero.
-export async function solicitarOtpTrocaTelefoneAction(
-  raw: unknown
-): Promise<ActionResult<{ challengeId: string }>> {
-  const sessao = await auth();
-  if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
-  const phone = onlyDigits(String((raw as { phone?: unknown })?.phone ?? ""));
-  const phoneCountry = String((raw as { phoneCountry?: unknown })?.phoneCountry ?? "BR");
-  if (phone.length < 6) return { ok: false, error: "Telefone invalido" };
-  try {
-    const d = await criarDesafio(
-      { userId: sessao.user.id, purpose: "CHANGE_PHONE", destino: { phoneCountry, phoneDigits: phone } },
-      provedorDeOtp(),
-    );
-    return { ok: true, data: { challengeId: d.challengeId } };
-  } catch {
-    return { ok: false, error: "Envio de codigo indisponivel no momento." };
-  }
-}
-
-/// Passo 2 da troca de telefone: sessao + OTP do novo numero. Revoga sessoes
-/// antigas; a propria sessao que trocou precisa reautenticar (documentado).
-export async function trocarTelefoneAction(
+/// Troca de telefone do participante (§22): sessao valida + senha atual. O
+/// novo telefone entra como NAO verificado (phoneVerifiedAt=null); telefone
+/// nao e fator de login. Revoga todas as sessoes.
+export async function trocarTelefoneComSenhaAction(
   raw: unknown
 ): Promise<ActionResult> {
   const sessao = await auth();
   if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
-  const r = raw as { challengeId?: unknown; codigo?: unknown; phone?: unknown; phoneCountry?: unknown };
-  const challengeId = typeof r?.challengeId === "string" ? r.challengeId : "";
-  const codigo = typeof r?.codigo === "string" ? r.codigo : "";
+  const r = raw as { phone?: unknown; phoneCountry?: unknown; senha?: unknown };
   const phone = onlyDigits(String(r?.phone ?? ""));
   const phoneCountry = String(r?.phoneCountry ?? "BR");
-  if (!challengeId || !/^[0-9]{6}$/.test(codigo) || phone.length < 6) {
-    return { ok: false, error: "Dados invalidos" };
-  }
-  const out = await trocarTelefoneVerificado({
-    sessao: { userId: sessao.user.id, sessionVersion: sessao.user.sessionVersion },
-    novoPhone: phone,
-    novoPhoneCountry: phoneCountry,
-    challengeIdDoNovoTelefone: challengeId,
-    codigo,
-  });
-  if (!out.ok) return { ok: false, error: "Nao autorizado. Confirme sua identidade e tente de novo." };
-  // Sessoes antigas (incluindo esta) foram revogadas: forca reautenticacao.
+  const senha = typeof r?.senha === "string" ? r.senha : "";
+  if (phone.length < 6 || !senha) return { ok: false, error: "Dados invalidos" };
+
+  const user = await prisma.user.findUnique({ where: { id: sessao.user.id }, select: { passwordHash: true } });
+  const confere = user?.passwordHash ? await bcrypt.compare(senha, user.passwordHash) : false;
+  if (!confere) return { ok: false, error: "Senha incorreta." };
+
+  const emUso = await prisma.user.findFirst({ where: { phone, id: { not: sessao.user.id } }, select: { id: true } });
+  if (emUso) return { ok: false, error: "Telefone em uso por outra conta." };
+
+  await prisma.user.update({ where: { id: sessao.user.id }, data: { phone, phoneCountry, phoneVerifiedAt: null } });
+  await revogarTodasAsSessoes(sessao.user.id);
   await signOut({ redirect: false });
   return { ok: true, data: undefined };
 }
 
-/// Reauth de acao critica do participante (§20): dispara um OTP CRITICAL_ACTION
-/// ao telefone VERIFICADO da conta. O codigo prova a acao (single-use), sem
-/// cookie de "recent auth". Sem telefone verificado -> fail-closed (sem envio).
-export async function solicitarOtpDeAcaoCriticaAction(): Promise<ActionResult<{ challengeId: string }>> {
+/// Reauth de acao critica do participante por SENHA (§19/§20). Verifica a senha
+/// e emite uma prova single-use (challengeId + prova). A action critica consome.
+export async function provarAcaoCriticaComSenhaAction(
+  raw: unknown
+): Promise<ActionResult<{ challengeId: string; prova: string }>> {
   const sessao = await auth();
   if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
-  const user = await prisma.user.findUnique({
-    where: { id: sessao.user.id },
-    select: { phone: true, phoneCountry: true, phoneVerifiedAt: true },
-  });
-  if (!user?.phone || !user.phoneVerifiedAt) {
-    return { ok: false, error: "Telefone nao verificado." };
-  }
-  try {
-    const d = await criarDesafio(
-      { userId: sessao.user.id, purpose: "CRITICAL_ACTION", destino: { phoneCountry: user.phoneCountry, phoneDigits: user.phone } },
-      provedorDeOtp(),
-    );
-    return { ok: true, data: { challengeId: d.challengeId } };
-  } catch {
-    return { ok: false, error: "Envio de codigo indisponivel no momento." };
-  }
+  const senha = typeof (raw as { senha?: unknown })?.senha === "string" ? (raw as { senha: string }).senha : "";
+  if (!senha) return { ok: false, error: "Informe a senha." };
+  const prova = await emitirProvaDeAcaoCritica({ userId: sessao.user.id, senha });
+  if (!prova) return { ok: false, error: "Senha incorreta." };
+  return { ok: true, data: prova };
 }
 
-// Login passwordless via nome + celular. O provider Credentials no auth.ts
-// busca pelo celular e confere o nome, sem senha.
-export async function loginAction(
+/// Troca de senha do participante (§18): senha atual -> nova -> revoga sessoes.
+export async function trocarSenhaParticipanteAction(
   raw: unknown
 ): Promise<ActionResult> {
-  // A1 FECHADO: nome + CPF NÃO autenticam. CPF é identificador, não segredo.
-  // O login passou a ser CPF + código (OTP) enviado ao telefone da conta, em
-  // dois passos (solicitarCodigoDeLoginAction -> entrarComCodigoAction). Esta
-  // action legada existe só para não deixar nenhum caminho antigo conceder
-  // sessão: ela sempre recusa.
-  void raw;
-  return {
-    ok: false,
-    error: "O login agora exige o código enviado ao seu telefone.",
-  };
+  const sessao = await auth();
+  if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
+  const parsed = participantChangePasswordSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados invalidos", fieldErrors: parsed.error.flatten().fieldErrors };
+  const user = await prisma.user.findUnique({ where: { id: sessao.user.id }, select: { passwordHash: true } });
+  const confere = user?.passwordHash ? await bcrypt.compare(parsed.data.senhaAtual, user.passwordHash) : false;
+  if (!confere) return { ok: false, error: "Senha atual incorreta." };
+  await prisma.user.update({ where: { id: sessao.user.id }, data: { passwordHash: await hashDeSenha(parsed.data.novaSenha) } });
+  await revogarTodasAsSessoes(sessao.user.id);
+  await signOut({ redirect: false });
+  return { ok: true, data: undefined };
 }
 
-/// Passo 1 do login: recebe o CPF, localiza a conta e dispara o código (OTP)
-/// para o telefone cadastrado. Resposta neutra: não revela se o CPF existe.
-export async function solicitarCodigoDeLoginAction(
-  raw: unknown
-): Promise<ActionResult<{ challengeId: string }>> {
-  const cpf = typeof (raw as { cpf?: unknown })?.cpf === "string"
-    ? (raw as { cpf: string }).cpf.replace(/\D/g, "")
-    : "";
-  if (cpf.length !== 11) {
-    return { ok: false, error: "CPF inválido" };
-  }
-  const ip = ipDaRequisicao(await headers());
-  try {
-    const r = await solicitarOtpDeLogin({ cpf, ip }, provedorDeOtp());
-    if ("bloqueado" in r) {
-      return { ok: false, error: "Muitas tentativas. Tente novamente em alguns minutos." };
-    }
-    return { ok: true, data: { challengeId: r.challengeId } };
-  } catch {
-    // Provider real ainda não configurado (etapa seguinte). Não vaza detalhe.
-    return { ok: false, error: "Envio de código indisponível no momento." };
-  }
+// LEGADO OTP: caminhos antigos de login por OTP permanentemente FECHADOS (§37).
+export async function loginAction(): Promise<ActionResult> {
+  return { ok: false, error: "Entre com CPF e senha." };
 }
-
-/// Passo 2 do login: valida o código e cria a sessão.
-export async function entrarComCodigoAction(
-  raw: unknown
-): Promise<ActionResult> {
-  const challengeId = typeof (raw as { challengeId?: unknown })?.challengeId === "string"
-    ? (raw as { challengeId: string }).challengeId
-    : "";
-  const codigo = typeof (raw as { codigo?: unknown })?.codigo === "string"
-    ? (raw as { codigo: string }).codigo
-    : "";
-  if (!challengeId || !/^[0-9]{6}$/.test(codigo)) {
-    return { ok: false, error: "Código inválido" };
-  }
-  try {
-    await signIn("credentials", { challengeId, codigo, redirect: false });
-    return { ok: true, data: undefined };
-  } catch {
-    return { ok: false, error: "Código incorreto ou expirado." };
-  }
+export async function solicitarCodigoDeLoginAction(): Promise<ActionResult<{ challengeId: string }>> {
+  return { ok: false, error: "Entre com CPF e senha." };
+}
+export async function entrarComCodigoAction(): Promise<ActionResult> {
+  return { ok: false, error: "Entre com CPF e senha." };
 }
 
 // Entrada do painel. Mensagem de erro única de propósito: dizer "e-mail não

@@ -5,18 +5,10 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { IdCard, KeyRound, Link2, Lock, User } from "lucide-react";
+import { IdCard, Link2, Lock, User } from "lucide-react";
 
-import {
-  solicitarCadastroAction,
-  concluirCadastroAction,
-} from "@/server/actions/auth";
-import {
-  registerSchema,
-  otpCodigoSchema,
-  type RegisterInput,
-  type OtpCodigoInput,
-} from "@/lib/validations/auth";
+import { registerAction, loginParticipanteAction } from "@/server/actions/auth";
+import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
 import { formatCpf } from "@/lib/cpf";
 import { normalizarCodigo } from "@/lib/afiliados";
 import { PAIS_PADRAO } from "@/lib/telefone";
@@ -79,12 +71,6 @@ export function RegisterForm({
   const travado = Boolean(codigoTravado);
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
-  const [challengeId, setChallengeId] = useState<string | null>(null);
-  const formCodigo = useForm<OtpCodigoInput>({
-    resolver: zodResolver(otpCodigoSchema),
-    defaultValues: { codigo: "" },
-  });
-
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -92,6 +78,8 @@ export function RegisterForm({
       cpf: "",
       phone: "",
       phoneCountry: PAIS_PADRAO,
+      senha: "",
+      confirmarSenha: "",
       codigoDeIndicacao: codigoDaUrl,
     },
   });
@@ -99,73 +87,25 @@ export function RegisterForm({
   function onSubmit(values: RegisterInput) {
     setServerError(null);
     startTransition(async () => {
-      const result = await solicitarCadastroAction(values);
+      const result = await registerAction(values);
       if (!result.ok) {
         setServerError(result.error);
         toast.error(result.error);
         return;
       }
-      setChallengeId(result.data.challengeId);
-      toast.success("Enviamos um codigo ao seu telefone para confirmar o cadastro.");
-    });
-  }
-
-  function confirmarCadastro(values: OtpCodigoInput) {
-    if (!challengeId) return;
-    setServerError(null);
-    startTransition(async () => {
-      const r = await concluirCadastroAction({ challengeId, codigo: values.codigo });
-      if (!r.ok) {
-        setServerError(r.error);
-        toast.error(r.error);
+      const login = await loginParticipanteAction({ cpf: values.cpf, senha: values.senha });
+      if (!login.ok) {
+        toast.success("Conta criada. Entre com CPF e senha.");
+        router.push(`/login?redirect=${encodeURIComponent(redirectTo)}`);
         return;
       }
-      toast.success("Conta criada. Faça login para continuar.");
+      toast.success("Conta criada com sucesso");
       if (aoConcluir) return aoConcluir();
-      router.push(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+      router.refresh();
+      router.push(redirectTo);
     });
   }
 
-
-  if (challengeId) {
-    return (
-      <Form {...formCodigo}>
-        <form onSubmit={formCodigo.handleSubmit(confirmarCadastro)} className="space-y-4">
-          <FormField
-            control={formCodigo.control}
-            name="codigo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className={ROTULO}>Codigo recebido</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="000000"
-                      maxLength={6}
-                      className={cn(CAMPO, "tabular-nums tracking-[0.4em]")}
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {serverError && (
-            <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
-              {serverError}
-            </p>
-          )}
-          <BotaoDeGrade disabled={isPending}>
-            {isPending ? "Confirmando..." : "Confirmar cadastro"}
-          </BotaoDeGrade>
-        </form>
-      </Form>
-    );
-  }
 
   return (
     <Form {...form}>
@@ -230,6 +170,34 @@ export function RegisterForm({
         />
 
         <CampoDeTelefone form={form} classeDoRotulo={ROTULO} />
+        <p className="text-[11px] text-muted-foreground">
+          O telefone é para contato/cadastro; não substitui a senha.
+        </p>
+
+        <FormField control={form.control} name="senha" render={({ field }) => (
+          <FormItem>
+            <FormLabel className={ROTULO}>Senha</FormLabel>
+            <FormControl>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={CAMPO} {...field} />
+              </div>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <FormField control={form.control} name="confirmarSenha" render={({ field }) => (
+          <FormItem>
+            <FormLabel className={ROTULO}>Confirmar senha</FormLabel>
+            <FormControl>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input type="password" autoComplete="new-password" placeholder="Repita a senha" className={CAMPO} {...field} />
+              </div>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
 
         {/* Opcional, e o último campo de propósito: cadastro é conversão, e
             um campo a mais no meio do caminho custa gente. Quem tem código

@@ -61,14 +61,14 @@ describe("§37/§62 env validation do provider", () => {
     ADMIN_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
     DATABASE_URL: "postgresql://a@h/d", DIRECT_URL: "postgresql://m@h/d",
   } as unknown as NodeJS.ProcessEnv;
-  it("prod sem OTP_PROVIDER = problema", () => {
-    expect(coletarProblemasDeProducao(base).some((x) => x.variavel === "OTP_PROVIDER")).toBe(true);
+  it("prod sem OTP_PROVIDER = SEM problema (FASE 10.2: auth por senha; provider nao obrigatorio)", () => {
+    expect(coletarProblemasDeProducao(base).some((x) => x.variavel === "OTP_PROVIDER")).toBe(false);
   });
   it("prod com OTP_PROVIDER=fake = problema", () => {
     expect(coletarProblemasDeProducao({ ...base, OTP_PROVIDER: "fake" } as NodeJS.ProcessEnv).some((x) => x.variavel === "OTP_PROVIDER")).toBe(true);
   });
-  it("prod com provider real mas sem api key = problema", () => {
-    expect(coletarProblemasDeProducao({ ...base, OTP_PROVIDER: "vendorx" } as NodeJS.ProcessEnv).some((x) => x.variavel === "OTP_PROVIDER_API_KEY")).toBe(true);
+  it("prod com OTP_PROVIDER=fake = problema (fake nunca em prod)", () => {
+    expect(coletarProblemasDeProducao({ ...base, OTP_PROVIDER: "fake" } as NodeJS.ProcessEnv).some((x) => x.variavel === "OTP_PROVIDER")).toBe(true);
   });
   it("prod com provider+key+baseUrl HTTPS = sem problema de OTP", () => {
     const p = coletarProblemasDeProducao({ ...base, OTP_PROVIDER: "vendorx", OTP_PROVIDER_API_KEY: "k", OTP_PROVIDER_BASE_URL: "https://api.vendorx.com" } as NodeJS.ProcessEnv);

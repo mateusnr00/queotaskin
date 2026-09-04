@@ -73,7 +73,7 @@ FSM/lockdown/chave MFA).
 | FSM lockdown | PENDING | verify-roles.sql (prod) | operador | **sim** |
 | Migrations | READY | migrate status (prod) | operador | sim |
 | MFA key | PENDING | env presente + ≠payment | operador | **sim** |
-| OTP provider | **BLOCKER** | integração ausente | operador | **sim** |
+| OTP provider (participante) | N/A | NAO REQUERIDO (CPF+senha) | - | nao |
 | Backup/PITR | PENDING | checklist | operador | **sim** |
 | Alerting | PENDING | mínimo do §18 | operador | sim |
 | CI | READY | .github/workflows/ci.yml | dev/operador | não |

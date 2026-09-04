@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 
 import { updateSteamTradeUrlAction } from "@/server/actions/steam";
-import { solicitarOtpDeAcaoCriticaAction } from "@/server/actions/auth";
+import { provarAcaoCriticaComSenhaAction } from "@/server/actions/auth";
 import {
   steamTradeUrlSchema,
   type SteamTradeUrlInput,
@@ -36,64 +36,48 @@ export function SteamTradeUrlForm({
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(Boolean(current));
   // Reauth (§20): guardamos a URL pendente e o desafio; o codigo prova a acao.
-  const [reauth, setReauth] = useState<{ challengeId: string; urlPendente: string } | null>(null);
-  const [codigo, setCodigo] = useState("");
+  const [urlPendente, setUrlPendente] = useState<string | null>(null);
+  const [senha, setSenha] = useState("");
 
   const form = useForm<SteamTradeUrlInput>({
     resolver: zodResolver(steamTradeUrlSchema),
     defaultValues: { steamTradeUrl: current ?? "" },
   });
 
-  // Passo 1: pede o codigo de seguranca ao telefone e guarda a URL.
+  // Passo 1: guarda a URL e pede a senha atual (reauth por senha).
   function onSubmit(values: SteamTradeUrlInput) {
-    startTransition(async () => {
-      const r = await solicitarOtpDeAcaoCriticaAction();
-      if (!r.ok) {
-        toast.error(r.error);
-        return;
-      }
-      setReauth({ challengeId: r.data.challengeId, urlPendente: values.steamTradeUrl });
-      toast.success("Enviamos um código ao seu telefone para confirmar a alteração.");
-    });
+    setUrlPendente(values.steamTradeUrl);
   }
 
-  // Passo 2: confirma com o codigo (reauth single-use) e salva.
+  // Passo 2: valida a senha, emite a prova single-use e salva.
   function confirmar() {
-    if (!reauth) return;
+    if (urlPendente === null) return;
     startTransition(async () => {
-      const result = await updateSteamTradeUrlAction({ steamTradeUrl: reauth.urlPendente, challengeId: reauth.challengeId, codigo });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      setReauth(null);
-      setCodigo("");
+      const prova = await provarAcaoCriticaComSenhaAction({ senha });
+      if (!prova.ok) { toast.error(prova.error); return; }
+      const result = await updateSteamTradeUrlAction({ steamTradeUrl: urlPendente, challengeId: prova.data.challengeId, prova: prova.data.prova });
+      if (!result.ok) { toast.error(result.error); return; }
+      setUrlPendente(null);
+      setSenha("");
       setSaved(Boolean(result.data.steamTradeUrl));
       toast.success(result.data.steamTradeUrl ? "Link de troca salvo!" : "Link de troca removido.");
       router.refresh();
     });
   }
 
-  if (reauth) {
+  if (urlPendente !== null) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Digite o código enviado ao seu telefone para confirmar a alteração do link de troca.
+          Por seguranca, confirme sua senha para alterar o link de troca.
         </p>
-        <Input
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          placeholder="000000"
-          className="h-12 tabular-nums tracking-[0.4em]"
-          value={codigo}
-          onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        />
+        <Input type="password" autoComplete="current-password" placeholder="Sua senha atual"
+          className="h-12" value={senha} onChange={(e) => setSenha(e.target.value)} />
         <div className="flex gap-3">
-          <Button onClick={confirmar} disabled={isPending || codigo.length !== 6}>
+          <Button onClick={confirmar} disabled={isPending || !senha}>
             {isPending ? "Confirmando..." : "Confirmar e salvar"}
           </Button>
-          <Button variant="ghost" onClick={() => { setReauth(null); setCodigo(""); }}>Cancelar</Button>
+          <Button variant="ghost" onClick={() => { setUrlPendente(null); setSenha(""); }}>Cancelar</Button>
         </div>
       </div>
     );

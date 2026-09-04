@@ -3,62 +3,35 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import {
-  solicitarOtpDeRecuperacaoAction,
-  concluirRecuperacaoAction,
-} from "@/server/actions/recuperacao-participante";
-import { onlyDigits } from "@/lib/cpf";
-import { PAIS_PADRAO } from "@/lib/telefone";
+import { redefinirSenhaPorRecuperacaoAction } from "@/server/actions/recuperacao-participante";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// O grant nunca é persistido em localStorage: vive só nesta prop (vinda da URL
-// capability) durante o fluxo.
+// O grant nunca e persistido em localStorage: vive so nesta prop (da URL
+// capability) durante o fluxo. Define uma NOVA SENHA.
 export function RecuperacaoLegadoForm({ caseId, grant }: { caseId: string; grant: string }) {
   const [isPending, start] = useTransition();
-  const [phone, setPhone] = useState("");
-  const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [codigo, setCodigo] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmar, setConfirmar] = useState("");
 
-  function pedir() {
-    const digits = onlyDigits(phone);
-    if (digits.length < 6) { toast.error("Telefone inválido"); return; }
-    start(async () => {
-      const r = await solicitarOtpDeRecuperacaoAction({ caseId, grant, phone: digits, phoneCountry: PAIS_PADRAO });
-      if (!r.ok) { toast.error(r.error); return; }
-      setChallengeId(r.data.challengeId);
-      toast.success("Enviamos um código ao novo telefone.");
-    });
-  }
   function concluir() {
-    if (!challengeId) return;
+    if (novaSenha.length < 8) { toast.error("Minimo 8 caracteres"); return; }
+    if (novaSenha !== confirmar) { toast.error("As senhas nao conferem"); return; }
     start(async () => {
-      const r = await concluirRecuperacaoAction({ caseId, grant, challengeId, codigo, phone: onlyDigits(phone), phoneCountry: PAIS_PADRAO });
+      const r = await redefinirSenhaPorRecuperacaoAction({ caseId, grant, novaSenha, confirmarSenha: confirmar });
       if (!r.ok) { toast.error(r.error); return; }
-      toast.success("Telefone verificado. Entre com o novo número.");
+      toast.success("Senha redefinida. Entre com CPF e a nova senha.");
       window.location.href = "/login";
     });
   }
 
-  if (challengeId) {
-    return (
-      <div className="space-y-3">
-        <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000"
-          className="h-12 tabular-nums tracking-[0.4em]" value={codigo}
-          onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-        <Button onClick={concluir} disabled={isPending || codigo.length !== 6}>
-          {isPending ? "Confirmando..." : "Confirmar e concluir"}
-        </Button>
-      </div>
-    );
-  }
   return (
     <div className="space-y-3">
-      <Input inputMode="tel" autoComplete="tel" placeholder="Novo telefone (com DDD)" className="h-12"
-        value={phone} onChange={(e) => setPhone(e.target.value)} />
-      <Button onClick={pedir} disabled={isPending}>
-        {isPending ? "Enviando..." : "Enviar código"}
-      </Button>
+      <Input type="password" autoComplete="new-password" placeholder="Nova senha (min. 8)" className="h-12"
+        value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} />
+      <Input type="password" autoComplete="new-password" placeholder="Confirmar nova senha" className="h-12"
+        value={confirmar} onChange={(e) => setConfirmar(e.target.value)} />
+      <Button onClick={concluir} disabled={isPending}>{isPending ? "Salvando..." : "Redefinir senha"}</Button>
     </div>
   );
 }

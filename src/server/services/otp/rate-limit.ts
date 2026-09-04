@@ -18,7 +18,8 @@ export type BucketDeAuth =
   | "MFA_VERIFY"
   | "MFA_SETUP_VERIFY"
   | "RECOVERY_CODE_VERIFY"
-  | "ADMIN_STEP_UP";
+  | "ADMIN_STEP_UP"
+  | "PARTICIPANT_PASSWORD_ATTEMPT";
 
 // Teto por bucket dentro da janela. Escolhas explícitas (documentadas), não
 // silenciosas.
@@ -36,6 +37,7 @@ const LIMITE: Record<BucketDeAuth, number> = {
   MFA_SETUP_VERIFY: 8,  // confirmacoes de enrollment por admin/janela
   RECOVERY_CODE_VERIFY: 6, // usos de recovery code por admin/janela
   ADMIN_STEP_UP: 8,     // step-ups por admin/janela (independente do login)
+  PARTICIPANT_PASSWORD_ATTEMPT: 10, // tentativas de login por identidade/janela
 };
 
 const JANELA_MS = 15 * 60 * 1000;

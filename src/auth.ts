@@ -34,7 +34,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/auth.config";
 import { adminLoginSchema } from "@/lib/validations/auth";
-import { autenticarPorDesafioDeLogin } from "@/server/services/otp/login";
+import { autenticarParticipantePorSenha } from "@/server/services/otp/senha-participante";
 import { isAdminHost } from "@/lib/host";
 import {
   chaveDeConta,
@@ -61,38 +61,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // localiza a conta e envia o código é a Server Action de passo 1
     // (solicitarOtpDeLogin); este passo 2 só aceita um código válido, de uso
     // único, ligado a esta conta. Conhecer nome + CPF não basta.
+    // Participante: login por CPF + SENHA. CPF e identificador; a senha e o
+    // segredo definido pelo usuario. Nome/telefone/challengeId/codigo NUNCA
+    // autenticam (nem como alternativa silenciosa).
     Credentials({
       id: "credentials",
       credentials: {
-        challengeId: { label: "Desafio", type: "text" },
-        codigo: { label: "Código", type: "text" },
+        cpf: { label: "CPF", type: "text" },
+        senha: { label: "Senha", type: "password" },
       },
       async authorize(credentials, request) {
-        const challengeId = typeof credentials?.challengeId === "string" ? credentials.challengeId : "";
-        const codigo = typeof credentials?.codigo === "string" ? credentials.codigo : "";
-        if (!challengeId || !/^[0-9]{6}$/.test(codigo)) return null;
+        const cpf = typeof credentials?.cpf === "string" ? credentials.cpf.replace(/\D/g, "") : "";
+        const senha = typeof credentials?.senha === "string" ? credentials.senha : "";
+        if (cpf.length !== 11 || senha.length < 1) return null;
 
         const ip = ipDaRequisicao(request?.headers ?? new Headers());
-        const ident = await autenticarPorDesafioDeLogin({ challengeId, codigo, ip });
+        const ident = await autenticarParticipantePorSenha({ cpf, senha, ip });
         if (!ident) return null;
 
         const user = await prisma.user.findUnique({ where: { id: ident.id } });
         if (!user) return null;
 
-        // No host do painel, conta de painel entra só com senha.
+        // No host do painel, conta de painel entra so com senha de admin.
         if (PAPEIS_DE_PAINEL.has(user.role)) {
           const host = request?.headers?.get("host") ?? "";
           if (isAdminHost(host)) return null;
         }
 
         return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          tenantId: user.tenantId,
-          image: user.image,
-          sessionVersion: user.sessionVersion,
+          id: user.id, email: user.email, name: user.name, role: user.role,
+          tenantId: user.tenantId, image: user.image, sessionVersion: user.sessionVersion,
         };
       },
     }),

@@ -1,58 +1,26 @@
 "use server";
 
-// Conclusão de recuperação de legado pelo PRÓPRIO participante (§3). O grant
-// (emitido pelo suporte) chega por capability URL. Resposta neutra para
-// grant inválido/expirado/consumido/case rejeitado (§5). Nunca usa CPF/nome/
-// telefone histórico como prova; a prova é o OTP no NOVO telefone.
-import { headers } from "next/headers";
-
-import { ipDaRequisicao } from "@/server/services/login-throttle";
-import { onlyDigits } from "@/lib/cpf";
-import {
-  solicitarOtpDeRecuperacao,
-  concluirRecuperacao,
-} from "@/server/services/otp/recuperacao";
-import { provedorDeOtp } from "@/server/services/otp/provider";
+// Recuperacao de legado pelo participante (FASE 10.2): o grant (emitido pelo
+// suporte) chega por capability URL. O usuario define uma NOVA SENHA. Sem OTP,
+// sem telefone. Resposta neutra para grant invalido/expirado/consumido (§5).
+import { concluirRecuperacaoComSenha } from "@/server/services/otp/recuperacao";
 import type { ActionResult } from "@/server/actions/auth";
 
-const MSG_NEUTRA = "Link de recuperação inválido ou expirado.";
+const MSG_NEUTRA = "Link de recuperacao invalido ou expirado.";
 
-export async function solicitarOtpDeRecuperacaoAction(
-  raw: unknown,
-): Promise<ActionResult<{ challengeId: string }>> {
-  const r = raw as { caseId?: unknown; grant?: unknown; phone?: unknown; phoneCountry?: unknown };
-  const caseId = typeof r?.caseId === "string" ? r.caseId : "";
-  const grant = typeof r?.grant === "string" ? r.grant : "";
-  const phone = onlyDigits(String(r?.phone ?? ""));
-  const phoneCountry = String(r?.phoneCountry ?? "BR");
-  void (await headers()); // garante contexto de request
-  if (!caseId || !grant || phone.length < 6) return { ok: false, error: MSG_NEUTRA };
-  try {
-    const out = await solicitarOtpDeRecuperacao({ caseId, grant, novoPhone: phone, novoPhoneCountry: phoneCountry }, provedorDeOtp());
-    if (!out.ok) return { ok: false, error: MSG_NEUTRA }; // grant inválido/expirado/consumido
-    return { ok: true, data: { challengeId: out.challengeId } };
-  } catch {
-    return { ok: false, error: "Envio de código indisponível no momento." };
-  }
-}
-
-export async function concluirRecuperacaoAction(
+export async function redefinirSenhaPorRecuperacaoAction(
   raw: unknown,
 ): Promise<ActionResult> {
-  const r = raw as { caseId?: unknown; grant?: unknown; challengeId?: unknown; codigo?: unknown; phone?: unknown; phoneCountry?: unknown };
+  const r = raw as { caseId?: unknown; grant?: unknown; novaSenha?: unknown; confirmarSenha?: unknown };
   const caseId = typeof r?.caseId === "string" ? r.caseId : "";
   const grant = typeof r?.grant === "string" ? r.grant : "";
-  const challengeId = typeof r?.challengeId === "string" ? r.challengeId : "";
-  const codigo = typeof r?.codigo === "string" ? r.codigo : "";
-  const phone = onlyDigits(String(r?.phone ?? ""));
-  const phoneCountry = String(r?.phoneCountry ?? "BR");
-  void ipDaRequisicao(await headers());
-  if (!caseId || !grant || !challengeId || !/^[0-9]{6}$/.test(codigo) || phone.length < 6) {
-    return { ok: false, error: "Dados inválidos" };
-  }
-  const out = await concluirRecuperacao({ caseId, grant, challengeId, codigo, novoPhone: phone, novoPhoneCountry: phoneCountry });
+  const novaSenha = typeof r?.novaSenha === "string" ? r.novaSenha : "";
+  const confirmar = typeof r?.confirmarSenha === "string" ? r.confirmarSenha : "";
+  if (!caseId || !grant) return { ok: false, error: MSG_NEUTRA };
+  if (novaSenha.length < 8) return { ok: false, error: "A senha precisa de pelo menos 8 caracteres." };
+  if (novaSenha !== confirmar) return { ok: false, error: "As senhas nao conferem." };
+
+  const out = await concluirRecuperacaoComSenha({ caseId, grant, novaSenha });
   if (out.ok) return { ok: true, data: undefined };
-  // Neutro: não distingue grant vs OTP em detalhe que permita enumeração.
-  const msg = out.motivo === "OTP_INVALIDO" ? "Código incorreto ou expirado." : MSG_NEUTRA;
-  return { ok: false, error: msg };
+  return { ok: false, error: MSG_NEUTRA }; // neutro (grant invalido/consumido/corrida)
 }

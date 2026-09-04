@@ -24,6 +24,8 @@ estruturados / `AdminSecurityEvent` / `PAYMENT_*` logs. Nenhum dado sensível.
 | STEP_UP_FAILURE | MEDIUM | repetido | ação crítica sob tentativa |
 | ROLE_CHANGE denied | HIGH | qualquer | tentativa de escalação |
 | LEGACY_RECOVERY_APPROVAL | HIGH | qualquer | revisar caso + ator |
-| abuso de OTP participante | MEDIUM | rate estourado | rate-limit já atua |
+| participant password brute-force | HIGH | bucket estourado | possivel credential stuffing |
+| login failure spike (participante) | HIGH | pico | investigar |
+| password reset activity (recovery) | MEDIUM | pico | revisar casos |
 | OTP_SEND_FAILURE (spike) | HIGH | pico | provider degradado; auth fail-closed |
 | OTP provider unavailable | HIGH | sustentado | login participante indisponível |

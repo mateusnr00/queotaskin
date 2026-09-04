@@ -46,6 +46,13 @@ const phoneCountryField = z
 
 // CPF validado por dígito verificador. Aceita máscara, só os dígitos vão
 // para o banco, que é como estão gravados.
+// Senha de participante (§6): comprimento e o que importa; min 8, permite
+// letras/numeros/simbolos/espacos. Sem regras absurdas de composicao.
+const senhaField = z
+  .string()
+  .min(8, "A senha precisa de pelo menos 8 caracteres")
+  .max(200, "Senha longa demais");
+
 const cpfField = z
   .string()
   .transform(onlyDigits)
@@ -56,6 +63,14 @@ export const loginSchema = z.object({
   cpf: cpfField,
 });
 export type LoginInput = z.infer<typeof loginSchema>;
+
+// Login novo do participante: CPF (identificador) + senha (segredo). Nome e
+// telefone NAO participam.
+export const participantLoginSchema = z.object({
+  cpf: cpfField,
+  senha: z.string().min(1, "Informe a senha"),
+});
+export type ParticipantLoginInput = z.infer<typeof participantLoginSchema>;
 
 // Cadastro pede nome + CPF + celular. CPF é validado por dígito verificador;
 // nunca é exibido na UI depois do cadastro.
@@ -110,15 +125,16 @@ export const registerSchema = z
      * não pode impedir alguém de criar conta. Quem confere é o serviço, depois
      * da conta criada, e o cadastro segue de qualquer jeito.
      */
+    senha: senhaField,
+    confirmarSenha: z.string(),
     codigoDeIndicacao: z.string().trim().max(32).optional().or(z.literal("")),
   })
   .superRefine((dados, ctx) => {
     if (!telefoneValido(dados.phone, dados.phoneCountry)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["phone"],
-        message: "Telefone inválido para o país escolhido",
-      });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["phone"], message: "Telefone inválido para o país escolhido" });
+    }
+    if (dados.senha !== dados.confirmarSenha) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["confirmarSenha"], message: "As senhas não conferem" });
     }
   });
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -229,3 +245,14 @@ export const otpCodigoSchema = z.object({
   codigo: z.string().regex(/^[0-9]{6}$/, "Código de 6 dígitos"),
 });
 export type OtpCodigoInput = z.infer<typeof otpCodigoSchema>;
+
+
+// Troca de senha do participante (§18).
+export const participantChangePasswordSchema = z
+  .object({
+    senhaAtual: z.string().min(1, "Informe a senha atual"),
+    novaSenha: z.string().min(8, "A nova senha precisa de pelo menos 8 caracteres").max(200),
+    confirmarSenha: z.string(),
+  })
+  .refine((d) => d.novaSenha === d.confirmarSenha, { message: "As senhas não conferem", path: ["confirmarSenha"] });
+export type ParticipantChangePasswordInput = z.infer<typeof participantChangePasswordSchema>;

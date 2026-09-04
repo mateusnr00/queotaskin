@@ -26,11 +26,11 @@ export async function updateSteamTradeUrlAction(
   if (!parsed.success) {
     return { ok: false, error: "Dados inválidos", fieldErrors: parsed.error.flatten().fieldErrors };
   }
-  // Reauth obrigatória (§8): o payload traz o desafio CRITICAL_ACTION recente.
-  const reauthRaw = raw as { challengeId?: unknown; codigo?: unknown };
+  // Reauth obrigatória (§21): prova CRITICAL_ACTION emitida pela senha atual.
+  const reauthRaw = raw as { challengeId?: unknown; prova?: unknown };
   const challengeId = typeof reauthRaw?.challengeId === "string" ? reauthRaw.challengeId : "";
-  const codigo = typeof reauthRaw?.codigo === "string" ? reauthRaw.codigo : "";
-  if (!challengeId || !/^[0-9]{6}$/.test(codigo)) {
+  const prova = typeof reauthRaw?.prova === "string" ? reauthRaw.prova : "";
+  if (!challengeId || prova.length < 8) {
     return { ok: false, error: "Confirmação de segurança necessária." };
   }
 
@@ -40,7 +40,7 @@ export async function updateSteamTradeUrlAction(
   const r = await alterarSteamTradeUrl({
     sessao: { userId: session.user.id, sessionVersion: session.user.sessionVersion },
     steamTradeUrl,
-    reauth: { challengeId, codigo },
+    reauth: { challengeId, codigo: prova },
   });
   if (!r.ok) {
     // Resposta neutra (§26): nao distingue sessao de reauth em detalhe.
