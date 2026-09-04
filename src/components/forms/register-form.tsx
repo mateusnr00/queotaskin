@@ -32,6 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
+import { caminhoDeRedirecionamentoSeguro } from "@/lib/host";
 
 /** Rótulo miúdo em caixa alta, como nos painéis do jogo. */
 const ROTULO = "text-[11px] font-semibold uppercase tracking-wider";
@@ -67,7 +68,9 @@ export function RegisterForm({
   // NextAuth v5 manda ?callbackUrl= quando bate numa rota protegida; nossas
   // próprias telas mandam ?redirect=. Aceita os dois.
   const redirectTo =
-    searchParams.get("redirect") ?? searchParams.get("callbackUrl") ?? "/";
+    caminhoDeRedirecionamentoSeguro(
+      searchParams.get("redirect") ?? searchParams.get("callbackUrl"),
+    );
   // O código travado vem pronto do servidor, que já olhou a URL e o cookie.
   // Aqui a URL ainda é lida como reserva, para o formulário dentro do diálogo
   // de reserva (que não passa pela página de cadastro) continuar preenchendo.

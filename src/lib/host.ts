@@ -71,3 +71,18 @@ export function urlDaRequisicao(
   if (proto) url.protocol = `${proto.split(",")[0]!.trim()}:`;
   return url;
 }
+
+/**
+ * Sanitiza um destino de redirecionamento vindo de query (?redirect=,
+ * ?callbackUrl=). SO caminho interno: precisa comecar com "/" e nao ser
+ * "//" (protocolo-relativo) nem conter esquema. Bloqueia open redirect para
+ * origem externa (§22). Fallback: "/".
+ */
+export function caminhoDeRedirecionamentoSeguro(destino: string | null | undefined): string {
+  if (!destino) return "/";
+  const d = destino.trim();
+  if (!d.startsWith("/")) return "/";      // externo ou relativo estranho
+  if (d.startsWith("//") || d.startsWith("/\\")) return "/"; // protocolo-relativo
+  if (d.includes("://") || d.includes("\\")) return "/";
+  return d;
+}

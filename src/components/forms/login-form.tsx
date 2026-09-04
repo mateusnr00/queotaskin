@@ -29,6 +29,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
+import { caminhoDeRedirecionamentoSeguro } from "@/lib/host";
 
 const ROTULO = "text-[11px] font-semibold uppercase tracking-wider";
 const CAMPO = "h-12 pl-11";
@@ -40,7 +41,9 @@ export function LoginForm({ aoConcluir }: { aoConcluir?: () => void } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo =
-    searchParams.get("redirect") ?? searchParams.get("callbackUrl") ?? "/";
+    caminhoDeRedirecionamentoSeguro(
+      searchParams.get("redirect") ?? searchParams.get("callbackUrl"),
+    );
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);

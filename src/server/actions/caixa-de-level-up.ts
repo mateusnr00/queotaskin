@@ -16,6 +16,7 @@
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { validarSessaoParticipante } from "@/server/services/otp/sessao-participante";
 import { getCurrentTenantOrThrow } from "@/lib/tenant";
 import {
   abrirCaixa,
@@ -32,7 +33,11 @@ const entrada = z.object({ boxId: z.string().cuid() });
 export async function abrirCaixaAction(raw: unknown): Promise<AberturaDaCaixa> {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    // Reward claim: exige sessao VALIDA (sessionVersion atual, nao legada).
+    const sess = await validarSessaoParticipante(
+      session?.user?.id ? { userId: session.user.id, sessionVersion: session.user.sessionVersion } : null,
+    );
+    if (!sess.ok) {
       return { ok: false, erro: "Entre na sua conta para abrir a caixa." };
     }
 
@@ -42,7 +47,7 @@ export async function abrirCaixaAction(raw: unknown): Promise<AberturaDaCaixa> {
     const { id: tenantId } = await getCurrentTenantOrThrow();
     return await abrirCaixa({
       boxId: parsed.data.boxId,
-      userId: session.user.id,
+      userId: sess.userId,
       tenantId,
     });
   } catch (err) {

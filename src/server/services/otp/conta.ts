@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db";
 import { verificarDesafio } from "@/server/services/otp/otp-service";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
+import { validarSessaoParticipante, type SessaoParticipante } from "@/server/services/otp/sessao-participante";
 
 export type ClasseDeConta = "PHONE_VERIFIED" | "LEGACY_PHONE_UNVERIFIED" | "LEGACY_NO_PHONE";
 
@@ -22,38 +23,43 @@ export type ResultadoTrocaTelefone =
 /// e entao: grava o novo telefone + phoneVerifiedAt, e REVOGA as sessoes
 /// antigas (a versao sobe). Nunca vira fator sem a prova do novo numero.
 export async function trocarTelefoneVerificado(entrada: {
-  userId: string;
+  sessao: SessaoParticipante;
   novoPhone: string;
   novoPhoneCountry: string;
   challengeIdDoNovoTelefone: string;
   codigo: string;
 }): Promise<ResultadoTrocaTelefone> {
+  // Sessao valida primeiro (§9): sem sessao autenticada, nada de trocar
+  // telefone - informar CPF+novo telefone+OTP sem sessao seria A1 com passos.
+  const sess = await validarSessaoParticipante(entrada.sessao);
+  if (!sess.ok) return { ok: false, motivo: "SESSAO_INVALIDA" };
+  const userId = sess.userId;
   // Reauth/prova do novo numero: o challenge tem de ser CHANGE_PHONE, deste
   // usuario, e conferir. verificarDesafio consome (uso unico).
   const verif = await verificarDesafio({
     challengeId: entrada.challengeIdDoNovoTelefone,
     codigo: entrada.codigo,
     purpose: "CHANGE_PHONE",
-    userId: entrada.userId,
+    userId,
   });
   if (verif.resultado !== "VERIFICADO") return { ok: false, motivo: "CODIGO_INVALIDO" };
 
   // O telefone novo nao pode pertencer a outra conta (respeita o unique).
   const emUso = await prisma.user.findFirst({
-    where: { phone: entrada.novoPhone, id: { not: entrada.userId } },
+    where: { phone: entrada.novoPhone, id: { not: userId } },
     select: { id: true },
   });
   if (emUso) return { ok: false, motivo: "TELEFONE_EM_USO" };
 
   await prisma.user.update({
-    where: { id: entrada.userId },
+    where: { id: userId },
     data: {
       phone: entrada.novoPhone,
       phoneCountry: entrada.novoPhoneCountry,
       phoneVerifiedAt: new Date(),
     },
   });
-  const versao = await revogarTodasAsSessoes(entrada.userId);
+  const versao = await revogarTodasAsSessoes(userId);
   return { ok: true, sessionVersion: versao };
 }
 

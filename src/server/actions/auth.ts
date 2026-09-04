@@ -22,6 +22,9 @@ import { solicitarOtpDeLogin } from "@/server/services/otp/login";
 import { provedorDeOtp } from "@/server/services/otp/provider";
 import { solicitarCadastro, concluirCadastro } from "@/server/services/otp/registro";
 import { revogarTodasAsSessoes } from "@/server/services/otp/sessao";
+import { criarDesafio } from "@/server/services/otp/otp-service";
+import { trocarTelefoneVerificado } from "@/server/services/otp/conta";
+import { onlyDigits } from "@/lib/cpf";
 import { registrarLog } from "@/server/services/activity-log";
 import {
   chavesDoLogin,
@@ -98,6 +101,54 @@ export async function encerrarTodasAsSessoesAction(): Promise<ActionResult> {
   const sessao = await auth();
   if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
   await revogarTodasAsSessoes(sessao.user.id);
+  await signOut({ redirect: false });
+  return { ok: true, data: undefined };
+}
+
+/// Passo 1 da troca de telefone (§9): exige sessao; dispara OTP ao NOVO numero.
+export async function solicitarOtpTrocaTelefoneAction(
+  raw: unknown
+): Promise<ActionResult<{ challengeId: string }>> {
+  const sessao = await auth();
+  if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
+  const phone = onlyDigits(String((raw as { phone?: unknown })?.phone ?? ""));
+  const phoneCountry = String((raw as { phoneCountry?: unknown })?.phoneCountry ?? "BR");
+  if (phone.length < 6) return { ok: false, error: "Telefone invalido" };
+  try {
+    const d = await criarDesafio(
+      { userId: sessao.user.id, purpose: "CHANGE_PHONE", destino: { phoneCountry, phoneDigits: phone } },
+      provedorDeOtp(),
+    );
+    return { ok: true, data: { challengeId: d.challengeId } };
+  } catch {
+    return { ok: false, error: "Envio de codigo indisponivel no momento." };
+  }
+}
+
+/// Passo 2 da troca de telefone: sessao + OTP do novo numero. Revoga sessoes
+/// antigas; a propria sessao que trocou precisa reautenticar (documentado).
+export async function trocarTelefoneAction(
+  raw: unknown
+): Promise<ActionResult> {
+  const sessao = await auth();
+  if (!sessao?.user?.id) return { ok: false, error: "Nao autenticado" };
+  const r = raw as { challengeId?: unknown; codigo?: unknown; phone?: unknown; phoneCountry?: unknown };
+  const challengeId = typeof r?.challengeId === "string" ? r.challengeId : "";
+  const codigo = typeof r?.codigo === "string" ? r.codigo : "";
+  const phone = onlyDigits(String(r?.phone ?? ""));
+  const phoneCountry = String(r?.phoneCountry ?? "BR");
+  if (!challengeId || !/^[0-9]{6}$/.test(codigo) || phone.length < 6) {
+    return { ok: false, error: "Dados invalidos" };
+  }
+  const out = await trocarTelefoneVerificado({
+    sessao: { userId: sessao.user.id, sessionVersion: sessao.user.sessionVersion },
+    novoPhone: phone,
+    novoPhoneCountry: phoneCountry,
+    challengeIdDoNovoTelefone: challengeId,
+    codigo,
+  });
+  if (!out.ok) return { ok: false, error: "Nao autorizado. Confirme sua identidade e tente de novo." };
+  // Sessoes antigas (incluindo esta) foram revogadas: forca reautenticacao.
   await signOut({ redirect: false });
   return { ok: true, data: undefined };
 }

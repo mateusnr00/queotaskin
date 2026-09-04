@@ -9,9 +9,8 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
-import { prisma } from "@/lib/db";
-import { steamIdFromTradeUrl } from "@/lib/cs2";
 import { steamTradeUrlSchema } from "@/lib/validations/steam";
+import { alterarSteamTradeUrl } from "@/server/services/otp/steam-url";
 import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
 
@@ -25,23 +24,28 @@ export async function updateSteamTradeUrlAction(
 
   const parsed = steamTradeUrlSchema.safeParse(raw);
   if (!parsed.success) {
-    return {
-      ok: false,
-      error: "Dados inválidos",
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
+    return { ok: false, error: "Dados inválidos", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  // Reauth obrigatória (§8): o payload traz o desafio CRITICAL_ACTION recente.
+  const reauthRaw = raw as { challengeId?: unknown; codigo?: unknown };
+  const challengeId = typeof reauthRaw?.challengeId === "string" ? reauthRaw.challengeId : "";
+  const codigo = typeof reauthRaw?.codigo === "string" ? reauthRaw.codigo : "";
+  if (!challengeId || !/^[0-9]{6}$/.test(codigo)) {
+    return { ok: false, error: "Confirmação de segurança necessária." };
   }
 
   const value = parsed.data.steamTradeUrl;
   const steamTradeUrl = value === "" ? null : value;
 
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: {
-      steamTradeUrl,
-      steamId: steamTradeUrl ? steamIdFromTradeUrl(steamTradeUrl) : null,
-    },
+  const r = await alterarSteamTradeUrl({
+    sessao: { userId: session.user.id, sessionVersion: session.user.sessionVersion },
+    steamTradeUrl,
+    reauth: { challengeId, codigo },
   });
+  if (!r.ok) {
+    // Resposta neutra (§26): nao distingue sessao de reauth em detalhe.
+    return { ok: false, error: "Nao autorizado. Confirme sua identidade e tente de novo." };
+  }
 
   // Ação de site público, fora do recorte "painel e dinheiro", incluída de
   // propósito: é o endereço para onde a skin vai. Se ele muda entre o

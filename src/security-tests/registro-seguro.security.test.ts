@@ -155,7 +155,8 @@ suiteDeIntegracao("P1-A rollout · cadastro seguro e legado", () => {
     const novoPhone = telUnico();
     const fake = new FakeOtpProvider();
     const d = await criarDesafio({ userId: uid, purpose: "CHANGE_PHONE", destino: { phoneCountry: "BR", phoneDigits: novoPhone } }, fake);
-    const r = await trocarTelefoneVerificado({ userId: uid, novoPhone, novoPhoneCountry: "BR", challengeIdDoNovoTelefone: d.challengeId, codigo: fake.ultimoCodigo()! });
+    const sv = (await prisma.user.findUnique({ where: { id: uid }, select: { sessionVersion: true } }))!.sessionVersion;
+    const r = await trocarTelefoneVerificado({ sessao: { userId: uid, sessionVersion: sv }, novoPhone, novoPhoneCountry: "BR", challengeIdDoNovoTelefone: d.challengeId, codigo: fake.ultimoCodigo()! });
     expect(r.ok).toBe(true);
     const u = await prisma.user.findUnique({ where: { id: uid }, select: { phone: true, phoneVerifiedAt: true, sessionVersion: true } });
     expect(u?.phone).toBe(novoPhone);

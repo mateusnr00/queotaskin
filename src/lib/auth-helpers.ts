@@ -16,6 +16,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
+import { validarSessaoParticipante, donoOuAdminPodeAcessar } from "@/server/services/otp/sessao-participante";
 
 export async function requireAuth() {
   const session = await auth();
@@ -156,11 +157,7 @@ export async function sessionMayAccessOwnedResource(
   ownerUserId: string | null | undefined
 ): Promise<boolean> {
   const session = await auth();
-  const uid = session?.user?.id;
-  if (!uid) return true; // deslogado: capability-URL
-  if (ownerUserId && uid === ownerUserId) return true;
-  const role = session.user.role;
-  return role === "ADMIN" || role === "SUPER_ADMIN";
+  return donoOuAdminPodeAcessar(session?.user?.id, session?.user?.role, ownerUserId);
 }
 
 /**
@@ -183,4 +180,20 @@ export async function ehDoPainel(tenantId: string): Promise<boolean> {
   if (!fresh) return false;
   if (fresh.role === "SUPER_ADMIN") return true;
   return fresh.role === "ADMIN" && fresh.tenantId === tenantId;
+}
+
+
+// Sessao de participante VALIDADA para acao protegida (§2). Exige sessao,
+// confirma o sessionVersion contra o banco (revogacao/logout-all) e recusa
+// sessao legada (sem claim confiavel). Retorna so o userId da SESSAO - nunca
+// do request (§3). Lanca em falha (fail-closed).
+export async function requireValidParticipantSession(): Promise<{ userId: string }> {
+  const session = await auth();
+  const v = await validarSessaoParticipante(
+    session?.user?.id
+      ? { userId: session.user.id, sessionVersion: session.user.sessionVersion }
+      : null,
+  );
+  if (!v.ok) throw new UnauthorizedError();
+  return { userId: v.userId };
 }

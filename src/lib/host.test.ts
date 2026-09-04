@@ -73,3 +73,15 @@ describe("urlDaRequisicao", () => {
     expect(url.protocol).toBe("https:");
   });
 });
+
+import { caminhoDeRedirecionamentoSeguro } from "@/lib/host";
+describe("caminhoDeRedirecionamentoSeguro (§22 open redirect)", () => {
+  it("aceita caminho interno, recusa externo/protocolo-relativo/esquema", () => {
+    expect(caminhoDeRedirecionamentoSeguro("/minha-conta")).toBe("/minha-conta");
+    expect(caminhoDeRedirecionamentoSeguro("https://evil.com")).toBe("/");
+    expect(caminhoDeRedirecionamentoSeguro("//evil.com")).toBe("/");
+    expect(caminhoDeRedirecionamentoSeguro("/\\evil.com")).toBe("/");
+    expect(caminhoDeRedirecionamentoSeguro("javascript:alert(1)")).toBe("/");
+    expect(caminhoDeRedirecionamentoSeguro(null)).toBe("/");
+  });
+});

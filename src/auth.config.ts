@@ -61,7 +61,9 @@ export const authConfig = {
         token.id = user.id;
         token.role = user.role;
         token.tenantId = user.tenantId ?? null;
-        token.sessionVersion = (user as { sessionVersion?: number }).sessionVersion ?? 0;
+        // Legado (token emitido antes desta arquitetura) NAO tem este claim:
+        // fica undefined e as acoes sensiveis tratam como fail-closed.
+        token.sessionVersion = (user as { sessionVersion?: number }).sessionVersion;
       }
       return token;
     },
@@ -76,8 +78,7 @@ export const authConfig = {
           | "PARTICIPANT";
         session.user.tenantId =
           (token.tenantId as string | null | undefined) ?? null;
-        session.user.sessionVersion =
-          (token.sessionVersion as number | undefined) ?? 0;
+        session.user.sessionVersion = token.sessionVersion as number | undefined;
       }
       return session;
     },
