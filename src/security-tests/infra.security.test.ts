@@ -91,6 +91,11 @@ describe("INFRA-11 security headers", () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).not.toContain("unsafe-eval");
+    // REGRESSÃO: as imagens de skin vêm do CDN da Steam; o img-src precisa
+    // liberá-lo, senão o navegador bloqueia todas as artes do catálogo/prêmios.
+    expect(csp).toContain("img-src");
+    expect(csp).toContain("https://*.steamstatic.com");
+    expect(csp).toContain("https://*.akamaihd.net");
     // fora de prod nao manda HSTS
     expect(securityHeaders(false).map((h) => h.key)).not.toContain("Strict-Transport-Security");
   });

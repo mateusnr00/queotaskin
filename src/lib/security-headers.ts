@@ -14,7 +14,12 @@ export function securityHeaders(ehProd: boolean): { key: string; value: string }
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'`,
     `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
-    `img-src 'self' data: blob: ${supabase} https://*.supabase.co`,
+    // Steam CDN: as artes das skins (catálogo, prêmios, títulos premiados) são
+    // servidas pelo CDN da Steam - hoje community.akamai.steamstatic.com, além
+    // das variantes cloudflare/fastly (*.steamstatic.com) e do legado
+    // *.akamaihd.net. Sem liberá-las aqui, o CSP bloqueia TODAS as imagens de
+    // skin no navegador e elas somem (a URL continua no banco).
+    `img-src 'self' data: blob: ${supabase} https://*.supabase.co https://*.steamstatic.com https://*.akamaihd.net`,
     `font-src 'self' https://fonts.gstatic.com`,
     `connect-src 'self' ${supabase} https://*.supabase.co`,
     "frame-ancestors 'none'",
