@@ -62,8 +62,12 @@ export async function processarWebhookDePagamento(
     eventoOficial: evento.eventoOficial,
   });
 
-  // 1. IDEMPOTÊNCIA POR EVENTO. O unique no banco é a última linha; aqui a
-  //    inserção que conflita significa "já vi este evento" -> no-op.
+  // 1. REGISTRA O EVENTO (dedup de AUDITORIA). O @@unique evita linhas
+  //    repetidas. Mas a idempotência FINANCEIRA NÃO mora aqui: um evento
+  //    logado cujo processamento morreu no meio precisa poder ser reprocessado
+  //    no reenvio do gateway, senão o dinheiro fica preso. Por isso, colisão
+  //    aqui NÃO encerra o fluxo: ele segue e a decisão vem do estado do
+  //    Payment (FSM compare-and-set), que é idempotente por natureza.
   let eventId: string;
   try {
     const criado = await prisma.paymentWebhookEvent.create({
@@ -79,11 +83,15 @@ export async function processarWebhookDePagamento(
     });
     eventId = criado.id;
   } catch (e) {
-    if (isUniqueViolation(e)) {
-      logSeg("PAYMENT_DUPLICATE_EVENT", { provider: evento.provider, externalId: evento.externalId });
-      return { desfecho: "JA_PROCESSADO" };
-    }
-    throw e;
+    if (!isUniqueViolation(e)) throw e;
+    // Já existe a linha deste evento. Recupera o id e SEGUE: pode ser retry de
+    // crash (pagamento ainda PENDING) ou duplicata de algo já resolvido.
+    logSeg("PAYMENT_DUPLICATE_EVENT", { provider: evento.provider, externalId: evento.externalId });
+    const existente = await prisma.paymentWebhookEvent.findFirst({
+      where: { provider: evento.provider, providerEventId: chave },
+      select: { id: true },
+    });
+    eventId = existente?.id ?? "";
   }
 
   // 2. localizar o Payment pela transação GRAVADA.
@@ -99,6 +107,11 @@ export async function processarWebhookDePagamento(
   if (!payment) {
     await marcarEvento(eventId, { verificationResult: "INVALID", processingError: "Payment não encontrado" });
     return { desfecho: "PAGAMENTO_DESCONHECIDO" };
+  }
+
+  // Pagamento já em estado terminal: dedup financeiro verdadeiro. Nada a fazer.
+  if (payment.status === "APPROVED" || payment.status === "REJECTED" || payment.status === "REFUNDED") {
+    return { desfecho: "JA_PROCESSADO" };
   }
 
   // 3. VERIFICAR no gateway. Webhook nunca aprova sozinho.
@@ -124,7 +137,7 @@ export async function processarWebhookDePagamento(
       paymentId: payment.id,
       para: destino,
       motivo: `webhook ${evento.provider}`,
-      verificado: destino === "APPROVED", // provado pelo gateway acima
+      verificado: destino === "APPROVED",
     });
     if (r.ok && !r.noop && destino === "APPROVED") {
       await finalizarReservaPaga(tx, payment.reservationId);
@@ -143,10 +156,9 @@ export async function processarWebhookDePagamento(
   if (!transicao.ok) return { desfecho: "NAO_APROVADO", verificacao: verif.resultado };
   if (transicao.noop) return { desfecho: "JA_PROCESSADO", verificacao: verif.resultado };
 
-  // 5. EFEITOS DERIVADOS (idempotentes por unique/lock; fora da transação
-  //    principal de propósito, para não segurar locks longos). Documentado:
-  //    um crash entre a transação e aqui deixa a reserva PAGA sem os efeitos,
-  //    que a reconciliação (fase P1) reprocessa. Cada efeito é idempotente.
+  // 5. EFEITOS DERIVADOS (idempotentes por unique/lock). Documentado: um crash
+  //    entre a transação e aqui deixa a reserva PAGA sem os efeitos, que são
+  //    idempotentes e reprocessáveis (a reconciliação de P1 fecha isso).
   const tenantId = payment.reservation?.raffle.tenantId ?? null;
   void registrarLog({
     acao: "pagamento.aprovado", tenantId, origem: "SISTEMA",
@@ -198,6 +210,7 @@ async function aplicarEfeitosDePagamentoAprovado(reservationId: string): Promise
 }
 
 async function marcarEvento(id: string, data: Prisma.PaymentWebhookEventUpdateInput): Promise<void> {
+  if (!id) return;
   await prisma.paymentWebhookEvent.update({ where: { id }, data: { processedAt: new Date(), ...data } }).catch(() => {});
 }
 

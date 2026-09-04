@@ -1,4 +1,4 @@
-// F-01 — PROVA FINANCEIRA: nenhum corpo de webhook controlado pelo atacante
+// F-01 - PROVA FINANCEIRA: nenhum corpo de webhook controlado pelo atacante
 // cria, sozinho, um Payment APPROVED. Sempre pela barreira de ambiente.
 //
 // O gateway é injetado por `deps.resolverProvider`: nenhum teste toca rede.
@@ -85,14 +85,14 @@ suiteDeIntegracao("F-01 · prova financeira do webhook", () => {
     return { reserva: r?.status, pagamento: p?.status, xp };
   }
 
-  it("TESTE 1 — webhook diz PAID, gateway diz PENDING → NÃO aprova", async () => {
+  it("TESTE 1 - webhook diz PAID, gateway diz PENDING → NÃO aprova", async () => {
     const { reservationId, externalId } = await cenario();
     const r = await processarWebhookDePagamento(forjar(externalId), fakeProvider("PENDING"));
     expect(r.desfecho).toBe("PENDENTE");
     expect(await estado(reservationId, externalId)).toEqual({ reserva: "PENDING", pagamento: "PENDING", xp: 0 });
   });
 
-  it("TESTE 2 — transação inexistente no gateway (INVALID) → não aprova", async () => {
+  it("TESTE 2 - transação inexistente no gateway (INVALID) → não aprova", async () => {
     const { reservationId, externalId } = await cenario();
     // externalId do webhook diverge do gravado, e é único por execução para o
     // fingerprint determinístico não colidir entre rodadas.
@@ -104,7 +104,7 @@ suiteDeIntegracao("F-01 · prova financeira do webhook", () => {
     expect((await estado(reservationId, externalId)).pagamento).toBe("PENDING");
   });
 
-  it("TESTE 3 — gateway indisponível → NÃO aprova (fail-closed)", async () => {
+  it("TESTE 3 - gateway indisponível → NÃO aprova (fail-closed)", async () => {
     const { reservationId, externalId } = await cenario();
     const r = await processarWebhookDePagamento(forjar(externalId), fakeProvider("APPROVED", { indisponivel: true }));
     expect(r.desfecho).toBe("NAO_APROVADO");
@@ -112,7 +112,7 @@ suiteDeIntegracao("F-01 · prova financeira do webhook", () => {
     expect((await estado(reservationId, externalId)).pagamento).toBe("PENDING");
   });
 
-  it("TESTE 4 — gateway confirma APPROVED, valor correto → exatamente uma aprovação", async () => {
+  it("TESTE 4 - gateway confirma APPROVED, valor correto → exatamente uma aprovação", async () => {
     const { reservationId, externalId } = await cenario();
     const r = await processarWebhookDePagamento(forjar(externalId), fakeProvider("APPROVED", { valor: 50 }));
     expect(r.desfecho).toBe("APROVADO");
@@ -121,14 +121,14 @@ suiteDeIntegracao("F-01 · prova financeira do webhook", () => {
     expect(e.xp).toBeLessThanOrEqual(1);
   });
 
-  it("TESTE 5 — gateway expõe valor DIVERGENTE → NÃO aprova (INVALID)", async () => {
+  it("TESTE 5 - gateway expõe valor DIVERGENTE → NÃO aprova (INVALID)", async () => {
     const { reservationId, externalId } = await cenario();
     const r = await processarWebhookDePagamento(forjar(externalId), fakeProvider("APPROVED", { valor: 5 }));
     expect(r.verificacao).toBe("INVALID");
     expect((await estado(reservationId, externalId)).pagamento).toBe("PENDING");
   });
 
-  it("TESTE 10/11 — APPROVED recebe PENDING não regride; APPROVED de novo é no-op", async () => {
+  it("TESTE 10/11 - APPROVED recebe PENDING não regride; APPROVED de novo é no-op", async () => {
     const { reservationId, externalId } = await cenario();
     await processarWebhookDePagamento(forjar(externalId), fakeProvider("APPROVED", { valor: 50 }));
     // agora chega um webhook PENDING
@@ -140,7 +140,7 @@ suiteDeIntegracao("F-01 · prova financeira do webhook", () => {
     expect((await estado(reservationId, externalId)).pagamento).toBe("APPROVED"); // não regrediu
   });
 
-  it("TESTE 7 — 20 webhooks idênticos em série → 1 efeito financeiro", async () => {
+  it("TESTE 7 - 20 webhooks idênticos em série → 1 efeito financeiro", async () => {
     const { reservationId, externalId } = await cenario();
     for (let i = 0; i < 20; i++) {
       await processarWebhookDePagamento(forjar(externalId), fakeProvider("APPROVED", { valor: 50 }));
@@ -148,7 +148,7 @@ suiteDeIntegracao("F-01 · prova financeira do webhook", () => {
     expect((await estado(reservationId, externalId)).xp).toBeLessThanOrEqual(1);
   });
 
-  it("TESTE 8 — 20 webhooks idênticos SIMULTÂNEOS → 1 efeito financeiro", async () => {
+  it("TESTE 8 - 20 webhooks idênticos SIMULTÂNEOS → 1 efeito financeiro", async () => {
     const { reservationId, externalId } = await cenario();
     await Promise.allSettled(
       Array.from({ length: 20 }, () => processarWebhookDePagamento(forjar(externalId), fakeProvider("APPROVED", { valor: 50 }))),

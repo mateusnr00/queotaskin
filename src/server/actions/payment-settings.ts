@@ -17,6 +17,7 @@ import { getActiveTenantIdForAdmin } from "@/lib/tenant";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { registrarLog } from "@/server/services/activity-log";
 import type { ActionResult } from "@/server/actions/auth";
+import { baseUrlConfiavel } from "@/lib/pagamentos/hosts-confiaveis";
 
 const paymentSettingsSchema = z.object({
   provider: z.enum(["SYNCPAY", "SIGILOPAY", "NEXUSPAG", "HORSEPAY"]),
@@ -29,8 +30,8 @@ const paymentSettingsSchema = z.object({
     .optional()
     .default("")
     .refine(
-      (v) => !v || v.startsWith("http://") || v.startsWith("https://"),
-      "URL deve começar com http:// ou https://"
+      (v) => baseUrlConfiavel("SYNCPAY", v, { permitirLocal: process.env.NODE_ENV !== "production" }),
+      "O endereço precisa ser o host oficial do gateway, via https.",
     ),
   sigilopayClientId: z.string().max(200).optional().default(""),
   sigilopayClientSecret: z.string().max(500).optional().default(""),

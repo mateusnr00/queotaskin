@@ -57,12 +57,12 @@ export function assertSafeEnvironment(opcoes: OpcoesDaBarreira = {}): {
 } {
   const env = opcoes.env ?? process.env;
 
-  // CAMADA 1 — ambiente explicitamente de teste.
+  // CAMADA 1 - ambiente explicitamente de teste.
   if (env.NODE_ENV !== "test") {
     throw new AmbienteInseguroError("camada 1 (NODE_ENV)", `NODE_ENV="${env.NODE_ENV}" (esperado "test")`);
   }
 
-  // CAMADA 2 — opt-in explícito e obrigatório.
+  // CAMADA 2 - opt-in explícito e obrigatório.
   if (env.ALLOW_DESTRUCTIVE_TESTS !== "true") {
     throw new AmbienteInseguroError("camada 2 (opt-in)", "ALLOW_DESTRUCTIVE_TESTS != 'true'");
   }
@@ -78,6 +78,15 @@ export function assertSafeEnvironment(opcoes: OpcoesDaBarreira = {}): {
     }
   }
 
+  // DIRECT_URL (usada por `prisma migrate`) também não pode apontar para
+  // produção, mesmo que a DATABASE_URL esteja limpa.
+  const direto = (env.DIRECT_URL ?? "").toLowerCase();
+  for (const frag of FRAGMENTOS_DE_PRODUCAO) {
+    if (direto.includes(frag)) {
+      throw new AmbienteInseguroError("camada 3 (DIRECT_URL)", `DIRECT_URL contém marca de produção "${frag}"`);
+    }
+  }
+
   let parsed: URL;
   try {
     parsed = new URL(bruto);
@@ -85,19 +94,19 @@ export function assertSafeEnvironment(opcoes: OpcoesDaBarreira = {}): {
     throw new AmbienteInseguroError("camada 3 (URL)", "DATABASE_URL ilegível");
   }
 
-  // CAMADA 3 — host em allowlist de loopback.
+  // CAMADA 3 - host em allowlist de loopback.
   const host = parsed.hostname;
   if (!HOSTS_LOCAIS.has(host)) {
     throw new AmbienteInseguroError("camada 3 (host)", `host não-local: "${host}"`);
   }
 
-  // CAMADA 4 — nome do banco em allowlist.
+  // CAMADA 4 - nome do banco em allowlist.
   const banco = parsed.pathname.replace(/^\//, "").split("?")[0];
   if (!BANCOS_DE_TESTE.has(banco)) {
     throw new AmbienteInseguroError("camada 4 (banco)", `nome de banco não permitido: "${banco}"`);
   }
 
-  // CAMADA 5 — SENTINELA no banco. Obrigatória.
+  // CAMADA 5 - SENTINELA no banco. Obrigatória.
   const leitor = opcoes.lerSentinela ?? lerSentinelaComPsql;
   let marker: string | null;
   try {

@@ -17,7 +17,7 @@ const LOCAL_OK = {
 };
 const sentinelaBoa = () => SENTINELA_MARKER;
 
-describe("barreira de isolamento — deixa passar só o ambiente comprovadamente local", () => {
+describe("barreira de isolamento - deixa passar só o ambiente comprovadamente local", () => {
   it("1. localhost + sentinela correta -> permite", () => {
     const d = assertSafeEnvironment({ env: LOCAL_OK, lerSentinela: sentinelaBoa });
     expect(d.host).toBe("localhost");
@@ -80,4 +80,29 @@ describe("barreira de isolamento — deixa passar só o ambiente comprovadamente
       assertSafeEnvironment({ env: { ...LOCAL_OK, NODE_ENV: "production" }, lerSentinela: sentinelaBoa }),
     ).toThrow(/NODE_ENV/);
   });
+
+  it("§25 red-team: hosts disfarçados de local são bloqueados", () => {
+    const ataques = [
+      "postgresql://user@localhost.attacker.com/queotaskin",
+      "postgresql://user@127.0.0.1.attacker.com/queotaskin",
+      "postgresql://attacker@evil.com:5432/queotaskin",
+      "postgres://user@127.0.0.1/production",
+    ];
+    for (const url of ataques) {
+      expect(() =>
+        assertSafeEnvironment({ env: { ...LOCAL_OK, DATABASE_URL: url }, lerSentinela: sentinelaBoa }),
+        url,
+      ).toThrow(AmbienteInseguroError);
+    }
+  });
+
+  it("§25 DIRECT_URL apontando para produção bloqueia, mesmo com DATABASE_URL local", () => {
+    expect(() =>
+      assertSafeEnvironment({
+        env: { ...LOCAL_OK, DIRECT_URL: "postgresql://u:p@db.x.supabase.co:5432/postgres" },
+        lerSentinela: sentinelaBoa,
+      }),
+    ).toThrow(/DIRECT_URL/);
+  });
+
 });

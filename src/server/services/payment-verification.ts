@@ -90,11 +90,17 @@ export async function verifyPayment(
     return v("UNVERIFIABLE", `gateway indisponível: ${(e as Error).name}`);
   }
 
-  // 7. valor, SE o gateway expõe. Divergência => INVALID (não aprova).
+  // 7. valor, SE o gateway expõe. Comparado em CENTAVOS inteiros (nada de
+  //    float solto), e um valor não-finito (NaN/Infinity) é divergência, não
+  //    "sem valor": NaN em comparação escaparia a guarda ingênua.
   const valorGateway = extrairValor(consulta.raw);
   if (valorGateway != null) {
-    const esperado = Number(pg.amount);
-    if (Math.abs(valorGateway - esperado) > 0.001) {
+    if (!Number.isFinite(valorGateway)) {
+      return v("INVALID", "valor do gateway não é finito", null);
+    }
+    const centavosGateway = Math.round(valorGateway * 100);
+    const centavosEsperado = Math.round(Number(pg.amount) * 100);
+    if (centavosGateway !== centavosEsperado) {
       return v("INVALID", "valor do gateway diverge do esperado", valorGateway);
     }
   }
