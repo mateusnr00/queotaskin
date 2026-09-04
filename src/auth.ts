@@ -45,13 +45,9 @@ import {
   registrarFalha,
 } from "@/server/services/login-throttle";
 import { registrarLog } from "@/server/services/activity-log";
+import { mfaAtivo, verificarTotpDoAdmin, usarRecoveryCode } from "@/server/services/admin/mfa";
+import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 
-// "  João  da  Silva " → "joão da silva", usado pra comparar nomes
-// digitados pelo usuário sem se importar com maiúsculas ou espaços
-// extras. Acentos são preservados (joão ≠ joao) pra não dar falso-positivo.
-function normalizeName(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 const PAPEIS_DE_PAINEL = new Set(["ADMIN", "SUPER_ADMIN"]);
 
@@ -105,6 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "E-mail", type: "email" },
         password: { label: "Senha", type: "password" },
+        totp: { label: "Codigo MFA", type: "text" },
       },
       async authorize(credentials, request) {
         const parsed = adminLoginSchema.safeParse(credentials);
@@ -121,6 +118,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email.toLowerCase() },
         });
+        // (sessionVersion vem no objeto do user; usado na sessao admin)
 
         // Compara sempre, mesmo sem usuário ou sem hash: um retorno rápido
         // aqui revelaria quais e-mails existem pelo tempo de resposta.
@@ -168,6 +166,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        // MFA (§9/§11): admin com MFA ATIVA nao entra so com a senha. O
+        // segundo fator (TOTP do app, ou recovery code) e obrigatorio aqui.
+        // Sem MFA ativa, o login passa e a area de enrollment obriga a ativar.
+        if (await mfaAtivo(user.id)) {
+          const totp = typeof (credentials as { totp?: unknown })?.totp === "string" ? (credentials as { totp: string }).totp.trim() : "";
+          let segundoFator = /^[0-9]{6}$/.test(totp) ? await verificarTotpDoAdmin(user.id, totp) : false;
+          if (!segundoFator && totp.length >= 8) segundoFator = await usarRecoveryCode(user.id, totp);
+          if (!segundoFator) {
+            await registrarFalha(chaves);
+            await registrarEventoDeSeguranca({ action: "MFA_FAILURE", actorAdminId: user.id });
+            return null; // senha certa, MFA errado: NAO autentica
+          }
+        }
+
         // Só a chave da conta (ver comentário no provider acima).
         await limparFalhas([chaveDeConta(parsed.data.email.toLowerCase())]);
 
@@ -197,6 +209,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           tenantId: user.tenantId,
           image: user.image,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),

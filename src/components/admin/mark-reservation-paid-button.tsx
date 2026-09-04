@@ -33,7 +33,7 @@ export function MarkReservationPaidButton({
       return;
     }
     startTransition(async () => {
-      const result = await markReservationPaidAction(reservationId);
+      const result = await markReservationPaidAction({ reservationId, motivo: "override manual", totp: "" });
       if (!result.ok) {
         toast.error(result.error);
         setConfirming(false);

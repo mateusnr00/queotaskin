@@ -45,6 +45,10 @@ export function aprovacaoAutomaticaPermitida(provider: string): boolean {
   const tier = tierDoProvider(provider);
   if (tier === "STRONG") return true;
   if (tier === "STATUS_ONLY") {
+    // §30 (P1-B): em PRODUCAO, STATUS_ONLY autoaprovar e IMPOSSIVEL - nenhum
+    // toggle de admin/env pode enfraquecer o invariante financeiro. O opt-in
+    // so existe fora de producao (test/dev), para os testes de mecanismo.
+    if (process.env.NODE_ENV === "production") return false;
     return process.env.PAYMENTS_ALLOW_STATUS_ONLY_AUTO_APPROVAL === "true";
   }
   return false;

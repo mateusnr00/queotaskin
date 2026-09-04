@@ -35,6 +35,9 @@ import {
   getAdminOrThrow,
   sessionMayAccessOwnedResource,
 } from "@/lib/auth-helpers";
+import { exigirStepUpAdmin } from "@/server/services/admin/sessao";
+import { mfaAtivo } from "@/server/services/admin/mfa";
+import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 import { autoAwardTicketsForReservation } from "@/server/services/awarded-tickets";
 import { autoGenerateSurpriseBoxesForReservation } from "@/server/services/surprise-boxes";
 import { gerarRaspadinhasParaReserva } from "@/server/services/raspadinhas";
@@ -527,13 +530,34 @@ export async function checkPaymentStatusAction(
 // + Ticket transicionam juntos. Idempotente (chamar 2x em PAID não faz
 // nada). Restrita ao tenant do admin pra impedir cross-tenant.
 export async function markReservationPaidAction(
-  reservationId: string,
+  entrada: string | { reservationId: string; motivo?: string; totp?: string },
 ): Promise<ActionResult<{ recreatedTickets?: number[] }>> {
   try {
+    // Compat: aceita string legada, mas exige objeto com step-up para executar.
+    const reservationId = typeof entrada === "string" ? entrada : entrada?.reservationId;
+    const motivo = typeof entrada === "object" ? (entrada.motivo ?? "").trim() : "";
+    const totp = typeof entrada === "object" ? (entrada.totp ?? "") : "";
     if (typeof reservationId !== "string" || reservationId.length === 0) {
       return { ok: false, error: "ID de reserva inválido" };
     }
     const session = await getAdminOrThrow();
+
+    // §22 payment override e CRITICAL: exige MFA ativa + step-up recente +
+    // motivo obrigatorio, tudo server-side. Nao bypassa P0 (a escrita continua
+    // a mesma; o financial maintenance guard e as regras da FSM seguem valendo).
+    if (!(await mfaAtivo(session.user.id))) {
+      return { ok: false, error: "Ative o MFA para executar acoes criticas." };
+    }
+    if (motivo.length < 3) {
+      return { ok: false, error: "Informe o motivo do pagamento manual." };
+    }
+    if (!(await exigirStepUpAdmin(session.user.id, totp))) {
+      return { ok: false, error: "Confirmacao de seguranca (MFA) necessaria." };
+    }
+    await registrarEventoDeSeguranca({
+      action: "PAYMENT_OVERRIDE", actorAdminId: session.user.id,
+      targetType: "Reservation", targetId: reservationId, reason: motivo,
+    });
 
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },

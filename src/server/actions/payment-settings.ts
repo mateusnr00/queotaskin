@@ -9,6 +9,7 @@
 // enviar texto novo = sobrescreve.
 
 import { revalidatePath } from "next/cache";
+import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
@@ -208,6 +209,7 @@ export async function updatePaymentSettingsAction(
   });
 
   revalidatePath("/admin/configuracoes/pagamentos");
+  await registrarEventoDeSeguranca({ action: "GATEWAY_CONFIG_CHANGE", actorAdminId: session.user.id, tenantId, targetType: "Tenant", targetId: tenantId });
   return { ok: true, data: undefined };
 }
 

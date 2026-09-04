@@ -2823,3 +2823,47 @@ model LegacyRecoveryAudit {
   @@index([caseId])
   @@index([userId])
 }
+
+/// MFA (TOTP) do admin. Secret guardado CIFRADO (encryptSecret), nunca em
+/// texto nem em log. status PENDING ate confirmar o primeiro codigo; so entao
+/// ACTIVE. lastUsedStep barra replay do mesmo timestep.
+model AdminMfa {
+  userId       String    @id
+  secretEnc    String
+  status       String    @default("PENDING") // PENDING | ACTIVE
+  lastUsedStep Int?
+  createdAt    DateTime  @default(now())
+  activatedAt  DateTime?
+}
+
+/// Codigos de recuperacao do MFA de admin. Guardados so como HMAC, single-use.
+model AdminRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Trilha de eventos de seguranca privilegiados. before/after seguros (sem
+/// secret). Aplicacao nao expoe delete (imutabilidade - ver relatorio).
+model AdminSecurityEvent {
+  id           String   @id @default(cuid())
+  actorAdminId String?
+  tenantId     String?
+  action       String
+  targetType   String?
+  targetId     String?
+  result       String   @default("OK")
+  reason       String?
+  before       Json?
+  after        Json?
+  requestId    String?
+  at           DateTime @default(now())
+
+  @@index([actorAdminId])
+  @@index([action])
+  @@index([tenantId])
+}

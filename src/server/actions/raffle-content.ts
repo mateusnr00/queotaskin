@@ -15,6 +15,8 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { getAdminOrThrow } from "@/lib/auth-helpers";
+import { vencedorEstaTravado } from "@/server/services/admin/sessao";
+import { registrarEventoDeSeguranca } from "@/server/services/admin/audit";
 import { assertRaffleInActiveTenant } from "@/lib/tenant";
 import {
   chaveDoNome,
@@ -1377,9 +1379,20 @@ export async function setRaffleWinnerAction(
 
     const raffle = await prisma.raffle.findUnique({
       where: { id: raffleId },
-      select: { totalNumbers: true, tenantId: true },
+      select: { totalNumbers: true, tenantId: true, status: true, winnerTicketNumber: true },
     });
     if (!raffle) return { ok: false, error: "Sorteio não encontrado" };
+    // §25 winner locking: sorteio FINISHED tem vencedor imutavel por acao
+    // normal. Alteracao excepcional e break-glass (P2/ops), nao este caminho.
+    if (vencedorEstaTravado(raffle.status)) {
+      await registrarEventoDeSeguranca({
+        action: "WINNER_OVERRIDE", result: "DENIED", actorAdminId: session.user.id,
+        tenantId, targetType: "Raffle", targetId: raffleId,
+        reason: "sorteio finalizado: vencedor imutavel",
+        before: { winnerTicketNumber: raffle.winnerTicketNumber }, after: { tentativa: ticketNumber },
+      });
+      return { ok: false, error: "Sorteio finalizado: o vencedor nao pode ser alterado." };
+    }
     if (ticketNumber < 1 || ticketNumber > raffle.totalNumbers) {
       return {
         ok: false,

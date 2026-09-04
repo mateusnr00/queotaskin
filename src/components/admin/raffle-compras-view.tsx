@@ -3336,7 +3336,7 @@ function RowActions({
     if (!confirm(`Marcar a reserva de ${row.participantName} como paga?`))
       return;
     startTransition(async () => {
-      const result = await markReservationPaidAction(row.id);
+      const result = await markReservationPaidAction({ reservationId: row.id, motivo: "override manual", totp: "" });
       if (!result.ok) {
         toast.error(result.error);
         return;
