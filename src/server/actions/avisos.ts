@@ -29,6 +29,9 @@ const avisoSchema = z.object({
   avisoAtivo: z.coerce.boolean().default(false),
   avisoAspecto: z.enum(["3:5", "9:16"]).default("3:5"),
   avisoLinkUrl: linkOpcional,
+  // Escurecimento do fundo (0 a 90). Faixa fechada para não deixar o fundo
+  // 100% preto (some com o site) nem negativo.
+  avisoFundoOpacidade: z.coerce.number().int().min(0).max(90).default(70),
 });
 
 export type AvisoSettingsInput = z.input<typeof avisoSchema>;
@@ -48,7 +51,7 @@ export async function salvarAvisoAction(raw: unknown): Promise<ActionResult> {
     };
   }
 
-  const { avisoAtivo, avisoAspecto, avisoLinkUrl } = parsed.data;
+  const { avisoAtivo, avisoAspecto, avisoLinkUrl, avisoFundoOpacidade } = parsed.data;
 
   // Ligar o aviso sem imagem não mostra nada: avisa em vez de gravar um estado
   // que promete um pop-up e não entrega.
@@ -68,6 +71,7 @@ export async function salvarAvisoAction(raw: unknown): Promise<ActionResult> {
       avisoAtivo,
       avisoAspecto,
       avisoLinkUrl: avisoLinkUrl || null,
+      avisoFundoOpacidade,
     },
   });
 

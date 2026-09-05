@@ -29,10 +29,13 @@ export function AvisoModal({
   imagemUrl,
   aspecto,
   destino,
+  fundoOpacidade = 70,
 }: {
   imagemUrl: string;
   aspecto: "3:5" | "9:16";
   destino: string | null;
+  /** Escurecimento do fundo, 0 a 90 (% de preto sobre o site). */
+  fundoOpacidade?: number;
 }) {
   const dispensado = useSyncExternalStore(
     semAssinatura,
@@ -89,7 +92,16 @@ export function AvisoModal({
       aria-modal="true"
       aria-label="Aviso"
       onClick={fechar}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in-0 duration-200"
+      // O escurecimento do fundo vem do painel (0 a 90). Preto sólido com
+      // opacidade, em vez de bg-black/70 fixo, para o admin poder deixar o site
+      // mais visível atrás da imagem. Blur leve só quando ainda há algum
+      // escurecimento, senão o fundo "claro" continuaria borrado.
+      style={{
+        backgroundColor: `rgba(0,0,0,${Math.min(90, Math.max(0, fundoOpacidade)) / 100})`,
+      }}
+      className={`fixed inset-0 z-[60] flex items-center justify-center p-4 animate-in fade-in-0 duration-200 ${
+        fundoOpacidade > 10 ? "backdrop-blur-sm" : ""
+      }`}
     >
       {/* Clicar NA imagem não deve fechar como clicar no fundo: o fundo fecha;
           a imagem, quando tem link, navega. */}

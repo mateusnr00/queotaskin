@@ -20,6 +20,7 @@ export default async function AvisosPage() {
       avisoAspecto: true,
       avisoImagemUrl: true,
       avisoLinkUrl: true,
+      avisoFundoOpacidade: true,
     },
   });
 
@@ -45,6 +46,7 @@ export default async function AvisosPage() {
           avisoAspecto: aspecto,
           avisoImagemUrl: tenant?.avisoImagemUrl ?? null,
           avisoLinkUrl: tenant?.avisoLinkUrl ?? null,
+          avisoFundoOpacidade: tenant?.avisoFundoOpacidade ?? 70,
         }}
       />
     </div>

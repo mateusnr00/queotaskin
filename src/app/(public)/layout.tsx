@@ -27,6 +27,7 @@ export default async function PublicLayout({
               avisoImagemUrl: true,
               avisoAspecto: true,
               avisoLinkUrl: true,
+              avisoFundoOpacidade: true,
             },
           })
           .catch(() => null)
@@ -39,6 +40,7 @@ export default async function PublicLayout({
           imagemUrl={aviso.avisoImagemUrl}
           aspecto={aviso.avisoAspecto === "9:16" ? "9:16" : "3:5"}
           destino={aviso.avisoLinkUrl ?? null}
+          fundoOpacidade={aviso.avisoFundoOpacidade}
         />
       )}
       <SiteHeader />

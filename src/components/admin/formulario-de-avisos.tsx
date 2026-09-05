@@ -30,6 +30,7 @@ export function FormularioDeAvisos({
     avisoAspecto: Aspecto;
     avisoImagemUrl: string | null;
     avisoLinkUrl: string | null;
+    avisoFundoOpacidade: number;
   };
 }) {
   const router = useRouter();
@@ -37,6 +38,7 @@ export function FormularioDeAvisos({
   const [aspecto, setAspecto] = useState<Aspecto>(initial.avisoAspecto);
   const [imagemUrl, setImagemUrl] = useState<string | null>(initial.avisoImagemUrl);
   const [linkUrl, setLinkUrl] = useState(initial.avisoLinkUrl ?? "");
+  const [fundo, setFundo] = useState(initial.avisoFundoOpacidade);
   const [enviando, setEnviando] = useState(false);
   const [salvando, startSalvar] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -89,6 +91,7 @@ export function FormularioDeAvisos({
         avisoAtivo: ativo,
         avisoAspecto: aspecto,
         avisoLinkUrl: linkUrl.trim(),
+        avisoFundoOpacidade: fundo,
       });
       if (!r.ok) {
         toast.error(r.error);
@@ -211,6 +214,67 @@ export function FormularioDeAvisos({
         </div>
         <p className="text-xs text-muted-foreground">
           Se preencher, a imagem vira um link. Vazio: a imagem só fecha no “X”.
+        </p>
+      </div>
+
+      {/* Escurecimento do fundo (opacidade da camada preta sobre o site) */}
+      <div className="rounded-2xl border p-4 md:p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="aviso-fundo" className="text-sm font-semibold">
+            Escurecimento do fundo
+          </Label>
+          <span className="text-xs font-medium tabular-nums text-muted-foreground">
+            {fundo}%
+          </span>
+        </div>
+        <input
+          id="aviso-fundo"
+          type="range"
+          min={0}
+          max={90}
+          step={5}
+          value={fundo}
+          onChange={(e) => setFundo(Number(e.target.value))}
+          className="w-full accent-primary"
+        />
+        <div className="flex justify-between text-[11px] text-muted-foreground">
+          <span>Site mais visível</span>
+          <span>Fundo mais escuro</span>
+        </div>
+
+        {/* Prévia real: um "site" de mentira atrás, a camada preta na opacidade
+            escolhida por cima, e a imagem no centro. É o que o visitante vê. */}
+        <div className="relative mt-1 h-40 overflow-hidden rounded-xl border">
+          <div
+            aria-hidden
+            className="absolute inset-0 grid grid-cols-3 gap-2 p-2 opacity-90"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-md bg-gradient-to-br from-muted to-muted-foreground/20" />
+            ))}
+          </div>
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{ backgroundColor: `rgba(0,0,0,${fundo / 100})` }}
+          />
+          {imagemUrl && (
+            <div className="absolute inset-0 flex items-center justify-center p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagemUrl}
+                alt="Prévia"
+                className={cn(
+                  "max-h-full rounded-lg object-contain shadow-xl",
+                  aspecto === "9:16" ? "aspect-[9/16]" : "aspect-[3/5]",
+                )}
+              />
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Regula o quanto o site atrás da imagem fica escuro. Se a sua arte já é
+          escura, diminua aqui para o site não sumir.
         </p>
       </div>
 

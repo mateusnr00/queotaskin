@@ -400,6 +400,11 @@ model Tenant {
   avisoImagemUrl String?
   avisoAspecto   String? // "3:5" | "9:16"
   avisoLinkUrl   String?
+  /// Escurecimento do fundo do pop-up (0 a 90). É a opacidade da camada preta
+  /// sobre o site atrás da imagem, em %. 0 = site totalmente visível; 90 = bem
+  /// escuro. Serve para regular quando a arte já é escura e o fundo fechado
+  /// demais some com o site.
+  avisoFundoOpacidade Int @default(70)
 
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja
   // qual for a proporção. ROUND é escolha explícita de quem tem um emblema.
