@@ -240,34 +240,16 @@ export function CompactRaffleCard({
       href={vendendo ? `/${raffle.slug}` : `/sorteio/${raffle.draw!.publicId}`}
       className="group flex gap-3 overflow-hidden rounded-xl border bg-card p-3 transition-colors hover:border-primary/40"
     >
-      {/* O selo de nível vive SOBRE a miniatura (como no cartão grande), e não
-          mais no rodapé: no rodapé ele disputava a largura com o preço e a
-          chamada, e os três não cabiam numa linha estreita, truncando "GRÁ..."
-          e "P...". Aqui ele não rouba largura de ninguém, e o rodapé fica só
-          com preço + chamada, que sempre cabem. */}
-      <div className="relative h-20 w-28 shrink-0 sm:w-32">
-        <RaffleCover
-          url={raffle.images[0]?.url ?? null}
-          title={raffle.title}
-          skinName={prize?.skinName}
-          rarity={prize?.skinRarity}
-          variant="thumb"
-          className="h-full w-full rounded-lg"
-          sizes="128px"
-        />
-        {/* O fundo escuro é do INVÓLUCRO, não do selo: o selo pinta a própria
-            cor por style inline, que venceria qualquer classe de fundo. O
-            invólucro só existe quando há nível (degrauDoRank), senão sobraria
-            uma pílula preta vazia. Mesmo arranjo do cartão grande. */}
-        {degrauDoRank(raffle.minLevel) && (
-          <span className="absolute left-1 top-1 z-10 max-w-[calc(100%-0.5rem)] rounded-full bg-black/55 shadow-[0_1px_4px_rgba(0,0,0,0.7)] backdrop-blur-sm">
-            <SeloDeExclusiva
-              minLevel={raffle.minLevel}
-              className="min-w-0 text-[9px]"
-            />
-          </span>
-        )}
-      </div>
+      <RaffleCover
+        url={raffle.images[0]?.url ?? null}
+        title={raffle.title}
+        skinName={prize?.skinName}
+        rarity={prize?.skinRarity}
+        variant="thumb"
+        // Cartão mais enxuto: a miniatura não cresce no desktop (era h-24 w-40).
+        className="h-20 w-28 shrink-0 rounded-lg sm:w-32"
+        sizes="128px"
+      />
 
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
         <div className="space-y-1">
@@ -279,10 +261,12 @@ export function CompactRaffleCard({
           )}
         </div>
 
-        {/* Rodapé enxuto: só preço (esquerda) e a chamada (direita, ml-auto).
-            O nível saiu para cima da miniatura, então aqui sobram dois itens
-            curtos que sempre cabem e ficam uniformes entre os cartões. A
-            chamada nunca é cortada; se apertar mesmo, quem cede é o preço. */}
+        {/* Rodapé com dois itens curtos: preço à esquerda e UM selo à direita.
+            No sorteio EXCLUSIVO, o selo de nível ("PRATA III") toma o lugar da
+            chamada que pisca, porque o próprio nível já diz que é exclusivo, e
+            os dois juntos não cabiam nem faziam sentido repetidos. No sorteio
+            normal (sem nível), fica a chamada ("ADQUIRA JÁ!"). Sempre um só,
+            encostado na direita, uniforme entre os cartões. */}
         <div className="flex items-center gap-2">
           <span
             className={cn(
@@ -299,7 +283,14 @@ export function CompactRaffleCard({
           >
             {vendendo ? priceLabel(raffle) : "Assistir ao sorteio"}
           </span>
-          <SeloDeStatus texto={statusBadge} className="ml-auto shrink-0" />
+          {degrauDoRank(raffle.minLevel) ? (
+            <SeloDeExclusiva
+              minLevel={raffle.minLevel}
+              className="ml-auto min-w-0 shrink-0"
+            />
+          ) : (
+            <SeloDeStatus texto={statusBadge} className="ml-auto shrink-0" />
+          )}
         </div>
       </div>
     </Link>
