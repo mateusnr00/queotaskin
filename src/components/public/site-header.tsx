@@ -226,6 +226,25 @@ export async function SiteHeader() {
           </div>
         )}
 
+        {/* Criar conta no TOPO do celular, para quem ainda não tem conta. No
+            desktop o nav já mostra "Entrar/Criar conta"; no celular esse nav é
+            hidden e sobrava só o hambúrguer, então o caminho principal (criar
+            conta) ficava escondido dentro da gaveta. "Entrar" continua na
+            gaveta, que é onde quem já tem conta procura. O ml-auto empurra o
+            botão e o hambúrguer juntos para a direita quando não há rank. */}
+        {!session?.user && (
+          <Link
+            href="/registro"
+            className={cn(
+              buttonVariants({ size: "sm" }),
+              "md:hidden mr-2",
+              rankChip ? "" : "ml-auto",
+            )}
+          >
+            Criar conta
+          </Link>
+        )}
+
         {/* Mobile drawer */}
         <PublicMobileMenu
           isLoggedIn={Boolean(session?.user)}
