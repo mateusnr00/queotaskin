@@ -392,13 +392,13 @@ model Tenant {
   /// Um modal com uma imagem clicável e um "X" no canto para fechar. Serve
   /// para anunciar promoção quando houver. `avisoAtivo` liga/desliga; a
   /// imagem mora no Storage (`avisoImagemUrl`); `avisoAspecto` diz se a arte é
-  /// 5:3 (paisagem) ou 9:16 (story), para o modal enquadrar sem cortar;
+  /// 3:5 (retrato) ou 9:16 (story), para o modal enquadrar sem cortar;
   /// `avisoLinkUrl` é opcional — quando existe, a imagem vira link. A dispensa
   /// é lembrada no navegador pela própria URL da imagem: trocar a arte faz o
   /// aviso reaparecer, sem precisar de versão.
   avisoAtivo     Boolean @default(false)
   avisoImagemUrl String?
-  avisoAspecto   String? // "5:3" | "9:16"
+  avisoAspecto   String? // "3:5" | "9:16"
   avisoLinkUrl   String?
 
   // RECTANGLE é o padrão porque nunca corta: encaixa a imagem inteira seja

@@ -23,7 +23,7 @@ export default async function AvisosPage() {
     },
   });
 
-  const aspecto = tenant?.avisoAspecto === "9:16" ? "9:16" : "5:3";
+  const aspecto = tenant?.avisoAspecto === "9:16" ? "9:16" : "3:5";
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -31,7 +31,7 @@ export default async function AvisosPage() {
         etiqueta="Ajustes"
         icone={<Bell aria-hidden className="h-3 w-3" />}
         titulo="Avisos"
-        descricao="Um pop-up de imagem para anunciar promoção. Suba a arte (5:3 ou 9:16), opcionalmente um link, e ligue. No site ela aparece com um “X” para fechar e não volta a incomodar até você trocar a imagem."
+        descricao="Um pop-up de imagem para anunciar promoção. Suba a arte (3:5 ou 9:16), opcionalmente um link, e ligue. No site ela aparece com um “X” para fechar e não volta a incomodar até você trocar a imagem."
         migalha={[
           { rotulo: "Admin", href: "/admin" },
           { rotulo: "Configurações", href: "/admin/configuracoes" },

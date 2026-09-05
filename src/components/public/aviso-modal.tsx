@@ -31,7 +31,7 @@ export function AvisoModal({
   destino,
 }: {
   imagemUrl: string;
-  aspecto: "5:3" | "9:16";
+  aspecto: "3:5" | "9:16";
   destino: string | null;
 }) {
   const dispensado = useSyncExternalStore(
@@ -72,7 +72,7 @@ export function AvisoModal({
   const razao =
     aspecto === "9:16"
       ? "aspect-[9/16] w-[min(86vw,340px)] max-h-[82vh]"
-      : "aspect-[5/3] w-[min(92vw,560px)]";
+      : "aspect-[3/5] w-[min(86vw,380px)] max-h-[82vh]";
 
   const imagem = (
     // eslint-disable-next-line @next/next/no-img-element

@@ -2,7 +2,7 @@
 
 // Aviso/promoção em imagem (pop-up estilo restaurante). A IMAGEM em si é subida
 // por uploadLogoAction(slot="aviso"), que grava avisoImagemUrl. Aqui ficam os
-// campos que acompanham a arte: ligar/desligar, a proporção (5:3 ou 9:16) e o
+// campos que acompanham a arte: ligar/desligar, a proporção (3:5 ou 9:16) e o
 // link opcional para onde a imagem leva ao ser clicada. Por tenant.
 
 import { revalidatePath } from "next/cache";
@@ -27,7 +27,7 @@ const linkOpcional = z
 
 const avisoSchema = z.object({
   avisoAtivo: z.coerce.boolean().default(false),
-  avisoAspecto: z.enum(["5:3", "9:16"]).default("5:3"),
+  avisoAspecto: z.enum(["3:5", "9:16"]).default("3:5"),
   avisoLinkUrl: linkOpcional,
 });
 

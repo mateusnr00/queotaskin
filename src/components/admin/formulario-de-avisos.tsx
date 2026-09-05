@@ -1,7 +1,7 @@
 "use client";
 
 // Aba "Avisos" do painel: um pop-up de imagem (estilo promoção de restaurante)
-// que aparece no site com um "X" para fechar. O admin sobe a arte (5:3 ou
+// que aparece no site com um "X" para fechar. O admin sobe a arte (3:5 ou
 // 9:16), escolhe a proporção, opcionalmente cola um link para onde a imagem
 // leva, e liga/desliga. A imagem sobe na hora (uploadLogoAction slot="aviso");
 // os demais campos salvam no botão.
@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-type Aspecto = "5:3" | "9:16";
+type Aspecto = "3:5" | "9:16";
 
 export function FormularioDeAvisos({
   initial,
@@ -101,7 +101,7 @@ export function FormularioDeAvisos({
     });
   }
 
-  const razao = aspecto === "9:16" ? "aspect-[9/16] max-w-[240px]" : "aspect-[5/3] max-w-md";
+  const razao = aspecto === "9:16" ? "aspect-[9/16] max-w-[240px]" : "aspect-[3/5] max-w-[260px]";
 
   return (
     <div className="space-y-6">
@@ -111,7 +111,7 @@ export function FormularioDeAvisos({
           <div>
             <Label className="text-sm font-semibold">Imagem do aviso</Label>
             <p className="text-xs text-muted-foreground">
-              Use uma arte em <strong>5:3</strong> (paisagem) ou{" "}
+              Use uma arte em <strong>3:5</strong> (retrato) ou{" "}
               <strong>9:16</strong> (story). PNG, JPG ou WebP, até 3 MB.
             </p>
           </div>
@@ -131,7 +131,7 @@ export function FormularioDeAvisos({
 
         {/* Proporção */}
         <div className="flex items-center gap-2">
-          {(["5:3", "9:16"] as const).map((op) => (
+          {(["3:5", "9:16"] as const).map((op) => (
             <button
               key={op}
               type="button"
@@ -143,7 +143,7 @@ export function FormularioDeAvisos({
                   : "border-input text-muted-foreground hover:text-foreground",
               )}
             >
-              {op === "5:3" ? "Paisagem 5:3" : "Story 9:16"}
+              {op === "3:5" ? "Retrato 3:5" : "Story 9:16"}
             </button>
           ))}
         </div>

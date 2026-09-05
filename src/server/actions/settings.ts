@@ -341,7 +341,7 @@ const COLUNA_POR_SLOT: Record<
   favicon: "faviconUrl",
   fundo: "authBackgroundUrl",
   trofeu: "trofeuUrl",
-  // A arte do aviso/promoção (5:3 ou 9:16). Trocar a imagem faz o pop-up
+  // A arte do aviso/promoção (3:5 ou 9:16). Trocar a imagem faz o pop-up
   // reaparecer para quem já tinha fechado, porque a dispensa é lembrada pela URL.
   aviso: "avisoImagemUrl",
 };

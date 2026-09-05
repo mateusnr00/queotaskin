@@ -37,7 +37,7 @@ export default async function PublicLayout({
       {aviso?.avisoAtivo && aviso.avisoImagemUrl && (
         <AvisoModal
           imagemUrl={aviso.avisoImagemUrl}
-          aspecto={aviso.avisoAspecto === "9:16" ? "9:16" : "5:3"}
+          aspecto={aviso.avisoAspecto === "9:16" ? "9:16" : "3:5"}
           destino={aviso.avisoLinkUrl ?? null}
         />
       )}
