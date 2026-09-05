@@ -376,6 +376,7 @@ export default async function EditRafflePage({
           pricePerNumber: Number(raffle.pricePerNumber),
           isFree: raffle.isFree,
           freeLabel: raffle.freeLabel,
+          seloInicialTexto: raffle.seloInicialTexto,
           hasFee: raffle.hasFee,
           feeAmount: raffle.feeAmount ? Number(raffle.feeAmount) : null,
           reservationTimeoutMinutes: raffle.reservationTimeoutMinutes,
