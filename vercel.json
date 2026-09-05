@@ -3,7 +3,6 @@
   "regions": [
     "gru1"
   ],
-  "//buildCommand": "Aplica as migrations ANTES de compilar. migrate-deploy.mjs só roda `prisma migrate deploy` quando VERCEL_ENV=production (preview e local pulam, sem tocar o banco de produção); depois vem o build normal (prisma generate + next build). Sem isto, mudança de schema não chegava sozinha em produção e virava passo manual.",
   "buildCommand": "node scripts/migrate-deploy.mjs && npm run build",
   "crons": [
     {
