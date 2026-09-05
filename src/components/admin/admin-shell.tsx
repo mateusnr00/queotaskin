@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   BarChart3,
+  Bell,
   Boxes,
   LayoutDashboard,
   Megaphone,
@@ -66,6 +67,7 @@ const NAV_CONFIG = [
   { href: "/admin/configuracoes/pagamentos", label: "Pagamentos", icon: Wallet },
   { href: "/admin/configuracoes/mensagens", label: "Mensagens", icon: MessageSquare },
   { href: "/admin/configuracoes/anuncios", label: "Anúncios", icon: Megaphone },
+  { href: "/admin/configuracoes/avisos", label: "Avisos", icon: Bell },
   { href: "/admin/personalizar-tema", label: "Personalizar tema", icon: Palette },
 ] as const;
 

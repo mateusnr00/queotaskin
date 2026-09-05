@@ -331,16 +331,19 @@ const LOGO_EXT =
 // incompatíveis: a logo é uma faixa larga com o nome escrito, o favicon é
 // lido a 16px num quadrado, o fundo cobre uma tela inteira e o troféu é um
 // selo de poucos pixels ao lado de um texto.
-export type SlotDeImagem = "logo" | "favicon" | "fundo" | "trofeu";
+export type SlotDeImagem = "logo" | "favicon" | "fundo" | "trofeu" | "aviso";
 
 const COLUNA_POR_SLOT: Record<
   SlotDeImagem,
-  "logoUrl" | "faviconUrl" | "authBackgroundUrl" | "trofeuUrl"
+  "logoUrl" | "faviconUrl" | "authBackgroundUrl" | "trofeuUrl" | "avisoImagemUrl"
 > = {
   logo: "logoUrl",
   favicon: "faviconUrl",
   fundo: "authBackgroundUrl",
   trofeu: "trofeuUrl",
+  // A arte do aviso/promoção (5:3 ou 9:16). Trocar a imagem faz o pop-up
+  // reaparecer para quem já tinha fechado, porque a dispensa é lembrada pela URL.
+  aviso: "avisoImagemUrl",
 };
 
 const COLUNAS_DE_IMAGEM = {
@@ -348,12 +351,14 @@ const COLUNAS_DE_IMAGEM = {
   faviconUrl: true,
   authBackgroundUrl: true,
   trofeuUrl: true,
+  avisoImagemUrl: true,
 } as const;
 
 function slotDoFormulario(valor: FormDataEntryValue | null): SlotDeImagem {
   if (valor === "favicon") return "favicon";
   if (valor === "fundo") return "fundo";
   if (valor === "trofeu") return "trofeu";
+  if (valor === "aviso") return "aviso";
   return "logo";
 }
 
