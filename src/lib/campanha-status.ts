@@ -50,12 +50,16 @@ export function statusDaCampanha(
   vendidos: number,
   total: number,
   config: ConfiguracaoDeStatus = CONFIGURACAO_PADRAO,
-  gratuita = false
+  gratuita = false,
+  // Texto do selo inicial exclusivo desta campanha (Raffle.seloInicialTexto).
+  // Vence o texto do painel e o padrão. Vazio/null cai no comportamento antigo.
+  textoInicialDaRifa: string | null = null
 ): string {
-  // O texto do painel manda, quando existe: quem escreveu sabe o que quis
-  // dizer. Só o padrão troca, porque "Adquira já!" numa campanha que não
-  // cobra nada contradiz o resto da página.
+  // Precedência do selo inicial: o desta campanha manda; depois o do painel
+  // (tenant); por último o padrão. "Adquira já!" numa campanha gratuita vira
+  // "Participe já!", porque não se adquire o que é de graça.
   const inicio =
+    textoInicialDaRifa?.trim() ||
     config.earlyText?.trim() ||
     (gratuita ? STATUS_PADRAO.earlyGratuita : STATUS_PADRAO.early);
 

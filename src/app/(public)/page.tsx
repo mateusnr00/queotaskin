@@ -89,6 +89,7 @@ export default async function HomePage() {
       pricePerNumber: true,
       isFree: true,
       freeLabel: true,
+      seloInicialTexto: true,
       minLevel: true,
       principal: true,
       totalNumbers: true,
@@ -219,6 +220,8 @@ export default async function HomePage() {
       vendidosPorRifa.get(r.id) ?? 0,
       r.totalNumbers,
       statusConfig,
+      r.isFree,
+      r.seloInicialTexto,
     );
 
   // A coluna de ganhadores só existe quando há ganhador. Antes o grid de duas

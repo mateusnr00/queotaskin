@@ -625,6 +625,10 @@ model Raffle {
   // ("SORTEIO GRATUITO"). Admin pode personalizar pra "PARTICIPAÇÃO LIVRE",
   // "ENTRADA GRÁTIS", etc.
   freeLabel            String?
+  /// Texto do selo inicial do card (o "Adquira já!" que pisca), exclusivo
+  /// desta campanha. Vazio = usa o padrão ("Adquira já!"). Só troca a faixa
+  /// INICIAL; metade/últimos/esgotado seguem automáticos pela venda.
+  seloInicialTexto     String?
   hasFee               Boolean          @default(false) // adicionar taxa por reserva
   feeAmount            Decimal?         @db.Decimal(10, 2)
   /// Números aleatórios por padrão. O formulário do painel já vem nesse

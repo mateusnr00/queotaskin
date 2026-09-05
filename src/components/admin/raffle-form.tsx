@@ -253,6 +253,7 @@ const DEFAULT_VALUES: RaffleGeneralInput = {
   pricePerNumber: 1,
   isFree: false,
   freeLabel: null,
+  seloInicialTexto: null,
   hasFee: false,
   feeAmount: null,
   reservationTimeoutMinutes: 5,
@@ -1705,6 +1706,33 @@ export function RaffleForm({
                     )}
                   />
                 )}
+
+                {/* Selo/chamada do card (o "Adquira já!" que pisca), exclusivo
+                    desta campanha. Vale para qualquer campanha, paga ou grátis. */}
+                <FormField
+                  control={form.control}
+                  name="seloInicialTexto"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Selo do card (chamada)</FormLabel>
+                      <FormControl>
+                        <Input
+                          maxLength={40}
+                          placeholder="Adquira já!"
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value || null)}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        O texto que pisca no canto do card, só desta campanha.
+                        Vazio: mostra “Adquira já!”. Muda só a chamada inicial;
+                        “últimos números”, “esgotado” e afins seguem automáticos
+                        pela venda.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {hasFee && (
                   <FormField

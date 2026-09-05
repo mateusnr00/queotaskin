@@ -570,6 +570,7 @@ export default async function PublicRaffleDetailPage({
                 raffle.totalNumbers,
                 statusConfig,
                 raffle.isFree,
+                raffle.seloInicialTexto,
               )}
             />
           )}

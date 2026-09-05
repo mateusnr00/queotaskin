@@ -127,6 +127,15 @@ export const raffleGeneralSchema = z.object({
     .optional()
     .nullable()
     .transform((v) => (v && v.trim() ? v.trim() : null)),
+  // Texto do selo inicial do card (o "Adquira já!" que pisca), exclusivo desta
+  // campanha. Vazio/null = usa o padrão ("Adquira já!"). Só troca a faixa
+  // INICIAL; as faixas de venda (metade, últimos, esgotado) seguem automáticas.
+  seloInicialTexto: z
+    .string()
+    .max(40, "Máximo 40 caracteres")
+    .optional()
+    .nullable()
+    .transform((v) => (v && v.trim() ? v.trim() : null)),
   hasFee: z.coerce.boolean().default(false),
   feeAmount: z.coerce.number().min(0).max(99_999_999.99).optional().nullable(),
   reservationTimeoutMinutes: z.coerce

@@ -47,6 +47,7 @@ export default async function PublicRafflesListPage() {
       pricePerNumber: true,
       isFree: true,
       freeLabel: true,
+      seloInicialTexto: true,
       minLevel: true,
       principal: true,
       totalNumbers: true,
@@ -76,7 +77,13 @@ export default async function PublicRafflesListPage() {
   // da transmissão, e o selo de venda falaria de uma venda que já terminou.
   const selo = (r: (typeof raffles)[number]) =>
     seloDoSorteio(r.draw?.status) ??
-    statusDaCampanha(vendidosPorRifa.get(r.id) ?? 0, r.totalNumbers, statusConfig);
+    statusDaCampanha(
+      vendidosPorRifa.get(r.id) ?? 0,
+      r.totalNumbers,
+      statusConfig,
+      r.isFree,
+      r.seloInicialTexto,
+    );
 
   return (
     <ContainerPublico>
