@@ -245,8 +245,10 @@ export function CompactRaffleCard({
         skinName={prize?.skinName}
         rarity={prize?.skinRarity}
         variant="thumb"
-        className="h-20 w-28 shrink-0 rounded-lg sm:h-24 sm:w-40"
-        sizes="160px"
+        // Cartão mais enxuto: a miniatura não cresce no desktop (era h-24 w-40),
+        // o que puxava a altura do cartão para cima sem ganhar leitura.
+        className="h-20 w-28 shrink-0 rounded-lg sm:w-32"
+        sizes="128px"
       />
 
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
@@ -259,24 +261,18 @@ export function CompactRaffleCard({
           )}
         </div>
 
-        {/* flex-wrap, e o grupo da direita sem shrink-0: preço, selo de nível
-            e selo de status não cabem numa linha de 240px, e travados eles
-            transbordavam o card em até 92px, com "Aguardando sorteio" saindo
-            pela borda. Quebrar é a saída certa aqui, porque nenhum dos três
-            pode ser cortado nem escondido.
-
-            Tentei travar a linha também aqui, como no cartão grande, e em
-            320px o resultado foi o rótulo do nível reduzido a nada e o
-            "ADQUIRA JÁ!" quebrando em duas linhas por cima do selo: a coluna
-            de conteúdo deste cartão tem cerca de 180px, e os três somam 228.
-            No cartão grande a linha inteira está disponível, e lá cabe. */}
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+        {/* Uma linha só, e os selos SEMPRE encostados na direita (ml-auto),
+            para o rodapé ficar uniforme entre todos os cartões. Nada de
+            flex-wrap: quebrar jogava os selos para uma segunda linha alinhada à
+            esquerda, e aí um cartão tinha o selo embaixo e à esquerda, o outro
+            à direita. Quando aperta, quem cede é o preço e o rótulo do nível
+            (truncam); o selo laranja (a chamada) nunca é cortado. */}
+        <div className="flex items-center gap-2">
           <span
             className={cn(
-              "font-bold text-primary",
-              // Aqui o mesmo desacerto: grátis saía em text-xs contra o
-              // text-base de um preço. Ele passa a ter pelo menos o mesmo
-              // peso, com o espaçamento de letras que a palavra pede.
+              "min-w-0 truncate font-bold text-primary",
+              // Grátis sai com o mesmo peso do preço, com o espaçamento de
+              // letras que a palavra pede.
               raffle.isFree && vendendo
                 ? "text-base tracking-[0.06em] uppercase"
                 : "text-base",
@@ -287,9 +283,9 @@ export function CompactRaffleCard({
           >
             {vendendo ? priceLabel(raffle) : "Assistir ao sorteio"}
           </span>
-          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <SeloDeExclusiva minLevel={raffle.minLevel} />
-            <SeloDeStatus texto={statusBadge} />
+          <span className="ml-auto flex min-w-0 items-center justify-end gap-1.5">
+            <SeloDeExclusiva minLevel={raffle.minLevel} className="min-w-0 shrink" />
+            <SeloDeStatus texto={statusBadge} className="shrink-0" />
           </span>
         </div>
       </div>
