@@ -42,11 +42,12 @@ export function SeloDeExclusiva({
           longe, e o cadeado só dizia "fechado", que é o que menos importa
           aqui. */}
       <RankBadge rank={rankFromXp(degrau.xp)} size="xs" />
-      {/* O rótulo trunca em vez de esticar o selo. No rodapé do cartão ele
-          divide a linha com o preço e com o botão, e crescer ali empurraria
-          justamente o botão para fora. O desenho do nível fica, que é o que
-          se reconhece de longe. */}
-      <span className="truncate">{degrau.label}</span>
+      {/* Rótulo fixo "LEVEL" (o `uppercase` do selo cuida da caixa), em vez do
+          nome do degrau ("Prata III", "Ouro"...): o número do nível já está no
+          desenho do selo ao lado, então o conjunto lê "[N] LEVEL", igual em
+          toda campanha. Sem o nome do tier, o selo também para de variar de
+          largura entre um card e outro. */}
+      <span className="truncate">Level</span>
     </span>
   );
 }
