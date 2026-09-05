@@ -17,6 +17,7 @@ import type { BoostNaTela } from "@/components/public/caixas-de-level-up";
 import { RaffleCover } from "@/components/public/raffle-cover";
 import { SeloDeStatus } from "@/components/public/selo-de-status";
 import { SeloDeExclusiva } from "@/components/rank/selo-de-exclusiva";
+import { degrauDoRank } from "@/lib/rank";
 import { formatBRL } from "@/lib/format";
 import { MOLDURA_DO_DESTAQUE } from "@/lib/raffle-images";
 import { cn } from "@/lib/utils";
@@ -239,17 +240,34 @@ export function CompactRaffleCard({
       href={vendendo ? `/${raffle.slug}` : `/sorteio/${raffle.draw!.publicId}`}
       className="group flex gap-3 overflow-hidden rounded-xl border bg-card p-3 transition-colors hover:border-primary/40"
     >
-      <RaffleCover
-        url={raffle.images[0]?.url ?? null}
-        title={raffle.title}
-        skinName={prize?.skinName}
-        rarity={prize?.skinRarity}
-        variant="thumb"
-        // Cartão mais enxuto: a miniatura não cresce no desktop (era h-24 w-40),
-        // o que puxava a altura do cartão para cima sem ganhar leitura.
-        className="h-20 w-28 shrink-0 rounded-lg sm:w-32"
-        sizes="128px"
-      />
+      {/* O selo de nível vive SOBRE a miniatura (como no cartão grande), e não
+          mais no rodapé: no rodapé ele disputava a largura com o preço e a
+          chamada, e os três não cabiam numa linha estreita, truncando "GRÁ..."
+          e "P...". Aqui ele não rouba largura de ninguém, e o rodapé fica só
+          com preço + chamada, que sempre cabem. */}
+      <div className="relative h-20 w-28 shrink-0 sm:w-32">
+        <RaffleCover
+          url={raffle.images[0]?.url ?? null}
+          title={raffle.title}
+          skinName={prize?.skinName}
+          rarity={prize?.skinRarity}
+          variant="thumb"
+          className="h-full w-full rounded-lg"
+          sizes="128px"
+        />
+        {/* O fundo escuro é do INVÓLUCRO, não do selo: o selo pinta a própria
+            cor por style inline, que venceria qualquer classe de fundo. O
+            invólucro só existe quando há nível (degrauDoRank), senão sobraria
+            uma pílula preta vazia. Mesmo arranjo do cartão grande. */}
+        {degrauDoRank(raffle.minLevel) && (
+          <span className="absolute left-1 top-1 z-10 max-w-[calc(100%-0.5rem)] rounded-full bg-black/55 shadow-[0_1px_4px_rgba(0,0,0,0.7)] backdrop-blur-sm">
+            <SeloDeExclusiva
+              minLevel={raffle.minLevel}
+              className="min-w-0 text-[9px]"
+            />
+          </span>
+        )}
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
         <div className="space-y-1">
@@ -261,12 +279,10 @@ export function CompactRaffleCard({
           )}
         </div>
 
-        {/* Uma linha só, e os selos SEMPRE encostados na direita (ml-auto),
-            para o rodapé ficar uniforme entre todos os cartões. Nada de
-            flex-wrap: quebrar jogava os selos para uma segunda linha alinhada à
-            esquerda, e aí um cartão tinha o selo embaixo e à esquerda, o outro
-            à direita. Quando aperta, quem cede é o preço e o rótulo do nível
-            (truncam); o selo laranja (a chamada) nunca é cortado. */}
+        {/* Rodapé enxuto: só preço (esquerda) e a chamada (direita, ml-auto).
+            O nível saiu para cima da miniatura, então aqui sobram dois itens
+            curtos que sempre cabem e ficam uniformes entre os cartões. A
+            chamada nunca é cortada; se apertar mesmo, quem cede é o preço. */}
         <div className="flex items-center gap-2">
           <span
             className={cn(
@@ -283,10 +299,7 @@ export function CompactRaffleCard({
           >
             {vendendo ? priceLabel(raffle) : "Assistir ao sorteio"}
           </span>
-          <span className="ml-auto flex min-w-0 items-center justify-end gap-1.5">
-            <SeloDeExclusiva minLevel={raffle.minLevel} className="min-w-0 shrink" />
-            <SeloDeStatus texto={statusBadge} className="shrink-0" />
-          </span>
+          <SeloDeStatus texto={statusBadge} className="ml-auto shrink-0" />
         </div>
       </div>
     </Link>
